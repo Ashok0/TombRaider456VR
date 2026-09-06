@@ -1,4 +1,4 @@
-# TombRaiderVR
+# Tomb Raider IV-VI Remastered VR Mod
 
 **Phase 1: a head-tracking test** for **Tomb Raider IV–VI Remastered**
 (`tomb456.exe`, v1.0.2a, 2026-01-17 build).
