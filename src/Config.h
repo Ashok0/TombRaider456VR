@@ -50,6 +50,29 @@ struct Config {
     // apparent IPD), lower it to grow the world.
     float worldUnitsPerMetre = 423.0f;
 
+    // Multiplier on the eye separation ONLY, leaving world size alone.
+    //
+    // WorldUnitsPerMetre is the physically honest control: it changes apparent
+    // size and stereo depth together, because they are the same thing. IpdScale
+    // is the cheat -- it strengthens depth without shrinking the world. Reach
+    // for it only if the scale feels right but the depth still reads flat.
+    float ipdScale         = 1.0f;
+
+    // Step per hotkey press, multiplicative. 1.25 = 25% a press, so three
+    // presses roughly double. 5% steps proved far too small to judge against --
+    // scale differences only become obvious at something like 2x.
+    float scaleStep        = 1.25f;
+
+    // Live tuning hotkeys. Numpad +/- adjust world scale, Numpad * / adjust
+    // IpdScale, Numpad 0 resets both to the ini values. Every change is logged
+    // so the value that felt right can be copied back into this file.
+    // 0 disables a key.
+    int   scaleUpKey       = 0x6B;   // VK_ADD       (numpad +)
+    int   scaleDownKey     = 0x6D;   // VK_SUBTRACT  (numpad -)
+    int   ipdUpKey         = 0x6A;   // VK_MULTIPLY  (numpad *)
+    int   ipdDownKey       = 0x6F;   // VK_DIVIDE    (numpad /)
+    int   resetTuningKey   = 0x60;   // VK_NUMPAD0
+
     // Per-eye render target size. 0 = ask OpenVR for the recommended size.
     int   eyeWidth         = 0;
     int   eyeHeight        = 0;
@@ -112,9 +135,118 @@ struct Config {
 
     // Fallback frame-number trigger. 0 = only the hotkey fires a capture.
     int   traceStartFrame  = 0;
+
+    // Split the two independent sources of per-eye difference so they can be
+    // tested apart. Both default on; turning either off is a diagnostic.
+    //
+    //   parallax  -- the +-13.4 unit view offset. THIS is depth.
+    //   shear     -- proj[8] = -+0.2425, the asymmetric frustum. This is a
+    //                constant sideways shift and carries NO depth at all.
+    //
+    // Every measurement so far confirms only that the halves DIFFER, which the
+    // shear alone is enough to cause. Isolating them says which one is real:
+    //
+    //   PerEyeView=1 PerEyeProjection=0 -> if depth appears, the shear was
+    //       fighting the parallax, and that configuration is the fix.
+    //   PerEyeView=0 PerEyeProjection=1 -> if the halves still differ, the
+    //       difference is pure shear and parallax is not reaching the pixels.
+    //   PerEyeView=1 PerEyeProjection=1 -> current behaviour.
+    bool  perEyeView       = true;
+
+    // 0 = the engine's own projection. NOT a clean control: it also drops the
+    //     HMD field of view and feeds a 1.78-aspect frustum into a 0.93-aspect
+    //     viewport, so it changes two things at once and proves nothing about
+    //     the shear on its own.
+    // 1 = the HMD's true asymmetric frustum (correct, and the default).
+    // 2 = the HMD's field of view, symmetrised: same total extent per axis,
+    //     shear forced to zero. This is the clean single-variable test, because
+    //     FOV and aspect stay exactly as in mode 1.
+    //
+    // Mode 2 exists because the shear contributes a CONSTANT disparity of
+    // (r+l)/(r-l) - the pedestal - which for this HMD is 0.485 NDC, about 326 px.
+    // The headset optics are meant to cancel it exactly. The depth cue riding on
+    // top is only ~32 px at 2000 units. If that cancellation is not happening,
+    // the eyes converge on the pedestal and everything collapses to one plane --
+    // flat, oversized, and immune to IpdScale.
+    int   perEyeProjection = 1;
+
+    // Where the per-eye TRANSLATION is applied.
+    //
+    //   0 = uViewMatrix translation column (the original).
+    //       BROKEN: 38 of the engine's 125 vertex shaders transform position as
+    //       dot(uViewMatrix[i].xyz, p.xyz) -- rotation ONLY, never reading the
+    //       translation column. For those passes the camera offset is baked into
+    //       uModelMatrix on the CPU instead. So a per-eye translation here is
+    //       invisible to them: no parallax, no depth, everything at infinity (so
+    //       it reads oversized), IpdScale and WorldUnitsPerMetre inert. A per-eye
+    //       ROTATION was always visible, which is why a 20-degree yaw test worked
+    //       while every translation test failed.
+    //
+    //   1 = uModelMatrix translation column.
+    //       ALSO BROKEN, differently: skinned geometry is transformed by
+    //       uJoints[72*3], not uModelMatrix, so characters do not move with the
+    //       world and end up floating outside the map. Chasing every transform
+    //       path is a losing game.
+    //
+    //   3 = uProjMatrix composed with the WHOLE per-eye transform, and the view
+    //       matrix left completely untouched. THE FIX.
+    //
+    //       With the game's own view matrix in place both shader families agree
+    //       exactly: full-dot gives R_g*w + t_g, and rotation-only gives R_g*p
+    //       with p = w + R_g^T*t_g, which is the same R_g*w + t_g. They only
+    //       diverge once the view matrix is modified. So don't modify it --
+    //       fold the eye transform E = [R_e | t_e] into the projection:
+    //           clip = P * (R_e*v + t_e) = (P * E) * v
+    //       One multiply, rotation and translation together, correct for both
+    //       families by construction.
+    //
+    //       Mode 2's head-movement blow-up came from d = (R_e - I)*t_g + t_e:
+    //       t_g is ~82000 units, so any head rotation made the first term
+    //       thousands of units. E is metres-scale, so this cannot happen here.
+    //
+    //   2 = uProjMatrix, post-multiplied by translate(d). Gives correct depth and
+    //       working scale keys, but the world swims when you rotate your head,
+    //       for the reason above. Superseded by 3.
+    //       Every one of the 125 shaders ends with uProjMatrix * vec4(view, 1.0),
+    //       so this is the one matrix nothing can bypass -- joints included. A
+    //       view-space shift d is exactly equivalent to P * translate(d):
+    //           clip.x += m[0]*dx + m[4]*dy + m[8]*dz
+    //       which yields the same delta/depth parallax as shifting the view.
+    int   eyeOffsetMode = 2;
+
+    // Yaw the RIGHT eye's view by this many degrees. Diagnostic only.
+    //
+    // Every link from the injection to the draw has been verified correct, and
+    // the headset still shows no parallax. One of those verifications must be
+    // wrong, so this stops arguing about a 26-unit translation and applies an
+    // effect that cannot be subtle or misjudged: at 20 degrees the two halves
+    // are looking in visibly different directions.
+    //
+    //   halves differ wildly -> the view matrix DOES drive rendering, and the
+    //       fault is specific to the translation column.
+    //   halves stay identical -> the view matrix reaches the GPU (proved by
+    //       glGetUniformfv) but does not affect the draw at all, and the whole
+    //       injection point is wrong however correct it reads.
+    float debugEyeYawDegrees = 0.0f;
+
+    // Burn a red bar into the left half of the eye target and a blue bar into
+    // the right half. A direct eye-mapping check for when every measurable
+    // thing upstream reads correct and the headset still shows mono. See
+    // StereoRenderer::MarkEyes for how to read the result.
+    bool  eyeMarkers       = false;
 };
 
 const Config& Cfg();
 void LoadConfig(const wchar_t* iniPath);
+
+// --- live tuning ------------------------------------------------------------
+// Scale is a perceptual judgement, so it is adjustable in the headset rather
+// than through an edit-restart cycle. These start from the ini values.
+float LiveWorldUnitsPerMetre();
+float LiveIpdScale();
+void  AdjustWorldScale(float factor);   // multiplicative, e.g. 1.05f
+void  AdjustIpdScale(float factor);
+void  LogTuning(const char* why);
+void  ResetTuning();
 
 } // namespace tr

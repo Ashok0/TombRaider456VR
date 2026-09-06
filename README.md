@@ -1,33 +1,39 @@
 # Tomb Raider IV-VI Remastered VR Mod
 
-**Phase 1: a head-tracking test** for **Tomb Raider IV–VI Remastered**
-(`tomb456.exe`, v1.0.2a, 2026-01-17 build).
+**A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a,
+2026-01-17 build), driving an OpenVR runtime.
 
 The mod loads into the game, reads the head pose from an OpenVR runtime, and
-composes it onto the game camera so that **looking around with the headset moves
-the in-game view**. In its shipped configuration the picture still goes to the
-monitor: one image, the engine's own field of view, nothing submitted to the
-compositor. That is the point — it isolates the view maths (tracking,
-handedness, scale) from everything else, which are the things hardest to get
-right and easiest to misdiagnose once stereo rendering is in the way.
-
-That is **Phase 1**, and it is where this project currently is. `Mode=mono` is
-the default in the shipped ini, it is the mode that is meant to be run today,
-and it is what the rest of this README is mostly about.
-
-| | | State |
-|---|---|---|
-| **Phase 1** | Mono head tracking — one image, engine projection, no compositor | Shipped default. Run this. |
-| **Phase 2** | Stereo — per-eye matrices, double-wide target, compositor submit | Implemented in the same binary, off by default, not yet validated on hardware |
-
-Phase 2 is `Mode=stereo` and is described near the bottom. The two share one
+composes it onto the game camera. It is built in two phases that share one
 binary and one set of hooks — the phase boundary is a config switch, not a
 branch.
 
+| | | State |
+|---|---|---|
+| **Phase 1** | Mono head tracking — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
+| **Phase 2** | **Native stereo with 6DOF** — per-eye matrices, double-wide target, positional tracking, compositor submit | Working. `Mode=stereo` |
+
+**Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
+Phase 2 debuggable. One image, the engine's own field of view, no compositor —
+which isolates the view maths (tracking, handedness, scale) from everything
+else. Those are the things hardest to get right and easiest to misdiagnose once
+stereo rendering is in the way, and every difficult bug in Phase 2 was diagnosed
+by first proving the same thing in Phase 1.
+
+**Phase 2** is where it becomes VR: both eyes rendered natively by the engine,
+positional head tracking, and live scale tuning in the headset. The mechanism
+— including three plausible implementations that fail in instructive ways — is
+in [Phase 2: native stereo with 6DOF](#phase-2-native-stereo-with-6dof).
+
+Note that the shipped `TombRaiderVR.ini` still selects `Mode=mono`. Set
+`Mode=stereo` for Phase 2.
+
 The renderer was reverse-engineered from the shipped binary and its PDB. Every
 address in `src/Engine.h` was read out of Ghidra and re-verified against the
-decompiler before being written down; `docs/engine-map.html` is the full map of
-how the renderer works and why the hooks sit where they do.
+decompiler before being written down. `docs/engine-map.html` is the full map of
+how the renderer works and why the hooks sit where they do; `trace.txt` is the
+session that produced it, summarised in
+[Where this came from: the Ghidra trace](#where-this-came-from-the-ghidra-trace).
 
 ---
 
@@ -292,22 +298,281 @@ initialisation and reports the runtime's own error symbol and description.
 
 ---
 
-## Phase 2: stereo
+## Phase 2: native stereo with 6DOF
 
-`Mode=stereo` switches on the rest of the code. It is implemented but has not
-been run against a headset, so treat this section as a description of what is
-written rather than of what is known to work.
+`Mode=stereo` turns on the rest of the code: per-eye matrices, real positional
+tracking, and compositor submission. Both eyes are rendered natively by the
+engine — no reprojection, no depth-buffer trickery, no shader edits.
 
-Move to it only once Phase 1 looks right — if the picture moves with your head
-and the world feels the right size, the two hardest things (handedness and
-scale) are correct, and stereo is then mostly plumbing.
+Getting depth to actually appear took four attempts at one question — *where
+does the per-eye transform go?* — and the three that failed are documented here
+because each one fails in a way that looks like something else.
+
+### Why the obvious answer is wrong
+
+The natural place for a per-eye offset is the view matrix. It does not work,
+and the reason is specific: of the engine's **125 vertex shaders, 38 transform
+position as `dot(uViewMatrix[i].xyz, p.xyz)`** — rotation only. They never read
+the translation column at all; for those passes the camera offset is baked into
+`uModelMatrix` on the CPU beforehand.
+
+So a per-eye translation written into `uViewMatrix` is simply invisible to 38
+of the 125 shader paths. The symptoms are misleading:
+
+- no parallax, so everything sits at infinity — which reads as **oversized**,
+  not as flat
+- `IpdScale` and `WorldUnitsPerMetre` appear inert
+- a per-eye **rotation** was always visible, because rotation-only shaders do
+  honour the rotation — which is why a 20° yaw test passed while every
+  translation test failed
+
+That last point is what kept the bug alive: the view matrix demonstrably drove
+rendering, so the injection point looked correct.
+
+All three earlier placements fail, each differently:
+
+| Mode | Where the translation goes | Why it fails |
+|---|---|---|
+| `EyeOffsetMode=0` | `uViewMatrix` translation column | Invisible to the 38 rotation-only shaders (above) |
+| `EyeOffsetMode=1` | `uModelMatrix` translation column | Skinned geometry is transformed by `uJoints[72*3]`, not `uModelMatrix`, so characters do not move with the world and float outside the map |
+| `EyeOffsetMode=2` | `uProjMatrix`, post-multiplied by `translate(d)` | Correct depth and working scale keys, but the world **swims when you rotate your head** |
+
+Mode 2's swim is worth understanding, because it is the trap one level below the
+first. The view-space delta it applies is `d = (R_e − I)·t_g + t_e`. The game's
+own view translation `t_g` is on the order of **82,000 world units**, so any head
+rotation at all makes the first term thousands of units and the world slides
+away underneath you. Chasing individual transform paths is a losing game.
+
+### The fix: fold the whole eye transform into the projection
+
+`EyeOffsetMode=3` leaves the view matrix **completely untouched** and composes
+the per-eye transform into the projection instead:
+
+```
+clip = P · (R_e·v + t_e) = (P · E) · v        E = [ R_e | t_e ]
+```
+
+One multiply, rotation and translation together, applied to the one matrix
+nothing in the engine can bypass — every one of the 125 shaders ends with
+`uProjMatrix * vec4(viewpos, 1.0)`, skinned geometry included.
+
+It is correct for **both** shader families by construction, and the proof is why
+leaving the view matrix alone matters so much. With the game's own view matrix
+in place:
+
+- the full-dot shaders compute `R_g·w + t_g`
+- the rotation-only shaders compute `R_g·p`, where the CPU already gave them
+  `p = w + R_gᵀ·t_g`
+
+which is the same `R_g·w + t_g`. **The two families agree exactly — and only
+diverge once the view matrix is modified.** So don't modify it.
+
+Mode 2's blow-up cannot happen here either: `E` is a metres-scale transform, so
+there is no `t_g`-sized term to amplify.
+
+In `validate_draw` this is a column-major `P · E` with `E`'s bottom row taken as
+`(0,0,0,1)`, which is why column 3 picks up `P`'s own column 3. The `kProj`
+dirty bit is forced by hand; `kView` deliberately is **not**, because in mode 3
+nothing writes to the view matrix at all. `P` is restored after the original
+uploads, so the engine never observes the substitution.
+
+### 6DOF
+
+Positional tracking is now honoured in stereo, not just mono. It previously
+applied only on the mono path, which meant `PositionalTracking=0` silently did
+nothing once stereo was on — the head's translation went through regardless.
+Both modes now zero it in the same place.
+
+The full per-eye chain, in order:
+
+1. **Head pose** from `WaitGetPoses`, inverted to tracking→head.
+2. **Translation dropped** if `PositionalTracking=0` — a pure pivot about the
+   game camera, so a wrong world scale cannot push you through the floor.
+3. **Eye offset** — `eyeFromHead` from `GetEyeToHeadTransform`, with `IpdScale`
+   applied to its translation only.
+4. `eye ← head ← tracking` composed in OpenVR's own convention.
+5. **Into engine space** — OpenVR's Y-up metres to TR's Y-down world units:
+   Y-flip if `FlipViewY`, then × `WorldUnitsPerMetre`.
+
+`SeatedOrigin=1` remains the default, and matters as much in stereo as in mono:
+standing space is absolute room coordinates, so a head 1.6 m off the floor is
+~680 TR units of offset before you have moved.
+
+The eye-to-head offset is the entire source of stereo separation, so it is
+logged at init and a zero one is called out explicitly — otherwise a headset
+reporting no IPD looks exactly like a world-scale problem:
+
+```
+vr: eye 0 eyeToHead offset = (-0.0320, +0.0000, +0.0000) m
+vr: WARNING eye 1 has a ZERO eye-to-head offset -- there will be no stereo
+    separation regardless of WorldUnitsPerMetre
+```
+
+### Live tuning: scale and IPD are separate controls
+
+Scale is a perceptual judgement, so it is adjustable **in the headset** rather
+than through an edit–rebuild–relaunch cycle. Every change is logged in a form
+you can paste straight back into the ini.
+
+| Key | Effect |
+|---|---|
+| numpad `+` | Raise `WorldUnitsPerMetre` — **smaller** world, **stronger** depth |
+| numpad `−` | Lower it — bigger world, weaker depth |
+| numpad `*` / `/` | `IpdScale` up / down |
+| numpad `0` | Reset both to the ini values |
+
+The two do different things, and confusing them wastes time:
+
+- **`WorldUnitsPerMetre`** is the physically honest control. Apparent size and
+  stereo depth are the same quantity — your IPD is fixed, so a world rendered
+  too large leaves the eye separation proportionally too small, which reads as
+  "enormous" *and* "no depth" simultaneously. One number fixes both.
+- **`IpdScale`** is the cheat: it stretches eye separation without changing
+  world size. Reach for it only when the scale feels right but depth still
+  reads flat. `1.0` is physically honest.
+
+Steps are multiplicative (`ScaleStep=1.25`, so three presses roughly double).
+5% steps proved useless — scale differences only become obvious around 2×.
+Values are clamped to 16–8192 units/m and 0.1–10× IPD. The log line reports the
+resulting eye separation in world units for a 64 mm IPD, which is the number
+worth sanity-checking:
+
+```
+tuning [world scale]: WorldUnitsPerMetre=528.8  IpdScale=1.000
+                      (eye separation ~33.8 world units for a 64 mm IPD)
+```
+
+### Per-eye projection: separating shear from parallax
+
+Two independent things make the eyes differ, and only one of them is depth:
+
+- **parallax** — the ±13.4-unit view offset. This *is* depth.
+- **shear** — `proj[8] = ∓0.2425`, the asymmetric frustum. A constant sideways
+  shift carrying **no depth at all**.
+
+Confirming that the two halves *differ* proves nothing, because the shear alone
+is enough to cause that. `PerEyeProjection` isolates them:
+
+| Value | Frustum | Use |
+|---|---|---|
+| `0` | The engine's own projection | **Not a clean control** — it also drops the HMD field of view and feeds a 1.78-aspect frustum into a 0.93-aspect viewport, changing two things at once |
+| `1` | The HMD's true asymmetric frustum | Correct, and the default |
+| `2` | HMD field of view, symmetrised — same total extent per axis, shear forced to zero | The clean single-variable test: FOV and aspect stay exactly as in mode 1 |
+
+Mode 2 exists because of a specific failure. The shear contributes a **constant
+disparity** — the pedestal — of `(r+l)/(r−l)`, which for this HMD is 0.485 NDC,
+about **326 px**. The headset optics are meant to cancel it exactly. The actual
+depth cue riding on top is only ~32 px at 2000 units. If that cancellation is
+not happening, the eyes converge on the pedestal and the scene collapses to one
+plane: flat, oversized, and immune to `IpdScale`.
+
+Symmetrising averages the tangent magnitudes, which preserves `(r−l)` and
+`(b−t)` exactly — so scale and aspect are untouched and the shear is the only
+variable that moved.
+
+`PerEyeView=0` is the mirror-image test: keep the shear, drop the parallax. If
+the halves still differ with it off, the difference was never parallax.
+
+### Live pass classification
+
+The world/2D test now reads `vid_state.proj` **at draw time** rather than
+trusting the flag cached by the `vid_setPass` hook. `vid_setPass` configures a
+pass once and many draws follow, and anything that repoints `vid_state.proj` in
+between — `vid_setOrtho3D` does exactly that — leaves the cached flag stale. The
+pointer in `vid_state` at the moment of the draw is the actual truth about which
+matrix is about to be uploaded.
+
+Disagreements between the live and cached classification are counted and
+reported. A histogram of every distinct `proj` pointer seen at draw time is
+logged too, because the test assumes `proj` is only ever `&mProj[0]` or
+`&mProj[1]` — if the engine points it somewhere else during gameplay, every
+draw silently classifies as 2D and no per-eye matrices are applied anywhere:
+
+```
+proj pointers: mProj[0](ortho)=00000001..  mProj[1](persp)=00000001..
+  proj=00000001..  draws=12043    perspective/world
+  proj=00000001..  draws=1881     ortho/2D
+```
+
+An `UNRECOGNISED` row there is the explanation for a scene with no depth.
+
+### Instrumentation: proving where stereo breaks
+
+Most of Phase 2's new code is measurement, because "the headset shows mono" has
+about six possible causes and they are indistinguishable from the outside. The
+checks form a ladder from our own memory out to the pixels, and each one
+isolates the stage below it.
+
+**1. Did our write land?** The injection logs the packed view translation read
+straight back out of engine memory (floats 3, 7, 11 of `mView_packed`), plus
+the `uViewMatrix` uniform location from `shaders[].uid[1]`.
+
+**2. Is the separation non-zero?** Each eye is logged exactly once, then the
+distance between them is reported. Identical translations mean both eyes render
+the same view and no scale setting can help:
+
+```
+inject: SEPARATION between eyes = 26.83 world units (dx=26.83 dy=0.00 dz=0.00)
+```
+
+**3. Did the GPU receive it?** An in-memory write is not an upload —
+`validate_draw` only uploads when `consts` has the dirty bit set *and*
+`shaders[].uid[1] >= 0`. `glGetUniformfv` asks the GPU what it actually holds,
+per eye. This is the load-bearing check: if the two match, the matrices never
+reached the shader; if they differ, the fault is downstream in viewport, target
+or submit. It is re-armed every report window rather than latched once, so it
+tracks live tuning changes instead of only ever sampling frame 1.
+`glGetUniformfv` forces a pipeline sync, so it runs twice per 1800 frames and no
+more. A driver that does not export it loses the diagnostic, not stereo.
+
+**4. Are the two halves actually different pixels?** `CompareHalves` samples a
+5×5 interior grid from each half of the eye target with `glReadPixels` and
+counts how many differ by more than a small threshold. It runs before `Submit`
+and the clear, on the frame just rendered. Correct stereo at any sane IPD moves
+most of those samples; identical halves move none.
+
+**5. Do the halves map to the right eyes?** `EyeMarkers=1` burns a red bar into
+the left half and a blue bar into the right, in the same place in each:
+
+| What you see | What it means |
+|---|---|
+| Red in left eye, blue in right | Halves map to eyes correctly |
+| Both bars in both eyes | Submit bounds are being ignored |
+| The same colour in both eyes | Both eyes are getting the same half |
+| No bars at all | What you are looking at is not this texture |
+
+**6. Does the view matrix drive rendering at all?** `DebugEyeYawDegrees=20`
+swings the right eye's view by an angle that cannot be subtle or misjudged. If
+the halves stay identical under that, the injection point itself is wrong
+however correct it reads.
+
+**The health report** ties these together every 1800 frames, in deltas:
+
+```
+stereo health @frame 5400: world draws=14203  duplicated=7104
+  injected eye0=7101 eye1=7101  (99% of world draws got per-eye matrices)
+  offscreen-skipped=0  classify-mismatch=0
+verify: uViewMatrix ON GPU  eye0=(...) eye1=(...)  separation=26.83 world units
+halves: 23 of 25 sampled pixels differ between the left and right halves
+```
+
+Two deliberate choices in that report, both of which were bugs first:
+
+- **Deltas, not totals.** A one-shot report at frame 300 only ever sampled the
+  menus, where almost everything legitimately is 2D. It read "2 injections out
+  of 725 draws" and looked like a serious bug when it was a title screen.
+- **The denominator is total world draws, not duplications.** Dividing
+  injections by duplications reads 100% by construction — both are gated on the
+  same condition, so it could never detect the failure it was warning about.
+
+### How the frame is rendered
 
 Each draw is issued twice into the two halves of one double-wide render target,
 with different matrices and a different viewport. The scene is not re-run. That
 matters because the engine creates a **GL 3.2 Core** context and ships **202
 shader pairs**: `GL_OVR_multiview2` would mean editing 404 GLSL sources and
 would still need driver support on a 3.2 core context. Duplicating draws needs
-zero shader changes, because `uViewMatrix` is already a plain `vec4[4]` uniform.
+zero shader changes.
 
 `validate_draw` cannot issue a draw — its two callers do, immediately after it
 returns — so per-eye duplication happens one level up in `ogl_draw` /
@@ -316,7 +581,140 @@ so every "return to the backbuffer" inside `ogl_setRenderTarget` lands in the
 stereo target without hooking that function at all. Both halves go to the
 compositor as one texture split by UV bounds.
 
-First-run toggles:
+### Where this came from: the Ghidra trace
+
+`trace.txt` is the captured reverse-engineering session that produced
+`src/Engine.h`, run against the shipped `tomb456.exe` with its PDB. Five
+functions were traced end to end — `validate_draw`, `vid_setViewMatrix` +
+`ogl_setPerspAngles`, `ogl_setRenderTarget`, `init_ogl`, and `vid_setPass` —
+and nearly every design decision above traces back to something in it.
+
+**The headline: there is no camera object.** The database holds 1611 structs and
+not one is a `Camera` or `Frustum`. Camera state is flat globals plus a
+dirty-flag bitmask, centred on `RenderState` @ `vid_state` (240 bytes, 29
+members) with `shader` at +16, `consts` at +96, and the four matrix pointers
+`proj`/`view`/`shadow`/`model` at +104/+112/+120/+144.
+
+**The trap that shaped everything: the view matrix is not uploaded via
+`glUniformMatrix4fv`.** That symbol is a function pointer with only three xrefs
+in the whole binary, and `validate_draw` holds the only two call sites. Inside
+it:
+
+```c
+if ((consts & 1)       && uid[0] >= 0) glUniformMatrix4fv(uid[0], 1, 0, proj);
+if ((consts & 2)       && uid[1] >= 0) glUniform4fv      (uid[1], 4,    view);   // ←
+if ((consts & 4)       && uid[2] >= 0) glUniformMatrix4fv(uid[2], 6, 0, shadow);
+if ((consts & 0x10000) && uid[5] >= 0) glUniform4fv      (uid[5], 4,    model);  // ←
+```
+
+View and model go up as 4×`vec4` through `glUniform4fv`; only projection and
+shadow use `glUniformMatrix4fv`. Hooking `glUniformMatrix4fv` — the obvious
+move, and the literal thing that was asked for — would have caught projection
+and missed the view matrix entirely. `init_ogl`'s extracted GLSL confirms it is
+by design rather than a decompiler artifact: `uniform vec4 uViewMatrix[4]` and
+`uniform vec4 uModelMatrix[4]`, against `uniform mat4 uProjMatrix`.
+
+That single fact is why per-eye stereo needs no shader changes at all: a plain
+`vec4[4]` uniform can simply be overwritten per eye. The trace stopped there,
+and its conclusion was optimistic — it extracted the uniform *interface* rather
+than reading the 202 shader bodies, so the 38 rotation-only consumers of that
+uniform went unnoticed until the depth bug forced a look at the GLSL itself.
+
+#### What each trace established, and what it decided
+
+| Finding | Where | What it decided in Phase 2 |
+|---|---|---|
+| `uViewMatrix` / `uModelMatrix` are `vec4[4]`; `uProjMatrix` is the only `mat4` every shader ends with | `init_ogl` GLSL | Draw duplication over `GL_OVR_multiview2`; and ultimately `EyeOffsetMode=3`, which targets the one matrix nothing bypasses |
+| `uniform vec4 uJoints[72*3]` — skinned geometry has its own transform path | `init_ogl` GLSL | Why `EyeOffsetMode=1` (model matrix) leaves characters floating outside the map |
+| `consts` dirty bits: `1`=proj, `2`=view, `4`=shadow, `0x10000`=model, `0x1000000`=joints; a shader switch forces `0xff07bf` | `validate_draw` | Which bits to force by hand after substituting a matrix |
+| The proj dirty bit is a **pointer** comparison (`vid_state_prev.proj != vid_state.proj`) | `vid_setPass` | Why new contents in the same `mProj[1]` never trip it, so `kProj` is set manually |
+| `vid_setPass`'s 202-case switch points `proj` at `mProj[0]` (ortho/2D) or `mProj[1]` (perspective/world) per pass | `vid_setPass` | The world-vs-HUD signal the whole injection gate is built on |
+| Nine cases (`0x3F`, `0x40`, `0x48`, `0xC0`, `0xC1`, `0xC4`–`0xC7`) never assign `proj` and inherit the previous pass's pointer | `vid_setPass` | Why classification reads the live pointer instead of a static shader-id table |
+| Every render target is a layered 2D array texture — `glFramebufferTextureLayer` + `GL_TEXTURE_2D_ARRAY`, `color_index` is the layer | `ogl_setRenderTarget` | Per-eye targets need no new plumbing; the engine already renders to layered targets natively |
+| Exactly one `FBO_custom` exists, and every target change re-attaches colour + depth and runs a full `glCheckFramebufferStatus` | `ogl_setRenderTarget` | Why Phase 2 allocates its own FBO rather than fighting for attachments |
+| `FBO_default` is latched from `GL_FRAMEBUFFER_BINDING` at init | `init_ogl` | The redirection trick: overwrite that global and every "return to backbuffer" lands in the eye target, with no hook on `ogl_setRenderTarget` |
+| **Scissor test is globally enabled at init** | `init_ogl` | Per-eye viewport must set scissor too, or geometry clips across the eye boundary |
+| `glCheckFramebufferStatus`'s return value is discarded — no branch, no log | `ogl_setRenderTarget` | A bad layer index fails silently, so a black screen is a plausible symptom of an unrelated mistake |
+| Depth is `GL_DEPTH_ATTACHMENT` only, never depth-stencil | `ogl_setRenderTarget` | The eye target matches — no stencil |
+| GL 3.2 Core, 202 `shader_init` calls, 404 GLSL sources, all `#version 150` | `init_ogl` | The multiview cost estimate: 404 files to edit, plus driver support on a core context |
+| A shader id above 201 skips all configuration, and `validate_draw` then indexes `shaders[]` out of bounds | `vid_setPass` | The out-of-range warning in the `vid_setPass` detour |
+
+#### The view and projection setters
+
+`vid_setViewMatrix` takes a 3×4 **integer** matrix — TR's classic 16384 = 1.0
+fixed point — scales rotation by 1/16384, passes translation through raw as
+world units, and negates Z for the handedness flip into GL convention. It writes
+two separate globals: `mView` (rotation only, a different consumer) and
+`mView_packed`, which carries rotation plus translation at float indices 3, 7
+and 11. That transposed, row-vector layout is exactly what a `vec4[4]` uniform
+uploaded without a transpose flag wants — and indices 3/7/11 are the ones the
+Phase 2 in-memory readback prints.
+
+`ogl_setPerspAngles` builds a **symmetric** frustum by construction: it writes
+`e00 = 1/tanX`, `e11 = -1/tanY`, and explicitly zeroes the shear terms `e02` and
+`e12`. The self-test's load-bearing assertion — that a symmetric OpenVR frustum
+reproduces this function byte for byte — comes straight from this trace.
+`vid_setPerspOffset` does nothing *but* set those two shear terms, so the engine
+already exposes an asymmetric-frustum lever as an API entry point.
+
+Neither has a single call xref. Both are address-taken into the `app` struct @
+`0x1405833E0` by `vidInit` / `init_ogl`, and the real call path is
+**game DLL → `app.<fn>` vtable → setter → `consts` bit → `validate_draw`
+uploads**.
+
+#### The road not taken
+
+The trace's own suggestion was to inject at that vtable — swap `app.setViewMatrix`
+and `app.setPerspOffset` for per-eye control without touching the GL layer. It
+is a clean idea and Phase 2 does not use it, for reasons only the later shader
+analysis exposed:
+
+- swapping `app.setViewMatrix` still routes the eye offset through
+  `mView_packed`, i.e. `uViewMatrix` — the exact column the 38 rotation-only
+  shaders never read. It would have hit the same wall from a tidier place.
+- `app.setPerspOffset` controls the frustum **shear**, which is a constant
+  sideways shift carrying no depth. It is the right lever for the asymmetric
+  frustum and the wrong one for parallax.
+
+Hooking `validate_draw` instead — the single choke point where every uniform
+reaches the GPU, which the very first trace identified — is what made it
+possible to substitute a matrix the engine has no API for at all.
+
+#### Caveats recorded in the trace
+
+- **`gTargetWidth` and `gTargetHeight` sit ~44 MB apart** (`0x143298680` vs
+  `0x140698678`) even though the code writes them as a pair. The trace flagged
+  this as likely a bad PDB symbol or a Ghidra artifact and said to confirm the
+  real store address before hooking either; `src/Engine.h` carries the same
+  warning next to the constant.
+- **`ogl_rt` is a single latch with no stack.** Nested target changes do not
+  restore correctly — the inner restore clobbers the outer's saved state.
+  Relevant if eye passes are ever wrapped around existing effect passes.
+- **`init_ogl` always returns 1.** There is no failure path: if
+  `wglCreateContext` fails, every later GL call silently no-ops.
+- The analysis ran against a **copy** of the Ghidra project (staged under
+  `C:\dev\Ghidra\`), so annotations made during the trace do not appear in the
+  original `.rep`.
+
+### Phase 2 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `EyeOffsetMode` | `2` | Where the per-eye transform is applied. **`3` is the working one** — see below |
+| `PerEyeProjection` | `1` | `0` engine frustum, `1` HMD asymmetric, `2` HMD FOV symmetrised |
+| `PerEyeView` | `1` | Per-eye view offset. `0` keeps the shear and drops the parallax |
+| `PositionalTracking` | `1` in the ini | 6DOF. `0` is rotation-only |
+| `IpdScale` | `1.0` | Eye separation only, world size unchanged |
+| `ScaleStep` | `1.25` | Multiplicative step for the tuning hotkeys (clamped 1.01–4.0) |
+| `EyeMarkers` | `0` | Red/blue eye-mapping bars |
+| `DebugEyeYawDegrees` | `0` | Yaw the right eye by N degrees as a visibility test |
+
+> **Note on `EyeOffsetMode`.** The built-in default is `2`, and the shipped
+> `TombRaiderVR.ini` does not set the key — so unless you add `EyeOffsetMode=3`
+> explicitly, stereo runs the superseded mode that swims when you turn your
+> head. Mode 3 is the one the code documents as the fix.
+
+Sign-convention toggles, unchanged from Phase 1:
 
 | Symptom | Setting |
 |---|---|
@@ -333,8 +731,9 @@ First-run toggles:
 
 These are honest gaps, not oversights.
 
-- **Phase 2 has never been run against a headset.** Phase 1 is the mode this
-  project is meant to be run in today; every limit below is a Phase 2 limit.
+- **The shipped ini still selects Phase 1**, and does not set `EyeOffsetMode`,
+  so a bare `Mode=stereo` runs the superseded mode 2 rather than the working
+  mode 3. See the note under [Phase 2 settings](#phase-2-settings).
 - **The frame graph is not fully traced.** The engine renders a post-processing
   chain into its own layered array textures before compositing. The stereo hooks
   only split work that targets the backbuffer, detected by reading the `ogl_rt`
@@ -371,5 +770,6 @@ src/proxy/        the winmm shim that gets us loaded
 tools/            fetch_openvr.ps1, gen_winmm_forwards.ps1, vrprobe
 tests/            selftest (hooks + maths), proxytest (loader behaviour)
 docs/             engine-map.html -- the full renderer map
+trace.txt         the Ghidra session that produced src/Engine.h
 TombRaiderVR.ini  shipped config; Mode=mono, i.e. Phase 1
 ```

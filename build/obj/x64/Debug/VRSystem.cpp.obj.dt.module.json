@@ -1,0 +1,14 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "C:\\dev\\TombRaider456VR\\build\\obj\\x64\\Debug\\VRSystem.obj",
+            "outputs": [
+                "C:\\dev\\TombRaider456VR\\build\\obj\\x64\\Debug\\VRSystem.cpp.obj.dt.module.json",
+                "C:\\dev\\TombRaider456VR\\build\\obj\\x64\\Debug\\VRSystem.cpp.obj.dt.d.json"
+            ],
+            "requires": []
+        }
+    ]
+}

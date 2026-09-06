@@ -40,6 +40,22 @@ public:
     // screen still shows something sensible.
     void MirrorToWindow(int windowWidth, int windowHeight, GLuint windowFbo);
 
+    // Sample a grid of pixels from each half of the rendered frame and count
+    // how many differ. Everything upstream of this -- matrices, viewport,
+    // target, submit bounds -- has been verified correct while the headset
+    // still shows mono, so the only remaining question is whether the two
+    // halves actually contain different pixels. This answers it directly.
+    // Costs a pipeline stall, so call it rarely.
+    void CompareHalves(int& samples, int& differing);
+
+    // Burn a red bar into the left half and a blue bar into the right half,
+    // in the same place in each. Purely a human-readable eye-mapping check:
+    //   red in left eye, blue in right ... halves map to eyes correctly
+    //   both bars in both eyes .......... submit bounds are being ignored
+    //   same colour in both eyes ........ both eyes get the same half
+    //   no bars at all .................. what you see is not this texture
+    void MarkEyes();
+
 private:
     GLuint   m_fbo   = 0;
     GLuint   m_tex   = 0;

@@ -4,6 +4,7 @@
 #include "GL.h"
 
 #include <cstdio>
+#include <cmath>
 
 namespace tr {
 namespace {
@@ -157,6 +158,19 @@ bool VRSystem::Init() {
                                    &m_rawProj[e][2], &m_rawProj[e][3]);
         LogF("vr: eye %d raw tangents l=%.4f r=%.4f t=%.4f b=%.4f",
              e, m_rawProj[e][0], m_rawProj[e][1], m_rawProj[e][2], m_rawProj[e][3]);
+
+        // The eye offset is the entire source of stereo separation. If these
+        // are zero the headset is reporting no IPD and no amount of world-scale
+        // tuning can produce depth -- so say so loudly rather than let it look
+        // like a scale problem.
+        const vr::HmdMatrix34_t& e2h = m_system->GetEyeToHeadTransform(eye);
+        LogF("vr: eye %d eyeToHead offset = (%+.4f, %+.4f, %+.4f) m",
+             e, e2h.m[0][3], e2h.m[1][3], e2h.m[2][3]);
+        const float mag = std::fabs(e2h.m[0][3]) + std::fabs(e2h.m[1][3]) + std::fabs(e2h.m[2][3]);
+        if (mag < 1e-5f) {
+            LogF("vr: WARNING eye %d has a ZERO eye-to-head offset -- there will be "
+                 "no stereo separation regardless of WorldUnitsPerMetre", e);
+        }
     }
 
     m_system->GetRecommendedRenderTargetSize(&m_eyeW, &m_eyeH);
@@ -231,27 +245,39 @@ void VRSystem::BeginFrame() {
 Affine VRSystem::EyeView(Eye eye) const {
     const auto& c = Cfg();
 
+    const float scale = LiveWorldUnitsPerMetre();
+
+    // Head pose, with positional dropped when only rotation is wanted. This is
+    // honoured in stereo as well as mono -- it used to apply only to mono, which
+    // made PositionalTracking=0 silently do nothing once stereo was on.
+    Affine head = m_headFromTracking;
+    if (!c.positionalTracking) {
+        head.r[0][3] = head.r[1][3] = head.r[2][3] = 0.0f;
+    }
+
     // Mono: the centred head view, with no per-eye offset. There is only one
     // image, so applying half an IPD to it would just shift the whole picture.
     if (c.monoTracking) {
-        Affine head = m_headFromTracking;
-        if (!c.positionalTracking) {
-            // Pure pivot about the game camera. With translation zeroed there
-            // is no way for a wrong world scale to push the camera through the
-            // floor, which makes this the safe first thing to switch on.
-            head.r[0][3] = head.r[1][3] = head.r[2][3] = 0.0f;
-        }
-        return ToEngineSpace(head, c.worldUnitsPerMetre, c.flipViewY);
+        return ToEngineSpace(head, scale, c.flipViewY);
     }
 
     int idx = static_cast<int>(eye);
     if (c.swapEyes) idx = 1 - idx;
 
+    // IpdScale stretches the eye offset only, leaving world size alone. Applied
+    // here rather than folded into `scale` so that world size and stereo
+    // strength stay independently adjustable.
+    Affine eyeFromHead = m_eyeFromHead[idx];
+    const float ipd = LiveIpdScale();
+    eyeFromHead.r[0][3] *= ipd;
+    eyeFromHead.r[1][3] *= ipd;
+    eyeFromHead.r[2][3] *= ipd;
+
     // In OpenVR's own convention first: eye <- head <- tracking origin.
-    const Affine ovr = Mul(m_eyeFromHead[idx], m_headFromTracking);
+    const Affine ovr = Mul(eyeFromHead, head);
 
     // Then into the engine's Y-down, TR-unit view space.
-    return ToEngineSpace(ovr, c.worldUnitsPerMetre, c.flipViewY);
+    return ToEngineSpace(ovr, scale, c.flipViewY);
 }
 
 void VRSystem::EyeProjection(Eye eye, float zNear, float zFar, mat4& out) const {
@@ -259,11 +285,20 @@ void VRSystem::EyeProjection(Eye eye, float zNear, float zFar, mat4& out) const 
     int idx = static_cast<int>(eye);
     if (c.swapEyes) idx = 1 - idx;
 
-    BuildEyeProjection(out,
-                       m_rawProj[idx][0], m_rawProj[idx][1],
-                       m_rawProj[idx][2], m_rawProj[idx][3],
-                       zNear, zFar,
-                       c.flipProjectionY);
+    float l = m_rawProj[idx][0], r = m_rawProj[idx][1];
+    float t = m_rawProj[idx][2], b = m_rawProj[idx][3];
+
+    // Mode 2: keep the total field of view per axis, drop the off-centring.
+    // Averaging the magnitudes preserves (r-l) and (b-t) exactly, so scale and
+    // aspect are untouched and the only thing that changes is the shear.
+    if (c.perEyeProjection == 2) {
+        const float hw = (std::fabs(l) + std::fabs(r)) * 0.5f;
+        const float hh = (std::fabs(t) + std::fabs(b)) * 0.5f;
+        l = -hw; r = hw;
+        t = -hh; b = hh;
+    }
+
+    BuildEyeProjection(out, l, r, t, b, zNear, zFar, c.flipProjectionY);
 }
 
 void VRSystem::Submit(GLuint tex, uint32_t, uint32_t) {

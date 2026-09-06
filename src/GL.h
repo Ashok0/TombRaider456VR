@@ -27,6 +27,7 @@
 #define GL_SRGB8_ALPHA8           0x8C43
 #define GL_RGBA8                  0x8058
 #define GL_FRAMEBUFFER_SRGB       0x8DB9
+#define GL_CURRENT_PROGRAM        0x8B8D
 
 typedef ptrdiff_t GLsizeiptr_t;
 
@@ -46,6 +47,10 @@ extern GLenum (APIENTRY* CheckFramebufferStatus)(GLenum);
 extern void (APIENTRY* BlitFramebuffer)(GLint, GLint, GLint, GLint,
                                         GLint, GLint, GLint, GLint,
                                         GLbitfield, GLenum);
+
+// GL 2.0. Used only by the per-eye verification in Hooks.cpp, so its absence is
+// reported but not fatal -- a driver without it loses the diagnostic, not stereo.
+extern void (APIENTRY* GetUniformfv)(GLuint, GLint, GLfloat*);
 
 // Resolve everything. Requires a current context. Safe to call repeatedly.
 bool Load();

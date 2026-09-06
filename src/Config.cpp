@@ -10,6 +10,8 @@ namespace tr {
 namespace {
 
 Config g_cfg;
+float  g_liveScale = 423.0f;
+float  g_liveIpd   = 1.0f;
 
 int GetInt(const wchar_t* key, int def, const wchar_t* ini) {
     return static_cast<int>(GetPrivateProfileIntW(L"VR", key, def, ini));
@@ -45,6 +47,35 @@ float GetFloat(const wchar_t* key, float def, const wchar_t* ini) {
 
 const Config& Cfg() { return g_cfg; }
 
+float LiveWorldUnitsPerMetre() { return g_liveScale; }
+float LiveIpdScale()           { return g_liveIpd; }
+
+void AdjustWorldScale(float factor) {
+    g_liveScale *= factor;
+    if (g_liveScale < 16.0f)   g_liveScale = 16.0f;
+    if (g_liveScale > 8192.0f) g_liveScale = 8192.0f;
+    LogTuning("world scale");
+}
+
+void AdjustIpdScale(float factor) {
+    g_liveIpd *= factor;
+    if (g_liveIpd < 0.1f)  g_liveIpd = 0.1f;
+    if (g_liveIpd > 10.0f) g_liveIpd = 10.0f;
+    LogTuning("ipd");
+}
+
+void ResetTuning() {
+    g_liveScale = g_cfg.worldUnitsPerMetre;
+    g_liveIpd   = g_cfg.ipdScale;
+    LogTuning("reset to ini");
+}
+
+void LogTuning(const char* why) {
+    LogF("tuning [%s]: WorldUnitsPerMetre=%.1f  IpdScale=%.3f "
+         "(eye separation ~%.1f world units for a 64 mm IPD)",
+         why, g_liveScale, g_liveIpd, 0.064f * g_liveScale * g_liveIpd);
+}
+
 void LoadConfig(const wchar_t* ini) {
     if (GetFileAttributesW(ini) == INVALID_FILE_ATTRIBUTES) {
         Log("config: no TombRaiderVR.ini found, using defaults");
@@ -63,6 +94,15 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.positionalTracking  = GetBool (L"PositionalTracking", g_cfg.positionalTracking, ini);
     g_cfg.seatedOrigin        = GetBool (L"SeatedOrigin",       g_cfg.seatedOrigin,       ini);
     g_cfg.worldUnitsPerMetre  = GetFloat(L"WorldUnitsPerMetre", g_cfg.worldUnitsPerMetre, ini);
+    g_cfg.ipdScale            = GetFloat(L"IpdScale",           g_cfg.ipdScale,           ini);
+    g_cfg.scaleUpKey          = GetIntAuto(L"ScaleUpKey",       g_cfg.scaleUpKey,         ini);
+    g_cfg.scaleDownKey        = GetIntAuto(L"ScaleDownKey",     g_cfg.scaleDownKey,       ini);
+    g_cfg.ipdUpKey            = GetIntAuto(L"IpdUpKey",         g_cfg.ipdUpKey,           ini);
+    g_cfg.ipdDownKey          = GetIntAuto(L"IpdDownKey",       g_cfg.ipdDownKey,         ini);
+    g_cfg.resetTuningKey      = GetIntAuto(L"ResetTuningKey",   g_cfg.resetTuningKey,     ini);
+    g_cfg.scaleStep           = GetFloat(L"ScaleStep",          g_cfg.scaleStep,          ini);
+    if (g_cfg.scaleStep < 1.01f) g_cfg.scaleStep = 1.01f;
+    if (g_cfg.scaleStep > 4.0f)  g_cfg.scaleStep = 4.0f;
     g_cfg.eyeWidth            = GetInt  (L"EyeWidth",           g_cfg.eyeWidth,           ini);
     g_cfg.eyeHeight           = GetInt  (L"EyeHeight",          g_cfg.eyeHeight,          ini);
     g_cfg.superSample         = GetFloat(L"SuperSample",        g_cfg.superSample,        ini);
@@ -70,6 +110,11 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.flipViewY           = GetBool (L"FlipViewY",          g_cfg.flipViewY,          ini);
     g_cfg.swapEyes            = GetBool (L"SwapEyes",           g_cfg.swapEyes,           ini);
     g_cfg.flipSubmitV         = GetBool (L"FlipSubmitV",        g_cfg.flipSubmitV,        ini);
+    g_cfg.eyeMarkers          = GetBool (L"EyeMarkers",         g_cfg.eyeMarkers,         ini);
+    g_cfg.perEyeView          = GetBool (L"PerEyeView",         g_cfg.perEyeView,         ini);
+    g_cfg.debugEyeYawDegrees  = GetFloat(L"DebugEyeYawDegrees", g_cfg.debugEyeYawDegrees, ini);
+    g_cfg.eyeOffsetMode       = GetIntAuto(L"EyeOffsetMode",    g_cfg.eyeOffsetMode,      ini);
+    g_cfg.perEyeProjection    = GetIntAuto(L"PerEyeProjection", g_cfg.perEyeProjection,   ini);
     g_cfg.flatHud             = GetBool (L"FlatHud",            g_cfg.flatHud,            ini);
     g_cfg.duplicateDraws      = GetBool (L"DuplicateDraws",     g_cfg.duplicateDraws,     ini);
     g_cfg.mirrorToWindow      = GetBool (L"MirrorToWindow",     g_cfg.mirrorToWindow,     ini);
@@ -79,6 +124,9 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.traceFrames         = GetInt  (L"TraceFrames",        g_cfg.traceFrames,        ini);
     g_cfg.traceStartFrame     = GetInt  (L"TraceStartFrame",    g_cfg.traceStartFrame,    ini);
     g_cfg.traceKey            = GetIntAuto(L"TraceKey",         g_cfg.traceKey,           ini);
+
+    g_liveScale = g_cfg.worldUnitsPerMetre;
+    g_liveIpd   = g_cfg.ipdScale;
 
     if (g_cfg.superSample < 0.25f) g_cfg.superSample = 0.25f;
     if (g_cfg.superSample > 4.0f)  g_cfg.superSample = 4.0f;

@@ -107,6 +107,19 @@ inline Affine ToEngineSpace(const Affine& ovr, float unitsPerMetre, bool flipY) 
     return o;
 }
 
+// Rotation about the engine's Y axis, as a view-space pre-multiply. Diagnostic
+// helper for DebugEyeYawDegrees.
+inline Affine RotY(float degrees) {
+    const float a = degrees * 3.14159265358979f / 180.0f;
+    const float c = std::cos(a);
+    const float s = std::sin(a);
+    Affine o{};
+    o.r[0][0] =  c; o.r[0][1] = 0.0f; o.r[0][2] = s;   o.r[0][3] = 0.0f;
+    o.r[1][0] = 0.0f; o.r[1][1] = 1.0f; o.r[1][2] = 0.0f; o.r[1][3] = 0.0f;
+    o.r[2][0] = -s; o.r[2][1] = 0.0f; o.r[2][2] = c;   o.r[2][3] = 0.0f;
+    return o;
+}
+
 // --- mView_packed <-> Affine -----------------------------------------------
 //
 // The packed layout IS the row-major affine matrix the shader consumes, so

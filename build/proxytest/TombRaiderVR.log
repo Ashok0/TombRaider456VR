@@ -1,0 +1,5 @@
+TombRaiderVR: starting
+config: mode=MONO head-tracking tracking=rotation+position origin=seated units/m=423.0 ss=1.00 flipProjY=1 flipViewY=1 dup=1 flatHud=1
+engine: SizeOfImage 0x2B000 is too small for our RVAs (need 0xE9AEF28)
+engine: host module does not match the reference build; refusing to patch
+TombRaiderVR: could not bind to tomb456.exe, aborting

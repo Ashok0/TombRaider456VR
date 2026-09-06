@@ -1,0 +1,10 @@
+﻿  Config.cpp
+  dllmain.cpp
+  Engine.cpp
+  GL.cpp
+  Hooks.cpp
+  InlineHook.cpp
+  Log.cpp
+  StereoRenderer.cpp
+  VRSystem.cpp
+  TombRaiderVR.vcxproj -> C:\dev\TombRaider456VR\build\x64\Debug\TombRaiderVR.dll

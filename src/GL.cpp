@@ -16,6 +16,7 @@ GLenum (APIENTRY* CheckFramebufferStatus)(GLenum) = nullptr;
 void (APIENTRY* BlitFramebuffer)(GLint, GLint, GLint, GLint,
                                  GLint, GLint, GLint, GLint,
                                  GLbitfield, GLenum) = nullptr;
+void (APIENTRY* GetUniformfv)(GLuint, GLint, GLfloat*) = nullptr;
 
 namespace {
 
@@ -56,6 +57,11 @@ bool Load() {
     ok &= Grab(FramebufferRenderbuffer,"glFramebufferRenderbuffer");
     ok &= Grab(CheckFramebufferStatus, "glCheckFramebufferStatus");
     ok &= Grab(BlitFramebuffer,        "glBlitFramebuffer");
+
+    // Diagnostics only. Deliberately not folded into `ok`: a driver that does
+    // not hand this out must not disable stereo, it just loses the GPU-side
+    // verification line in the log.
+    Grab(GetUniformfv, "glGetUniformfv");
 
     g_loaded = ok;
     LogF("gl: loader %s", ok ? "ready" : "INCOMPLETE");

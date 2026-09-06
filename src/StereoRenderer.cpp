@@ -88,6 +88,62 @@ void StereoRenderer::SetEyeViewport(int eye) {
     glScissor(x, 0, static_cast<GLsizei>(m_eyeW), static_cast<GLsizei>(m_eyeH));
 }
 
+void StereoRenderer::CompareHalves(int& samples, int& differing) {
+    samples = differing = 0;
+    if (!m_fbo) return;
+
+    GLint prevRead = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
+    gl::BindFramebuffer(GL_READ_FRAMEBUFFER, m_fbo);
+
+    // A 5x5 interior grid. Correct stereo at any sane IPD moves most of these
+    // by far more than the threshold; identical halves move none of them.
+    const int N = 5;
+    for (int gy = 1; gy <= N; ++gy) {
+        for (int gx = 1; gx <= N; ++gx) {
+            const GLint x = static_cast<GLint>(m_eyeW * gx / (N + 1));
+            const GLint y = static_cast<GLint>(m_eyeH * gy / (N + 1));
+            unsigned char a[4] = { 0, 0, 0, 0 };
+            unsigned char b[4] = { 0, 0, 0, 0 };
+            glReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, a);
+            glReadPixels(x + static_cast<GLint>(m_eyeW), y, 1, 1,
+                         GL_RGBA, GL_UNSIGNED_BYTE, b);
+            ++samples;
+            int d = 0;
+            for (int c = 0; c < 3; ++c) {
+                d += (a[c] > b[c]) ? (a[c] - b[c]) : (b[c] - a[c]);
+            }
+            if (d > 8) ++differing;
+        }
+    }
+
+    gl::BindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevRead));
+}
+
+void StereoRenderer::MarkEyes() {
+    if (!m_fbo) return;
+
+    GLint prevFbo = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    gl::BindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+
+    const GLsizei bw = static_cast<GLsizei>(m_eyeW / 4);
+    const GLsizei bh = static_cast<GLsizei>(m_eyeH / 12);
+    const GLint   bx = static_cast<GLint>(m_eyeW / 2) - bw / 2;
+
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(bx, 0, bw, bh);
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glScissor(bx + static_cast<GLint>(m_eyeW), 0, bw, bh);
+    glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+    gl::BindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo));
+}
+
 void StereoRenderer::MirrorToWindow(int winW, int winH, GLuint windowFbo) {
     if (!m_fbo || winW <= 0 || winH <= 0) return;
 
