@@ -1,0 +1,297 @@
+#include "VRSystem.h"
+#include "Config.h"
+#include "Log.h"
+#include "GL.h"
+
+#include <cstdio>
+
+namespace tr {
+namespace {
+
+// openvr_api.dll's exported C entry points. openvr.h declares these; we resolve
+// them by hand so the DLL has no static import on the runtime.
+typedef uint32_t (VR_CALLTYPE* PFN_VR_InitInternal)(vr::EVRInitError*, vr::EVRApplicationType);
+typedef void     (VR_CALLTYPE* PFN_VR_ShutdownInternal)();
+typedef void*    (VR_CALLTYPE* PFN_VR_GetGenericInterface)(const char*, vr::EVRInitError*);
+typedef bool     (VR_CALLTYPE* PFN_VR_IsHmdPresent)();
+typedef bool     (VR_CALLTYPE* PFN_VR_IsRuntimeInstalled)();
+typedef const char* (VR_CALLTYPE* PFN_VR_GetErrorDesc)(vr::EVRInitError);
+typedef const char* (VR_CALLTYPE* PFN_VR_GetErrorSymbol)(vr::EVRInitError);
+
+PFN_VR_InitInternal       g_initInternal     = nullptr;
+PFN_VR_ShutdownInternal   g_shutdownInternal = nullptr;
+PFN_VR_GetGenericInterface g_getInterface    = nullptr;
+PFN_VR_IsHmdPresent       g_isHmdPresent     = nullptr;
+PFN_VR_IsRuntimeInstalled g_isRuntimeInstalled = nullptr;
+PFN_VR_GetErrorDesc       g_errDesc          = nullptr;
+PFN_VR_GetErrorSymbol     g_errSymbol        = nullptr;
+
+// Turn an EVRInitError into something a human can act on. Far more use than the
+// bare number: the runtime's own strings name the actual problem.
+void LogInitError(const char* what, vr::EVRInitError err) {
+    LogF("vr: %s failed -- %s (%d): %s",
+         what,
+         g_errSymbol ? g_errSymbol(err) : "?",
+         static_cast<int>(err),
+         g_errDesc ? g_errDesc(err) : "no description available");
+}
+
+VRSystem g_vr;
+
+// OpenVR's HmdMatrix34_t is already row-major 3x4, same shape as our Affine.
+Affine FromHmd(const vr::HmdMatrix34_t& m) {
+    Affine a{};
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 4; ++j)
+            a.r[i][j] = m.m[i][j];
+    return a;
+}
+
+} // namespace
+
+VRSystem& VR() { return g_vr; }
+
+bool VRSystem::Init() {
+    m_dll = LoadLibraryW(L"openvr_api.dll");
+    if (!m_dll) {
+        Log("vr: openvr_api.dll not found next to the exe or on PATH");
+        return false;
+    }
+
+    g_initInternal     = reinterpret_cast<PFN_VR_InitInternal>(
+                             GetProcAddress(m_dll, "VR_InitInternal"));
+    g_shutdownInternal = reinterpret_cast<PFN_VR_ShutdownInternal>(
+                             GetProcAddress(m_dll, "VR_ShutdownInternal"));
+    g_getInterface     = reinterpret_cast<PFN_VR_GetGenericInterface>(
+                             GetProcAddress(m_dll, "VR_GetGenericInterface"));
+    g_isHmdPresent     = reinterpret_cast<PFN_VR_IsHmdPresent>(
+                             GetProcAddress(m_dll, "VR_IsHmdPresent"));
+    g_isRuntimeInstalled = reinterpret_cast<PFN_VR_IsRuntimeInstalled>(
+                             GetProcAddress(m_dll, "VR_IsRuntimeInstalled"));
+    g_errDesc          = reinterpret_cast<PFN_VR_GetErrorDesc>(
+                             GetProcAddress(m_dll, "VR_GetVRInitErrorAsEnglishDescription"));
+    g_errSymbol        = reinterpret_cast<PFN_VR_GetErrorSymbol>(
+                             GetProcAddress(m_dll, "VR_GetVRInitErrorAsSymbol"));
+
+    if (!g_initInternal || !g_getInterface || !g_shutdownInternal) {
+        Log("vr: openvr_api.dll is missing expected exports");
+        return false;
+    }
+
+    {
+        wchar_t loaded[MAX_PATH]{};
+        GetModuleFileNameW(m_dll, loaded, MAX_PATH);
+        char narrow[MAX_PATH]{};
+        WideCharToMultiByte(CP_UTF8, 0, loaded, -1, narrow, MAX_PATH, nullptr, nullptr);
+        LogF("vr: using %s", narrow);
+    }
+
+    // These two are diagnostics, NOT gates.
+    //
+    // VR_IsHmdPresent is a lightweight config probe and returns false in
+    // situations where initialisation would in fact succeed -- a headset in
+    // standby is the common one. Refusing to continue on it throws away the
+    // real EVRInitError, which is the only thing that actually says what is
+    // wrong. So: report it and carry on regardless.
+    LogF("vr: runtime installed=%s, IsHmdPresent=%s",
+         (g_isRuntimeInstalled && g_isRuntimeInstalled()) ? "yes" : "no",
+         (g_isHmdPresent && g_isHmdPresent()) ? "yes" : "no");
+
+    // Mono bring-up prefers a Background app: it reads tracking without taking
+    // over as the VR scene application, so nothing depends on the compositor
+    // and SteamVR will not complain about a missing frame loop.
+    const bool mono = Cfg().monoTracking;
+    vr::EVRApplicationType appType =
+        mono ? vr::VRApplication_Background : vr::VRApplication_Scene;
+    const char* appName = mono ? "Background" : "Scene";
+
+    vr::EVRInitError err = vr::VRInitError_None;
+    g_initInternal(&err, appType);
+
+    // A Background app deliberately will not start SteamVR; it attaches to a
+    // server that is already up. If none is, retry as an Overlay app, which
+    // will bring the runtime up and still does not own the scene.
+    if (err == vr::VRInitError_Init_NoServerForBackgroundApp && mono) {
+        LogInitError("VR_InitInternal(Background)", err);
+        Log("vr: no running SteamVR to attach to; retrying as an Overlay app");
+        err = vr::VRInitError_None;
+        appType = vr::VRApplication_Overlay;
+        appName = "Overlay";
+        g_initInternal(&err, appType);
+    }
+
+    if (err != vr::VRInitError_None) {
+        char what[64]{};
+        _snprintf_s(what, sizeof(what), _TRUNCATE, "VR_InitInternal(%s)", appName);
+        LogInitError(what, err);
+        return false;
+    }
+    LogF("vr: initialised as a %s app", appName);
+
+    m_system = static_cast<vr::IVRSystem*>(
+                   g_getInterface(vr::IVRSystem_Version, &err));
+    if (!m_system || err != vr::VRInitError_None) {
+        LogInitError("VR_GetGenericInterface(IVRSystem)", err);
+        LogF("vr: the runtime does not serve %s -- openvr_api.dll and SteamVR "
+             "are probably different generations", vr::IVRSystem_Version);
+        g_shutdownInternal();
+        return false;
+    }
+
+    // The compositor is required for stereo and irrelevant for mono.
+    m_compositor = static_cast<vr::IVRCompositor*>(
+                       g_getInterface(vr::IVRCompositor_Version, &err));
+    if (!m_compositor && !mono) {
+        LogInitError("VR_GetGenericInterface(IVRCompositor)", err);
+        g_shutdownInternal();
+        m_system = nullptr;
+        return false;
+    }
+
+    // Latch the per-eye constants. These do not change while the runtime is up.
+    for (int e = 0; e < 2; ++e) {
+        const vr::Hmd_Eye eye = (e == 0) ? vr::Eye_Left : vr::Eye_Right;
+        m_eyeFromHead[e] = InvertRigid(FromHmd(m_system->GetEyeToHeadTransform(eye)));
+        m_system->GetProjectionRaw(eye,
+                                   &m_rawProj[e][0], &m_rawProj[e][1],
+                                   &m_rawProj[e][2], &m_rawProj[e][3]);
+        LogF("vr: eye %d raw tangents l=%.4f r=%.4f t=%.4f b=%.4f",
+             e, m_rawProj[e][0], m_rawProj[e][1], m_rawProj[e][2], m_rawProj[e][3]);
+    }
+
+    m_system->GetRecommendedRenderTargetSize(&m_eyeW, &m_eyeH);
+    const auto& c = Cfg();
+    if (c.eyeWidth  > 0) m_eyeW = static_cast<uint32_t>(c.eyeWidth);
+    if (c.eyeHeight > 0) m_eyeH = static_cast<uint32_t>(c.eyeHeight);
+    m_eyeW = static_cast<uint32_t>(m_eyeW * c.superSample);
+    m_eyeH = static_cast<uint32_t>(m_eyeH * c.superSample);
+
+    LogF("vr: ready, per-eye target %ux%u", m_eyeW, m_eyeH);
+    return true;
+}
+
+void VRSystem::Shutdown() {
+    if (m_system && g_shutdownInternal) g_shutdownInternal();
+    m_system     = nullptr;
+    m_compositor = nullptr;
+    if (m_dll) { FreeLibrary(m_dll); m_dll = nullptr; }
+}
+
+void VRSystem::GetEyeSize(uint32_t& w, uint32_t& h) const {
+    w = m_eyeW;
+    h = m_eyeH;
+}
+
+void VRSystem::BeginFrame() {
+    if (!m_system) return;
+
+    vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
+
+    if (Cfg().monoTracking) {
+        // Read tracking directly. WaitGetPoses would block on the compositor's
+        // frame loop and expects a Submit to follow, neither of which applies
+        // when we are only sampling the head pose.
+        //
+        // Seated by default: standing space is absolute room coordinates, so
+        // the head's ~1.6 m height would be scaled into several hundred TR
+        // units of camera displacement before the player moves at all.
+        const vr::ETrackingUniverseOrigin origin = Cfg().seatedOrigin
+            ? vr::TrackingUniverseSeated
+            : vr::TrackingUniverseStanding;
+        m_system->GetDeviceToAbsoluteTrackingPose(
+            origin, 0.0f, poses, vr::k_unMaxTrackedDeviceCount);
+    } else {
+        if (!m_compositor) return;
+        m_compositor->WaitGetPoses(poses, vr::k_unMaxTrackedDeviceCount, nullptr, 0);
+    }
+
+    const auto& hmd = poses[vr::k_unTrackedDeviceIndex_Hmd];
+    const bool wasValid = m_poseValid;
+    m_poseValid = hmd.bPoseIsValid && hmd.bDeviceIsConnected;
+    if (m_poseValid) {
+        // mDeviceToAbsoluteTracking is head->tracking; we want tracking->head.
+        m_headFromTracking = InvertRigid(FromHmd(hmd.mDeviceToAbsoluteTracking));
+    }
+
+    if (wasValid != m_poseValid) {
+        LogF("vr: head pose %s", m_poseValid ? "ACQUIRED" : "LOST");
+    }
+
+    // In mono bring-up, print the head position periodically. If these numbers
+    // do not move when you move, the problem is tracking, not the injection.
+    if (Cfg().monoTracking && m_poseValid) {
+        if (++m_poseLogTick % 120 == 0) {
+            const auto& t = hmd.mDeviceToAbsoluteTracking.m;
+            LogF("vr: head @ x=%+.3f y=%+.3f z=%+.3f m  (fwd %+.2f %+.2f %+.2f)",
+                 t[0][3], t[1][3], t[2][3], -t[0][2], -t[1][2], -t[2][2]);
+        }
+    }
+}
+
+Affine VRSystem::EyeView(Eye eye) const {
+    const auto& c = Cfg();
+
+    // Mono: the centred head view, with no per-eye offset. There is only one
+    // image, so applying half an IPD to it would just shift the whole picture.
+    if (c.monoTracking) {
+        Affine head = m_headFromTracking;
+        if (!c.positionalTracking) {
+            // Pure pivot about the game camera. With translation zeroed there
+            // is no way for a wrong world scale to push the camera through the
+            // floor, which makes this the safe first thing to switch on.
+            head.r[0][3] = head.r[1][3] = head.r[2][3] = 0.0f;
+        }
+        return ToEngineSpace(head, c.worldUnitsPerMetre, c.flipViewY);
+    }
+
+    int idx = static_cast<int>(eye);
+    if (c.swapEyes) idx = 1 - idx;
+
+    // In OpenVR's own convention first: eye <- head <- tracking origin.
+    const Affine ovr = Mul(m_eyeFromHead[idx], m_headFromTracking);
+
+    // Then into the engine's Y-down, TR-unit view space.
+    return ToEngineSpace(ovr, c.worldUnitsPerMetre, c.flipViewY);
+}
+
+void VRSystem::EyeProjection(Eye eye, float zNear, float zFar, mat4& out) const {
+    const auto& c = Cfg();
+    int idx = static_cast<int>(eye);
+    if (c.swapEyes) idx = 1 - idx;
+
+    BuildEyeProjection(out,
+                       m_rawProj[idx][0], m_rawProj[idx][1],
+                       m_rawProj[idx][2], m_rawProj[idx][3],
+                       zNear, zFar,
+                       c.flipProjectionY);
+}
+
+void VRSystem::Submit(GLuint tex, uint32_t, uint32_t) {
+    if (!m_compositor || !tex) return;
+
+    vr::Texture_t t{};
+    t.handle      = reinterpret_cast<void*>(static_cast<uintptr_t>(tex));
+    t.eType       = vr::TextureType_OpenGL;
+    t.eColorSpace = vr::ColorSpace_Gamma;
+
+    // One double-wide texture, split by UV bounds -- avoids a second FBO and a
+    // second attachment switch per frame.
+    //
+    // V runs 0..1 by default, i.e. ordinary GL orientation. This used to be
+    // tied to FlipProjectionY, which was wrong and made the headset image
+    // upside down: the engine's negative e11 is there to cancel TR's Y-down
+    // world, so what lands in the eye texture is already a correctly oriented
+    // GL render with its origin at lower-left. Inverting V as well flipped a
+    // correct image. FlipSubmitV stays available as an escape hatch.
+    const bool flip = Cfg().flipSubmitV;
+    const float v0 = flip ? 1.0f : 0.0f;
+    const float v1 = flip ? 0.0f : 1.0f;
+
+    vr::VRTextureBounds_t left { 0.0f, v0, 0.5f, v1 };
+    vr::VRTextureBounds_t right{ 0.5f, v0, 1.0f, v1 };
+
+    m_compositor->Submit(vr::Eye_Left,  &t, &left);
+    m_compositor->Submit(vr::Eye_Right, &t, &right);
+}
+
+} // namespace tr

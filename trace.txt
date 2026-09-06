@@ -1,0 +1,559 @@
+ re-mcp is connected to the tomb456 Ghidra project. Find all structs and functions related to the camera — search for Camera, Frustum, viewMatrix, projMatrix, and anything calling glUniformMatrix4fv
+
+  Called re-mcp
+
+No databases are open yet — the server connected, but the project still needs loading. Let me see what targets are available:
+
+  Searched for 1 pattern, ran 1 shell command
+
+The project contains a program named tomb456.exe, and I found the source binary — with a PDB alongside it, which means good symbol names:
+
+C:\Users\Ashok\Downloads\vr\[WIN] Tomb Raide[2026-01-17] (PDB)\tomb456.exe
+
+Opening the existing project to reuse its pr that would destroy it):
+
+  Listed 1 directory, called re-mcp 2 times
+
+27 MB of real prior analysis in that project't recreate it. Two things to check before Ipick a target:
+
+  Called re-mcp, ran 1 shell command
+
+glUniformMatrix4fv appears only in tomb456.exe — none of the DLLs. So the renderer lives in the launcher exe and the
+existing project is the right target. No hidpr, so let me check how this build actuallyhandles project paths:
+
+  Ran 2 shell commands
+
+Now the root cause is clear. Let me confirm one constant:
+
+  Ran 1 shell command
+
+Root cause pinned down: open_database always treats file_path as a binary to import — it never opens an arbitrary
+.gpr. It looks for a project at <binary_dir>>.gpr. Your project is at a different pathand a different project name (TombRaider456 vs the expected tomb456.exe), so it tried to import the 0-byte .gpr as a
+binary → "No load spec found". (The 0-byte .verything in the .rep.)
+
+I'll stage the expected layout with copies,  untouched:
+
+  Called re-mcp 2 times, ran 3 shell commands
+
+Stale ID registration from the failed spawn a fresh ID rather than fighting it:
+
+  Called re-mcp 2 times
+
+Project opened with the prior analysis intac PE. Now the actual search:
+
+  Called re-mcp 3 times
+
+glUniformMatrix4fv is an indirect call throuE525C68 (the 3P6A mangling marks it as a data variable, not a function) — so call sites are xrefs to that pointer. Following that, plus widening the net since the
+struct filter came back empty:
+
+  Called re-mcp 3 times
+
+Now the picture is clear. Let me pull the tw— the single choke point where matrices reach the GPU, and the view matrix setter:
+
+  Called re-mcp 2 times
+
+The renderer's whole matrix pipeline is a global state struct, not camera objects. Let me pull that struct definition:
+
+  Called re-mcp
+
+RenderState (240 bytes, 29 members) is the vid_state type. Fetching it plus the global matrix addresses:
+
+  Called re-mcp 3 times
+
+Search complete. Here's the map.
+
+The headline: there is no Camera or Frustum struct
+
+Zero hits for Camera, Frustum, viewMatrix, or projMatrix as type names. The DB has 1611 structs but they're almost
+entirely PDB noise (CRT __acrt_* lambdas, RT engine has no camera object — camera stateis flat globals plus a dirty-flag bitmask.
+
+RenderState @ vid_state 0x14E51C900 — the real camera struct
+
+240 bytes, 29 members. The matrix-relevant slice:
+
+┌─────┬────────┬────────────────────────┐
+│ Off │ Member │          Type          │
+├─────┼────────┼────────────────────────┤
+│ 16  │ shader │ int                    │
+├─────┼────────┼────────────────────────┤
+│ 96  │ consts │ uint ← dirty-flag mask │
+├─────┼────────┼────────────────────────┤
+│ 104 │ proj   │ mat4 *                 │
+├─────┼────────┼────────────────────────┤
+│ 112 │ view   │ mat4 *                 │
+├─────┼────────┼────────────────────────┤
+│ 120 │ shadow │ mat4 *                 │
+├─────┼────────┼────────────────────────┤
+│ 144 │ model  │ mat4 *                 │
+└─────┴────────┴────────────────────────┘
+
+Shadowed by vid_state_prev @ 0x14E51CA00 for redundant-upload filtering. Backing storage: mProj @ 0x14E51C6F0, mView @
+0x14E51C8C0, mShadow @ 0x14E51CB70. mat4 is
+
+glUniformMatrix4fv — a function pointer, not
+
+It's a data variable at 0x14E525C68 (?glUnifA), so calls are indirect. Only 3 xrefs:
+
+- init_ogl @ 0x140016328 — WRITE (resolves t
+- validate_draw @ 0x140011EDE and 0x140011F3C — the only two call sites
+
+validate_draw @ 0x140011CC0 is the single choke point where every matrix reaches the GPU.
+
+The trap: the view matrix is not uploaded via glUniformMatrix4fv
+
+This is the thing worth knowing before you hook anything. Inside validate_draw:
+
+if ((consts & 1) && shaders[s].uid[0] >= 0)      // proj
+    (*glUniformMatrix4fv)(uid[0], 1, '\0', &
+if ((consts & 2) && shaders[s].uid[1] >= 0)      // view  ← glUniform4fv!
+    (*glUniform4fv)(uid[1], 4, &vid_state.vi
+if ((consts & 4) && shaders[s].uid[2] >= 0)      // shadow, 6 matrices
+    (*glUniformMatrix4fv)(uid[2], 6, '\0', &
+if ((consts & 0x10000) && shaders[s].uid[5] >= 0) // model ← glUniform4fv!
+    (*glUniform4fv)(uid[5], 4, &vid_state.mo
+
+View and model go up as 4×vec4 via glUniformojection and shadow use glUniformMatrix4fv.Hooking glUniformMatrix4fv alone — the literal ask — would catch projection and miss view entirely.
+
+consts dirty bits: 1=proj, 2=view, 4=shadow, 8=shadowFalloff, 0x10=shadowPos, 0x20=fogColor, 0x100=fogPlane,
+0x200=dofPlane, 0x400=effectOffsets, 0x1000000=joints,0x80000..0x400000=LPos/LCol/LDir/ambient, 0x800000=color. A shader switch forces the mask to 0xff07bf to re-upload
+everything.
+
+Camera functions (44 total in vid_*/ogl_*; t
+
+Projection — vid_setPerspMatrix 0x14000B920 |=1), vid_getPerspMatrix 0x14000B8F0,vid_setPerspOffset 0x14000B8D0, vid_setOrtho3D 0x14000B880, ogl_setPersp 0x1400128E0, ogl_setOrtho 0x1400129A0,
+ogl_getPerspAngles 0x1400127D0, ogl_setPersp
+
+View — vid_setViewMatrix 0x14000B960, vid_se_setViewMatrix2 0x14000BCD0.
+
+Model — vid_setModelMatrix 0x14000BDB0, plusatrixUnitPos variants0x14000BED0–0x14000C0DE.
+
+Shadow/misc — vid_setCalcShadowMatrix 0x14000C0E0, vid_setShadowMatrix 0x14000C180, ogl_getCubemapMatrix 0x140012790,
+ogl_setRenderTarget 0x140013C30, ogl_setView 0x140011820.
+
+No frustum-culling function exists under anynd — only vid_setInverseCullingFlag0x14000D730 (backface winding). Culling likely lives in the per-game DLLs.
+
+For a VR port, ogl_setPerspAngles + vid_setPerspOffset are your asymmetric-frustum and stereo-offset levers, and
+validate_draw is the one function to hook fo
+
+---
+
+One setup caveat: open_database can't open aports a binary and looks for a project at<binary_dir>/ghidra_projects/<binary_name>.gpr. So I copied tomb456.exe/.pdb to C:\dev\Ghidra\ and copied your project
+to C:\dev\Ghidra\ghidra_projects\tomb456.exeC:\dev\Ghidra\TombRaider456.rep is untouched (still 27 MB) — but it's now a fork: any renames or comments I make land on the copy, and anything you do in the GUI
+on the original won't be visible to me. Wortther of us annotates further.
+
+Want me to trace vid_setViewMatrix and ogl_sthis up as a shareable engine-map page?
+
+✻ Cooked for 5m 10s · done 4:09 PM
+
+> trace vid_setViewMatrix and ogl_setPerspAngl
+
+  Called re-mcp 4 times
+
+Both functions have zero call xrefs — only Dlled into a function-pointer table. Let metrace who consumes it:
+
+  Called re-mcp 4 times
+
+0x14E9BE6FC is just a .pdata unwind entry — noise. So the only real reference to each is an address-taken in vidInit /
+init_ogl. Let me see the table they're insta
+
+  Called re-mcp
+
+vidInit installs the whole renderer API into how the game DLLs reach it. But there's adiscrepancy worth chasing: vidInit sets vid_state.proj = mProj (slot 0), while every projection setter writes
+mProj[1]. Let me resolve which slot is live:
+
+  Called re-mcp 4 times
+
+mProj is mat4[2] — that resolves it. And oglbal literally named CameraSide, which myearlier struct/function filters missed. Let me close that gap:
+
+  Called re-mcp 2 times
+
+mProj[0] = ortho (2D/UI), mProj[1] = perspective (3D). One last piece — where ogl_setPerspAngles gets installed:
+
+  Called re-mcp 3 times
+
+init_ogl installs them into a pointer table at 0x1405835xx. Let me identify that table:
+
+  Called re-mcp 2 times
+
+Both traced. Here's the full path.
+
+vid_setViewMatrix @ 0x14000B960
+
+Signature: void vid_setViewMatrix(int *m) — takes a 3×4 integer matrix (12 ints, row-major: m[0..3], m[4..7],
+m[8..11]).
+
+mView.e00       =  (float)m[0]  * 6.1035e-0516384
+...
+mView.e20       = -(float)m[8]  * 6.1035e-05
+mView_packed.e30 =  (float)m[3];                 // translation, UNSCALED
+mView_packed.e31 =  (float)m[7];
+mView_packed.e32 =  (float)m[11];
+vid_state.consts |= 2;
+vid_state.view    = &mView_packed;
+
+Three things matter here:
+
+- Fixed-point input. Rotation is TR's classic 16384 = 1.0 fixed point, scaled by 1/16384. Translation is passed
+  through raw as world units — not scaled.
+- Z is negated (-m[8], -m[9], -m[10]) — the handedness flip into GL convention.
+- It writes two different globals. mView @ 0, its translation column (float idx 12–15)coming from constants. mView_packed @ 0x14E51CB30 gets rotation plus translation at float indices 3, 7, 11 — the
+  bottom row, i.e. a transposed / row-vectors at mView_packed.
+
+That transposed layout is almost certainly wiform4fv rather than glUniformMatrix4fv — the shader takes it as vec4[4], so no transpose flag is needed. mView (rotation-only) is a separate consumer I haven't
+traced.
+
+ogl_setPerspAngles @ 0x140012840
+
+void ogl_setPerspAngles(float tanX, float ta
+{
+    vid_state.consts |= 1;
+    mProj[1].e00 =  1.0f / tanX;
+    mProj[1].e11 = -1.0f / tanY;
+    mProj[1].e02 =  0.0f;  mProj[1].e12 = 0.0f;           // ← symmetric
+    mProj[1].e22 = (zNear + zFar) / (zNear -
+    mProj[1].e23 = (2.0f * zFar * zNear) / (zNear - zFar);
+    mProj[1].e32 = -1.0f;  mProj[1].e33 = 0.
+}
+
+Float-index layout confirms this is standard GL column-major: e32 lands at index 11 (-1) and e23 at index 14 (2fn/(n-f)) — exactly glFrustum's layout. Songles.
+
+The VR-relevant find: this function explicitrustum shear terms, (r+l)/(r-l) and(t+b)/(t-b). And vid_setPerspOffset @ 0x14000B8D0 does nothing but set them:
+
+void vid_setPerspOffset(float x, float y) {
+    vid_state.consts |= 1;
+    mProj[1].e02 = x;
+    mProj[1].e12 = y;
+}
+
+That is precisely the asymmetric-frustum lever per-eye VR projection needs — already exposed as an API entry point.
+ogl_setPerspAngles for the eye's half-angles the eye's frustum shear.
+
+Neither is called directly — both go through
+
+Zero call xrefs on either; both are address-global app struct @ 0x1405833E0, which is how tomb4/5/6.dll reach the renderer.
+
+vidInit @ 0x14000D750 installs ~40 entries including app.setViewMatrix = vid_setViewMatrix, app.setPerspMatrix,
+app.setPerspOffset, app.setOrtho3D. init_oglgl_* half:
+
+┌────────────┬──────────────────────┐
+│ Table slot │       Function       │
+├────────────┼──────────────────────┤
+│ app+0x130  │ ogl_setPerspAngles   │
+├────────────┼──────────────────────┤
+│ app+0x150  │ ogl_setPersp         │
+├────────────┼──────────────────────┤
+│ app+0x158  │ ogl_setOrtho         │
+├────────────┼──────────────────────┤
+│ app+0x160  │ ogl_getProjRangeSize │
+└────────────┴──────────────────────┘
+
+So the real call path is game DLL → app.<fn>nsts bit → validate_draw uploads.
+
+mProj slot question, resolved
+
+mProj is mat4[2] @ 0x14E51C6F0. mProj[0] = os it), mProj[1] = perspective (every perspsetter writes it). vidInit initially points vid_state.proj at slot 0, and vid_setOrtho3D copies slot 0 → slot 1 and
+repoints to mProj + 1. During 3D rendering t
+
+Also worth noting: CameraSide @ 0x14015AAD0 ubemap face matrices read byogl_getCubemapMatrix — the only global in the binary with "Camera" in the name. (The "Camera Systems Programmers" hit
+at 0x14007A598 is just a credits string.)
+
+---
+
+For hooking, validate_draw remains the one cnjection is at the app vtable — swapapp.setViewMatrix and app.setPerspOffset and you get per-eye control without touching the GL layer. Want me to trace
+vid_setPass (the 2944-byte shader/pass dispa next — the latter is where per-eyeframebuffers would need to go?
+
+✻ Baked for 3m 19s · done 4:13 PM
+
+> trace ogl_setRenderTarget
+
+  Called re-mcp 3 times
+
+The struct name needs the literal angle brackets. Continuing:
+
+  Called re-mcp 7 times
+
+ogl_setRenderTarget @ 0x140013C30
+
+void ogl_setRenderTarget(int color_id, int depth_id,
+                         int color_index, in
+                         int color_mip,   int depth_mip)
+
+Installed at app+0x178 by init_ogl @ 0x140015CA0. One direct caller in the exe (ogl_texCopy); everything else reaches
+it through the app vtable.
+
+Three phases
+
+1. Latch the request into the global ogl_rt ogl_rt>, 24 bytes):
+
+┌─────┬─────────────┐
+│ Off │   Member    │
+├─────┼─────────────┤
+│ 0   │ color_id    │
+├─────┼─────────────┤
+│ 4   │ color_mip   │
+├─────┼─────────────┤
+│ 8   │ color_index │
+├─────┼─────────────┤
+│ 12  │ depth_id    │
+├─────┼─────────────┤
+│ 16  │ depth_mip   │
+├─────┼─────────────┤
+│ 20  │ depth_index │
+└─────┴─────────────┘
+
+2. Invalidate all 7 texture units — unrolledGL_TEXTURE_2D_ARRAY and stampvid_state_prev.tex[i] = 0xFFFFFFFF so validate_draw is forced to rebind. This is what stops a texture still bound as a
+sampler from being attached as a target.
+
+3. Bind. Two paths:
+
+if (color_id == 0 && depth_id == 0) {
+    vid_state.consts |= 4;                       // ← shadow-matrix dirty bit
+    glBindFramebuffer(GL_FRAMEBUFFER, FBO_de
+} else {
+    glBindFramebuffer(GL_FRAMEBUFFER, FBO_cu
+    glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                              ogl_textures[cdex);
+    glDrawBuffer(color_id ? GL_COLOR_ATTACHMENT0 : GL_NONE);
+    glFramebufferTextureLayer(GL_FRAMEBUFFER
+                              depth_id ? ogl_textures[depth_id] : 0,
+                              depth_mip, dep
+    glCheckFramebufferStatus(GL_FRAMEBUFFER);
+}
+gTargetWidth  = texDesc[id].width  ? texDesc[id].width  : gWidth;
+gTargetHeight = texDesc[id].height ? texDesc
+
+What matters for VR
+
+Every render target is a layered 2D array teureLayer + GL_TEXTURE_2D_ARRAY (0x8C1A)throughout — never glFramebufferTexture2D. color_index is the array layer. That means per-eye targets need no new
+plumbing: allocate a 2-layer array texture aThe engine already renders to layered targets natively.
+
+But there is exactly one custom FBO. FBO_custom @ 0x14E9ADF28 is a single global, created in init_ogl @ 0x1400182F6,
+destroyed in ogl_release. Every offscreen bit's attachments. Per-eye switching works, but each switch re-attaches color and depth and calls glCheckFramebufferStatus — a full validation on every target
+change, twice per frame minimum in stereo. Irgets, a second FBO to ping-pong is the cheap win.
+
+glCheckFramebufferStatus's return value is discarded. No branch on it, no logging. An incomplete FBO from a bad layer
+index will fail silently and you'll get an e worth knowing before you start passing newcolor_index values.
+
+Depth has no stencil. GL_DEPTH_ATTACHMENT (0x8D00) only, never GL_DEPTH_STENCIL_ATTACHMENT.
+
+Asymmetric dirty flag. The backbuffer path sets vid_state.consts |= 4 (shadow matrices) but the custom-target path
+doesn't. So returning to the backbuffer forcing between offscreen targets doesn't. If you insert an eye-target switch mid-frame, shadow matrices won't be re-uploaded — probably fine, since nothing else
+invalidates them either, but it's an inconsi
+
+ogl_texCopy @ 0x140014A10 — the save/restore
+
+The only direct caller, and it shows the int
+
+glBindFramebuffer(GL_READ_FRAMEBUFFER, FBO_clot
+glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, ogl_textures[dst], 0, 0);
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_2D_ARRAY, ogl_textures[src]);
+glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0,
+ogl_setRenderTarget(ogl_rt.color_id, ogl_rt.depth_id,      // restore from latch
+                    ogl_rt.color_index, ogl_
+                    ogl_rt.color_mip, ogl_rt.depth_mip);
+
+ogl_rt exists purely as this save/restore latch — written only by ogl_setRenderTarget, read only here. There's no
+stack, so nested target changes don't restorand the inner restore clobbers the outer'ssaved state. Relevant if you wrap eye passes around existing effect passes.
+
+Two things to verify before patching
+
+- gTargetWidth is at 0x143298680 while gTargetHeight is at 0x140698678 — ~44 MB apart, though the code writes them as
+  a pair. gWidth/gHeight sit together at 0x1very likely a bad PDB symbol or a Ghidraplacement artifact rather than the real layout; confirm the actual store address before you hook either.
+- The texDesc + lVar3 != NULL guard in the warithmetic on a global array — always true.Dead check, no behavioral consequence.
+
+---
+
+That's the render-target path end to end. The natural next targets are init_ogl (where FBO_custom and the texture
+array pool are created — it'd tell you how teye) or vid_setPass, the 2944-byte shaderdispatcher. Say the word; I can also consolidate the four traces so far into a single engine-map page if it's getting
+hard to hold in scrollback.
+
+✻ Brewed for 1m 34s · done 4:15 PM
+
+> trace init_ogl
+
+  Called re-mcp
+
+init_ogl is 10,241 bytes — the largest functg it whole:
+
+  Called re-mcp
+
+847K characters — too large to inline, savedtructurally with shell tools rather thanreading it linearly:
+
+  Ran 1 shell command
+
+1325 lines but 612 chars/line average — some lines are enormous. Let me map the structure:
+
+  Ran 6 shell commands
+
+Let me decode the attribute arrays and check the failure paths:
+
+  Ran 1 shell command
+
+That output included full GLSL sources. Re-running the parts I need cleanly:
+
+  Ran 2 shell commands
+
+Coverage note: the decompilation is 1,325 lines / 811KB, of which ~1,000 lines are embedded GLSL source. I scanned all
+1,325 lines with pattern extraction and read), all 47 vtable installs, context creation(85–165), and GL object setup (1230–1325). I did not read the 202 shader bodies line by line — I extracted their
+uniform interface instead.
+
+init_ogl @ 0x140015BA0 — six phases, 10,241
+
+1 · Install 47 app vtable entries (lines 33– calls init_ogl first, then layers the vid_*half on top. Six slots are stubbed to _guard_check_icall_nop: suspend, resume, markerPush, markerPop,
+preparePixelUnpack, finishPixelUnpack, memStRelease = ogl_ibRelease — index and vertexbuffer release share one function.
+
+2 · Dummy-context bootstrap (85–119). The classic Windows two-step: a throwaway "static" window + legacy context
+purely to resolve wglChoosePixelFormatARB an then wglMakeCurrent(NULL,NULL) → ReleaseDC → wglDeleteContext → DestroyWindow.
+
+3 · Real context on the game HWND (119–145). If either ARB entry point is missing it silently falls back to legacy
+ChoosePixelFormat + wglCreateContext. The AR
+
+DRAW_TO_WINDOW=1  SUPPORT_OPENGL=1  DOUBLE_B
+ACCELERATION=FULL  COLOR_BITS=32  ALPHA_BITS=8  DEPTH_BITS=24
+CTX_MAJOR_VERSION=3  CTX_MINOR_VERSION=2  PR
+
+OpenGL 3.2 Core profile. No WGL_SAMPLES/SAMPcil bits.
+
+4 · GL loader (146–230) — 56 wglGetProcAddreiscarded (glUniform1fv/2fv/3fv,glCompressedTexImage2D, glGetInternalformativ, glFramebufferRenderbuffer, glDisableVertexAttribArray, glGetProgramiv).
+That's consistent rather than buggy: the engfv and glUniform1iv, which do have namedglobals.
+
+5 · 202 shader_init calls — shaders[0] through shaders[0xC9], 404 GLSL sources (vert+frag), all #version 150.
+
+6 · Object creation + default state (1236–1322):
+
+- 8 VAOs, 2 VBOs — VBO[0] = GL_ARRAY_BUFFER 768 KB, VBO[1] = GL_ELEMENT_ARRAY_BUFFER 5 MB, both GL_DYNAMIC_DRAW
+- Vertex layout stride 0x28 = 40 bytes, matcactly. Attribs 0,2,3,5,6,7 enabled; 1 and 4are not
+- 8 samplers; FBO_default comes from glGetInNDING), then glGenFramebuffers(1,&FBO_custom)
+- Default state: blend off, scissor test on,on-offset-fill on, seamless cubemaps on,glDepthFunc(GL_LEQUAL), primitive restart index 0xFFFF
+- vid_state_prev.shader = 0xCA — sentinel (oing the first validate_draw to bind a program
+
+The shader interface confirms the earlier tr
+
+Extracted from the GLSL, this is the uniformes:
+
+uniform mat4 uProjMatrix;        // ← glUnif
+uniform vec4 uViewMatrix[4];     // ← glUniform4fv,        uid[1]
+uniform mat4 uShadowMatrix[6];   // ← glUnif
+uniform vec4 uModelMatrix[4];    // ← glUniform4fv,        uid[5]
+uniform vec4 uLightPos[8], uLightCol[8], uLi
+uniform vec4 uJoints[72 * 3];
+
+So view and model being vec4[4] is by design in the GLSL, not a decompiler artifact — that settles the question from
+the earlier trace. Samplers: sTex0..sTex3, sMap are all sampler2DArray, sShadow issampler2DArrayShadow, sNoise is sampler3D. Everything is array-textured, consistent with the layered render targets.
+
+What this means for the VR port
+
+GL 3.2 Core is the binding constraint. GL_OVR_multiview2 would need the extension declared in all 404 shader sources
+plus driver support on a 3.2 core context. Tcene twice with different view/proj — needszero shader changes, because uViewMatrix is already a plain vec4[4] uniform you can overwrite per eye. Given 202
+shader pairs, that's decisively the cheaper
+
+FBO_default is captured from the current binan OpenXR/OpenVR runtime binds its ownframebuffer before init_ogl runs, FBO_default latches that FBO, and every "return to backbuffer" in
+ogl_setRenderTarget goes somewhere unexpecte here.
+
+Scissor test is globally enabled at init. Pepdate scissor too, or you'll get clippingacross the eye boundary.
+
+init_ogl always returns 1. There is no failure path — if wglCreateContext fails, hRC is NULL, wglMakeCurrent fails
+silently, and every later GL call is a no-opowing if a VR runtime's context grab collides with this.
+
+Minor asymmetry: glBindSampler is called for units 1,2,3,6,7,8, but validate_draw only manages units 0–6
+(RenderState.tex[7]/smp[7]). Units 7 and 8 auched again.
+
+---
+
+Natural next step is vid_setPass @ 0x14000C4pass dispatcher that decides which of the 202 programs runs, which is where you'd gate per-eye passes. Say the word. I can also fold all five traces into a single
+engine-map page if scrollback is getting unw
+
+✻ Crunched for 3m 47s · done 4:19 PM
+
+> trace vid_setPass
+
+  Called re-mcp 3 times
+
+vid_setPass @ 0x14000C4C0 — the pass dispatc
+
+void vid_setPass(int shader, float *params,
+
+Installed as app.setPass by vidInit @ 0x1400e game DLLs invoke it through the vtable.This is the function that translates "draw this kind of thing" into the full vid_state configuration that
+validate_draw later uploads.
+
+Supporting struct, now confirmed:
+
+struct Shader {          // 80 bytes
+    uint id;             // GL program object
+    int  uid[18];        // uniform locationid[0..0x11]
+    int  fvf;            // vertex format
+};
+
+Flow
+
+1 · Default the params vec4. If params == NU255, 0.0, app.multiplier).
+
+2 · Culling, with a global inversion hook.
+
+if (mInverseCulling == 0)      vid_state.cul
+else if (cull == 2)            vid_state.cull = 1;   // swap
+else if (cull == 1)            vid_state.cul
+else                           vid_state.cull = cull;
+
+mInverseCulling is the flag vid_setInverseCullingFlag sets. This is the engine's existing answer to
+mirrored-projection winding — relevant if yolipped axis.
+
+3 · Fog selection.
+
+if ((blend == 2 || blend == 3) && shader < 0ogBlack;
+else { vid_state.fogPlane = mFogPlane; vid_state.fogColor = mFogColor; }
+if (vid_state_prev.fogColor != vid_state.fog20;
+
+Note the asymmetry: the black-fog branch doeetains whatever the previous pass left. 0x49is the boundary between the TR4/5-era shader block and the rest.
+
+4 · Reset texture slots, then preload tex[0..3] = {7, 8, 9, 10} as defaults.
+
+5 · The 202-case switch, which per shader sets depthTest, depthWrite, depthSlope, the seven tex[] bindings — and
+critically, which projection matrix the pass
+
+6 · Dirty-flag tail:
+
+if (params changed vs mParams)               // uid[6]
+if (vid_state_prev.proj != vid_state.proj)  vid_state.consts |= 1;        // uid[0]
+
+This is what resolves the mProj slot question
+
+The open question from the earlier trace — which of mProj[0]/mProj[1] is live — is answered here, per pass:
+
+┌─────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────┐
+│     vid_state.proj      │                 Ds                                       │
+├─────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────┤
+│ mProj (slot 0, ortho)   │ 0x3B–0x3D, 0x3E,, 0x46, 0x47, 0x49                       │
+├─────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────┤
+│ mProj + 1 (slot 1,      │ 0x02–0x03, 0x09–ven), 0x96, 0x98, 0x9A–0xA0 (even),      │
+│ perspective)            │ 0xBE, 0xBF, plus the shared LAB_14000cfac tail used by most 3D cases                  │
+└─────────────────────────┴──────────────────────────────────────────────────────────┘
+
+So vid_setPass is the world-space/screen-spap is exactly the 2D layer — logos, menus,subtitles, fades, the app.getGame()-dependent title art in cases 0x3B–0x3D.
+
+Two subtleties inside that:
+
+- Several cases never assign proj at all — 0x3F, 0x40, 0x48, 0xC0, 0xC1, 0xC4, 0xC5, 0xC6, 0xC7. They inherit the
+  previous pass's pointer. 0x3E sets mProj twhich is how 0x3F normally ends up ortho —but reached on its own it is whatever was last set. Sticky state.
+- The proj dirty bit is a pointer comparisonwitching mProj[1] → mProj[1] sets no flageven if the matrix contents changed. That's precisely why vid_setPerspMatrix/ogl_setPerspAngles/vid_setPerspOffset
+  each set consts |= 1 themselves. Both mech
+
+Robustness gap
+
+if (0xc9 < (uint)param_1) goto LAB_14000cfbf
+
+A shader ID above 201 skips all configuratioail — leaving tex[0..6] all zero,depthTest/depthWrite untouched from the previous pass, and proj unchanged. No clamp, no assert, no log. Since
+vid_state.shader was already assigned param_draw will then index shaders[param_1] out ofbounds. Worth a guard if you start synthesizing pass IDs.
+
+For the VR port
+
+This is the cleanest injection point for per-eye projection that leaves the HUD alone. Because vid_setPass decides
+ortho-vs-perspective per pass, hooking it giass world-space?" signal — override mProj[1]per eye on the perspective group, and leave mProj[0] passes on the flat path (or reproject them onto a floating panel
+deliberately, rather than accidentally).
+
+The mInverseCulling hook is already wired foms vec4 (uParams) is a free per-pass channelyou could use to pass an eye index into shaders if you later need one.
+
+---
+
+That's the render path traced end to end: vidInit/init_ogl (setup) → app vtable → vid_setPass (pass state) →      vid_set*Matrix / ogl_setPersp* (matrices) →  → validate_draw (upload). If you want, I can fold all six traces into one engine-map page with the call graph and the hook points marked — otherwise, name the next function.

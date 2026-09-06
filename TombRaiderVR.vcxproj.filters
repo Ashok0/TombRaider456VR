@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Engine">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000001}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Hooking">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="VR">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Support">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000004}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\Engine.cpp"><Filter>Engine</Filter></ClCompile>
+    <ClCompile Include="src\Hooks.cpp"><Filter>Hooking</Filter></ClCompile>
+    <ClCompile Include="src\InlineHook.cpp"><Filter>Hooking</Filter></ClCompile>
+    <ClCompile Include="src\VRSystem.cpp"><Filter>VR</Filter></ClCompile>
+    <ClCompile Include="src\StereoRenderer.cpp"><Filter>VR</Filter></ClCompile>
+    <ClCompile Include="src\GL.cpp"><Filter>Support</Filter></ClCompile>
+    <ClCompile Include="src\Config.cpp"><Filter>Support</Filter></ClCompile>
+    <ClCompile Include="src\Log.cpp"><Filter>Support</Filter></ClCompile>
+    <ClCompile Include="src\dllmain.cpp"><Filter>Support</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Engine.h"><Filter>Engine</Filter></ClInclude>
+    <ClInclude Include="src\StereoMath.h"><Filter>Engine</Filter></ClInclude>
+    <ClInclude Include="src\Hooks.h"><Filter>Hooking</Filter></ClInclude>
+    <ClInclude Include="src\InlineHook.h"><Filter>Hooking</Filter></ClInclude>
+    <ClInclude Include="src\VRSystem.h"><Filter>VR</Filter></ClInclude>
+    <ClInclude Include="src\StereoRenderer.h"><Filter>VR</Filter></ClInclude>
+    <ClInclude Include="src\GL.h"><Filter>Support</Filter></ClInclude>
+    <ClInclude Include="src\Config.h"><Filter>Support</Filter></ClInclude>
+    <ClInclude Include="src\Log.h"><Filter>Support</Filter></ClInclude>
+  </ItemGroup>
+</Project>

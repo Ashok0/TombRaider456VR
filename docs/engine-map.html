@@ -1,0 +1,944 @@
+<title>tomb456 Renderer Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+:root {
+  --ground:   #EDEFF0;
+  --surface:  #F7F8F9;
+  --sunken:   #E2E6E8;
+  --ink:      #1B2429;
+  --muted:    #5C6B73;
+  --faint:    #8A9BA3;
+  --rule:     #CFD6D9;
+  --accent:   #2E7D6F;
+  --accent-w: #D9E8E4;
+  --rust:     #A8543A;
+  --rust-w:   #F2E1DA;
+  --shadow:   rgba(27, 36, 41, .07);
+
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body:    "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono:    "JetBrains Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+
+  --measure: 68ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:   #12171A;
+    --surface:  #1A2124;
+    --sunken:   #0C1113;
+    --ink:      #DDE4E7;
+    --muted:    #93A3AB;
+    --faint:    #6C7D86;
+    --rule:     #2A3439;
+    --accent:   #4FB3A0;
+    --accent-w: #16302C;
+    --rust:     #D08265;
+    --rust-w:   #331E17;
+    --shadow:   rgba(0, 0, 0, .4);
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground:   #12171A;
+  --surface:  #1A2124;
+  --sunken:   #0C1113;
+  --ink:      #DDE4E7;
+  --muted:    #93A3AB;
+  --faint:    #6C7D86;
+  --rule:     #2A3439;
+  --accent:   #4FB3A0;
+  --accent-w: #16302C;
+  --rust:     #D08265;
+  --rust-w:   #331E17;
+  --shadow:   rgba(0, 0, 0, .4);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.62;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- shell ---------- */
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 28px 120px;
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .rail { position: static; margin-bottom: 40px; }
+}
+
+/* ---------- masthead ---------- */
+.masthead {
+  grid-column: 1 / -1;
+  padding: 72px 0 40px;
+  border-bottom: 2px solid var(--ink);
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 18px;
+}
+
+h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(38px, 6.2vw, 68px);
+  line-height: .96;
+  letter-spacing: -.025em;
+  margin: 0 0 20px;
+  text-wrap: balance;
+}
+
+.standfirst {
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 60ch;
+  margin: 0 0 32px;
+}
+
+.fingerprint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 32px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--faint);
+}
+.fingerprint b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ---------- rail ---------- */
+.rail {
+  position: sticky;
+  top: 24px;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding-top: 44px;
+}
+.rail h2 {
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 500;
+  margin: 0 0 14px;
+}
+.rail ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.rail a {
+  color: var(--muted);
+  text-decoration: none;
+  display: block;
+  border-left: 2px solid var(--rule);
+  padding-left: 11px;
+  line-height: 1.35;
+}
+.rail a:hover, .rail a:focus-visible {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  outline: none;
+}
+.rail .addr { display: block; color: var(--faint); font-size: 10.5px; }
+
+/* ---------- main ---------- */
+main { padding-top: 44px; min-width: 0; }
+
+section { margin-bottom: 76px; scroll-margin-top: 24px; }
+
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 10px;
+  margin-bottom: 26px;
+}
+h2.sec-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 27px;
+  letter-spacing: -.015em;
+  margin: 0;
+}
+.sec-addr {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.sec-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  margin-left: auto;
+}
+
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -.005em;
+  margin: 34px 0 12px;
+}
+
+p { max-width: var(--measure); margin: 0 0 16px; }
+
+a.inline { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+code {
+  font-family: var(--mono);
+  font-size: .855em;
+  background: var(--sunken);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ---------- lede ---------- */
+.lede {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  padding: 22px 26px;
+  margin: 0 0 30px;
+  max-width: var(--measure);
+}
+.lede p { margin: 0; }
+.lede p + p { margin-top: 12px; }
+
+/* ---------- trap / correction callouts ---------- */
+.flag {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rust);
+  background: var(--surface);
+  padding: 18px 22px;
+  margin: 24px 0;
+  max-width: var(--measure);
+}
+.flag .tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--rust);
+  display: block;
+  margin-bottom: 8px;
+}
+.flag p:last-child { margin-bottom: 0; }
+
+/* ---------- code ---------- */
+pre {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.62;
+  background: var(--sunken);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  margin: 0 0 20px;
+  color: var(--ink);
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--faint); }
+pre .k { color: var(--accent); }
+pre .w { color: var(--rust); }
+
+/* ---------- tables ---------- */
+.tw { overflow-x: auto; margin: 0 0 22px; border: 1px solid var(--rule); border-radius: 4px; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface);
+}
+th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+td {
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.n { color: var(--accent); white-space: nowrap; }
+td.d { font-family: var(--body); font-size: 14px; color: var(--muted); line-height: 1.45; }
+tr.hl td { background: var(--accent-w); }
+tr.warn td { background: var(--rust-w); }
+
+/* ---------- diagram ---------- */
+figure { margin: 0 0 26px; }
+.dia {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 20px;
+  overflow-x: auto;
+}
+.dia svg { display: block; min-width: 620px; width: 100%; height: auto; }
+figcaption {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+/* ---------- key/value strip ---------- */
+.kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  margin: 0 0 24px;
+  overflow: hidden;
+}
+.kv div { background: var(--surface); padding: 14px 16px; }
+.kv dt {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 5px;
+}
+.kv dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+ul.tight { max-width: var(--measure); padding-left: 20px; margin: 0 0 18px; }
+ul.tight li { margin-bottom: 8px; }
+
+hr.end {
+  border: none;
+  border-top: 2px solid var(--ink);
+  margin: 0 0 22px;
+}
+.colophon {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.7;
+  max-width: var(--measure);
+}
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">Renderer reverse-engineering &middot; six traces, consolidated</p>
+    <h1>tomb456 Renderer Map</h1>
+    <p class="standfirst">
+      How the Tomb Raider IV&ndash;VI Remastered renderer moves a camera onto the GPU &mdash;
+      and every lever a stereo VR port needs, in the order you will reach for them.
+    </p>
+    <div class="fingerprint">
+      <span>binary <b>tomb456.exe</b></span>
+      <span>build <b>v1.0.2a &middot; 2026-01-17</b></span>
+      <span>image base <b>0x140000000</b></span>
+      <span>functions <b>1531</b></span>
+      <span>symbols <b>PDB</b></span>
+    </div>
+  </header>
+
+  <nav class="rail">
+    <h2>Index</h2>
+    <ol>
+      <li><a href="#path">The call path<span class="addr">how a DLL reaches GL</span></a></li>
+      <li><a href="#state">vid_state<span class="addr">0x14E51C900</span></a></li>
+      <li><a href="#dirty">Dirty bits<span class="addr">consts @ +96</span></a></li>
+      <li><a href="#validate">validate_draw<span class="addr">0x140011CC0</span></a></li>
+      <li><a href="#setpass">vid_setPass<span class="addr">0x14000C4C0</span></a></li>
+      <li><a href="#view">vid_setViewMatrix<span class="addr">0x14000B960</span></a></li>
+      <li><a href="#proj">Projection<span class="addr">0x140012840</span></a></li>
+      <li><a href="#target">ogl_setRenderTarget<span class="addr">0x140013C30</span></a></li>
+      <li><a href="#init">init_ogl<span class="addr">0x140015BA0</span></a></li>
+      <li><a href="#hook">Where to hook<span class="addr">for stereo</span></a></li>
+      <li><a href="#errata">Errata &amp; open<span class="addr">corrections</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <div class="lede">
+      <p><b>There is no camera object.</b> The database holds 1611 structs and not one is a
+      Camera or a Frustum &mdash; those names return zero hits as types, and no
+      frustum-culling function exists under any spelling. The engine's entire camera is a
+      single 240-byte global of flat state plus a dirty-flag bitmask, drained to the GPU at
+      exactly one place.</p>
+      <p>That is the good news for a VR port: there is one choke point to intercept, not a
+      class hierarchy to subvert.</p>
+    </div>
+
+    <!-- ================= CALL PATH ================= -->
+    <section id="path">
+      <div class="sec-head">
+        <h2 class="sec-title">The call path</h2>
+        <span class="sec-addr">app @ 0x1405833E0</span>
+      </div>
+
+      <p>The game logic lives in per-title DLLs (tomb4/5/6). They never call the renderer
+      directly &mdash; they call through a function-pointer table, the <code>app</code> struct.
+      <code>vidInit</code> installs roughly forty <code>vid_*</code> entries into it and
+      <code>init_ogl</code> installs forty-seven <code>ogl_*</code> entries. Every renderer
+      entry point in this map has <b>zero direct call sites</b> in the exe; each is
+      address-taken exactly once, at its install site.</p>
+
+      <figure>
+        <div class="dia">
+          <svg viewBox="0 0 700 260" role="img" aria-label="Call path from game DLL through the app vtable into renderer setters, into vid_state, and out through validate_draw to OpenGL.">
+            <defs>
+              <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="var(--muted)"/>
+              </marker>
+              <marker id="ara" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="var(--accent)"/>
+              </marker>
+            </defs>
+            <g font-family="JetBrains Mono, monospace" font-size="11">
+
+              <rect x="8" y="20" width="118" height="46" rx="3" fill="var(--sunken)" stroke="var(--rule)"/>
+              <text x="67" y="40" text-anchor="middle" fill="var(--ink)">tomb4/5/6</text>
+              <text x="67" y="55" text-anchor="middle" fill="var(--faint)" font-size="10">.dll</text>
+
+              <rect x="170" y="14" width="126" height="58" rx="3" fill="var(--surface)" stroke="var(--accent)"/>
+              <text x="233" y="36" text-anchor="middle" fill="var(--ink)">app vtable</text>
+              <text x="233" y="52" text-anchor="middle" fill="var(--accent)" font-size="9.5">0x1405833E0</text>
+              <text x="233" y="64" text-anchor="middle" fill="var(--faint)" font-size="9">~87 entries</text>
+
+              <rect x="340" y="6" width="150" height="34" rx="3" fill="var(--surface)" stroke="var(--rule)"/>
+              <text x="415" y="27" text-anchor="middle" fill="var(--ink)">vid_setPass</text>
+
+              <rect x="340" y="47" width="150" height="34" rx="3" fill="var(--surface)" stroke="var(--rule)"/>
+              <text x="415" y="68" text-anchor="middle" fill="var(--ink)">vid_setViewMatrix</text>
+
+              <rect x="340" y="88" width="150" height="34" rx="3" fill="var(--surface)" stroke="var(--rule)"/>
+              <text x="415" y="109" text-anchor="middle" fill="var(--ink)">ogl_setPerspAngles</text>
+
+              <rect x="340" y="129" width="150" height="34" rx="3" fill="var(--surface)" stroke="var(--rule)"/>
+              <text x="415" y="150" text-anchor="middle" fill="var(--ink)">vid_setPerspOffset</text>
+
+              <rect x="340" y="176" width="150" height="42" rx="3" fill="var(--sunken)" stroke="var(--rule)"/>
+              <text x="415" y="192" text-anchor="middle" fill="var(--ink)">ogl_draw</text>
+              <text x="415" y="208" text-anchor="middle" fill="var(--ink)">ogl_drawVB</text>
+
+              <line x1="128" y1="43" x2="166" y2="43" stroke="var(--muted)" marker-end="url(#ar)"/>
+              <path d="M298,43 C318,43 320,23 336,23" fill="none" stroke="var(--muted)" marker-end="url(#ar)"/>
+              <path d="M298,43 C318,43 320,64 336,64" fill="none" stroke="var(--muted)" marker-end="url(#ar)"/>
+              <path d="M298,43 C318,43 320,105 336,105" fill="none" stroke="var(--muted)" marker-end="url(#ar)"/>
+              <path d="M298,43 C318,43 320,146 336,146" fill="none" stroke="var(--muted)" marker-end="url(#ar)"/>
+              <path d="M298,43 C318,43 322,197 336,197" fill="none" stroke="var(--muted)" marker-end="url(#ar)"/>
+
+              <rect x="530" y="40" width="160" height="72" rx="3" fill="var(--accent-w)" stroke="var(--accent)"/>
+              <text x="610" y="62" text-anchor="middle" fill="var(--ink)" font-weight="700">vid_state</text>
+              <text x="610" y="78" text-anchor="middle" fill="var(--accent)" font-size="9.5">0x14E51C900</text>
+              <text x="610" y="94" text-anchor="middle" fill="var(--faint)" font-size="9">240 bytes + consts</text>
+
+              <path d="M492,23 C512,23 514,55 526,60" fill="none" stroke="var(--accent)" marker-end="url(#ara)"/>
+              <path d="M492,64 C512,64 514,70 526,72" fill="none" stroke="var(--accent)" marker-end="url(#ara)"/>
+              <path d="M492,105 C512,105 514,90 526,84" fill="none" stroke="var(--accent)" marker-end="url(#ara)"/>
+              <path d="M492,146 C512,146 516,105 526,96" fill="none" stroke="var(--accent)" marker-end="url(#ara)"/>
+
+              <rect x="530" y="150" width="160" height="44" rx="3" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+              <text x="610" y="169" text-anchor="middle" fill="var(--ink)" font-weight="700">validate_draw</text>
+              <text x="610" y="185" text-anchor="middle" fill="var(--accent)" font-size="9.5">0x140011CC0</text>
+
+              <line x1="610" y1="114" x2="610" y2="146" stroke="var(--accent)" marker-end="url(#ara)"/>
+              <path d="M492,197 C510,197 516,180 526,175" fill="none" stroke="var(--muted)" marker-end="url(#ar)"/>
+
+              <rect x="530" y="212" width="160" height="34" rx="3" fill="var(--sunken)" stroke="var(--rule)"/>
+              <text x="610" y="233" text-anchor="middle" fill="var(--ink)">OpenGL 3.2 Core</text>
+              <line x1="610" y1="196" x2="610" y2="208" stroke="var(--accent)" marker-end="url(#ara)"/>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Setters mutate vid_state and raise a dirty bit; nothing uploads until a draw
+          forces validate_draw to drain the flags. ogl_draw and ogl_drawVB are the only two
+          callers of validate_draw, and each issues glDrawElements immediately after it returns.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ================= VID_STATE ================= -->
+    <section id="state">
+      <div class="sec-head">
+        <h2 class="sec-title">vid_state</h2>
+        <span class="sec-addr">0x14E51C900</span>
+        <span class="sec-note">RenderState &middot; 240 bytes &middot; 29 members</span>
+      </div>
+
+      <p>This is the camera. It is shadowed by <code>vid_state_prev</code> at
+      <code>0x14E51CA00</code>, which exists purely to filter redundant GL calls. The
+      matrix-bearing slice:</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Off</th><th>Member</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="n">16</td><td>shader</td><td>int</td><td class="d">Index into shaders[202]</td></tr>
+            <tr class="hl"><td class="n">96</td><td>consts</td><td>uint</td><td class="d">Dirty-flag mask &mdash; see below</td></tr>
+            <tr class="hl"><td class="n">104</td><td>proj</td><td>mat4 *</td><td class="d">&amp;mProj[0] ortho, or &amp;mProj[1] perspective</td></tr>
+            <tr class="hl"><td class="n">112</td><td>view</td><td>mat4 *</td><td class="d">&amp;mView_packed</td></tr>
+            <tr><td class="n">120</td><td>shadow</td><td>mat4 *</td><td class="d">&amp;mShadow, six matrices</td></tr>
+            <tr><td class="n">144</td><td>model</td><td>mat4 *</td><td class="d">Uploaded as vec4[4], not a matrix</td></tr>
+            <tr><td class="n">40</td><td>tex[7]</td><td>uint</td><td class="d">Texture slots</td></tr>
+            <tr><td class="n">68</td><td>smp[7]</td><td>uint</td><td class="d">Sampler slots</td></tr>
+            <tr><td class="n">200</td><td>joints</td><td>float *</td><td class="d">num_joints &times; 3 vec4s</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Backing storage</h3>
+      <dl class="kv">
+        <div><dt>mProj</dt><dd>0x14E51C6F0</dd></div>
+        <div><dt>mView</dt><dd>0x14E51C8C0</dd></div>
+        <div><dt>mView_packed</dt><dd>0x14E51CB30</dd></div>
+        <div><dt>mShadow</dt><dd>0x14E51CB70</dd></div>
+        <div><dt>shaders</dt><dd>0x14E9AE040</dd></div>
+        <div><dt>ogl_rt</dt><dd>0x14E9AE000</dd></div>
+      </dl>
+
+      <p><code>mProj</code> is <code>mat4[2]</code>: slot 0 is orthographic, slot 1 is
+      perspective. Every perspective setter writes slot 1; <code>vid_setOrtho3D</code> copies
+      slot 0 into slot 1 and repoints. Which one is live is decided per pass &mdash; see
+      <a class="inline" href="#setpass">vid_setPass</a>.</p>
+
+      <div class="flag">
+        <span class="tag">Address-space note</span>
+        <p>Globals sit at <code>0x14Exxxxxx</code> while the file on disk is only 1.6 MB. That
+        is not a bad symbol: <code>.data</code> genuinely spans
+        <code>0x140167000&ndash;0x14E9BDBDF</code>, a 232 MB mostly zero-filled section. Every
+        one of these is a legitimate image-base + RVA and safe to compute at runtime.</p>
+      </div>
+    </section>
+
+    <!-- ================= DIRTY BITS ================= -->
+    <section id="dirty">
+      <div class="sec-head">
+        <h2 class="sec-title">The dirty-flag mask</h2>
+        <span class="sec-addr">vid_state.consts, +96</span>
+      </div>
+
+      <p>Setters raise bits; <code>validate_draw</code> drains them and zeroes the mask. A
+      shader switch forces the mask to <code>0xff07bf</code>, re-uploading everything.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Bit</th><th>Mask</th><th>Uniform</th><th>Upload</th></tr></thead>
+          <tbody>
+            <tr class="hl"><td class="n">0</td><td>0x1</td><td>uid[0] proj</td><td class="d">glUniformMatrix4fv &times;1</td></tr>
+            <tr class="hl"><td class="n">1</td><td>0x2</td><td>uid[1] view</td><td class="d">glUniform4fv &times;4</td></tr>
+            <tr><td class="n">2</td><td>0x4</td><td>uid[2] shadow</td><td class="d">glUniformMatrix4fv &times;6</td></tr>
+            <tr><td class="n">3</td><td>0x8</td><td>uid[3] shadowFalloff</td><td class="d">glUniform4fv &times;6</td></tr>
+            <tr><td class="n">4</td><td>0x10</td><td>uid[4] shadowPos</td><td class="d">glUniform4fv &times;6</td></tr>
+            <tr><td class="n">5</td><td>0x20</td><td>uid[8] fogColor</td><td class="d">glUniform4fv &times;1</td></tr>
+            <tr><td class="n">8</td><td>0x100</td><td>uid[15] fogPlane</td><td class="d">glUniform4fv &times;1</td></tr>
+            <tr><td class="n">9</td><td>0x200</td><td>uid[16] dofPlane</td><td class="d">glUniform4fv &times;1</td></tr>
+            <tr><td class="n">10</td><td>0x400</td><td>uid[17] effectOffsets</td><td class="d">glUniform4fv &times;3</td></tr>
+            <tr class="hl"><td class="n">16</td><td>0x10000</td><td>uid[5] model</td><td class="d">glUniform4fv &times;4</td></tr>
+            <tr><td class="n">17</td><td>0x20000</td><td>uid[6] params</td><td class="d">glUniform4fv &times;1</td></tr>
+            <tr class="warn"><td class="n">18</td><td>0x40000</td><td>uid[10] joints</td><td class="d">glUniform4fv &times; num_joints&times;3</td></tr>
+            <tr><td class="n">19&ndash;22</td><td>0x80000&ndash;0x400000</td><td>uid[11..14]</td><td class="d">LPos / LCol / LDir / ambient</td></tr>
+            <tr><td class="n">23</td><td>0x800000</td><td>uid[7] color</td><td class="d">glUniform4fv &times;1</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flag">
+        <span class="tag">Correction to the working notes</span>
+        <p>Earlier notes recorded <code>joints</code> as <code>0x1000000</code>. It is
+        <b>0x40000</b> (bit 18). The check: <code>0xff07bf</code> sets exactly bits
+        {0&ndash;5, 7, 8&ndash;10, 16&ndash;23}, and every entry above falls inside it. Bit 24
+        is not in that mask at all, so it cannot have been a real flag.</p>
+      </div>
+    </section>
+
+    <!-- ================= VALIDATE_DRAW ================= -->
+    <section id="validate">
+      <div class="sec-head">
+        <h2 class="sec-title">validate_draw</h2>
+        <span class="sec-addr">0x140011CC0</span>
+        <span class="sec-note">1967 bytes</span>
+      </div>
+
+      <p>The single point where every matrix reaches the GPU. It binds the program if the
+      shader changed, sets sampler assignments through a 202-case switch, drains the dirty
+      flags, rebinds the seven texture units, then reconciles depth, blend and cull.</p>
+
+      <div class="flag">
+        <span class="tag">The trap</span>
+        <p><b>The view matrix does not go up through glUniformMatrix4fv.</b> Projection and
+        shadow do; view and model go up as four <code>vec4</code>s through
+        <code>glUniform4fv</code>. Hooking <code>glUniformMatrix4fv</code> &mdash; the obvious
+        move &mdash; catches projection and misses view entirely.</p>
+      </div>
+
+<pre><code><span class="c">// the upload block, condensed</span>
+<span class="k">if</span> ((consts &amp; 1)     &amp;&amp; uid[0] &gt;= 0) glUniformMatrix4fv(uid[0], 1, GL_FALSE, &amp;proj-&gt;e00);
+<span class="k">if</span> ((consts &amp; 2)     &amp;&amp; uid[1] &gt;= 0) <span class="w">glUniform4fv</span>(uid[1], 4, &amp;view-&gt;e00);   <span class="c">// &lt;-- not Matrix4fv</span>
+<span class="k">if</span> ((consts &amp; 4)     &amp;&amp; uid[2] &gt;= 0) glUniformMatrix4fv(uid[2], 6, GL_FALSE, &amp;shadow-&gt;e00);
+<span class="k">if</span> ((consts &amp; 0x10000) &amp;&amp; uid[5] &gt;= 0) <span class="w">glUniform4fv</span>(uid[5], 4, &amp;model-&gt;e00);  <span class="c">// &lt;-- not Matrix4fv</span>
+...
+vid_state.consts = 0;   <span class="c">// mask is consumed</span></code></pre>
+
+      <p><code>glUniformMatrix4fv</code> is itself a data variable at
+      <code>0x14E525C68</code>, not a function, so calls to it are indirect. It has exactly
+      three references: a write in <code>init_ogl</code> that resolves it, and the two call
+      sites inside <code>validate_draw</code>.</p>
+
+      <p>Because the mask is zeroed at the end, anything that raises
+      <code>consts</code> before the original runs will be uploaded and then cleared &mdash;
+      which is what makes per-draw matrix substitution practical.</p>
+    </section>
+
+    <!-- ================= SETPASS ================= -->
+    <section id="setpass">
+      <div class="sec-head">
+        <h2 class="sec-title">vid_setPass</h2>
+        <span class="sec-addr">0x14000C4C0</span>
+        <span class="sec-note">2944 bytes &middot; app.setPass</span>
+      </div>
+
+      <p><code>void vid_setPass(int shader, float *params, int cull, int blend)</code>.
+      This translates &ldquo;draw this kind of thing&rdquo; into a full
+      <code>vid_state</code> configuration. Its 202-case switch sets depth state, the seven
+      texture slots, and &mdash; the part that matters most &mdash; <b>which projection matrix
+      the pass uses</b>.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>vid_state.proj</th><th>Shader ids</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td class="n">mProj &nbsp;(slot 0)</td><td>0x3B&ndash;0x3E, 0x46, 0x47, 0x49</td><td class="d">Orthographic: logos, menus, subtitles, fades, title art</td></tr>
+            <tr class="hl"><td class="n">mProj+1 (slot 1)</td><td>0x02&ndash;0x03, 0x09&ndash;&hellip;, 0x96, 0x98, 0x9A&ndash;0xA0, 0xBE, 0xBF, plus the shared 3D tail</td><td class="d">Perspective: world space</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>So <code>vid_setPass</code> <i>is</i> the world-space / screen-space switch. That makes
+      it the natural gate for &ldquo;does this pass get per-eye matrices?&rdquo; &mdash; the
+      ortho group is exactly the flat 2D layer you want to leave alone.</p>
+
+      <h3>Two subtleties that will bite</h3>
+      <ul class="tight">
+        <li><b>Sticky state.</b> Cases <code>0x3F, 0x40, 0x48, 0xC0, 0xC1, 0xC4&ndash;0xC7</code>
+          never assign <code>proj</code> at all and inherit the previous pass's pointer. A
+          static table of shader ids would classify these wrong &mdash; read
+          <code>vid_state.proj</code> <i>after</i> the call instead.</li>
+        <li><b>The proj dirty bit is a pointer comparison.</b> The tail does
+          <code>if (vid_state_prev.proj != vid_state.proj) consts |= 1</code>. Writing new
+          <i>contents</i> into the same <code>mProj[1]</code> raises nothing. That is exactly
+          why every projection setter sets <code>consts |= 1</code> itself.</li>
+      </ul>
+
+      <div class="flag">
+        <span class="tag">Robustness gap</span>
+        <p><code>vid_state.shader</code> is assigned before the range check. A shader id above
+        201 hits <code>if (0xc9 &lt; id) goto tail</code>, skipping all configuration &mdash;
+        then <code>validate_draw</code> indexes <code>shaders[id]</code> out of bounds. No
+        clamp, no assert, no log. Worth a guard if you ever synthesise pass ids.</p>
+      </div>
+    </section>
+
+    <!-- ================= VIEW ================= -->
+    <section id="view">
+      <div class="sec-head">
+        <h2 class="sec-title">vid_setViewMatrix</h2>
+        <span class="sec-addr">0x14000B960</span>
+      </div>
+
+      <p>Takes a 3&times;4 <b>integer</b> matrix &mdash; twelve ints, row-major &mdash; and
+      writes two different globals. Rotation is classic Tomb Raider fixed point where
+      <code>16384 = 1.0</code>; translation is passed through raw in world units.</p>
+
+<pre><code><span class="c">// mView_packed @ 0x14E51CB30, as float[16]</span>
+[ 0..3 ]  =  ( m0,  m1,  m2,  m3 )   <span class="c">// row 0, translation X raw in .w</span>
+[ 4..7 ]  =  ( m4,  m5,  m6,  m7 )   <span class="c">// row 1, translation Y</span>
+[ 8..11]  =  (-m8, -m9, -m10, m11)   <span class="c">// row 2 NEGATED, translation Z</span>
+[12..15]  =  ( 1,   0,   ...    )    <span class="c">// unused by the shader</span>
+<span class="c">// rotation terms scaled by 1/16384; translation NOT scaled</span></code></pre>
+
+      <p>Three things follow. The Z row is negated &mdash; that is the handedness flip onto
+      GL's &minus;Z forward. The layout is <b>row-major 3&times;4</b>, one row per
+      <code>vec4</code>, which is why it is uploaded with <code>glUniform4fv</code> and needs
+      no transpose flag. And TR world space is <b>Y-down</b>, which the projection compensates
+      for &mdash; see next.</p>
+    </section>
+
+    <!-- ================= PROJECTION ================= -->
+    <section id="proj">
+      <div class="sec-head">
+        <h2 class="sec-title">Projection &amp; the VR levers</h2>
+        <span class="sec-addr">0x140012840 &middot; 0x14000B8D0</span>
+      </div>
+
+<pre><code><span class="k">void</span> ogl_setPerspAngles(<span class="k">float</span> tanX, <span class="k">float</span> tanY, <span class="k">float</span> zNear, <span class="k">float</span> zFar) {
+    vid_state.consts |= 1;
+    mProj[1].e00 =  1.0f / tanX;
+    mProj[1].e11 = <span class="w">-1.0f / tanY;</span>            <span class="c">// &lt;-- engine renders Y-flipped</span>
+    mProj[1].e02 =  0.0f;  mProj[1].e12 = 0.0f;   <span class="c">// symmetric: no shear</span>
+    mProj[1].e22 = (zNear + zFar) / (zNear - zFar);
+    mProj[1].e23 = (2.0f * zFar * zNear) / (zNear - zFar);
+    mProj[1].e32 = -1.0f;  mProj[1].e33 = 0.0f;
+}
+
+<span class="k">void</span> vid_setPerspOffset(<span class="k">float</span> x, <span class="k">float</span> y) {
+    vid_state.consts |= 1;
+    mProj[1].e02 = x;   <span class="c">// (r+l)/(r-l)</span>
+    mProj[1].e12 = y;   <span class="c">// (t+b)/(t-b)</span>
+}</code></pre>
+
+      <p>Field naming follows the PDB: <code>eRC</code> is row R, column C, at float index
+      <code>C*4 + R</code>. So <code>e32</code> lands at index 11 (the &minus;1) and
+      <code>e23</code> at index 14 &mdash; exactly <code>glFrustum</code>'s column-major
+      layout, with one deviation: <b>e11 is negative</b>. The engine renders Y-flipped
+      throughout, and <code>ogl_setScissor</code> agrees, flipping Y against
+      <code>gTargetHeight</code>.</p>
+
+      <p><code>vid_setPerspOffset</code> does nothing but write the two frustum shear terms.
+      That is precisely the asymmetric-frustum lever a per-eye VR projection needs &mdash;
+      already exposed as an API entry point, already setting its own dirty bit.</p>
+
+      <div class="lede">
+        <p><b>A useful consistency check.</b> Feed a <i>symmetric</i> frustum
+        (<code>l=&minus;k, r=k, t=&minus;j, b=j</code>) through the standard asymmetric formula
+        and negate Y, and you get <code>e00 = 1/k</code>, <code>e11 = &minus;1/j</code>, zero
+        shear, and identical depth terms &mdash; byte for byte what
+        <code>ogl_setPerspAngles</code> writes. A correct per-eye projection therefore differs
+        from the engine's own only by the asymmetry VR asks for.</p>
+      </div>
+    </section>
+
+    <!-- ================= RENDER TARGET ================= -->
+    <section id="target">
+      <div class="sec-head">
+        <h2 class="sec-title">ogl_setRenderTarget</h2>
+        <span class="sec-addr">0x140013C30</span>
+        <span class="sec-note">713 bytes &middot; app+0x178</span>
+      </div>
+
+      <p>Three phases: latch the request into the 24-byte <code>ogl_rt</code> global;
+      invalidate all seven texture units by stamping
+      <code>vid_state_prev.tex[i] = 0xFFFFFFFF</code> so a texture still bound as a sampler
+      cannot also be a target; then bind.</p>
+
+      <p><b>Every render target is a layered 2D array texture.</b> The code uses
+      <code>glFramebufferTextureLayer</code> with <code>GL_TEXTURE_2D_ARRAY</code>
+      throughout and never <code>glFramebufferTexture2D</code>; <code>color_index</code> is the
+      array layer. Per-eye targets would need no new plumbing.</p>
+
+      <div class="flag">
+        <span class="tag">Four things that will surprise you</span>
+        <p><b>One FBO.</b> <code>FBO_custom</code> at <code>0x14E9ADF28</code> is a single
+        global. Every offscreen pass re-attaches colour and depth and runs a full
+        <code>glCheckFramebufferStatus</code> on every target change.</p>
+        <p><b>That status is discarded.</b> No branch, no log. An incomplete FBO from a bad
+        layer index fails silently.</p>
+        <p><b>No stencil anywhere.</b> <code>GL_DEPTH_ATTACHMENT</code> only, never
+        <code>GL_DEPTH_STENCIL_ATTACHMENT</code>.</p>
+        <p><b>ogl_rt is a latch, not a stack.</b> Written only here, read only by
+        <code>ogl_texCopy</code>. Nested target changes do not restore &mdash; the inner
+        restore clobbers the outer's saved state.</p>
+      </div>
+
+      <p>There is also an asymmetry worth knowing: returning to the backbuffer sets
+      <code>consts |= 4</code> (shadow matrices), but switching between offscreen targets does
+      not. Reading <code>ogl_rt.color_id == 0 &amp;&amp; ogl_rt.depth_id == 0</code> is a
+      reliable test for &ldquo;currently targeting the backbuffer&rdquo;.</p>
+    </section>
+
+    <!-- ================= INIT_OGL ================= -->
+    <section id="init">
+      <div class="sec-head">
+        <h2 class="sec-title">init_ogl</h2>
+        <span class="sec-addr">0x140015BA0</span>
+        <span class="sec-note">10,241 bytes &middot; largest function in the binary</span>
+      </div>
+
+      <p>Six phases: install 47 <code>app</code> vtable entries; bootstrap a throwaway window
+      and legacy context purely to resolve <code>wglChoosePixelFormatARB</code> and
+      <code>wglCreateContextAttribsARB</code>; create the real context on the game window;
+      resolve 56 GL entry points; run 202 <code>shader_init</code> calls; create objects and
+      set default state.</p>
+
+      <dl class="kv">
+        <div><dt>Context</dt><dd>GL 3.2 Core</dd></div>
+        <div><dt>Colour / depth</dt><dd>32 / 24, no stencil</dd></div>
+        <div><dt>Shaders</dt><dd>202 pairs, 404 GLSL</dd></div>
+        <div><dt>GLSL version</dt><dd>#version 150</dd></div>
+        <div><dt>VAOs / VBOs</dt><dd>8 / 2</dd></div>
+        <div><dt>Vertex stride</dt><dd>0x28 = 40 bytes</dd></div>
+      </dl>
+
+      <h3>The shader-side uniform interface</h3>
+
+<pre><code><span class="k">uniform</span> mat4 uProjMatrix;        <span class="c">// uid[0]  glUniformMatrix4fv</span>
+<span class="k">uniform</span> vec4 uViewMatrix[4];     <span class="c">// uid[1]  glUniform4fv</span>
+<span class="k">uniform</span> mat4 uShadowMatrix[6];   <span class="c">// uid[2]  glUniformMatrix4fv</span>
+<span class="k">uniform</span> vec4 uModelMatrix[4];    <span class="c">// uid[5]  glUniform4fv</span>
+<span class="k">uniform</span> vec4 uLightPos[8], uLightCol[8], uLightDir[8];
+<span class="k">uniform</span> vec4 uJoints[72 * 3];</code></pre>
+
+      <p>View and model being <code>vec4[4]</code> is by design in the GLSL, not a decompiler
+      artifact &mdash; that settles it. Samplers are all array-textured
+      (<code>sampler2DArray</code>, <code>sampler2DArrayShadow</code>), consistent with the
+      layered render targets.</p>
+
+      <div class="flag">
+        <span class="tag">Three landmines for an injector</span>
+        <p><b>GL 3.2 Core is the binding constraint.</b> <code>GL_OVR_multiview2</code> would
+        need the extension declared in all 404 shader sources plus driver support on a 3.2
+        core context. Drawing the scene twice needs <i>zero</i> shader changes, because
+        <code>uViewMatrix</code> is already a plain <code>vec4[4]</code> you can overwrite.</p>
+        <p><b>FBO_default is latched from whatever is bound at init.</b> If a VR runtime binds
+        its own framebuffer before <code>init_ogl</code> runs, every &ldquo;return to
+        backbuffer&rdquo; goes somewhere unexpected. Equally, overwriting that global
+        redirects the whole engine without hooking anything.</p>
+        <p><b>Scissor test is enabled globally at init.</b> Any per-eye viewport must update
+        the scissor box too, or the second eye is clipped away.</p>
+      </div>
+
+      <p><code>init_ogl</code> always returns 1. There is no failure path: if
+      <code>wglCreateContext</code> fails, <code>hRC</code> is NULL, <code>wglMakeCurrent</code>
+      fails silently, and every later GL call is a no-op.</p>
+    </section>
+
+    <!-- ================= HOOKING ================= -->
+    <section id="hook">
+      <div class="sec-head">
+        <h2 class="sec-title">Where to hook for stereo</h2>
+        <span class="sec-addr">the short answer</span>
+      </div>
+
+      <p>Two functions do the VR work; three more are unavoidable plumbing.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Function</th><th>Address</th><th>Prologue</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr class="hl"><td>vid_setPass</td><td class="n">0x14000C4C0</td><td class="n">10 B</td><td class="d">Classify pass: world-space vs 2D</td></tr>
+            <tr class="hl"><td>validate_draw</td><td class="n">0x140011CC0</td><td class="n">6 B</td><td class="d">Inject per-eye projection + view</td></tr>
+            <tr><td>ogl_draw</td><td class="n">0x140012BD0</td><td class="n">5 B</td><td class="d">Duplicate the draw per eye</td></tr>
+            <tr><td>ogl_drawVB</td><td class="n">0x140012CF0</td><td class="n">5 B</td><td class="d">Same, second draw path</td></tr>
+            <tr><td>ogl_present</td><td class="n">0x140012600</td><td class="n">6 B</td><td class="d">Frame boundary: submit, mirror, pose</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><b>Why the split.</b> <code>validate_draw</code> is the right place to substitute
+      matrices &mdash; it is the only place they reach the GPU &mdash; but it cannot issue a
+      draw. Its two callers do that immediately after it returns:</p>
+
+<pre><code><span class="c">// ogl_draw, tail</span>
+validate_draw();
+glDrawElements((strip != 0) + 4, count, type, offset);</code></pre>
+
+      <p>So per-eye duplication has to sit one level up. Each draw is issued twice into the two
+      halves of one double-wide target with different matrices and a different viewport; the
+      scene is never re-run.</p>
+
+      <p>All five prologues are position-independent, so a five-byte relative jump with a
+      hand-counted stolen-byte constant is enough &mdash; no length disassembler required.
+      Verify the bytes before patching and a game update degrades to &ldquo;VR did not
+      start&rdquo; rather than a corrupted instruction stream.</p>
+
+      <p>Worth noting: the binary carries Control Flow Guard <i>metadata</i>, but both
+      <code>_guard_check_icall</code> and <code>_guard_dispatch_icall</code> resolve to the
+      <b>nop</b> variants, so CFG is not enforced. Patching the <code>app</code> vtable would
+      also work &mdash; inline hooks are simply safe either way.</p>
+    </section>
+
+    <!-- ================= ERRATA ================= -->
+    <section id="errata">
+      <div class="sec-head">
+        <h2 class="sec-title">Errata &amp; open questions</h2>
+        <span class="sec-addr">what to re-check</span>
+      </div>
+
+      <h3>Corrected while consolidating</h3>
+      <ul class="tight">
+        <li><b>joints dirty bit</b> is <code>0x40000</code>, not <code>0x1000000</code>.
+          Confirmed against the <code>0xff07bf</code> shader-switch mask.</li>
+        <li><b>The 0x14Exxxxxx globals are real.</b> Earlier suspicion that they were bad PDB
+          placements was wrong &mdash; <code>.data</code> really is 232 MB.</li>
+        <li><b>gTargetWidth</b> at <code>0x143298680</code> sits 44 MB from
+          <code>gTargetHeight</code> at <code>0x140698678</code> despite being written as a
+          pair. Both are referenced by <i>two</i> functions each
+          (<code>appGetWidth</code>/<code>appGetHeight</code> and
+          <code>ogl_setRenderTarget</code>), so the layout is odd but the symbols are real.</li>
+      </ul>
+
+      <h3>Still open</h3>
+      <ul class="tight">
+        <li><b>The frame graph.</b> How the post-processing chain composites into the
+          backbuffer has not been traced end to end. This is the part of a VR port most likely
+          to need live iteration.</li>
+        <li><b>mView</b> (rotation-only, <code>0x14E51C8C0</code>) has a consumer separate from
+          <code>mView_packed</code> that has not been chased down.</li>
+        <li><b>Culling.</b> No frustum-culling function exists in the exe under any spelling
+          &mdash; only <code>vid_setInverseCullingFlag</code> at <code>0x14000D730</code>,
+          which flips winding. Culling most likely lives in the per-game DLLs.</li>
+        <li><b>CameraSide</b> at <code>0x14015AAD0</code> is the only global with
+          &ldquo;Camera&rdquo; in its name: cubemap face matrices read by
+          <code>ogl_getCubemapMatrix</code>. The &ldquo;Camera Systems Programmers&rdquo; hit
+          at <code>0x14007A598</code> is a credits string.</li>
+      </ul>
+
+      <hr class="end">
+      <p class="colophon">
+        Consolidated from six Ghidra tracing sessions against tomb456.exe v1.0.2a (2026-01-17)
+        with its shipped PDB. Addresses are for image base 0x140000000; rebase onto the loaded
+        module before use. Every figure on this page was re-read from the decompiler while
+        writing it &mdash; where the working notes and the binary disagreed, the binary won,
+        and the difference is recorded above.
+      </p>
+    </section>
+
+  </main>
+</div>

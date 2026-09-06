@@ -1,0 +1,103 @@
+#include "StereoRenderer.h"
+#include "Log.h"
+
+namespace tr {
+namespace {
+StereoRenderer g_stereo;
+}
+
+StereoRenderer& Stereo() { return g_stereo; }
+
+bool StereoRenderer::Create(uint32_t eyeW, uint32_t eyeH) {
+    if (m_fbo && m_eyeW == eyeW && m_eyeH == eyeH) return true;
+    Destroy();
+
+    if (!gl::Loaded() && !gl::Load()) return false;
+    if (eyeW == 0 || eyeH == 0) return false;
+
+    m_eyeW = eyeW;
+    m_eyeH = eyeH;
+
+    const GLsizei w = static_cast<GLsizei>(eyeW * 2);
+    const GLsizei h = static_cast<GLsizei>(eyeH);
+
+    GLint prevFbo = 0, prevTex = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
+
+    glGenTextures(1, &m_tex);
+    glBindTexture(GL_TEXTURE_2D, m_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    gl::GenRenderbuffers(1, &m_depth);
+    gl::BindRenderbuffer(GL_RENDERBUFFER, m_depth);
+    // The engine's own targets are depth-only, never depth+stencil
+    // (ogl_setRenderTarget uses GL_DEPTH_ATTACHMENT and nothing else), so
+    // matching that is enough.
+    gl::RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h);
+
+    gl::GenFramebuffers(1, &m_fbo);
+    gl::BindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    gl::FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_tex, 0);
+    gl::FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_depth);
+
+    const GLenum status = gl::CheckFramebufferStatus(GL_FRAMEBUFFER);
+
+    gl::BindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo));
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevTex));
+
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        LogF("stereo: framebuffer incomplete (0x%04X)", status);
+        Destroy();
+        return false;
+    }
+
+    LogF("stereo: created %dx%d double-wide target (fbo %u, tex %u)", w, h, m_fbo, m_tex);
+    gl::CheckErrors("StereoRenderer::Create");
+    return true;
+}
+
+void StereoRenderer::Destroy() {
+    if (m_fbo)   { gl::DeleteFramebuffers(1, &m_fbo);   m_fbo = 0; }
+    if (m_depth) { gl::DeleteRenderbuffers(1, &m_depth); m_depth = 0; }
+    if (m_tex)   { glDeleteTextures(1, &m_tex);          m_tex = 0; }
+    m_eyeW = m_eyeH = 0;
+}
+
+void StereoRenderer::BeginFrame() {
+    if (!m_fbo) return;
+    gl::BindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    glViewport(0, 0, static_cast<GLsizei>(m_eyeW * 2), static_cast<GLsizei>(m_eyeH));
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void StereoRenderer::SetEyeViewport(int eye) {
+    if (!m_fbo) return;
+    const GLint x = (eye == 0) ? 0 : static_cast<GLint>(m_eyeW);
+    glViewport(x, 0, static_cast<GLsizei>(m_eyeW), static_cast<GLsizei>(m_eyeH));
+
+    // init_ogl leaves GL_SCISSOR_TEST enabled globally, so the scissor box has
+    // to track the viewport or the second eye gets clipped away by whatever
+    // rectangle the engine last set.
+    glScissor(x, 0, static_cast<GLsizei>(m_eyeW), static_cast<GLsizei>(m_eyeH));
+}
+
+void StereoRenderer::MirrorToWindow(int winW, int winH, GLuint windowFbo) {
+    if (!m_fbo || winW <= 0 || winH <= 0) return;
+
+    gl::BindFramebuffer(GL_READ_FRAMEBUFFER, m_fbo);
+    gl::BindFramebuffer(GL_DRAW_FRAMEBUFFER, windowFbo);
+    glDisable(GL_SCISSOR_TEST);
+    gl::BlitFramebuffer(0, 0, static_cast<GLint>(m_eyeW), static_cast<GLint>(m_eyeH),
+                        0, 0, winW, winH,
+                        GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    gl::BindFramebuffer(GL_FRAMEBUFFER, windowFbo);
+}
+
+} // namespace tr
