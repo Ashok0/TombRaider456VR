@@ -184,6 +184,50 @@ struct Config {
     // comes out upside down.
     bool  videoFlipV       = false;
 
+    // Alternate-eye rendering for TR6 (Angel of Darkness).
+    //
+    // TR4 and TR5 draw straight to the backbuffer, so every world draw can be
+    // issued twice into the two halves of one double-wide target. TR6 cannot
+    // work that way: it renders the scene into the engine's own 2560x1440
+    // offscreen textures and composites at the end, and the composite samples
+    // those whole with 0-1 UVs. Widening them would break that sampling, and
+    // duplicating individual draws into halves of a target the composite reads
+    // entire would corrupt it. Measured: 572970 of 579945 world draws offscreen,
+    // against roughly 9% in TR4/5.
+    //
+    // So each FRAME is rendered entirely as one eye, mono, through the engine's
+    // normal path, and lands in that eye's half of the stereo target. The other
+    // half keeps the previous frame. Nothing is resized and nothing is
+    // duplicated.
+    //
+    // The cost is honest and unavoidable: each eye updates at half the frame
+    // rate. At 90 Hz that is 45 Hz per eye. Full-rate stereo would mean running
+    // the whole offscreen chain twice into parallel target sets, which is a much
+    // larger piece of work.
+    bool  alternateEyeGame6 = true;
+
+    // How many offscreen world draws a frame needs before alternate-eye engages.
+    //
+    // AER is only worth its half-rate cost when there is an offscreen 3D scene
+    // to reach. The TR6 main menu and the FMVs are 2D: they draw straight to the
+    // backbuffer, so the ordinary per-draw duplication handles them at FULL rate
+    // and looks better doing it. Gameplay runs ~800 offscreen world draws a
+    // frame; menus and video are near zero, so the count separates them cleanly
+    // with no extra symbols to find.
+    //
+    // The decision is latched once per frame from the previous frame's count, so
+    // it stays stable for the whole frame and costs one frame at a transition.
+    int   alternateEyeMinOffscreen = 50;
+
+    // Do not use the offscreen video panel in TR6.
+    //
+    // TR6 renders the scene into custom offscreen targets and composites to the
+    // backbuffer through a clip-space-direct shader -- indistinguishable from an
+    // FMV quad by the uid[0] < 0 test. Capturing it turns the whole game into a
+    // small floating panel. TR6's actual FMVs use the viewport-shift path
+    // instead, which suits a full-screen video regardless.
+    bool  videoSkipGame6   = true;
+
 
     // Negate Y when lifting the 2D layer onto the panel. Leave at 1.
     //

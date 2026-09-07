@@ -54,6 +54,14 @@ constexpr uint32_t ogl_drawVB         = 0x00012CF0;
 // The engine's own frame boundary -- a better hook than wglSwapBuffers.
 constexpr uint32_t ogl_present        = 0x00012600;
 
+// void fmvShow(void)
+// Draws the current video frame. Installed as app.fmvShow and called once per
+// frame while a cutscene plays -- an exact "a video is on screen right now"
+// signal, which the uid[0] < 0 shader test only approximates. TR6's scene
+// composite uses a clip-space-direct shader too, so the shader test alone
+// cannot tell its gameplay from its cutscenes.
+constexpr uint32_t fmvShow            = 0x00011350;
+
 // --- called, not hooked -----------------------------------------------------
 
 // void vid_setPerspOffset(float x, float y)
@@ -118,6 +126,11 @@ namespace drva {
 // _XInputGetState / _XInputSetState: function-pointer globals WinMain fills in
 // from GetProcAddress. There is no XInput import to hook -- overwriting these is
 // how we present the Touch controllers to the game as an Xbox pad.
+// Which game is running: 0 = TR4, 1 = TR5, 2 = TR6 (Angel of Darkness).
+// TR6 has a different render path -- it draws the whole scene into custom
+// offscreen targets and composites -- so some of our handling is per-game.
+constexpr uint32_t gGame           = 0x0017938C;
+
 constexpr uint32_t XInputGetState  = 0x00692858;
 constexpr uint32_t XInputSetState  = 0x006928B0;
 
@@ -260,6 +273,9 @@ RenderState&     VidStatePrev();
 // Address of the engine's _XInputGetState function-pointer global, or nullptr
 // if the module is not bound yet.
 void*            XInputGetStateSlot();
+
+// 0 = TR4, 1 = TR5, 2 = TR6. Returns -1 if the module is not bound.
+int              CurrentGame();
 mat4*            Proj();          // mat4[2]
 mat4&            ViewPacked();
 Shader*          Shaders();

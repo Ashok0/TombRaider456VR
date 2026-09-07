@@ -77,6 +77,11 @@ bool IsWorldPass() {
 }
 
 
+int CurrentGame() {
+    if (!g_base) return -1;
+    return *reinterpret_cast<int32_t*>(Var(drva::gGame));
+}
+
 void* XInputGetStateSlot() {
     if (!g_base) return nullptr;
     return reinterpret_cast<void*>(Var(drva::XInputGetState));

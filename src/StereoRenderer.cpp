@@ -62,6 +62,11 @@ bool StereoRenderer::Create(uint32_t eyeW, uint32_t eyeH) {
 }
 
 void StereoRenderer::Destroy() {
+    if (m_monoFbo)   { gl::DeleteFramebuffers(1, &m_monoFbo);      m_monoFbo = 0; }
+    if (m_monoDepth) { gl::DeleteRenderbuffers(1, &m_monoDepth);   m_monoDepth = 0; }
+    if (m_monoTex)   { glDeleteTextures(1, &m_monoTex);            m_monoTex = 0; }
+    m_monoW = m_monoH = 0;
+
     if (m_fbo)   { gl::DeleteFramebuffers(1, &m_fbo);   m_fbo = 0; }
     if (m_depth) { gl::DeleteRenderbuffers(1, &m_depth); m_depth = 0; }
     if (m_tex)   { glDeleteTextures(1, &m_tex);          m_tex = 0; }
@@ -76,6 +81,82 @@ void StereoRenderer::BeginFrame() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
+
+bool StereoRenderer::CreateMono(uint32_t w, uint32_t h) {
+    if (m_monoFbo && m_monoW == w && m_monoH == h) return true;
+    if (!gl::Loaded() && !gl::Load()) return false;
+    if (w == 0 || h == 0) return false;
+
+    if (m_monoFbo)   { gl::DeleteFramebuffers(1, &m_monoFbo);      m_monoFbo = 0; }
+    if (m_monoDepth) { gl::DeleteRenderbuffers(1, &m_monoDepth);   m_monoDepth = 0; }
+    if (m_monoTex)   { glDeleteTextures(1, &m_monoTex);            m_monoTex = 0; }
+
+    m_monoW = w;
+    m_monoH = h;
+
+    GLint prevFbo = 0, prevTex = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
+
+    glGenTextures(1, &m_monoTex);
+    glBindTexture(GL_TEXTURE_2D, m_monoTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)w, (GLsizei)h, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    gl::GenRenderbuffers(1, &m_monoDepth);
+    gl::BindRenderbuffer(GL_RENDERBUFFER, m_monoDepth);
+    gl::RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24,
+                            (GLsizei)w, (GLsizei)h);
+
+    gl::GenFramebuffers(1, &m_monoFbo);
+    gl::BindFramebuffer(GL_FRAMEBUFFER, m_monoFbo);
+    gl::FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                             GL_TEXTURE_2D, m_monoTex, 0);
+    gl::FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                GL_RENDERBUFFER, m_monoDepth);
+    const GLenum status = gl::CheckFramebufferStatus(GL_FRAMEBUFFER);
+
+    gl::BindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFbo);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)prevTex);
+
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        LogF("stereo: mono scratch incomplete (0x%04X)", status);
+        if (m_monoFbo)   { gl::DeleteFramebuffers(1, &m_monoFbo);    m_monoFbo = 0; }
+        if (m_monoDepth) { gl::DeleteRenderbuffers(1, &m_monoDepth); m_monoDepth = 0; }
+        if (m_monoTex)   { glDeleteTextures(1, &m_monoTex);          m_monoTex = 0; }
+        return false;
+    }
+
+    LogF("stereo: mono scratch ready (%ux%u, fbo %u, tex %u)",
+         w, h, m_monoFbo, m_monoTex);
+    return true;
+}
+
+void StereoRenderer::BeginMono() {
+    if (!m_monoFbo) return;
+    gl::BindFramebuffer(GL_FRAMEBUFFER, m_monoFbo);
+    glViewport(0, 0, (GLsizei)m_monoW, (GLsizei)m_monoH);
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void StereoRenderer::BlitMonoToHalf(int eye) {
+    if (!m_monoFbo || !m_fbo) return;
+    const GLint x = (eye == 0) ? 0 : (GLint)m_eyeW;
+    gl::BindFramebuffer(GL_READ_FRAMEBUFFER, m_monoFbo);
+    gl::BindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo);
+    glDisable(GL_SCISSOR_TEST);
+    gl::BlitFramebuffer(0, 0, (GLint)m_monoW, (GLint)m_monoH,
+                        x, 0, x + (GLint)m_eyeW, (GLint)m_eyeH,
+                        GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    gl::BindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+}
+
 
 void StereoRenderer::SetEyeViewport(int eye) {
     if (!m_fbo) return;

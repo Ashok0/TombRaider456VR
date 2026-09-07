@@ -51,6 +51,7 @@ hook::InlineHook g_hValidateDraw;
 hook::InlineHook g_hDraw;
 hook::InlineHook g_hDrawVB;
 hook::InlineHook g_hPresent;
+hook::InlineHook g_hFmvShow;
 
 typedef void(__cdecl* Fn_vid_setPass)(int shader, float* params, int cull, int blend);
 typedef void(__cdecl* Fn_validate_draw)();
@@ -80,6 +81,9 @@ const uint8_t kDrawPrologue[]     = { 0x48, 0x89, 0x5C, 0x24, 0x08 };
 // (the next instruction is a RIP-relative CMP, so we stop here)
 const uint8_t kPresentPrologue[]  = { 0x48, 0x83, 0xEC, 0x28, 0x33, 0xC9 };
 
+// MOV RAX,RSP ; MOV [RAX+8],RBX  -- 3 + 4 = 7 bytes, no RIP-relative operand.
+const uint8_t kFmvShowPrologue[]  = { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 };
+
 // --- per-frame state --------------------------------------------------------
 
 bool  g_worldPass    = false;   // set by the vid_setPass hook
@@ -98,6 +102,10 @@ unsigned g_injectCount[2] = { 0, 0 };
 unsigned g_dupCount = 0;
 unsigned g_classifyMismatch = 0;   // live vs cached world-pass disagreements
 unsigned g_lastReportFrame = 0;
+// Wall-clock at the last health report, for a real frame-rate figure. Under
+// alternate-eye each eye updates at HALF this, so it is the number that decides
+// whether the judder is worth chasing.
+LARGE_INTEGER g_lastReportTime = {};
 unsigned g_prevDup = 0, g_prevInj0 = 0, g_prevInj1 = 0;
 
 // World-space draws seen at validate_draw, counted per eye-pass, so a
@@ -116,6 +124,34 @@ unsigned g_prevWorld = 0, g_prevOffscreen = 0;
 // Logged once each so that if something still refuses to fuse, the log names
 // the shader instead of costing another play session to find.
 int   g_bypassSeen[8]  = { -1, -1, -1, -1, -1, -1, -1, -1 };
+
+// Alternate-eye rendering: which eye this whole frame belongs to.
+int  g_frameEye = 0;
+bool g_loggedAltEye = false;
+
+// Offscreen world draws, this frame and last. This is how we tell TR6 gameplay
+// (an offscreen 3D scene, ~800 a frame) from its menus and FMVs (2D, near zero).
+unsigned g_offscreenWorld     = 0;
+unsigned g_offscreenWorldPrev = 0;
+
+// Latched once per frame. AlternateEyeActive() is consulted from the draw path,
+// the injection gate and present, so it MUST NOT change mid-frame -- flipping
+// halfway would leave the frame split across two targets.
+bool g_aerLatched = false;
+
+bool AlternateEyeCapable() {
+    return Cfg().alternateEyeGame6
+        && !Cfg().monoTracking
+        && CurrentGame() == 2
+        && Stereo().monoValid();
+}
+
+// TR6 renders its scene offscreen, so per-draw duplication cannot reach it.
+// Each frame is one eye instead -- but only while there IS an offscreen scene.
+// See Config::alternateEyeMinOffscreen.
+bool AlternateEyeActive() {
+    return g_aerLatched;
+}
 
 bool  g_verifyArmed    = true;
 bool  g_verifyDone[2]  = { false, false };
@@ -289,6 +325,31 @@ bool g_inVideoCapture = false;
 
 // A pass with no uProjMatrix at all writes clip space directly and cannot be
 // moved by any uniform. That is the video path.
+// Is the offscreen video panel actually going to handle this frame's bypass
+// passes? Both the capture path and the viewport-shift fallback must agree: if
+// they disagree, a bypass pass gets NEITHER, which is head-locked and unfused.
+// That is exactly what VideoSkipGame6 caused in TR6 -- capture correctly
+// skipped, fallback still suppressed by "the panel exists".
+// Frame on which fmvShow was last called. The engine calls it once per frame
+// for as long as a video is on screen.
+unsigned g_fmvFrame = 0;
+
+bool FmvActive() {
+    return g_fmvFrame != 0 && (g_frameIndex - g_fmvFrame) <= 2;
+}
+
+bool VideoOffscreenActive() {
+    if (!Cfg().videoOffscreen || !Video().valid()) return false;
+
+    // TR6's scene composite goes through a clip-space-direct shader, the same
+    // signature as an FMV quad, so the shader test alone would capture the whole
+    // game. Require an actual video there. TR4/5 keep the original behaviour,
+    // which is working.
+    if (CurrentGame() == 2 && Cfg().videoSkipGame6 && !FmvActive()) return false;
+
+    return true;
+}
+
 bool IsBypassPass() {
     const int sid = VidState().shader;
     return vs_shader_in_range(sid) && Shaders()[sid].uid[0] < 0;
@@ -423,13 +484,15 @@ void __cdecl Detour_validate_draw() {
     const bool inject = VrLive()
                      && VR().poseValid()
                      && worldPass
-                     && (Cfg().monoTracking || TargetIsBackbuffer());
+                     && (Cfg().monoTracking || TargetIsBackbuffer()
+                         || AlternateEyeActive());
 
     // Count every world-space draw, injected or not, and separately the ones
     // rejected purely because the engine was drawing offscreen. Those two
     // numbers are what the health report needs to say something falsifiable.
     if (worldPass) {
         ++g_worldDraws;
+        if (!TargetIsBackbuffer()) ++g_offscreenWorld;
         if (!inject && VrLive() && VR().poseValid()
             && !Cfg().monoTracking && !TargetIsBackbuffer()) {
             ++g_worldOffscreen;
@@ -445,7 +508,7 @@ void __cdecl Detour_validate_draw() {
     if (VrLive() && !Cfg().monoTracking && VR().poseValid()
         && Cfg().videoDepthMetres > 0.0f && TargetIsBackbuffer()
         && Stereo().valid() && g_inDuplicate && !g_inVideoCapture
-        && !(Cfg().videoOffscreen && Video().valid())
+        && !VideoOffscreenActive()
         && IsBypassPass()) {
 
         const int sid = VidState().shader;
@@ -876,12 +939,28 @@ void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
         return;
     }
 
+    // Alternate-eye: draw ONCE. The whole frame is one eye, so there is nothing
+    // to duplicate -- only the backbuffer-targeted draws need the eye viewport,
+    // and the offscreen passes keep the engine's own full-size viewport.
+    if (AlternateEyeActive()) {
+        // One draw, and no eye viewport: the whole frame goes into the scratch
+        // target at the engine's own size, and present blits it into one half.
+        g_currentEye = g_frameEye;
+        h.Original<Fn>()(args...);
+        return;
+    }
+
     ++g_dupCount;
 
     // Clip-space-direct passes (video) cannot be moved by any matrix, so
     // capture the draw once offscreen and replay it as real geometry per eye.
     // That is the only way to get correct keystone and roll.
-    if (Cfg().videoOffscreen && Video().valid() && IsBypassPass()) {
+    // TR6 composites its offscreen scene to the backbuffer through a
+    // clip-space-direct shader -- the same signature as an FMV quad. Capturing
+    // that and replaying it as a 60-degree panel is what turned TR6 into a small
+    // floating rectangle. Its FMVs use the viewport-shift path instead, which
+    // VideoOffscreenActive() keeps consistent with this decision.
+    if (VideoOffscreenActive() && IsBypassPass()) {
         GLint prevFbo = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
 
@@ -925,6 +1004,16 @@ void __cdecl Detour_ogl_drawVB(int fvf, void* vb, void* ib, int stride,
 }
 
 // ---------------------------------------------------------------------------
+// fmvShow -- "a video is on screen this frame"
+// ---------------------------------------------------------------------------
+typedef void (__cdecl* Fn_fmvShow)(void);
+
+void __cdecl Detour_fmvShow() {
+    g_fmvFrame = g_frameIndex;
+    g_hFmvShow.Original<Fn_fmvShow>()();
+}
+
+// ---------------------------------------------------------------------------
 // ogl_present -- frame boundary
 // ---------------------------------------------------------------------------
 void LazyInit() {
@@ -957,6 +1046,16 @@ void LazyInit() {
     g_realDefaultFbo = FboDefault();
     FboDefault() = Stereo().fbo();
     LogF("present: redirected FBO_default %u -> %u", g_realDefaultFbo, Stereo().fbo());
+
+    // Alternate-eye scratch, at the engine's own render size.
+    if (Cfg().alternateEyeGame6) {
+        const int mw = ScreenWidth()  > 0 ? ScreenWidth()  : (int)(w * 2);
+        const int mh = ScreenHeight() > 0 ? ScreenHeight() : (int)h;
+        if (!Stereo().CreateMono((uint32_t)mw, (uint32_t)mh)) {
+            Log("stereo: mono scratch unavailable -- TR6 alternate-eye will "
+                "flicker, because the engine's clears reach both halves");
+        }
+    }
 
     // Offscreen video panel. Optional: if it fails to build, the viewport-fit
     // path still handles the video, just with residual keystone.
@@ -1040,6 +1139,23 @@ void __cdecl Detour_ogl_present() {
 
         // Against total world draws, not against duplications. See g_worldDraws.
         const unsigned pct = dWorld ? (100u * (dInj0 + dInj1) / dWorld) : 0u;
+        // Measured frame rate, and what each eye actually gets.
+        LARGE_INTEGER now{}, freq{};
+        QueryPerformanceCounter(&now);
+        QueryPerformanceFrequency(&freq);
+        if (g_lastReportTime.QuadPart != 0 && freq.QuadPart != 0) {
+            const double secs = double(now.QuadPart - g_lastReportTime.QuadPart)
+                              / double(freq.QuadPart);
+            if (secs > 0.0) {
+                const double fps = 1800.0 / secs;
+                LogF("perf: %.1f fps rendered%s", fps,
+                     AlternateEyeActive()
+                       ? " -- alternate-eye, so each EYE updates at half that"
+                       : "");
+            }
+        }
+        g_lastReportTime = now;
+
         LogF("stereo health @frame %u: world draws=%u  duplicated=%u  "
              "injected eye0=%u eye1=%u  (%u%% of world draws got per-eye matrices)  "
              "offscreen-skipped=%u  classify-mismatch=%u",
@@ -1136,6 +1252,12 @@ void __cdecl Detour_ogl_present() {
 
     // Hand both halves to the compositor before the swap so the runtime gets
     // the frame as early as possible.
+    // AER: fold this frame's eye into its half. The other half is untouched and
+    // keeps the frame it was given.
+    if (AlternateEyeActive() && Stereo().monoValid()) {
+        Stereo().BlitMonoToHalf(g_frameEye);
+    }
+
     if (Cfg().eyeMarkers) Stereo().MarkEyes();
 
     uint32_t w = 0, h = 0;
@@ -1151,11 +1273,48 @@ void __cdecl Detour_ogl_present() {
     // it that touches the default framebuffer behaves.
     FboDefault() = g_realDefaultFbo;
     g_hPresent.Original<Fn_ogl_present>()();
-    FboDefault() = Stereo().fbo();
+    FboDefault() = (AlternateEyeActive() && Stereo().monoValid())
+                 ? Stereo().monoFbo()
+                 : Stereo().fbo();
 
     // Latch poses for the frame we are about to render, then re-arm the target.
     VR().BeginFrame();
-    Stereo().BeginFrame();
+
+    // Decide whether the coming frame uses alternate-eye, from what the frame
+    // just drawn contained. Menus and FMVs fall back to ordinary per-draw
+    // duplication, which runs at full rate and looks better for 2D.
+    {
+        g_offscreenWorldPrev = g_offscreenWorld;
+        g_offscreenWorld = 0;
+        const bool want = AlternateEyeCapable()
+            && g_offscreenWorldPrev >=
+               static_cast<unsigned>(Cfg().alternateEyeMinOffscreen < 0
+                                     ? 0 : Cfg().alternateEyeMinOffscreen);
+        if (want != g_aerLatched) {
+            LogF("tr6: alternate-eye %s (%u offscreen world draws last frame)",
+                 want ? "ON -- offscreen 3D scene" : "off -- 2D, full rate",
+                 g_offscreenWorldPrev);
+        }
+        g_aerLatched = want;
+    }
+
+    if (AlternateEyeActive()) {
+        // Flip eyes, then render the whole frame into the single-eye scratch.
+        // FBO_default points there, so the engine's own clears cannot reach the
+        // half holding the other eye.
+        g_frameEye = 1 - g_frameEye;
+        g_currentEye = g_frameEye;
+        Stereo().BeginMono();
+        FboDefault() = Stereo().monoFbo();
+        if (!g_loggedAltEye) {
+            g_loggedAltEye = true;
+            Log("tr6: alternate-eye rendering active -- the scene is drawn "
+                "offscreen and composited, so each FRAME is one eye. Both eyes "
+                "are stereo-correct; each updates at half the frame rate.");
+        }
+    } else {
+        Stereo().BeginFrame();
+    }
 
     if (!g_loggedStereoFrame) {
         g_loggedStereoFrame = true;
@@ -1191,6 +1350,8 @@ bool InstallHooks() {
            5, kDrawPrologue,     sizeof(kDrawPrologue),     "ogl_drawVB"    },
         { &g_hPresent,      rva::ogl_present,   reinterpret_cast<void*>(&Detour_ogl_present),
            6, kPresentPrologue,  sizeof(kPresentPrologue),  "ogl_present"   },
+        { &g_hFmvShow,      rva::fmvShow,       reinterpret_cast<void*>(&Detour_fmvShow),
+           7, kFmvShowPrologue,  sizeof(kFmvShowPrologue),  "fmvShow"       },
     };
 
     bool allOk = true;
@@ -1206,7 +1367,7 @@ bool InstallHooks() {
         return false;
     }
 
-    Log("hooks: all five installed");
+    Log("hooks: all six installed");
     return true;
 }
 
@@ -1214,6 +1375,7 @@ void RemoveHooks() {
     GamepadShutdown();
 
     // Reverse order of installation.
+    g_hFmvShow.Remove();
     g_hPresent.Remove();
     g_hDrawVB.Remove();
     g_hDraw.Remove();

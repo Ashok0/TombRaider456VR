@@ -33,6 +33,30 @@ public:
     // Bind the eye target and clear it. Called once per frame.
     void BeginFrame();
 
+    // --- alternate-eye scratch target ---------------------------------------
+    //
+    // Under AER only one half is redrawn per frame, so the other must survive
+    // untouched. It cannot: FBO_default is the double-wide target, and any
+    // full-target glClear the engine issues wipes BOTH halves -- which reads as
+    // a hard flicker at half the frame rate, with no head movement needed.
+    //
+    // So AER points FBO_default at this single-eye scratch instead. The engine
+    // clears and renders into it exactly as it would a normal backbuffer, and
+    // present blits the result into one half. The other half is never bound, so
+    // nothing can disturb it.
+    bool CreateMono(uint32_t w, uint32_t h);
+    bool monoValid() const { return m_monoFbo != 0; }
+    GLuint monoFbo() const { return m_monoFbo; }
+
+    // Bind the scratch target and clear it. Once per frame, before the game
+    // renders.
+    void BeginMono();
+
+    // Blit the scratch into one half of the eye target. The engine renders at
+    // its own size and the halves are narrower, so this rescales -- which is
+    // correct, because the per-eye projection already carries the HMD's aspect.
+    void BlitMonoToHalf(int eye);
+
     // Set viewport + scissor to one half of the double-wide target.
     void SetEyeViewport(int eye);
 
@@ -57,6 +81,11 @@ public:
     void MarkEyes();
 
 private:
+    GLuint   m_monoFbo   = 0;
+    GLuint   m_monoTex   = 0;
+    GLuint   m_monoDepth = 0;
+    uint32_t m_monoW = 0, m_monoH = 0;
+
     GLuint   m_fbo   = 0;
     GLuint   m_tex   = 0;
     GLuint   m_depth = 0;

@@ -15,6 +15,7 @@ branch.
 | **Phase 3** | **UI fixes** — the flat 2D layer placed on a world-locked panel, and video cutscenes made fusable | Working. On by default in stereo |
 | **Phase 4** | **FMV fixes** — cutscenes captured offscreen and replayed as real world geometry | Working. On by default in stereo |
 | **Phase 5** | **VR controller support** — Touch controllers presented to the game as an Xbox pad | Working. On by default |
+| **Phase 6** | **TR6 support** — alternate-eye rendering for Angel of Darkness, which renders its scene offscreen | Working. Auto-detected per game |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -44,8 +45,16 @@ and no code patching — and the engine adopts the Xbox control scheme and promp
 by itself. See
 [Phase 5: VR controller support](#phase-5-vr-controller-support).
 
-Note that the shipped `TombRaiderVR.ini` still selects `Mode=mono`. Set
-`Mode=stereo` for Phase 2.
+**Phase 6** adds TR6. Angel of Darkness renders its scene into offscreen
+textures and composites at the end, so per-draw duplication cannot reach it at
+all; it gets alternate-eye rendering instead, selected automatically from which
+game is running. See [Phase 6: TR6 support](#phase-6-tr6-support).
+
+**Two ini files ship.** `TombRaiderVR.ini` is the Phase 1 bring-up config and
+still selects `Mode=mono`. `TombRaiderVR.working.ini` is the full working
+configuration — `Mode=stereo`, `EyeOffsetMode=3`, and every Phase 3–6 option
+documented in place. To play, copy `TombRaiderVR.working.ini` over
+`TombRaiderVR.ini` in the game folder.
 
 The renderer was reverse-engineered from the shipped binary and its PDB. Every
 address in `src/Engine.h` was read out of Ghidra and re-verified against the
@@ -104,7 +113,7 @@ Copy four files into the game folder, next to `tomb456.exe`:
 |---|---|
 | `winmm.dll` | `build\x64\Release\winmm.dll` (the proxy) |
 | `TombRaiderVR.dll` | `build\x64\Release\` |
-| `TombRaiderVR.ini` | repo root |
+| `TombRaiderVR.ini` | repo root — or `TombRaiderVR.working.ini`, renamed, for the full stereo config |
 | `openvr_api.dll` | `SteamVR\bin\win64\openvr_api.dll` |
 
 Then launch the game normally — from Steam, from a shortcut, however you like.
@@ -164,16 +173,17 @@ Overlay app will bring the runtime up and still does not own the scene.
 
 ## What it hooks
 
-Five inline hooks. All five are installed either way; in Phase 1 three are
-active and two sit inert.
+Six inline hooks, all installed together — all-or-nothing. In Phase 1 three are
+active and the rest sit inert.
 
-| Function | RVA | Role in Phase 1 |
+| Function | RVA | Role |
 |---|---|---|
-| `vid_setPass` | `0x0000C4C0` | **Active.** Classifies each pass as world-space or 2D |
-| `validate_draw` | `0x00011CC0` | **Active.** Composes the head pose into the view matrix |
-| `ogl_present` | `0x00012600` | **Active.** Frame boundary; samples the next head pose |
-| `ogl_draw` | `0x00012BD0` | Phase 2 only (per-eye duplication) |
-| `ogl_drawVB` | `0x00012CF0` | Phase 2 only |
+| `vid_setPass` | `0x0000C4C0` | **Phase 1.** Classifies each pass as world-space or 2D |
+| `validate_draw` | `0x00011CC0` | **Phase 1.** Composes the head pose into the view matrix |
+| `ogl_present` | `0x00012600` | **Phase 1.** Frame boundary; samples the next head pose |
+| `ogl_draw` | `0x00012BD0` | Phase 2 — per-eye duplication |
+| `ogl_drawVB` | `0x00012CF0` | Phase 2 — the other draw path |
+| `fmvShow` | `0x00011350` | Phase 6 — an exact "a video is on screen now" signal, which TR6 needs to tell its cutscenes from its scene composite |
 
 `validate_draw` is the single choke point where every uniform reaches the GPU,
 which makes it the right place to substitute matrices. The substitution is
@@ -728,10 +738,10 @@ possible to substitute a matrix the engine has no API for at all.
 | `EyeMarkers` | `0` | Red/blue eye-mapping bars |
 | `DebugEyeYawDegrees` | `0` | Yaw the right eye by N degrees as a visibility test |
 
-> **Note on `EyeOffsetMode`.** The built-in default is `2`, and the shipped
-> `TombRaiderVR.ini` does not set the key — so unless you add `EyeOffsetMode=3`
-> explicitly, stereo runs the superseded mode that swims when you turn your
-> head. Mode 3 is the one the code documents as the fix.
+> **Note on `EyeOffsetMode`.** The built-in default is `2` — the superseded mode
+> that swims when you turn your head — and the bring-up `TombRaiderVR.ini` does
+> not set the key. `TombRaiderVR.working.ini` sets `EyeOffsetMode=3`, which is
+> the working one. Use that file, or add the key yourself.
 
 Sign-convention toggles, unchanged from Phase 1:
 
@@ -898,8 +908,9 @@ working mode, and a fourth was missing:
 | `VideoDepthMetres` | `6.0` | Distance for clip-space-direct passes, applied as a viewport shift. `0` disables |
 | `FlatHud` | `1` | Keeps the 2D layer on the flat path rather than reprojecting it as world geometry |
 
-None of these keys are present in the shipped `TombRaiderVR.ini`, so the
-built-in defaults above are what runs unless you add them.
+These keys are absent from the bring-up `TombRaiderVR.ini`, so the built-in
+defaults above are what runs with it. `TombRaiderVR.working.ini` sets them
+explicitly, with the reasoning inline.
 
 ---
 
@@ -1017,8 +1028,8 @@ rebinds on its next draw instead of trusting a cache that is no longer true.
 | `VideoLockToHead` | `0` | `0` anchors the panel to the game camera; `1` welds it to your head |
 | `VideoFlipV` | `0` | Flip the captured video on replay. Only needed if a cutscene comes out upside down |
 
-As with Phases 2 and 3, none of these keys are in the shipped
-`TombRaiderVR.ini`, so the built-in defaults are what run.
+As with Phases 2 and 3, these are absent from the bring-up `TombRaiderVR.ini`
+and set explicitly in `TombRaiderVR.working.ini`.
 
 ---
 
@@ -1142,8 +1153,147 @@ pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) action=Y(L upper)
 | `GamepadMenuUsesBack` | `1` | Left lower face button sends `BACK` (System). `0` sends `START` (pause) |
 | `GamepadLogButtons` | `0` | Log raw legacy button masks on change |
 
-These keys are not in the shipped `TombRaiderVR.ini` either, so the defaults
-above are what run.
+These are in `TombRaiderVR.working.ini` and absent from the bring-up
+`TombRaiderVR.ini`.
+
+---
+
+## Phase 6: TR6 support
+
+Everything up to here was built against TR4 and TR5, which draw the world
+straight to the backbuffer. **TR6 (Angel of Darkness) does not**, and that single
+difference invalidates the technique the whole stereo path is built on.
+
+Phase 6 adds a second rendering strategy for TR6 — **alternate-eye rendering**,
+or AER — and the per-game detection to switch between them. Which game is
+running is read from a global (`gGame`: `0` = TR4, `1` = TR5, `2` = TR6).
+
+### Why per-draw duplication cannot work in TR6
+
+TR6 renders the scene into the engine's own **2560×1440 offscreen textures** and
+composites at the end. The measurement is stark:
+
+| Game | World draws offscreen |
+|---|---|
+| TR4 / TR5 | ~9% |
+| TR6 | **572,970 of 579,945** — 98.8% |
+
+Phase 2 duplicates each draw into the two halves of one double-wide target. In
+TR6 there is almost nothing on the backbuffer to duplicate, and the pieces that
+*are* there cannot be split:
+
+- the final composite samples those offscreen textures **whole, with 0–1 UVs**,
+  so widening them breaks the sampling
+- duplicating individual draws into halves of a target the composite later reads
+  entire would corrupt it
+
+### Alternate-eye rendering
+
+So instead of splitting each draw, **each frame is rendered entirely as one
+eye** — mono, through the engine's normal path, at its own size — and blitted
+into that eye's half of the stereo target. The other half keeps the frame it was
+given. Nothing is resized and nothing is duplicated.
+
+Both eyes are stereo-correct, because each frame carries its own eye's matrices.
+
+**The cost is honest and unavoidable: each eye updates at half the frame rate** —
+45 Hz out of 90. Full-rate stereo would mean running the entire offscreen chain
+twice into parallel target sets, which is a substantially larger piece of work.
+`AlternateEyeGame6=0` turns it off, and TR6 then renders flat at full rate.
+
+#### The scratch target, and the flicker it prevents
+
+The obvious implementation — render into one half of the double-wide target and
+leave the other alone — fails immediately, and the reason is worth recording.
+`FBO_default` *is* the double-wide target, so **any full-target `glClear` the
+engine issues wipes both halves**. That reads as a hard flicker at half the frame
+rate, with no head movement needed at all.
+
+AER therefore points `FBO_default` at a **single-eye scratch framebuffer** sized
+to the engine's own render resolution. The engine clears and renders into it
+exactly as it would a normal backbuffer, and `ogl_present` blits the result into
+one half of the eye target. The other half is never bound, so nothing can
+disturb it. The blit rescales, which is correct — the per-eye projection already
+carries the HMD's aspect.
+
+If the scratch cannot be created, that is logged plainly rather than silently
+degrading:
+
+```
+stereo: mono scratch unavailable -- TR6 alternate-eye will flicker,
+        because the engine's clears reach both halves
+```
+
+#### AER only where it earns its cost
+
+AER is worth half the frame rate only when there is an offscreen 3D scene to
+reach. TR6's main menu and its FMVs are 2D — they draw straight to the
+backbuffer, where ordinary per-draw duplication works at **full** rate and looks
+better doing it.
+
+The two are separated by counting offscreen world draws per frame, which needs
+no new symbols: gameplay runs ~800, menus and video are near zero.
+`AlternateEyeMinOffscreen` (default `50`) is the threshold.
+
+The decision is **latched once per frame**, from the previous frame's count.
+That matters: `AlternateEyeActive()` is consulted from the draw path, the
+injection gate and present, so a mid-frame flip would leave one frame split
+across two different targets. The cost of latching is one frame of lag at a
+transition.
+
+```
+tr6: alternate-eye ON -- offscreen 3D scene (812 offscreen world draws last frame)
+tr6: alternate-eye off -- 2D, full rate (0 offscreen world draws last frame)
+```
+
+### The FMV collision, and a sixth hook
+
+Phase 4 detects video by a structural test: a pass with no `uProjMatrix`
+(`uid[0] < 0`) writes clip space directly, so it must be an FMV quad.
+
+**In TR6 that test is ambiguous.** TR6's scene composite — the draw that puts the
+whole rendered world on screen — also goes through a clip-space-direct shader.
+It has exactly the same signature as an FMV quad, so Phase 4's capture-and-replay
+grabbed it and turned the entire game into a small floating panel.
+
+The fix is a **sixth inline hook**, on `fmvShow` (RVA `0x00011350`), which the
+engine installs as `app.fmvShow` and calls once per frame for as long as a
+cutscene is on screen. That is an exact "a video is on screen right now" signal
+where the shader test was only an approximation. A frame counter with a
+two-frame tolerance turns it into `FmvActive()`.
+
+TR6 therefore uses the offscreen panel **only while a video is genuinely
+playing**; its gameplay and menus are left alone. TR4 and TR5 keep the original
+behaviour, which was already working.
+
+One subtlety that caused a real bug: the capture path and the viewport-shift
+fallback must agree about whether the panel is handling a pass. The first cut
+skipped the capture in TR6 but left the fallback suppressed by "the panel
+exists", so TR6's bypass passes got **neither** — head-locked and unfused. Both
+now consult the same `VideoOffscreenActive()`.
+
+### Frame-rate reporting
+
+Because AER halves the per-eye rate, the health report now measures wall-clock
+frame rate over its 1800-frame window and says what each eye is actually
+getting:
+
+```
+perf: 89.7 fps rendered -- alternate-eye, so each EYE updates at half that
+```
+
+That is the number that decides whether the judder is worth chasing, and it was
+guesswork before.
+
+### Phase 6 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `AlternateEyeGame6` | `1` | Alternate-eye rendering in TR6. `0` renders TR6 flat at full rate |
+| `AlternateEyeMinOffscreen` | `50` | Offscreen world draws per frame before AER engages. Raise it if a menu drops to half rate; lower it if gameplay does not engage; `0` forces AER on for every TR6 frame |
+| `VideoSkipGame6` | `1` | In TR6, use the offscreen video panel only while `fmvShow` says a video is playing |
+
+All three are TR6-only: `gGame != 2` takes the TR4/TR5 path regardless.
 
 ---
 
@@ -1151,9 +1301,10 @@ above are what run.
 
 These are honest gaps, not oversights.
 
-- **The shipped ini still selects Phase 1**, and does not set `EyeOffsetMode`,
-  so a bare `Mode=stereo` runs the superseded mode 2 rather than the working
-  mode 3. See the note under [Phase 2 settings](#phase-2-settings).
+- **`TombRaiderVR.ini` is the bring-up config, not the playable one.** It
+  selects `Mode=mono` and leaves `EyeOffsetMode` at the superseded default of
+  `2`, so a bare `Mode=stereo` edit is not enough. `TombRaiderVR.working.ini` is
+  the file to actually use.
 - **The frame graph is not fully traced.** The engine renders a post-processing
   chain into its own layered array textures before compositing. The stereo hooks
   only split work that targets the backbuffer, detected by reading the `ogl_rt`
@@ -1181,6 +1332,11 @@ These are honest gaps, not oversights.
   means finding the frustum/portal test inside the game DLLs.
 - **The controllers are a gamepad, not hands.** Phase 5 maps them to XInput;
   there is no motion aiming, no hand presence in-world, and no haptics.
+- **TR6 updates each eye at half the frame rate.** Alternate-eye rendering is a
+  consequence of the engine compositing from offscreen targets, not a shortcut.
+  Full-rate stereo would mean running the whole offscreen chain twice into
+  parallel target sets — a substantially larger piece of work than anything in
+  Phases 1–6.
 
 ## Safety
 
@@ -1212,5 +1368,6 @@ tools/            fetch_openvr.ps1, gen_winmm_forwards.ps1, vrprobe
 tests/            selftest (hooks + maths), proxytest (loader behaviour)
 docs/             engine-map.html -- the full renderer map
 trace.txt         the Ghidra session that produced src/Engine.h
-TombRaiderVR.ini  shipped config; Mode=mono, i.e. Phase 1
+TombRaiderVR.ini  bring-up config; Mode=mono, i.e. Phase 1
+TombRaiderVR.working.ini  the full working config -- stereo, all phases on
 ```
