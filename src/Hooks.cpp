@@ -37,9 +37,12 @@
 #include "StereoRenderer.h"
 #include "VideoPanel.h"
 #include "Gamepad.h"
+#include "Callsite.h"
+#include "RoomCull.h"
 #include "VRSystem.h"
 
 #include <cstring>
+#include <intrin.h>
 #include <cmath>
 
 namespace tr {
@@ -95,6 +98,10 @@ bool  g_loggedFrame  = false;
 // which hid the only question that matters: do the two eyes actually differ?
 bool  g_loggedEye[2] = { false, false };
 float g_eyeViewT[2][3] = {};
+
+// The world -> eye matrix last injected, for RoomCull's head test.
+Affine g_lastHeadView      = Affine::Identity();
+bool   g_lastHeadViewValid = false;
 bool  g_reportedSeparation = false;
 // Per-eye injection counts. If eye 1 never gets injected, the duplication loop
 // is not reaching validate_draw with the right eye selected.
@@ -435,6 +442,8 @@ void ReadBackProjTranslation(uint32_t program, int loc, float out[3]) {
 // vid_setPass -- pass classification
 // ---------------------------------------------------------------------------
 void __cdecl Detour_vid_setPass(int shader, float* params, int cull, int blend) {
+    if (Cfg().logCallsites) NoteCallsite("vid_setPass", _ReturnAddress());
+
     // The engine has a real robustness gap here: vid_setPass assigns
     // vid_state.shader = shader BEFORE its range check, and a shader id above
     // 201 then skips all configuration and falls through, leaving validate_draw
@@ -733,6 +742,14 @@ void __cdecl Detour_validate_draw() {
                      ? Mul(VR().EyeView(eye), gameView)
                      : gameView;
 
+    // Publish it for RoomCull's head-oriented portal test. This is the only
+    // place the head's world-space orientation exists: the engine's own view
+    // matrix is the game camera's, and mView_packed is never rotated by VR.
+    // Either eye will do -- they differ by an IPD, which is nothing against a
+    // 1024-unit sector, and the test carries a margin far larger.
+    g_lastHeadView      = finalView;
+    g_lastHeadViewValid = true;
+
     // Diagnostic: swing the right eye's view by a large, unmistakable angle.
     if (Cfg().debugEyeYawDegrees != 0.0f && eye == Eye::Right) {
         finalView = Mul(RotY(Cfg().debugEyeYawDegrees), finalView);
@@ -1000,6 +1017,8 @@ void __cdecl Detour_ogl_draw(void* vb, unsigned firstIndex, unsigned count, int 
 
 void __cdecl Detour_ogl_drawVB(int fvf, void* vb, void* ib, int stride,
                                unsigned first, unsigned count, int strip) {
+    if (Cfg().logCallsites) NoteCallsite("ogl_drawVB", _ReturnAddress());
+
     DuplicatePerEye<Fn_ogl_drawVB>(g_hDrawVB, fvf, vb, ib, stride, first, count, strip);
 }
 
@@ -1122,6 +1141,9 @@ void __cdecl Detour_ogl_present() {
     // Re-assert the XInput pointer every frame: cheap, and it self-heals if the
     // game re-resolves XInput or if we got here before WinMain had.
     GamepadUpdate();
+
+    // The game DLLs load after we do, so this hook installs lazily.
+    RoomCullUpdate();
 
     // Periodic health report, in deltas. A one-shot report at frame 300 only
     // ever sampled the menus, where almost everything legitimately is 2D -- it
@@ -1324,6 +1346,15 @@ void __cdecl Detour_ogl_present() {
 
 } // namespace
 
+// Hand RoomCull the head's world-space orientation. False until the first
+// stereo frame has been injected, so the caller can fall back to adding rooms
+// unconditionally rather than rejecting everything before VR is up.
+bool LastHeadView(Affine& out) {
+    if (!g_lastHeadViewValid) return false;
+    out = g_lastHeadView;
+    return true;
+}
+
 bool InstallHooks() {
     if (!Bind()) return false;
 
@@ -1373,6 +1404,7 @@ bool InstallHooks() {
 
 void RemoveHooks() {
     GamepadShutdown();
+    RoomCullShutdown();
 
     // Reverse order of installation.
     g_hFmvShow.Remove();

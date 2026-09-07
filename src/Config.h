@@ -278,6 +278,96 @@ struct Config {
     // stays switchable.
     bool  gamepadMenuUsesBack = true;
 
+    // Draw every room in the level, defeating TR4's portal culling.
+    //
+    // The engine only submits rooms reached through a camera-facing portal, so
+    // looking away from the game camera finds nothing drawn. The culling is in
+    // tomb4.dll -- the exe has none, and widening the projection it hands the
+    // game was measured to change nothing.
+    //
+    // This appends every room to the draw list after traversal (exactly what the
+    // engine already does for rooms flagged 0x40000) and gives them full-screen
+    // clip rects. TR4 only: the addresses are that DLL's.
+    //
+    // Cost: no visibility culling at all. TR4 rooms are small, but a large level
+    // will cost frame rate. Off by default -- turn it on and watch the log line
+    // that reports how many rooms were forced.
+    // Expand the engine's visible set along PORTAL CONNECTIVITY by this many
+    // hops. 0 = off. This is the mechanism that fixes geometry going missing
+    // when you turn your head.
+    //
+    // The engine's traversal runs in the GAME CAMERA's space -- VR is injected
+    // at the shader uniform, so the engine's own view matrix never rotates with
+    // your head. A portal beside or behind the camera fails the near-plane test
+    // inside the clipper, so no amount of widening its rectangle helps (that
+    // was measured: 200% of screen each way changed nothing). Connectivity has
+    // no orientation bias: a room through the door behind you is one hop away
+    // whichever way the camera faces.
+    //
+    // 2 is conservative, 3 covers deeper sightlines and costs about ten more
+    // rooms and no measurable frame rate. Deeper than that is where rooms start
+    // appearing that you cannot actually see -- which is what the head test
+    // below exists to catch.
+    int   portalHops       = 3;
+
+    // Room indices hop expansion must never add. Comma or space separated.
+    // Per level, so a list that helps one means nothing in another.
+    int   excludeRooms[64] = {};
+    int   excludeCount     = 0;
+
+    // Before adding a hop room, test the portal we would reach it through
+    // against the ACTUAL HEADSET FRUSTUM.
+    //
+    // Hop expansion adds any portal-connected room and draws it WITHOUT a
+    // portal clip, so a room that is connected but not actually visible through
+    // that doorway still gets drawn -- and if it happens to share world space
+    // with somewhere you can see, you get foreign geometry laid over your own.
+    // That is the room-215 class of bug.
+    //
+    // The engine performs exactly this test already; it just performs it from
+    // the game camera. Doing it from the head is the piece that was missing.
+    // The portal's four corners go world -> eye -> clip using the view matrix
+    // we actually injected and the VR projection, so handedness and field of
+    // view come from the projection rather than being restated here.
+    // DEFAULT OFF until it is proven. The first version transformed portals
+    // with the view matrix's translation column, which is not what a textbook
+    // view matrix carries; the error scaled with world coordinates, so it
+    // behaved on a 116-room level and rejected essentially every portal on a
+    // 242-room one. Fixed to use rotation only, with the camera position taken
+    // from the engine's own globals -- but unproven, so opt in.
+    bool  portalHeadTest   = false;
+
+    // How far outside the frustum a portal may sit and still count as visible,
+    // in NDC (0.35 = 35% of half-width). Generous on purpose: losing geometry
+    // is the worse failure, so raise this if anything vanishes at the edges and
+    // lower it if unwanted rooms get through.
+    float portalHeadMargin = 0.35f;
+
+    // Give every listed room a full-screen clip rect. Leave on.
+    //
+    // Required, not lazy: the engine's portal-clipped rects are screen boxes
+    // computed for the game camera's view, and we render from the HMD's, so
+    // under head rotation they scissor the wrong part of the screen. Off is a
+    // diagnostic that separates "the list changed" from "the rects changed".
+    bool  drawAllRoomsClip = true;
+
+    // Legacy: append rooms by DISTANCE from the camera, ignoring portals.
+    //
+    // Superseded by portalHops and kept only for A/B. Proximity is the wrong
+    // criterion -- it will happily add a stacked room that shares world space
+    // with the one you are standing in and that no portal reaches.
+    bool  drawAllRooms     = false;
+
+    // Log the DLL-side return address of each distinct call into vid_setPass and
+    // ogl_drawVB, as "module+RVA".
+    //
+    // The game DLLs ship without PDBs, so this is how we locate their render
+    // code without searching 1791 unnamed functions: the DLL has to call across
+    // into the engine to draw, and the return address at our hook is a code
+    // address inside the DLL. One gameplay frame gives the exact RVAs to open in
+    // Ghidra. Deduplicated and capped, but still verbose -- leave off for play.
+    bool  logCallsites     = false;
+
     // Frame-graph tracer. Logs every render-target transition and how many
     // world-space vs 2D draws happen against each, for TraceFrames frames
     // starting at TraceStartFrame.

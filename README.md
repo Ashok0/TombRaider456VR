@@ -16,6 +16,7 @@ branch.
 | **Phase 4** | **FMV fixes** — cutscenes captured offscreen and replayed as real world geometry | Working. On by default in stereo |
 | **Phase 5** | **VR controller support** — Touch controllers presented to the game as an Xbox pad | Working. On by default |
 | **Phase 6** | **TR6 support** — alternate-eye rendering for Angel of Darkness, which renders its scene offscreen | Working. Auto-detected per game |
+| **Phase 7** | **Culling fix** — the missing geometry behind Lara, fixed inside the game DLLs | Working. TR4 / TR5 |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -49,6 +50,11 @@ by itself. See
 textures and composites at the end, so per-draw duplication cannot reach it at
 all; it gets alternate-eye rendering instead, selected automatically from which
 game is running. See [Phase 6: TR6 support](#phase-6-tr6-support).
+
+**Phase 7** fixes the void behind Lara. The engine only draws rooms its portal
+traversal reaches from the game camera, so looking away from it finds nothing —
+and the traversal is in the game DLLs, not the exe. See
+[Phase 7: culling fix](#phase-7-culling-fix).
 
 **Two ini files ship.** `TombRaiderVR.ini` is the Phase 1 bring-up config and
 still selects `Mode=mono`. `TombRaiderVR.working.ini` is the full working
@@ -184,6 +190,11 @@ active and the rest sit inert.
 | `ogl_draw` | `0x00012BD0` | Phase 2 — per-eye duplication |
 | `ogl_drawVB` | `0x00012CF0` | Phase 2 — the other draw path |
 | `fmvShow` | `0x00011350` | Phase 6 — an exact "a video is on screen now" signal, which TR6 needs to tell its cutscenes from its scene composite |
+
+A seventh hook lands **outside the exe**, in `tomb4.dll` / `tomb5.dll`, on the
+room renderer that consumes the portal-traversal draw list. It is installed
+lazily, because the game DLLs load after the mod does, and it is what
+[Phase 7](#phase-7-culling-fix) uses to extend the visible set.
 
 `validate_draw` is the single choke point where every uniform reaches the GPU,
 which makes it the right place to substitute matrices. The substitution is
@@ -1297,6 +1308,170 @@ All three are TR6-only: `gGame != 2` takes the TR4/TR5 path regardless.
 
 ---
 
+## Phase 7: culling fix
+
+Turn your head far enough away from where the game camera is pointing and there
+is nothing drawn — no walls, no floor, just void behind Lara. Phase 7 fixes it.
+
+The engine submits only the rooms in a list built by **portal traversal** from
+the game camera. That set is correct for a flat screen and for the camera's
+facing, and VR breaks both assumptions at once: the headset sees wider, and it
+can look somewhere the camera is not.
+
+### The culling is not in the exe
+
+This was recorded as a dead end for good reason. `tomb456.exe` contains no
+culling code at all, and the obvious lever does nothing:
+
+> Hooking `ogl_setPersp` and scaling `tanY` by 2 widened the projection from
+> **64.4° to 103.1° and produced zero extra geometry.** On TR6, 20× was the same.
+
+The traversal lives in `tomb4.dll` and `tomb5.dll` — and those ship **without
+PDBs**, 1791 unnamed functions in TR4 alone. Searching that statically for a
+portal test is a long shot.
+
+### Finding the code by asking the game
+
+The way in is a nice trick, and it is what made the rest possible. The DLL has
+to call across into the engine to draw anything — and the mod is already sitting
+on those calls. **The return address inside the `vid_setPass` and `ogl_drawVB`
+detours is a code address inside the DLL.**
+
+`LogCallsites=1` records `_ReturnAddress()` at both hooks, deduplicated and
+capped, and resolves each to `module+RVA` (via `EnumProcessModules`, since the
+DLLs are ASLR'd and the raw pointer is useless on its own):
+
+```
+callsite: vid_setPass    <- tomb4.dll+0xC53A1
+callsite: ogl_drawVB     <- tomb4.dll+0xC6018
+```
+
+One gameplay frame hands over the exact RVAs of the functions that submit
+geometry, and the call graph leads back from there to whatever decided what to
+submit. A blind search becomes a starting point.
+
+What that turned up, for both DLLs: the traversal, the draw list (`int16` room
+indices) and its count, the room array (stride `0x130`), and within a room its
+portal list at `+0x08`, world position at `+0x28`, render clip rect at
+`+0x4C`–`+0x52`, and `flipped_room` at `+0x68`.
+
+### The mechanism: expand along portal connectivity
+
+The engine already does the necessary thing for a special case — after traversal
+it appends any room flagged `0x40000`, bypassing portals entirely. Phase 7 does
+the same, for rooms reached by walking **portal connectivity** outward from the
+visible set, `PortalHops` deep (default 3).
+
+Connectivity rather than orientation is the whole point. The engine's traversal
+runs in the **game camera's** space, because VR is injected at the shader
+uniform and the engine's own view matrix never rotates with your head. A portal
+beside or behind the camera fails the near-plane test *inside* the clipper,
+before its rectangle is ever consulted. Connectivity has no orientation bias at
+all: a room through the door behind you is one hop away whichever way the camera
+happens to face.
+
+Two hops is conservative; three covers deeper sightlines for about ten more
+rooms and no measurable frame cost.
+
+**The hook goes on the consumer, not the producer.** Appending at the traversal
+function leaves a second traversal pass to run over the enlarged list, and that
+pass overran it. At the room renderer the list is final.
+
+**Full-screen clip rects are required, not lazy.** The engine's portal-clipped
+rects are screen boxes computed for the game camera's view; we render from the
+HMD's, so under head rotation they scissor the wrong region entirely. Appended
+rooms also still carry the inverted "empty" bounds the previous frame reset them
+to. `DrawAllRoomsClipRect=0` exists only as a diagnostic, to separate "the list
+changed" from "the rects changed".
+
+### Four things that were tried and measured wrong
+
+Each of these looks reasonable and is not. They are recorded so nobody spends a
+session re-deriving them.
+
+| Approach | Verdict |
+|---|---|
+| **Append rooms by distance** from the camera | Works, but proximity is the wrong criterion — it happily adds a stacked room that shares world space with the one you are standing in and that no portal reaches, drawing foreign geometry over your own. Kept as `DrawAllRooms` for A/B only |
+| **Widen the portal rectangle** | **Measured inert.** Swept to 200% of screen each way it changed neither geometry nor frame rate; 20× on TR6 was the same. The near-plane test rejects the portal before the rectangle is consulted, so no rectangle can rescue it. Removed |
+| **Reject hop rooms whose world AABB overlaps a drawn room** | **Measured wrong.** A TR room box is a rectangle around an irregular interior, and neighbours share a border of wall sectors, so ordinary adjacency shows a 2048×2048 overlap. It rejected six legitimate pairs at once. Removed |
+| **Match flip pairs by world position** | Replaced by the engine's own `flipped_room` field, which is unambiguous: the live room names its storage copy, and the copy holds `-1`. Skipping storage copies is now unconditional rather than a guess |
+
+### The head test, and why it is off by default
+
+Hop expansion adds any portal-connected room and draws it **without** a portal
+clip, so a room that is connected but not actually visible through that doorway
+still gets drawn — and where it shares world space with somewhere you can see,
+you get foreign geometry laid over your own. That is the room-215 class of bug.
+
+`PortalHeadTest=1` transforms the connecting portal's four corners
+world → eye → clip, using the view matrix actually injected last frame and the
+VR projection, and rejects the room if the quad lands wholly outside the
+frustum. Going all the way to clip space means the projection supplies
+handedness and field of view, so there is nothing to restate by hand. It is
+deliberately conservative — a portal straddling the near plane counts as
+visible, and `PortalHeadMargin` (0.35 NDC) expands the frustum — because losing
+geometry is the worse failure.
+
+The engine performs exactly this test already. It just performs it from the game
+camera; doing it from the head is the piece that was missing.
+
+It ships **off**, and the reason is instructive. The first version transformed
+portals using the view matrix's translation column — which is not the `-R·p` a
+textbook view matrix carries, because the engine packs something
+camera-position-shaped there instead. The error scaled with world coordinates,
+so the test behaved on a 116-room level and rejected essentially every portal on
+a 242-room one. It now uses rotation only, with the camera position taken from
+the engine's own globals, but it is unproven, so it is opt-in.
+
+The measurement discipline changed with it: the pass/reject ratio is reported
+**every 2000 decisions, not once**. A single early sample is exactly what hid
+the bug — the one-shot fired in a small level where the test behaved, and never
+re-measured on the large one where it did not.
+
+```
+rooms[TR4]: traversal found 18 of 116 rooms (hops 3, headtest off)
+rooms[TR4]: 3 hop(s) added 27 -> drawing 45 of 116
+rooms[TR4]: head test -- 1840 passed, 160 rejected (8% rejected) of the last 2000 portals
+```
+
+`DrawAllRoomsExclude` is the blunt companion: a per-level list of room indices
+hop expansion must never add. It is honestly labelled — what makes room 215
+special has never been identified, and three general mechanisms failed to
+characterise it — but it is one line and it demonstrably works while the general
+ones are still being proven.
+
+### Two things that would have been silent corruption
+
+- **The draw list holds 200 entries, not 206.** Deriving the bound as
+  `(drawCount − drawList) / 2` gives 206 and is wrong: scanning both DLLs for
+  RIP-relative references landing between the two addresses shows unrelated
+  globals in the gap. TR5 levels have 242 rooms, so this is not academic — the
+  wrong bound wrote over live engine state every frame.
+- **Nothing writes `room+0x4B`.** That byte looks like a render flag and is not:
+  it feeds a pass that relocates two-room objects with `ItemNewRoom`, moving
+  items out of the room you are standing in so they stop blocking you. Writing
+  it is what originally let Lara walk through a wall.
+
+The hook itself is installed lazily — the game DLLs load after the mod does —
+and verifies a per-game prologue (`48 8B C4 41 54` for TR4, `48 89 5C 24 10` for
+TR5) before patching. A mismatch is logged once and leaves stock culling in
+place rather than retrying every frame. TR4 and TR5 only; TR6 has no entry in
+the table.
+
+### Phase 7 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PortalHops` | `3` | Expand the visible set this many portal hops. `0` disables the fix |
+| `PortalHeadTest` | `0` | Test each connecting portal against the real headset frustum before adding its room. Unproven — opt in |
+| `PortalHeadMargin` | `0.35` | How far outside the frustum a portal may sit and still count as visible, in NDC. Raise if anything vanishes at the edges |
+| `DrawAllRoomsExclude` | *(empty)* | Room indices hop expansion must never add. Comma or space separated, per level |
+| `DrawAllRoomsClipRect` | `1` | Give every listed room a full-screen clip rect. Off is a diagnostic only |
+| `DrawAllRooms` | `0` | Legacy distance-based appending, kept for A/B |
+| `LogCallsites` | `0` | Log each distinct DLL-side call into `vid_setPass` / `ogl_drawVB` as `module+RVA`. Verbose; a research tool, not a play setting |
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
@@ -1324,12 +1499,15 @@ These are honest gaps, not oversights.
   plausible symptom of an unrelated mistake.
 - **Depth has no stencil anywhere** (`GL_DEPTH_ATTACHMENT` only), so the eye
   target matches that.
-- **Geometry disappears when you look far from the game camera**, and the fix is
-  not in the exe. The culling test lives in `tomb4/5/6.dll` and builds its planes
-  independently of the engine's projection: hooking `ogl_setPersp` and scaling
-  `tanY` by 2 widened the projection from 64.4° to 103.1° and produced no extra
-  geometry at all. That experiment is settled — do not re-run it. Fixing this
-  means finding the frustum/portal test inside the game DLLs.
+- **The culling fix is coverage, not correctness.** [Phase 7](#phase-7-culling-fix)
+  expands the visible set by portal connectivity, which is orientation-free and
+  therefore over-inclusive: rooms are drawn that you could not actually see
+  through that doorway. Where such a room shares world space with one you can
+  see, foreign geometry is laid over your own — the room-215 bug, still worked
+  around by index rather than understood. `PortalHeadTest` is the intended
+  general fix and is unproven.
+- **The culling fix is TR4 and TR5 only.** TR6's traversal has not been mapped,
+  so Angel of Darkness still culls to the game camera.
 - **The controllers are a gamepad, not hands.** Phase 5 maps them to XInput;
   there is no motion aiming, no hand presence in-world, and no haptics.
 - **TR6 updates each eye at half the frame rate.** Alternate-eye rendering is a
@@ -1363,6 +1541,8 @@ the culling investigation, and it is there for the next target that does.
 
 ```
 src/              the mod: hooks, engine map, OpenVR glue, matrix maths
+src/RoomCull.*    the DLL-side portal-culling fix (TR4/TR5)
+src/Callsite.*    return-address census, for locating code in the PDB-less DLLs
 src/proxy/        the winmm shim that gets us loaded
 tools/            fetch_openvr.ps1, gen_winmm_forwards.ps1, vrprobe
 tests/            selftest (hooks + maths), proxytest (loader behaviour)

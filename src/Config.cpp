@@ -35,6 +35,26 @@ int GetIntAuto(const wchar_t* key, int def, const wchar_t* ini) {
     return static_cast<int>(v);
 }
 
+// Read a comma- or space-separated list of room indices. Returns how many were
+// stored. Absent or malformed entries simply yield an empty list -- a bad line
+// must not become an exclusion nobody asked for.
+int GetIntList(const wchar_t* key, int* out, int maxOut, const wchar_t* ini) {
+    wchar_t buf[512] = {};
+    GetPrivateProfileStringW(L"VR", key, L"", buf, 512, ini);
+    int n = 0;
+    const wchar_t* p = buf;
+    while (*p && n < maxOut) {
+        while (*p == L' ' || *p == L',' || *p == L'	') ++p;
+        if (!*p) break;
+        wchar_t* end = nullptr;
+        const long v = wcstol(p, &end, 0);
+        if (end == p) break;
+        if (v >= 0) out[n++] = static_cast<int>(v);
+        p = end;
+    }
+    return n;
+}
+
 float GetFloat(const wchar_t* key, float def, const wchar_t* ini) {
     wchar_t buf[64] = {};
     wchar_t defBuf[64] = {};
@@ -113,6 +133,11 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.scaleDownKey        = GetIntAuto(L"ScaleDownKey",     g_cfg.scaleDownKey,       ini);
     g_cfg.ipdUpKey            = GetIntAuto(L"IpdUpKey",         g_cfg.ipdUpKey,           ini);
     g_cfg.ipdDownKey          = GetIntAuto(L"IpdDownKey",       g_cfg.ipdDownKey,         ini);
+    g_cfg.portalHops          = GetInt  (L"PortalHops",         g_cfg.portalHops,         ini);
+    g_cfg.portalHeadTest      = GetBool (L"PortalHeadTest",     g_cfg.portalHeadTest,     ini);
+    g_cfg.excludeCount        = GetIntList(L"DrawAllRoomsExclude", g_cfg.excludeRooms, 64, ini);
+    g_cfg.portalHeadMargin    = GetFloat(L"PortalHeadMargin",   g_cfg.portalHeadMargin,   ini);
+    g_cfg.drawAllRoomsClip    = GetBool (L"DrawAllRoomsClipRect", g_cfg.drawAllRoomsClip, ini);
     g_cfg.resetTuningKey      = GetIntAuto(L"ResetTuningKey",   g_cfg.resetTuningKey,     ini);
     g_cfg.scaleStep           = GetFloat(L"ScaleStep",          g_cfg.scaleStep,          ini);
     if (g_cfg.scaleStep < 1.01f) g_cfg.scaleStep = 1.01f;
@@ -144,6 +169,8 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.gamepadEnabled      = GetBool (L"GamepadEnabled",     g_cfg.gamepadEnabled,     ini);
     g_cfg.gamepadLogButtons   = GetBool (L"GamepadLogButtons",  g_cfg.gamepadLogButtons,  ini);
     g_cfg.gamepadMenuUsesBack = GetBool (L"GamepadMenuUsesBack", g_cfg.gamepadMenuUsesBack, ini);
+    g_cfg.logCallsites        = GetBool (L"LogCallsites",       g_cfg.logCallsites,       ini);
+    g_cfg.drawAllRooms        = GetBool (L"DrawAllRooms",       g_cfg.drawAllRooms,       ini);
     g_cfg.perEyeProjection    = GetIntAuto(L"PerEyeProjection", g_cfg.perEyeProjection,   ini);
     g_cfg.flatHud             = GetBool (L"FlatHud",            g_cfg.flatHud,            ini);
     g_cfg.duplicateDraws      = GetBool (L"DuplicateDraws",     g_cfg.duplicateDraws,     ini);
