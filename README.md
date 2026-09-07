@@ -18,6 +18,7 @@ branch.
 | **Phase 6** | **TR6 support** — alternate-eye rendering for Angel of Darkness, which renders its scene offscreen | Working. Auto-detected per game |
 | **Phase 7** | **Culling fix** — the missing geometry behind Lara, fixed inside the game DLLs | Working. TR4 / TR5 |
 | **Phase 8** | **D-pad input** — hold R3 and the left stick becomes a D-pad | Working. On by default |
+| **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -61,11 +62,16 @@ and the traversal is in the game DLLs, not the exe. See
 shift layer on R3. See
 [Phase 8: D-pad input support](#phase-8-d-pad-input-support).
 
-**Two ini files ship.** `TombRaiderVR.ini` is the Phase 1 bring-up config and
-still selects `Mode=mono`. `TombRaiderVR.working.ini` is the full working
-configuration — `Mode=stereo`, `EyeOffsetMode=3`, and every Phase 3–6 option
-documented in place. To play, copy `TombRaiderVR.working.ini` over
-`TombRaiderVR.ini` in the game folder.
+**Phase 9** unstacks the inventory. The engine lays that screen out through the
+projection's shear terms, which Phase 2 was overwriting wholesale. See
+[Phase 9: inventory fix](#phase-9-inventory-fix).
+
+`TombRaiderVR.ini` is the single config file, and it ships ready to play —
+`Mode=stereo`, `EyeOffsetMode=3`, and every option from every phase documented
+in place. If it is missing at startup the mod writes a fresh copy from a
+compiled-in template, so a working ini is never more than one launch away. An
+existing file is never overwritten (the write is `CREATE_NEW`), so tuned
+settings are safe.
 
 The renderer was reverse-engineered from the shipped binary and its PDB. Every
 address in `src/Engine.h` was read out of Ghidra and re-verified against the
@@ -124,7 +130,7 @@ Copy four files into the game folder, next to `tomb456.exe`:
 |---|---|
 | `winmm.dll` | `build\x64\Release\winmm.dll` (the proxy) |
 | `TombRaiderVR.dll` | `build\x64\Release\` |
-| `TombRaiderVR.ini` | repo root — or `TombRaiderVR.working.ini`, renamed, for the full stereo config |
+| `TombRaiderVR.ini` | repo root — or let the mod write its own on first launch |
 | `openvr_api.dll` | `SteamVR\bin\win64\openvr_api.dll` |
 
 Then launch the game normally — from Steam, from a shortcut, however you like.
@@ -754,10 +760,10 @@ possible to substitute a matrix the engine has no API for at all.
 | `EyeMarkers` | `0` | Red/blue eye-mapping bars |
 | `DebugEyeYawDegrees` | `0` | Yaw the right eye by N degrees as a visibility test |
 
-> **Note on `EyeOffsetMode`.** The built-in default is `2` — the superseded mode
-> that swims when you turn your head — and the bring-up `TombRaiderVR.ini` does
-> not set the key. `TombRaiderVR.working.ini` sets `EyeOffsetMode=3`, which is
-> the working one. Use that file, or add the key yourself.
+> **Note on `EyeOffsetMode`.** The compiled-in default is `2` — the superseded
+> mode that swims when you turn your head — but the shipped `TombRaiderVR.ini`
+> sets `EyeOffsetMode=3`, which is the working one. It only matters if you run
+> without an ini and without letting the mod write one.
 
 Sign-convention toggles, unchanged from Phase 1:
 
@@ -924,9 +930,8 @@ working mode, and a fourth was missing:
 | `VideoDepthMetres` | `6.0` | Distance for clip-space-direct passes, applied as a viewport shift. `0` disables |
 | `FlatHud` | `1` | Keeps the 2D layer on the flat path rather than reprojecting it as world geometry |
 
-These keys are absent from the bring-up `TombRaiderVR.ini`, so the built-in
-defaults above are what runs with it. `TombRaiderVR.working.ini` sets them
-explicitly, with the reasoning inline.
+The shipped `TombRaiderVR.ini` sets all of these explicitly, with the reasoning
+inline; the defaults above are what runs if the key is absent.
 
 ---
 
@@ -1044,8 +1049,7 @@ rebinds on its next draw instead of trusting a cache that is no longer true.
 | `VideoLockToHead` | `0` | `0` anchors the panel to the game camera; `1` welds it to your head |
 | `VideoFlipV` | `0` | Flip the captured video on replay. Only needed if a cutscene comes out upside down |
 
-As with Phases 2 and 3, these are absent from the bring-up `TombRaiderVR.ini`
-and set explicitly in `TombRaiderVR.working.ini`.
+As with Phases 2 and 3, the shipped `TombRaiderVR.ini` sets these explicitly.
 
 ---
 
@@ -1170,8 +1174,7 @@ pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) action=Y(L upper)
 | `GamepadMenuUsesBack` | `1` | Left lower face button sends `BACK` (System). `0` sends `START` (pause) |
 | `GamepadLogButtons` | `0` | Log raw legacy button masks on change |
 
-These are in `TombRaiderVR.working.ini` and absent from the bring-up
-`TombRaiderVR.ini`.
+All three are set explicitly in the shipped `TombRaiderVR.ini`.
 
 ---
 
@@ -1534,14 +1537,168 @@ pad: move=Lstick look=Rstick jump=A(R lower) ... sprint=L3 photo=LB+RB dpad=R3+L
 
 ---
 
+## Phase 9: inventory fix
+
+Every inventory item drawn on top of every other one, in a single stack. The
+cause is a good illustration of how Phase 2's central move — overwrite the
+projection with the eye frustum — can throw away information that was not
+obviously there.
+
+### The engine lays the inventory out through the projection
+
+`vid_setPerspOffset` (RVA `0x0000B8D0`) writes `e02` and `e12` — `m[8]` and
+`m[9]`, the two shear terms — **and nothing else**. A shear of `s` offsets NDC by
+`−s` at every depth, so it is how the engine places a draw on screen without
+touching its geometry.
+
+The inventory is laid out entirely with it. One captured frame, nine item draws:
+
+| | Model matrix | View matrix | Joints | `e02` |
+|---|---|---|---|---|
+| item 1 | identity | identity | 1 | `2.0250` |
+| item 2 | identity | identity | 1 | `1.3500` |
+| item 3 | identity | identity | 1 | `0.6750` |
+| item 4 | identity | identity | 1 | `0.0000` |
+| item 5 | identity | identity | 1 | `−0.6750` |
+| item 6 | identity | identity | 1 | `−1.3500` |
+
+Identical in every respect except one number, evenly spaced `0.675` apart.
+**That even spacing is the horizontal bar**, and the values past ±1 are the
+items scrolled off the sides of the screen.
+
+Overwriting `mProj[1]` with the per-eye frustum discarded all of it. Every item
+then got the same shear, so every item landed in the same place — the stack.
+
+### The fix: the shear is a skew of the engine's camera space
+
+The insight that makes this clean is that the shear is not really a property of
+the projection at all. A projection carrying `(sx, sy)` is *exactly* the same
+projection without it, applied to space pre-skewed by
+
+```
+(x, y, z) → (x + (sx/m00)·z,  y + (sy/m11)·z,  z)
+```
+
+Multiply it out and the two agree term for term. So reproducing the engine's
+placement means post-multiplying whatever projection we ended up with by that
+skew — which touches column 2 alone, and is therefore four multiply-adds rather
+than a matrix product.
+
+Adding the engine's shear to the eye's own keeps both: the frustum asymmetry the
+headset optics need **and** the engine's placement.
+
+### Two things the first attempt got wrong
+
+The obvious version — add the shear straight onto the eye frustum — fails twice
+over, and both failures are worth knowing.
+
+**Wrong side of the per-eye transform.** Every mode ends up evaluating `P · E · v`,
+and the engine's shear must multiply the **engine's** `v.z`. Sitting in `P`, it
+multiplied `(E·v).z` instead, so the offset swung with head orientation and the
+row sheared as you looked around. `EyeOffsetMode=3` makes that worst, because
+there the entire head transform lives in the projection. Applied after `E`, the
+skew reaches `v` itself.
+
+**Same NDC is not the same angle.** A shear of `s` offsets by `s·tan(fov)`, and
+the engine's frustum is not the headset's. Measured here:
+
+| | Engine | Eye |
+|---|---|---|
+| `tanX` | 1.119 | 1.108 |
+| `tanY` | **0.629** | **1.197** |
+
+So the row landed correctly — the two are 1% apart horizontally — while the
+vertical placement was thrown nearly twice as far as intended, out into the lens
+distortion. That was the fishbowl. Dividing by the engine's own `m00`/`m11`
+converts angle to angle, and the ratio falls out on its own.
+
+Because `ogl_setPersp` and `ogl_setPerspAngles` both explicitly zero `e02`/`e12`,
+this is exactly zero during gameplay and costs nothing there. Only the engine's
+screen-placed elements ever carry a shear.
+
+`ProjOffsetScale` trims the whole offset. `1.0` reproduces the engine's layout
+exactly, so the inventory row spans the same **angle** it does flat — which on a
+96° game frustum is a wide row to sweep your eyes across. Lower it to pull the
+elements toward the centre; `0` collapses them back into one stack, which is
+what the bug looked like.
+
+### The diagnostic that found it
+
+The frame tracer from Phase 1 answers "which target is the scene drawn into".
+A mislaid layer needs the other question: *of the three matrices that can place
+an element — projection, view, model — which one carries the difference between
+one element and the next?*
+
+`DumpDraws` plus `DumpKey` (F9) answers it directly. Set a few hundred, get the
+screen in question up in the headset, press the key, and each draw logs its
+projection, view translation, model translation, joint count and render target —
+**before** any substitution, so what appears is what the engine set:
+
+```
+dump 4   f=9312 sh=62  world-slot/persp  P[x=0.8938 y=1.5898 z=-1.0000 w=-1.0000
+         shear=0.0000,0.0000 ofs=0.0000,0.0000]  V=(0.0,0.0,0.0)
+         M=(0.0,0.0,0.0)  joints=1 rt=0
+```
+
+The code is blunt about why it exists: guessing is how the ortho-3D theory below
+got written and shipped inert.
+
+The health report gained two counters to match — `projoffset=` counts draws
+carrying a shear, and `ortho3D=` counts the path below. Both are zero during
+ordinary gameplay, so a non-zero value is itself the signal.
+
+### The ortho-3D path, which was the wrong theory
+
+`vid_setOrtho3D` (RVA `0x0000B880`) copies `mProj[0]` — the **ortho** matrix —
+into `mProj[1]` and points `vid_state.proj` at it. Pointer identity, which is all
+`IsWorldPass()` has, therefore reports "world space" for a pass that is
+orthographic, and handing it a per-eye perspective frustum would divide an ortho
+layout by a depth it was never built for.
+
+`IsOrthoProjection` classifies by matrix **content** instead: `ogl_setPerspAngles`
+writes `e32 = −1, e33 = 0` while `ogl_setOrtho` writes `e32 = 0, e33 = 1`, which
+in the engine's column-major layout are `m[11]` and `m[15]`.
+
+**This was written for the stacked inventory and was wrong about it.** The
+inventory is a perspective pass placed by `vid_setPerspOffset`, not an ortho one.
+Measured across a TR4 and a TR5 session, the ortho-3D path **never fired once**.
+
+It is kept anyway, for a defensible reason: an ortho matrix must not be replaced
+by a perspective frustum whatever draws it, and the `ortho3D=` counter reports
+honestly if it ever does. If it fires, the layer keeps the engine's own
+projection and gets stereo a different way — a flat per-eye NDC shift by default,
+because an ortho projection has no perspective divide, so moving `m[12]` is pure
+convergence and every relative x, y **and z** survives it. That last point is why
+this defaults the opposite way to the HUD: these are 3D meshes with real depth,
+and the HUD's panel discards the z input, which would leave every item
+z-fighting itself. `Ortho3DLockToHead=0` builds the world-locked panel instead,
+like the HUD's `Q = P_persp · E · L · P_o` but with `L`'s z column filled in so
+ortho depth lands in a slab rather than collapsing onto one plane.
+
+### Phase 9 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PreserveProjOffset` | `1` | Re-apply the engine's `vid_setPerspOffset` shear as a camera-space skew. **This is the inventory fix** |
+| `ProjOffsetScale` | `1.0` | Trim on the whole offset. Lower pulls elements toward the centre; `0` reproduces the stack |
+| `Ortho3D` | `1` | Classify ortho-in-the-world-slot passes by content and keep the engine's projection. Never observed to fire |
+| `Ortho3DDepthMetres` | `2.0` | Where that layer converges. `0` leaves it exactly as drawn |
+| `Ortho3DLockToHead` | `1` | `1` flat per-eye convergence shift; `0` world-locked depth slab |
+| `Ortho3DSizeDegrees` | `55` | Panel width when world-locked |
+| `Ortho3DSlabMetres` | `0.5` | Depth-slab thickness when world-locked. Too thin and meshes z-fight |
+| `DumpDraws` | `0` | Draws to capture on the dump hotkey. One line per draw, eye 0 only |
+| `DumpKey` | `0x78` | Virtual-key code that arms the dump (F9) |
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
 
-- **`TombRaiderVR.ini` is the bring-up config, not the playable one.** It
-  selects `Mode=mono` and leaves `EyeOffsetMode` at the superseded default of
-  `2`, so a bare `Mode=stereo` edit is not enough. `TombRaiderVR.working.ini` is
-  the file to actually use.
+- **The compiled-in defaults are not the shipped ones.** `EyeOffsetMode`
+  defaults to the superseded `2` and `Mode` to `mono` in `Config.h`; the shipped
+  `TombRaiderVR.ini` overrides both. Running with no ini at all gets the
+  bring-up behaviour, not the playable one.
 - **The frame graph is not fully traced.** The engine renders a post-processing
   chain into its own layered array textures before compositing. The stereo hooks
   only split work that targets the backbuffer, detected by reading the `ogl_rt`
@@ -1605,11 +1762,11 @@ the culling investigation, and it is there for the next target that does.
 src/              the mod: hooks, engine map, OpenVR glue, matrix maths
 src/RoomCull.*    the DLL-side portal-culling fix (TR4/TR5)
 src/Callsite.*    return-address census, for locating code in the PDB-less DLLs
+src/DefaultIni.h  the compiled-in ini template, written out when none exists
 src/proxy/        the winmm shim that gets us loaded
 tools/            fetch_openvr.ps1, gen_winmm_forwards.ps1, vrprobe
 tests/            selftest (hooks + maths), proxytest (loader behaviour)
 docs/             engine-map.html -- the full renderer map
 trace.txt         the Ghidra session that produced src/Engine.h
-TombRaiderVR.ini  bring-up config; Mode=mono, i.e. Phase 1
-TombRaiderVR.working.ini  the full working config -- stereo, all phases on
+TombRaiderVR.ini  the config; stereo, all phases on, written if missing
 ```

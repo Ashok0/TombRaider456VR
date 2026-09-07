@@ -192,6 +192,15 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.hudSizeDegrees      = GetFloat(L"HudSizeDegrees",     g_cfg.hudSizeDegrees,     ini);
     g_cfg.hudLockToHead       = GetBool (L"HudLockToHead",      g_cfg.hudLockToHead,      ini);
     g_cfg.hudFlipY            = GetBool (L"HudFlipY",           g_cfg.hudFlipY,           ini);
+    g_cfg.preserveProjOffset  = GetBool (L"PreserveProjOffset", g_cfg.preserveProjOffset, ini);
+    g_cfg.projOffsetScale     = GetFloat(L"ProjOffsetScale",    g_cfg.projOffsetScale,    ini);
+    g_cfg.ortho3D             = GetBool (L"Ortho3D",            g_cfg.ortho3D,            ini);
+    g_cfg.ortho3DDepthMetres  = GetFloat(L"Ortho3DDepthMetres", g_cfg.ortho3DDepthMetres, ini);
+    g_cfg.ortho3DLockToHead   = GetBool (L"Ortho3DLockToHead",  g_cfg.ortho3DLockToHead,  ini);
+    g_cfg.ortho3DSizeDegrees  = GetFloat(L"Ortho3DSizeDegrees", g_cfg.ortho3DSizeDegrees, ini);
+    g_cfg.ortho3DSlabMetres   = GetFloat(L"Ortho3DSlabMetres",  g_cfg.ortho3DSlabMetres,  ini);
+    g_cfg.dumpDraws           = GetIntAuto(L"DumpDraws",        g_cfg.dumpDraws,          ini);
+    g_cfg.dumpKey             = GetIntAuto(L"DumpKey",          g_cfg.dumpKey,            ini);
     g_cfg.videoDepthMetres    = GetFloat(L"VideoDepthMetres",   g_cfg.videoDepthMetres,   ini);
     g_cfg.videoLockToHead     = GetBool (L"VideoLockToHead",    g_cfg.videoLockToHead,    ini);
     g_cfg.videoSizeDegrees    = GetFloat(L"VideoSizeDegrees",   g_cfg.videoSizeDegrees,   ini);

@@ -185,6 +185,23 @@ inline bool ExtractNearFar(const mat4& proj, float& outNear, float& outFar) {
     return true;
 }
 
+// True when a projection matrix is ORTHOGRAPHIC rather than a perspective
+// frustum.
+//
+// This exists because pointer identity is not enough to classify a pass.
+// vid_setOrtho3D (0x0000B880) copies mProj[0] -- the ortho matrix -- into
+// mProj[1] and repoints vid_state.proj at it, so IsWorldPass() reports
+// "world space" for a layer that is orthographic. The inventory is drawn that
+// way: real 3D item meshes, ortho projection.
+//
+// The bottom row separates them cleanly. ogl_setPerspAngles writes
+// e32 = -1, e33 = 0; ogl_setOrtho writes e32 = 0, e33 = 1. In the engine's
+// column-major layout (verified against the PDB's mat4: offset 0 = e00,
+// 4 = e10, so index = col*4 + row) those are m[11] and m[15].
+inline bool IsOrthoProjection(const mat4& proj) {
+    return std::fabs(proj.m[11]) < 1e-6f && std::fabs(proj.m[15]) > 1e-6f;
+}
+
 // Build an asymmetric frustum from OpenVR's raw tangents into the engine's
 // layout.
 //

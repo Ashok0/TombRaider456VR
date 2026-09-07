@@ -122,6 +122,21 @@ unsigned g_prevDup = 0, g_prevInj0 = 0, g_prevInj1 = 0;
 // by construction and could never detect the failure it warned about.
 unsigned g_worldDraws     = 0;
 unsigned g_worldOffscreen = 0;   // world draws skipped: target was not the backbuffer
+
+// Draws on the ortho-3D layer -- the inventory. Counted separately from
+// g_worldDraws precisely because they are NOT world-space: folding them in
+// would inflate the health report's denominator with draws that are never
+// meant to be injected, and the injection percentage would read as a fault.
+unsigned g_ortho3DDraws  = 0;
+bool     g_loggedOrtho3D = false;
+
+// Draws whose projection carried a non-zero vid_setPerspOffset shear -- the
+// engine placing an element on screen through the projection rather than
+// through its geometry. Zero during gameplay; the inventory is nothing but.
+unsigned g_offsetDraws   = 0;
+bool     g_loggedOffset  = false;
+unsigned g_prevOrtho3D   = 0;
+unsigned g_prevOffset    = 0;
 unsigned g_prevWorld = 0, g_prevOffscreen = 0;
 
 // GPU-side verification of the per-eye view matrix. Re-armed at every health
@@ -235,6 +250,74 @@ void PollTraceKey() {
     g_traceKeyWasDown = down;
 }
 
+// --- per-draw state dump ----------------------------------------------------
+// Where does the engine put the placement of one element relative to the next?
+// It has three choices -- projection, view matrix, model matrix -- and which
+// one it used decides which of our substitutions can break a layout. Guessing
+// is how the ortho3D theory got written and shipped inert; this measures it.
+//
+// One line per draw (eye 0 only, so duplication does not double the log),
+// logged BEFORE any substitution, so what appears is what the engine set.
+unsigned g_dumpRemaining  = 0;
+unsigned g_dumpIndex      = 0;
+bool     g_dumpKeyWasDown = false;
+
+void PollDumpKey() {
+    const auto& c = Cfg();
+    if (c.dumpKey == 0 || c.dumpDraws <= 0) return;
+    const bool down = (GetAsyncKeyState(c.dumpKey) & 0x8000) != 0;
+    if (down && !g_dumpKeyWasDown) {
+        g_dumpRemaining = static_cast<unsigned>(c.dumpDraws);
+        g_dumpIndex     = 0;
+        LogF("dump: hotkey pressed, capturing the next %d draw(s)", c.dumpDraws);
+    }
+    g_dumpKeyWasDown = down;
+}
+
+void DumpDrawState() {
+    if (g_dumpRemaining == 0 || g_currentEye != 0) return;
+    --g_dumpRemaining;
+
+    const RenderState& vs = VidState();
+    const mat4* p = vs.proj;
+
+    // Which slot, and -- separately -- what the matrix in it actually is.
+    // vid_setOrtho3D can put ortho content in the world slot, so the two
+    // questions are not the same one.
+    const char* slot = (p == &Proj()[0]) ? "ortho-slot"
+                     : (p == &Proj()[1]) ? "world-slot"
+                     : "OTHER-slot";
+    const char* kind = !p ? "null"
+                     : (IsOrthoProjection(*p) ? "ORTHO" : "persp");
+
+    // view and model are row-major packed 3x4 affines uploaded as vec4[4], so
+    // the translation is floats 3, 7, 11 -- not the column-major 12, 13, 14
+    // that the projection uses.
+    float vt[3] = { 0, 0, 0 };
+    float mt[3] = { 0, 0, 0 };
+    if (vs.view)  { vt[0] = vs.view->m[3];  vt[1] = vs.view->m[7];  vt[2] = vs.view->m[11]; }
+    if (vs.model) { mt[0] = vs.model->m[3]; mt[1] = vs.model->m[7]; mt[2] = vs.model->m[11]; }
+
+    if (p) {
+        LogF("dump %-3u f=%u sh=%-3d %s/%s  P[x=%.4f y=%.4f z=%.4f w=%.4f "
+             "shear=%.4f,%.4f ofs=%.4f,%.4f]  V=(%.1f,%.1f,%.1f)  "
+             "M=(%.1f,%.1f,%.1f)  joints=%d rt=%d",
+             g_dumpIndex++, g_frameIndex, vs.shader, slot, kind,
+             p->m[0], p->m[5], p->m[10], p->m[11], p->m[8], p->m[9],
+             p->m[12], p->m[13],
+             vt[0], vt[1], vt[2], mt[0], mt[1], mt[2],
+             vs.num_joints, Rt().color_id);
+    } else {
+        LogF("dump %-3u f=%u sh=%-3d %s/%s  V=(%.1f,%.1f,%.1f)  "
+             "M=(%.1f,%.1f,%.1f)  joints=%d rt=%d",
+             g_dumpIndex++, g_frameIndex, vs.shader, slot, kind,
+             vt[0], vt[1], vt[2], mt[0], mt[1], mt[2],
+             vs.num_joints, Rt().color_id);
+    }
+
+    if (g_dumpRemaining == 0) Log("dump: capture complete");
+}
+
 // --- live tuning hotkeys ----------------------------------------------------
 bool g_tuneWasDown[5] = { false, false, false, false, false };
 
@@ -306,6 +389,7 @@ mat4 g_savedProj{};
 mat4 g_savedView{};
 mat4 g_savedModel{};
 mat4 g_savedHud{};
+mat4 g_savedOrtho3D{};
 bool g_modelPatched = false;
 
 bool VrLive() {
@@ -484,22 +568,55 @@ void __cdecl Detour_validate_draw() {
     // exactly that) leaves the cached flag stale. The pointer in vid_state at
     // the moment of the draw is the actual truth about which matrix is about to
     // be uploaded, so use that.
+    DumpDrawState();
+
     const bool worldPass = IsWorldPass();
     if (worldPass != g_worldPass) ++g_classifyMismatch;
     NoteProjPointer(VidState().proj);
 
     TraceDraw(worldPass);
 
+    // ...and the pointer is still not the whole truth. vid_setOrtho3D copies
+    // mProj[0] -- the ORTHO matrix -- into mProj[1] and repoints vid_state.proj
+    // at it, so a pass that is orthographic arrives here indistinguishable from
+    // world space by pointer alone, and handing it a per-eye perspective
+    // frustum would divide an ortho layout by a depth it was never built for.
+    // So classify by CONTENT as well: e32/e33 tell the two projections apart.
+    //
+    // Unverified. This was written for the stacked inventory and was WRONG
+    // about it -- the inventory is a perspective pass placed by
+    // vid_setPerspOffset (see preserveProjOffset). Measured over a TR4 and a
+    // TR5 session, ortho3D never fired once. It is kept because an ortho matrix
+    // must not be replaced by a perspective frustum whatever draws it, and the
+    // ortho3D= counter in the health report reports honestly if it ever does.
+    const mat4* liveProj = VidState().proj;
+    const bool ortho3D = Cfg().ortho3D && worldPass && liveProj
+                      && IsOrthoProjection(*liveProj);
+
+    if (ortho3D) {
+        ++g_ortho3DDraws;
+        if (!g_loggedOrtho3D) {
+            g_loggedOrtho3D = true;
+            LogF("ortho3D: shader %d has an ORTHO matrix in mProj[1] "
+                 "(vid_setOrtho3D). Keeping the engine's projection; %s.",
+                 VidState().shader,
+                 Cfg().ortho3DDepthMetres <= 0.0f ? "no convergence shift"
+                 : (Cfg().ortho3DLockToHead ? "head-locked convergence"
+                                            : "world-locked panel"));
+        }
+    }
+
     const bool inject = VrLive()
                      && VR().poseValid()
                      && worldPass
+                     && !ortho3D
                      && (Cfg().monoTracking || TargetIsBackbuffer()
                          || AlternateEyeActive());
 
     // Count every world-space draw, injected or not, and separately the ones
     // rejected purely because the engine was drawing offscreen. Those two
     // numbers are what the health report needs to say something falsifiable.
-    if (worldPass) {
+    if (worldPass && !ortho3D) {
         ++g_worldDraws;
         if (!TargetIsBackbuffer()) ++g_offscreenWorld;
         if (!inject && VrLive() && VR().poseValid()
@@ -618,6 +735,79 @@ void __cdecl Detour_validate_draw() {
         glEnable(GL_SCISSOR_TEST);
     }
 
+    // The ortho-3D layer (the inventory), left with the engine's own ortho
+    // projection by the gate above. It still needs stereo -- an ortho matrix is
+    // identical in both eyes, so without help it double-visions exactly like an
+    // untouched HUD -- but it must NOT go through the HUD's panel, which
+    // discards the z input. These are 3D meshes with depth of their own, and
+    // flattening them onto one plane leaves every item z-fighting itself.
+    if (ortho3D && VrLive() && !Cfg().monoTracking && VR().poseValid()
+        && Cfg().ortho3DDepthMetres > 0.0f && TargetIsBackbuffer()) {
+        mat4* op = VidState().proj;
+        if (op) {
+            const Eye oe = (g_currentEye == 0) ? Eye::Left : Eye::Right;
+            std::memcpy(&g_savedOrtho3D, op, sizeof(mat4));
+
+            if (Cfg().ortho3DLockToHead) {
+                // Ortho output has w == 1 and no perspective divide, so moving
+                // m[12] is a pure convergence shift: it changes where the layer
+                // fuses and nothing else. Every relative x, y and z survives it
+                // untouched, which is the whole reason this is the default here
+                // when it is not for the HUD.
+                op->m[12] += VR().HudNdcShiftX(oe, Cfg().ortho3DDepthMetres);
+            } else {
+                // World-locked, built like the HUD's panel:
+                //
+                //   Q = P_persp * E * L * P_o
+                //
+                // with one difference that matters. The HUD's L zeroes its z
+                // column; this one sets it, so ortho NDC z in [-1, 1] maps to
+                // camera z of -(Zc -/+ S) instead of collapsing onto -Zc. That
+                // is what keeps each mesh's own depth ordering.
+                const float scale = LiveWorldUnitsPerMetre();
+                const float Zc = Cfg().ortho3DDepthMetres * scale;
+                const float S  = (Cfg().ortho3DSlabMetres > 0.0f
+                                  ? Cfg().ortho3DSlabMetres : 0.5f)
+                               * 0.5f * scale;
+                const float halfFov = Cfg().ortho3DSizeDegrees * 0.5f
+                                    * 3.14159265358979f / 180.0f;
+                const float W = Zc * std::tan(halfFov);
+                const int   sw = ScreenWidth();
+                const int   sh = ScreenHeight();
+                const float aspect = (sh > 0) ? (float)sw / (float)sh : 1.7778f;
+                const float H = (aspect > 0.0f) ? W / aspect : W;
+
+                // Bracket the slab tightly rather than reusing the scene's
+                // near/far. mProj[1] holds the ortho matrix right now -- that
+                // is what got us here -- so there is no scene near/far left to
+                // read, and a tight bracket is what gives this thin layer the
+                // depth resolution not to z-fight.
+                float zn = Zc - S * 1.5f;
+                float zf = Zc + S * 1.5f;
+                if (zn < 0.01f * scale) zn = 0.01f * scale;
+                if (zf <= zn) zf = zn * 2.0f;
+
+                mat4 Ppersp{};
+                VR().EyeProjection(oe, zn, zf, Ppersp);
+
+                mat4 L{};
+                L.m[0]  = W;
+                L.m[5]  = Cfg().hudFlipY ? -H : H;   // same double flip as the HUD
+                L.m[10] = -S;                        // ortho z -> slab depth
+                L.m[14] = -Zc;
+                L.m[15] = 1.0f;
+
+                const mat4 E = AffineToMat4(VR().EyeView(oe));
+                *op = Mul4(Ppersp, Mul4(E, Mul4(L, g_savedOrtho3D)));
+            }
+
+            VidState().consts |= kProj;
+            g_hValidateDraw.Original<Fn_validate_draw>()();
+            std::memcpy(op, &g_savedOrtho3D, sizeof(mat4));
+            return;
+        }
+    }
+
     // The flat 2D layer (HUD, menus, subtitles, fades) is drawn with the
     // engine's ortho projection, identical in both eyes. The headset optics
     // apply a fixed per-eye correction assuming an asymmetric render, so an
@@ -709,7 +899,7 @@ void __cdecl Detour_validate_draw() {
 
     // Snapshot, substitute, upload, restore.
     std::memcpy(&g_savedView, liveVw, sizeof(mat4));
-    if (doProj || Cfg().eyeOffsetMode >= 2) {
+    if (doProj || Cfg().eyeOffsetMode >= 2 || Cfg().preserveProjOffset) {
         std::memcpy(&g_savedProj, livePr, sizeof(mat4));
     }
 
@@ -837,6 +1027,63 @@ void __cdecl Detour_validate_draw() {
         }
         *livePr = out;
         vs.consts |= kProj;
+    }
+
+    // Re-apply the engine's own projection OFFSET -- last, and innermost.
+    //
+    // vid_setPerspOffset writes e02/e12 (m[8]/m[9]) and nothing else, and a
+    // projection carrying shear (sx, sy) is EXACTLY the same projection without
+    // it, applied to space pre-skewed by
+    //
+    //     (x, y, z) -> (x + (sx/m00)*z,  y + (sy/m11)*z,  z)
+    //
+    // -- multiply it out and the two agree term for term. So the engine's
+    // placement is not really a property of its projection at all: it is a skew
+    // of the engine's own camera space, and reproducing it means post-
+    // multiplying whatever projection we have ended up with by that skew.
+    // Post-multiplying touches column 2 alone, which is why this is four
+    // multiply-adds rather than a matrix product.
+    //
+    // The first attempt added the shear straight onto the eye frustum instead,
+    // and got two things wrong at once:
+    //
+    //   * Wrong side of the per-eye transform. Every mode ends up evaluating
+    //     P * E * v, and the engine's shear must multiply the ENGINE's v.z --
+    //     but sitting in P it multiplied (E*v).z instead, so the offset swung
+    //     with head orientation and the row sheared as you looked around. Mode
+    //     3 makes that worst, since there the whole head transform lives in the
+    //     projection. Applied here, after E, the skew reaches v itself.
+    //
+    //   * Same NDC, not the same ANGLE. A shear of s offsets by s*tan(fov), and
+    //     the engine's frustum is not the headset's: measured here, engine
+    //     tanX 1.119 vs eye 1.108, but engine tanY 0.629 vs eye 1.197. So the
+    //     row landed right (1% apart) while the vertical placement was thrown
+    //     nearly twice as far as intended, out into the lens distortion. That
+    //     was the fishbowl. Dividing by the engine's own m00/m11 here converts
+    //     angle to angle, and the ratio falls out on its own.
+    //
+    // ogl_setPersp and ogl_setPerspAngles both zero e02/e12 explicitly, so this
+    // is inert during gameplay -- only the engine's screen-placed elements, the
+    // inventory among them, ever carry a shear.
+    if (Cfg().preserveProjOffset
+        && (g_savedProj.m[8] != 0.0f || g_savedProj.m[9] != 0.0f)
+        && g_savedProj.m[0] != 0.0f && g_savedProj.m[5] != 0.0f) {
+        const float k = Cfg().projOffsetScale;
+        const float a = (g_savedProj.m[8] / g_savedProj.m[0]) * k;
+        const float b = (g_savedProj.m[9] / g_savedProj.m[5]) * k;
+        mat4& P = *livePr;
+        for (int r = 0; r < 4; ++r) {
+            P.m[8 + r] += a * P.m[0 + r] + b * P.m[4 + r];
+        }
+        vs.consts |= kProj;
+        ++g_offsetDraws;
+        if (!g_loggedOffset) {
+            g_loggedOffset = true;
+            LogF("projoffset: shader %d carries vid_setPerspOffset shear "
+                 "(%.4f, %.4f) -- the engine is placing this draw through the "
+                 "projection. Re-applied as a camera-space skew (%.4f, %.4f).",
+                 vs.shader, g_savedProj.m[8], g_savedProj.m[9], a, b);
+        }
     }
 
     // Force the uploads. The engine's own dirty tracking would skip them: the
@@ -1136,6 +1383,7 @@ void __cdecl Detour_ogl_present() {
     }
 
     PollTraceKey();
+    PollDumpKey();
     PollTuningKeys();
 
     // Re-assert the XInput pointer every frame: cheap, and it self-heals if the
@@ -1155,9 +1403,13 @@ void __cdecl Detour_ogl_present() {
         const unsigned dInj1  = g_injectCount[1]  - g_prevInj1;
         const unsigned dWorld = g_worldDraws      - g_prevWorld;
         const unsigned dOff   = g_worldOffscreen  - g_prevOffscreen;
+        const unsigned dO3D   = g_ortho3DDraws    - g_prevOrtho3D;
+        const unsigned dOfs   = g_offsetDraws     - g_prevOffset;
         g_lastReportFrame = g_frameIndex;
         g_prevDup = g_dupCount; g_prevInj0 = g_injectCount[0]; g_prevInj1 = g_injectCount[1];
         g_prevWorld = g_worldDraws; g_prevOffscreen = g_worldOffscreen;
+        g_prevOrtho3D = g_ortho3DDraws;
+        g_prevOffset = g_offsetDraws;
 
         // Against total world draws, not against duplications. See g_worldDraws.
         const unsigned pct = dWorld ? (100u * (dInj0 + dInj1) / dWorld) : 0u;
@@ -1180,8 +1432,9 @@ void __cdecl Detour_ogl_present() {
 
         LogF("stereo health @frame %u: world draws=%u  duplicated=%u  "
              "injected eye0=%u eye1=%u  (%u%% of world draws got per-eye matrices)  "
-             "offscreen-skipped=%u  classify-mismatch=%u",
-             g_frameIndex, dWorld, dDup, dInj0, dInj1, pct, dOff, g_classifyMismatch);
+             "offscreen-skipped=%u  classify-mismatch=%u  ortho3D=%u  projoffset=%u",
+             g_frameIndex, dWorld, dDup, dInj0, dInj1, pct, dOff, g_classifyMismatch,
+             dO3D, dOfs);
 
         // What the GPU actually held, per eye. This is the load-bearing line:
         // if the two translations match, the per-eye view never reached the

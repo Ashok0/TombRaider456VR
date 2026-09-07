@@ -126,6 +126,80 @@ struct Config {
     //   passes (fades, full-screen effects) genuinely want to be screen-locked.
     bool  hudLockToHead    = false;
 
+    // --- the ortho-3D layer (the inventory) ---------------------------------
+    //
+    // vid_setOrtho3D (RVA 0x0000B880) copies the ORTHO matrix into mProj[1] and
+    // points vid_state.proj at it, so pointer identity -- which is all
+    // IsWorldPass() has -- reports "world space" for a pass that is
+    // orthographic. Substituting a per-eye perspective frustum there would
+    // divide an ortho layout by a depth it was never built for.
+    //
+    // This is NOT what stacked the inventory; preserveProjOffset above was.
+    // The path has never been seen to fire in TR4 or TR5 -- the ortho3D=
+    // counter in the health report is what says whether it ever does.
+    //
+    // true  = classify by matrix CONTENT as well, and leave the engine's own
+    //         ortho projection in place for those passes.
+    // false = the old behaviour, kept so the difference can be A/B'd.
+    // Carry the engine's own projection OFFSET through the per-eye
+    // substitution. vid_setPerspOffset (RVA 0x0000B8D0) writes e02 and e12 --
+    // m[8] and m[9], the two shear terms -- and nothing else. A shear of s
+    // shifts ndc by -s at every depth, so it is how the engine places a draw on
+    // screen without touching its geometry.
+    //
+    // The inventory is laid out entirely with it. Measured, one frame of it:
+    // nine item draws, every one with an identity model matrix, an identity
+    // view matrix and a single joint, differing ONLY in e02 -- 2.0250, 1.3500,
+    // 0.6750, 0.0000, -0.6750, -1.3500, evenly spaced 0.675 apart. That even
+    // spacing IS the horizontal bar, and the values past +/-1 are the items
+    // scrolled off the sides of the screen.
+    //
+    // Overwriting the projection with the eye frustum discarded all of it, so
+    // every item got the same shear and landed in the same place -- the stack.
+    // Adding the engine's shear to the eye's own keeps both: the frustum
+    // asymmetry the headset optics need AND the engine's placement.
+    //
+    // ogl_setPersp and ogl_setPerspAngles both explicitly zero e02/e12, so this
+    // is exactly zero during gameplay and costs nothing there. 0 = old
+    // behaviour, for A/B.
+    bool  preserveProjOffset = true;
+
+    // Trim on the whole offset. 1.0 reproduces the engine's layout exactly, so
+    // the inventory row spans the same ANGLE it does flat -- which on a 96
+    // degree game frustum is a wide row to sweep your eyes across. Lower it to
+    // pull the elements in toward the centre; 0 collapses them back into one
+    // stack, which is what the bug looked like.
+    float projOffsetScale    = 1.0f;
+
+    bool  ortho3D            = true;
+
+    // Distance in metres at which the ortho-3D layer converges. 0 = no shift at
+    // all: the layer is left exactly as the engine drew it, which still fixes
+    // the stacking but double-visions the way an untouched HUD does.
+    float ortho3DDepthMetres = 2.0f;
+
+    // true (default): a flat per-eye NDC shift, the same operation as
+    //   hudLockToHead. An ortho projection has no perspective divide, so moving
+    //   m[12] is pure convergence -- every relative x, y AND z survives it.
+    //   That last one is why this defaults the opposite way to the HUD: these
+    //   are 3D meshes carrying real depth, and the HUD's panel discards the z
+    //   input, which would leave every item z-fighting with itself.
+    //
+    // false: the world-locked panel, built exactly like the HUD's
+    //   Q = P_persp * E * L * P_o, except L's z column is filled in so ortho
+    //   depth lands in a slab instead of collapsing onto one plane.
+    bool  ortho3DLockToHead  = true;
+
+    // Horizontal angular width of the world-locked ortho-3D panel, in degrees,
+    // as seen from the game camera. Ignored when ortho3DLockToHead is true.
+    float ortho3DSizeDegrees = 55.0f;
+
+    // Thickness of the world-locked panel's depth slab, in metres: ortho NDC z
+    // maps onto ortho3DDepthMetres +/- half of this. Too thin and the item
+    // meshes z-fight; too thick and they separate visibly in depth. Ignored
+    // when ortho3DLockToHead is true.
+    float ortho3DSlabMetres  = 0.5f;
+
     // Distance in metres for full-screen passes that bypass uProjMatrix.
     //
     // Five of the engine's shaders write gl_Position = vec4(aCoord, 1.0) --
@@ -422,6 +496,20 @@ struct Config {
 
     // Fallback frame-number trigger. 0 = only the hotkey fires a capture.
     int   traceStartFrame  = 0;
+
+    // Per-draw state dump. The tracer above answers "which target is the scene
+    // drawn into"; this answers the other question, the one a mislaid layer
+    // needs: of the three matrices that can place an element -- projection,
+    // view, model -- which one carries the difference between one element and
+    // the next? Dump them per draw with the screen in question up, and the
+    // answer is in the log rather than in a guess.
+    //
+    // Number of draws to capture when the hotkey is pressed. 0 = disabled.
+    // One line per draw, not per eye. 300 covers a menu frame comfortably.
+    int   dumpDraws        = 0;
+
+    // Virtual-key code that arms the dump. 0x78 = F9.
+    int   dumpKey          = 0x78;
 
     // Split the two independent sources of per-eye difference so they can be
     // tested apart. Both default on; turning either off is a diagnostic.

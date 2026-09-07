@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 30141 bytes, 598 lines.
+// Source: TombRaiderVR.ini, 35462 bytes, 699 lines.
 #pragma once
 
 namespace tr {
@@ -182,6 +182,91 @@ HudLockToHead=0
 ; That inverts it AND reverses triangle winding, so backface culling removes the
 ; whole HUD -- leaving only elements drawn with culling off, upside down.
 HudFlipY=1
+
+; --- placement carried in the projection ------------------------------------
+
+; Carry the engine's own projection OFFSET through the per-eye substitution.
+;
+; vid_setPerspOffset writes e02/e12 -- the two shear terms -- and nothing else.
+; A shear of s shifts the image by -s at every depth, so it is how the engine
+; places a draw on screen without moving its geometry.
+;
+; The inventory is laid out entirely with it. Measured, one frame: nine item
+; draws, each with an identity model matrix, an identity view matrix and one
+; joint, differing ONLY in the shear -- 2.0250, 1.3500, 0.6750, 0.0000, -0.6750,
+; -1.3500, evenly spaced 0.675 apart. That spacing IS the horizontal bar, and
+; the values past +/-1 are the items scrolled off the sides.
+;
+; Writing the eye frustum over the top discarded all of it, so every item got
+; the same shear and landed in the same place. That was the stacked inventory.
+;
+; The offset is re-applied as a SKEW of the engine's camera space, not as a
+; shift of the headset's NDC. A projection carrying shear s is exactly the same
+; projection without it applied to space pre-skewed by (s/scale)*z, so the skew
+; reproduces the engine's placement whatever else we have done to the matrix --
+; and it has to go innermost, after the per-eye transform, because the engine's
+; shear multiplies the ENGINE's view-space z.
+;
+; Both details were got wrong first time round and both were visible. Adding the
+; shear onto the eye frustum instead put it on the far side of the head
+; transform, so the offset swung with head orientation and the row sheared as
+; you looked around; and it matched the NDC coordinate rather than the ANGLE,
+; which matters because the frustums differ -- measured, engine tanX 1.119 vs
+; eye 1.108, but engine tanY 0.629 vs eye 1.197. The row came out right to 1%
+; while the vertical placement was thrown 1.9x too far, into the lens
+; distortion. That was the fishbowl.
+;
+; ogl_setPersp and ogl_setPerspAngles both zero the shear explicitly, so this
+; adds exactly zero during gameplay. 0 = old behaviour, for A/B.
+PreserveProjOffset=1
+
+; Trim on the whole offset. 1.0 reproduces the engine's layout exactly, so the
+; inventory row spans the same ANGLE it does flat -- and on a 96 degree game
+; frustum that is a wide row to sweep your eyes across in a headset. Lower it to
+; pull the items in toward the centre (0.7 is a reasonable first try); 0
+; collapses them back into one stack, which is what the bug looked like.
+ProjOffsetScale=1.0
+
+; --- the ortho-3D layer (the inventory) -------------------------------------
+
+; vid_setOrtho3D copies mProj[0] -- the ORTHO matrix -- into mProj[1] and
+; repoints vid_state.proj at it, so by pointer alone (which is all the world/2D
+; test has) such a pass looks world-space. Handing it a perspective frustum
+; would divide an ortho layout by a depth it was never built for.
+;
+; NOT what caused the stacked inventory -- that was PreserveProjOffset above.
+; This path has never been observed to fire in TR4 or TR5; the projoffset= and
+; ortho3D= counters in the health report say whether it ever does.
+;
+; 1 = also check the matrix itself (e32/e33 tell ortho from perspective apart)
+;     and keep the engine's own projection for those passes.
+; 0 = old behaviour, for A/B.
+Ortho3D=1
+
+; Distance in metres at which the ortho-3D layer converges. 0 = no shift at all:
+; the layer is left exactly as the engine drew it, which still fixes the
+; stacking but double-visions the way an untouched HUD does.
+Ortho3DDepthMetres=2.0
+
+; 1 = head-locked convergence, and the default HERE even though the HUD defaults
+;     the other way. An ortho projection has no perspective divide, so shifting
+;     it is pure convergence: relative x, y AND z all survive untouched. The
+;     HUD's world-locked panel discards its z input, which is harmless for flat
+;     overlays and wrong for these -- they are meshes with real depth, and
+;     flattening them makes every item z-fight with itself.
+; 0 = world-locked panel, same construction as the HUD's but with the z column
+;     filled in so ortho depth lands in a slab instead of on one plane.
+Ortho3DLockToHead=1
+
+; Horizontal angular width of the world-locked panel, in degrees. Ignored when
+; Ortho3DLockToHead=1.
+Ortho3DSizeDegrees=55.0
+
+; Thickness of the world-locked panel's depth slab, in metres: ortho depth maps
+; onto Ortho3DDepthMetres plus or minus half of this. Too thin and the item
+; meshes z-fight; too thick and they visibly separate in depth. Ignored when
+; Ortho3DLockToHead=1.
+Ortho3DSlabMetres=0.5
 
 ; Distance in metres for full-screen passes that bypass uProjMatrix entirely.
 ; Five of the engine's shaders write gl_Position = vec4(aCoord, 1.0) -- straight
@@ -563,6 +648,22 @@ TraceKey=0x79
 
 ; Optional frame-number trigger instead of the hotkey. 0 = hotkey only.
 TraceStartFrame=0
+
+; Per-draw state dump. The trace above answers "which target is the scene drawn
+; into". This answers the other question, the one a mislaid layer needs: of the
+; three matrices that can place an element -- projection, view, model -- which
+; one carries the difference between one element and the next?
+;
+; Set DumpDraws to a few hundred, get the screen in question on the headset,
+; then press the DumpKey. One line per draw (not per eye), logged before any of
+; our substitutions, so what appears in the log is what the ENGINE set.
+;
+; 0 = disabled. 300 covers a menu frame comfortably; gameplay will fill it in a
+; fraction of one frame, which is fine -- the point is the screen you are on.
+DumpDraws=0
+
+; Virtual-key code that arms the dump. 0x78 = F9.
+DumpKey=0x78
 
 ; Expand the engine's visible set along PORTAL CONNECTIVITY by this many hops.
 ; 0 = off. This is what fixes geometry going missing when you turn your head.
