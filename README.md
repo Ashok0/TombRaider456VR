@@ -19,6 +19,7 @@ branch.
 | **Phase 7** | **Culling fix** — the missing geometry behind Lara, fixed inside the game DLLs | Working. TR4 / TR5 |
 | **Phase 8** | **D-pad input** — hold R3 and the left stick becomes a D-pad | Working. On by default |
 | **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
+| **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only | Working. On by default |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -66,12 +67,16 @@ shift layer on R3. See
 projection's shear terms, which Phase 2 was overwriting wholesale. See
 [Phase 9: inventory fix](#phase-9-inventory-fix).
 
-`TombRaiderVR.ini` is the single config file, and it ships ready to play —
+**Phase 10** is comfort: the headset already owns pitch, so the right stick is
+reduced to yaw and the conflicting second source of vertical rotation goes away.
+See [Phase 10: decoupled pitch](#phase-10-decoupled-pitch).
+
+**There is no ini file in the repo to copy.** The configuration lives in the
+DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
+`TombRaiderVR.ini` beside itself on first launch — ready to play, with
 `Mode=stereo`, `EyeOffsetMode=3`, and every option from every phase documented
-in place. If it is missing at startup the mod writes a fresh copy from a
-compiled-in template, so a working ini is never more than one launch away. An
-existing file is never overwritten (the write is `CREATE_NEW`), so tuned
-settings are safe.
+in place. The write is `CREATE_NEW`, so an existing file is never overwritten
+and tuned settings are safe. To reset to defaults, delete the ini and relaunch.
 
 The renderer was reverse-engineered from the shipped binary and its PDB. Every
 address in `src/Engine.h` was read out of Ghidra and re-verified against the
@@ -124,14 +129,16 @@ units/metre, applied before the player has moved at all.
 
 ## Installing
 
-Copy four files into the game folder, next to `tomb456.exe`:
+Copy three files into the game folder, next to `tomb456.exe`:
 
 | File | From |
 |---|---|
 | `winmm.dll` | `build\x64\Release\winmm.dll` (the proxy) |
 | `TombRaiderVR.dll` | `build\x64\Release\` |
-| `TombRaiderVR.ini` | repo root — or let the mod write its own on first launch |
 | `openvr_api.dll` | `SteamVR\bin\win64\openvr_api.dll` |
+
+`TombRaiderVR.ini` is not copied — the mod writes it there itself on first
+launch.
 
 Then launch the game normally — from Steam, from a shortcut, however you like.
 No injector. Put the headset on and load an actual level; a menu is not a test.
@@ -760,10 +767,10 @@ possible to substitute a matrix the engine has no API for at all.
 | `EyeMarkers` | `0` | Red/blue eye-mapping bars |
 | `DebugEyeYawDegrees` | `0` | Yaw the right eye by N degrees as a visibility test |
 
-> **Note on `EyeOffsetMode`.** The compiled-in default is `2` — the superseded
-> mode that swims when you turn your head — but the shipped `TombRaiderVR.ini`
-> sets `EyeOffsetMode=3`, which is the working one. It only matters if you run
-> without an ini and without letting the mod write one.
+> **Note on `EyeOffsetMode`.** The `Config.h` fallback is `2` — the superseded
+> mode that swims when you turn your head — but the generated `TombRaiderVR.ini`
+> sets `EyeOffsetMode=3`, which is the working one. The fallback only applies if
+> the ini cannot be written and none exists.
 
 Sign-convention toggles, unchanged from Phase 1:
 
@@ -930,8 +937,8 @@ working mode, and a fourth was missing:
 | `VideoDepthMetres` | `6.0` | Distance for clip-space-direct passes, applied as a viewport shift. `0` disables |
 | `FlatHud` | `1` | Keeps the 2D layer on the flat path rather than reprojecting it as world geometry |
 
-The shipped `TombRaiderVR.ini` sets all of these explicitly, with the reasoning
-inline; the defaults above are what runs if the key is absent.
+The generated `TombRaiderVR.ini` sets all of these explicitly, with the
+reasoning inline; the defaults above apply if a key is absent.
 
 ---
 
@@ -1049,7 +1056,7 @@ rebinds on its next draw instead of trusting a cache that is no longer true.
 | `VideoLockToHead` | `0` | `0` anchors the panel to the game camera; `1` welds it to your head |
 | `VideoFlipV` | `0` | Flip the captured video on replay. Only needed if a cutscene comes out upside down |
 
-As with Phases 2 and 3, the shipped `TombRaiderVR.ini` sets these explicitly.
+As with Phases 2 and 3, the generated `TombRaiderVR.ini` sets these explicitly.
 
 ---
 
@@ -1118,7 +1125,7 @@ therefore promotes its axis to 1.0 when the analogue value reads low.
 | Action | Control | XInput |
 |---|---|---|
 | Move | Left stick | `LX` / `LY` |
-| Look | Right stick | `RX` / `RY` |
+| Look | Right stick | `RX` / `RY` — yaw only, see [Phase 10](#phase-10-decoupled-pitch) |
 | Jump | Right lower face button | `A` |
 | Roll | Right upper face button | `B` |
 | Action | Left upper face button | `Y` |
@@ -1174,7 +1181,7 @@ pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) action=Y(L upper)
 | `GamepadMenuUsesBack` | `1` | Left lower face button sends `BACK` (System). `0` sends `START` (pause) |
 | `GamepadLogButtons` | `0` | Log raw legacy button masks on change |
 
-All three are set explicitly in the shipped `TombRaiderVR.ini`.
+All three are set explicitly in the generated `TombRaiderVR.ini`.
 
 ---
 
@@ -1691,14 +1698,90 @@ ortho depth lands in a slab rather than collapsing onto one plane.
 
 ---
 
+## Phase 10: decoupled pitch
+
+The right stick turns only. Its vertical axis is dropped, so the game camera
+never pitches from the stick.
+
+**In VR the headset already owns pitch** — you look up by looking up. Stick
+pitch is then a second source for the same axis, fighting the first, and it is
+the uncomfortable one: a vertical rotation the inner ear did not ask for is the
+strongest simulator-sickness trigger there is, worse than yaw. Yaw is left alone
+deliberately, because turning on the spot with the stick is how you play seated.
+
+### It does take something away
+
+This is not free, and the setting says so. The engine **aims** and reads its look
+camera from the pitch being suppressed, so a shot lined up by tilting the stick
+has to be lined up by tilting your head instead.
+
+It ships on anyway, for two reasons: comfort is the right default in a headset,
+and the chord below hands the stick back on demand, so nothing is actually out of
+reach. `DecoupledPitch=0` restores the stock two-axis stick.
+
+### Applied after the merge, not at the source
+
+The suppression happens in the XInput detour **after** the physical-pad merge,
+and that placement is load-bearing. Zeroing the axis back where the Touch state
+is built would only cover the controllers — the merge takes whichever source is
+larger, so a physical pad plugged in alongside would put stick pitch straight
+back and the setting would appear simply not to work.
+
+### The chord hands pitch back, and only ever that
+
+Hold **RT + RB** and stick pitch returns for as long as both are held. It is a
+release, never a trigger: with `DecoupledPitch=0` the stick already pitches and
+the chord does nothing at all.
+
+That one-directionality was arrived at the hard way, and both wrong versions are
+instructive:
+
+- **OR** made the chord dead weight for exactly the people who want it — anyone
+  running `DecoupledPitch=1`, which is the default.
+- **XOR** made the chord take pitch *away* when the setting was off, so the same
+  gesture meant opposite things depending on a value you cannot see while
+  playing.
+
+A momentary control has to do one thing. The trigger threshold is `30`, which is
+XInput's own `XINPUT_GAMEPAD_TRIGGER_THRESHOLD` rather than a number invented
+here, and Shoot and Walk both keep working while the chord is held — nothing is
+taken away to pay for it.
+
+### Know what RB is on Touch
+
+Touch has no physical shoulder buttons. As [Phase 5](#phase-5-vr-controller-support)
+describes, the **right grip** synthesises `XB_X` and `XB_RIGHT_SHOULDER`
+together — `X` because that is what the game binds Walk to, `RIGHT_SHOULDER` so
+the `LB`+`RB` Photo Mode chord stays reachable.
+
+So this chord is, physically, **right grip + right trigger** — which in play
+reads as *walk and shoot*. That is a combination people genuinely use, on a
+ledge especially, and it **will** engage the chord. `DecoupledPitchChord=0` if
+you would rather walk-and-shoot leave pitch alone.
+
+The binding line in the log states which way the pad is configured:
+
+```
+pad: move=Lstick look=Rstick(yaw only; hold RT+RB for pitch) jump=A(R lower) ...
+```
+
+### Phase 10 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `DecoupledPitch` | `1` | Drop the right stick's vertical axis so only the headset pitches the view. `0` restores the stock two-axis stick |
+| `DecoupledPitchChord` | `1` | Hold RT + RB to get stick pitch back while held. Never takes pitch away; does nothing when `DecoupledPitch=0` |
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
 
-- **The compiled-in defaults are not the shipped ones.** `EyeOffsetMode`
-  defaults to the superseded `2` and `Mode` to `mono` in `Config.h`; the shipped
-  `TombRaiderVR.ini` overrides both. Running with no ini at all gets the
-  bring-up behaviour, not the playable one.
+- **`Config.h`'s fallbacks are not the generated ini's values.** `EyeOffsetMode`
+  falls back to the superseded `2` and `Mode` to `mono`; the generated
+  `TombRaiderVR.ini` overrides both. Running with no ini and no way to write one
+  gets the bring-up behaviour, not the playable one.
 - **The frame graph is not fully traced.** The engine renders a post-processing
   chain into its own layered array textures before compositing. The stereo hooks
   only split work that targets the backbuffer, detected by reading the `ogl_rt`
@@ -1768,5 +1851,5 @@ tools/            fetch_openvr.ps1, gen_winmm_forwards.ps1, vrprobe
 tests/            selftest (hooks + maths), proxytest (loader behaviour)
 docs/             engine-map.html -- the full renderer map
 trace.txt         the Ghidra session that produced src/Engine.h
-TombRaiderVR.ini  the config; stereo, all phases on, written if missing
+(the ini is generated at runtime from src/DefaultIni.h, not stored here)
 ```

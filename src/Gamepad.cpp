@@ -261,6 +261,35 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
         }
     }
 
+    // Hold RT + RB to decouple pitch for as long as both are held. Read off the
+    // MERGED state for the same reason the suppression below is applied here: a
+    // physical pad's RT and RB have to reach it too.
+    //
+    // 30 is XInput's own XINPUT_GAMEPAD_TRIGGER_THRESHOLD -- what the platform
+    // calls a pressed trigger -- rather than a number invented here.
+    const bool chord = Cfg().decoupledPitchChord &&
+                       mine.Gamepad.bRightTrigger > 30 &&
+                       (mine.Gamepad.wButtons & XB_RIGHT_SHOULDER) != 0;
+
+    // Applied AFTER the merge, deliberately. Zeroing it back in BuildState
+    // would only cover the Touch controllers -- the merge above takes whichever
+    // source is larger, so a physical pad plugged in would put stick pitch
+    // straight back and the setting would appear not to work.
+    //
+    // The chord is a RELEASE, never a trigger: it hands stick pitch back while
+    // held, and does nothing at all when decoupledPitch is off. Only this
+    // setting decides whether pitch is taken away in the first place.
+    //
+    // Written twice wrongly before this. An OR made the chord dead weight for
+    // anyone running decoupledPitch=1 -- the only people who want it. An XOR
+    // then made it take pitch AWAY when the setting was off, so the chord meant
+    // opposite things depending on a value you cannot see while playing. A
+    // momentary control has to do one thing.
+    //
+    // Shoot and Walk are left intact, so holding it costs none of the actions
+    // the two buttons already do.
+    if (Cfg().decoupledPitch && !chord) mine.Gamepad.sThumbRY = 0;
+
     *state = mine;
     return ERROR_SUCCESS;
 }
@@ -291,9 +320,14 @@ void GamepadUpdate() {
     }
     if (!g_loggedOnce) {
         g_loggedOnce = true;
-        LogF("pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) "
+        LogF("pad: move=Lstick look=Rstick%s jump=A(R lower) roll=B(R upper) "
              "action=Y(L upper) system=%s(L lower) walk=LS+RB(R grip) "
              "duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=LB+RB%s",
+             Cfg().decoupledPitch
+                 ? (Cfg().decoupledPitchChord
+                        ? "(yaw only; hold RT+RB for pitch)"
+                        : "(yaw only, pitch decoupled)")
+                 : "",
              Cfg().gamepadMenuUsesBack ? "BACK" : "START",
              Cfg().dpadShift ? " dpad=R3+Lstick" : "");
     }

@@ -378,6 +378,37 @@ struct Config {
 
     bool  gamepadLogButtons = false;
 
+    // Right stick turns only. Its vertical axis is dropped, so the game camera
+    // never pitches from the stick.
+    //
+    // In VR the headset already owns pitch: you look up by looking up. Stick
+    // pitch is then a second, conflicting source for the same axis, and it is
+    // the uncomfortable one -- a vertical rotation the inner ear did not ask
+    // for is the strongest simulator-sickness trigger there is, worse than yaw.
+    //
+    // ON by default. It does change what the pad can do -- the engine aims and
+    // reads its look camera from the pitch this suppresses, so a shot lined up
+    // by tilting the stick has to be lined up by tilting your head instead --
+    // but decoupledPitchChord hands the stick back on demand, so nothing is
+    // actually out of reach, and comfort is the right thing to default to in a
+    // headset. Set to 0 for the stock two-axis stick.
+    bool  decoupledPitch    = true;
+
+    // Hold RT + RB to INVERT decoupledPitch for as long as both are held. On by
+    // default; it costs nothing when unused.
+    //
+    // Inverts rather than forces, so it earns its place whichever way round the
+    // setting is: off, the chord decouples while held; ON, the chord hands the
+    // stick pitch back while held, which is the case that matters once you play
+    // with decoupledPitch=1 all the time and want the stick for one shot.
+    //
+    // Note what RB is on Touch. There is no physical shoulder button -- the
+    // RIGHT grip synthesises XB_X | XB_RIGHT_SHOULDER for Walk -- so this chord
+    // is right grip + right trigger, which reads as "walk and shoot". That is a
+    // combination people genuinely use, and it will engage the chord. Set this
+    // to 0 if you would rather walk-and-shoot left pitch alone.
+    bool  decoupledPitchChord = true;
+
     // Which XInput button the left hand's lower face button sends.
     //
     // true  = BACK  -- the System menu. This is the default.

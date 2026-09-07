@@ -227,6 +227,8 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.dpadShift           = GetBool (L"DpadShift",           g_cfg.dpadShift,          ini);
     g_cfg.dpadShiftDeadzone   = GetFloat(L"DpadShiftDeadzone",   g_cfg.dpadShiftDeadzone,  ini);
     g_cfg.gamepadLogButtons   = GetBool (L"GamepadLogButtons",  g_cfg.gamepadLogButtons,  ini);
+    g_cfg.decoupledPitch      = GetBool (L"DecoupledPitch",     g_cfg.decoupledPitch,     ini);
+    g_cfg.decoupledPitchChord = GetBool (L"DecoupledPitchChord", g_cfg.decoupledPitchChord, ini);
     g_cfg.gamepadMenuUsesBack = GetBool (L"GamepadMenuUsesBack", g_cfg.gamepadMenuUsesBack, ini);
     g_cfg.logCallsites        = GetBool (L"LogCallsites",       g_cfg.logCallsites,       ini);
     g_cfg.drawAllRooms        = GetBool (L"DrawAllRooms",       g_cfg.drawAllRooms,       ini);

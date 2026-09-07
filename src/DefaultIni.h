@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 29337 bytes, 587 lines.
+// Source: TombRaiderVR.ini, 31855 bytes, 632 lines.
 #pragma once
 
 namespace tr {
@@ -377,6 +377,51 @@ GamepadEnabled=1
 ; which mask it actually set. Leave at 0 for normal play.
 GamepadLogButtons=0
 
+; Right stick turns only. Its vertical axis is dropped, so the game camera never
+; pitches from the stick. 1 = on and the default; 0 = the stock two-axis stick.
+;
+; In VR the headset already owns pitch: you look up by looking up. Stick pitch is
+; then a second source for the same axis, fighting the first, and it is the
+; uncomfortable one -- a vertical rotation your inner ear did not ask for is the
+; strongest simulator-sickness trigger there is, worse than yaw. Yaw is left
+; alone because turning on the spot with the stick is how you play seated.
+;
+; It does genuinely take something away: the engine aims and reads its look
+; camera from the pitch this suppresses, so a shot lined up by tilting the stick
+; has to be lined up by tilting your head instead. It is ON by default anyway,
+; because DecoupledPitchChord below hands the stick pitch back whenever you hold
+; RT+RB -- nothing is out of reach, and comfort is the right default in a
+; headset. Set this to 0 for the stock two-axis stick.
+;
+; Applied to whatever right stick reaches the game, including a physical pad
+; merged in alongside the Touch controllers. The binding line in the log says
+; "look=Rstick(yaw only; hold RT+RB for pitch)" when both are on.
+DecoupledPitch=1
+
+; Hold RT + RB to get stick pitch BACK for as long as both are held. 1 = on,
+; and it costs nothing when unused.
+;
+; This only ever hands pitch back -- it never takes it away. With
+; DecoupledPitch=0 the stick already pitches and the chord does nothing at all;
+; with DecoupledPitch=1 you keep the comfortable head-only default and can still
+; reach for the stick for the one shot that wants it, then let go.
+;
+; A momentary control has to mean ONE thing. An earlier version inverted the
+; setting instead, which made the same chord decouple pitch or restore it
+; depending on a value you cannot see while playing.
+;
+; KNOW WHAT RB IS HERE. Touch has no physical shoulder buttons: the RIGHT GRIP
+; synthesises XB_X and XB_RIGHT_SHOULDER together, because X is what the game
+; binds Walk to and RIGHT_SHOULDER is what keeps the LB+RB Photo Mode chord
+; reachable. So this chord is right grip + right trigger, which in play reads as
+; "walk and shoot" -- a combination people genuinely use, on a ledge especially,
+; and it WILL engage the chord. Set this to 0 if you would rather walk-and-shoot
+; leave pitch alone.
+;
+; The chord only ever ADDS the suppression. Shoot and Walk still do their jobs
+; while it is held; nothing is taken away to pay for it.
+DecoupledPitchChord=1
+
 ; Hold R3 (right stick click) to turn the LEFT stick into a D-pad.
 ;
 ; R3 is the modifier rather than L3 because L3 is Sprint, and sprint here is
@@ -451,7 +496,8 @@ LogCallsites=0
 ;
 ; DRAWALLROOMS IS THE EXPENSIVE ONE. TR5 Streets of Rome has 116 rooms; the
 ; traversal finds 3 to 12 of them, and forcing the rest drew 115 every frame --
-; about ten times the engine's own working set, doubled again for stereo.
+)INI"
+           R"INI(; about ten times the engine's own working set, doubled again for stereo.
 ; Affordable with stock textures, a slideshow with the HD-texture build.
 ;
 ; ROOM 215 IS NOT A FLIP ROOM, and flip detection does not catch it. Confirmed
@@ -506,8 +552,7 @@ TraceStartFrame=0
 ; 0 = off. This is what fixes geometry going missing when you turn your head.
 ;
 ; The engine's traversal runs in the GAME CAMERA's space -- VR is injected at
-)INI"
-           R"INI(; the shader uniform, so the engine's own view matrix never rotates with your
+; the shader uniform, so the engine's own view matrix never rotates with your
 ; head. A portal beside or behind the camera fails the near-plane test inside
 ; the clipper, so widening its rectangle does nothing (measured: 200% of screen
 ; each way changed neither geometry nor frame rate). Connectivity has no
@@ -606,7 +651,8 @@ RoomDumpKey=0x77
 DumpDraws=0
 
 ; Virtual-key code that arms the dump. 0x78 = F9.
-DumpKey=0x78
+)INI"
+           R"INI(DumpKey=0x78
 )INI";
 }
 

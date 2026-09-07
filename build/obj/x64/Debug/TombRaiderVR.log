@@ -11,10 +11,6 @@
   Gamepad.cpp
   VideoPanel.cpp
   VRSystem.cpp
-C:\dev\TombRaiderVR\src\RoomCull.cpp(320,30): warning C4456: declaration of 'e' hides previous local declaration
-      C:\dev\TombRaiderVR\src\RoomCull.cpp(310,36):
-      see declaration of 'e'
-  
-  TombRaiderVR.vcxproj -> C:\dev\TombRaiderVR\build\x64\Debug\TombRaiderVR.dll
+  TombRaiderVR.vcxproj -> C:\dev\TombRaider456VR\build\x64\Debug\TombRaiderVR.dll
   Deploying TombRaiderVR.dll to C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\
     Deployed. Settings in force: C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\TombRaiderVR.ini
