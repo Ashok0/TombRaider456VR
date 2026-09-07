@@ -75,6 +75,7 @@ uint8_t Trig(float v) {
 //   Look        right stick       Action  Y      Shoot  RT
 //   Duck        LB                Equip   LT     Sprint L3
 //   Walk        LS + RB           System  X      Photo  LB + RB
+//   D-pad       R3 + left stick
 //
 // Two of these are deliberately not the flat-screen defaults, because they suit
 // VR hands better:
@@ -102,7 +103,33 @@ void BuildState(XState& out) {
     if (R.btnUpper)   b |= XB_B;               // Roll
     if (L.btnUpper)   b |= XB_Y;               // Action
     if (L.stickClick) b |= XB_LEFT_THUMB;      // Sprint
-    if (R.stickClick) b |= XB_RIGHT_THUMB;
+
+    // --- D-pad shift --------------------------------------------------------
+    //
+    // Hold R3 and the left stick emits D-pad directions instead of movement.
+    // The axes are zeroed while shifted, or you would walk and press a
+    // direction at the same time -- which is the whole point of a shift.
+    //
+    // Only the DOMINANT axis fires, so the stick cannot emit up and left at
+    // once. A real D-pad allows diagonals, but this is mostly for menus and
+    // inventory, where a diagonal reads as two navigation events and moves the
+    // selection twice for one flick.
+    //
+    // A plain R3 click -- held with the stick centred -- still emits
+    // RIGHT_THUMB exactly as before, so whatever the game binds it to survives.
+    uint16_t dpad = 0;
+    if (Cfg().dpadShift && R.stickClick) {
+        const float dz = Cfg().dpadShiftDeadzone;
+        if (std::fabs(L.stickX) > std::fabs(L.stickY)) {
+            if (L.stickX >  dz) dpad = XB_DPAD_RIGHT;
+            if (L.stickX < -dz) dpad = XB_DPAD_LEFT;
+        } else {
+            if (L.stickY >  dz) dpad = XB_DPAD_UP;
+            if (L.stickY < -dz) dpad = XB_DPAD_DOWN;
+        }
+    }
+    b |= dpad;
+    if (R.stickClick && !dpad) b |= XB_RIGHT_THUMB;
 
     // System (BACK) on the left hand's lower face button, or START if the ini
     // asks for the pause menu there instead.
@@ -120,8 +147,9 @@ void BuildState(XState& out) {
     out.Gamepad.wButtons      = b;
     out.Gamepad.bLeftTrigger  = Trig(L.trigger);   // Equip weapon
     out.Gamepad.bRightTrigger = Trig(R.trigger);   // Shoot
-    out.Gamepad.sThumbLX      = Axis(L.stickX);
-    out.Gamepad.sThumbLY      = Axis(L.stickY);
+    const bool shifted        = (Cfg().dpadShift && R.stickClick);
+    out.Gamepad.sThumbLX      = shifted ? 0 : Axis(L.stickX);
+    out.Gamepad.sThumbLY      = shifted ? 0 : Axis(L.stickY);
     out.Gamepad.sThumbRX      = Axis(R.stickX);
     out.Gamepad.sThumbRY      = Axis(R.stickY);
 
@@ -212,8 +240,9 @@ void GamepadUpdate() {
         g_loggedOnce = true;
         LogF("pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) "
              "action=Y(L upper) system=%s(L lower) walk=LS+RB(R grip) "
-             "duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=LB+RB",
-             Cfg().gamepadMenuUsesBack ? "BACK" : "START");
+             "duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=LB+RB%s",
+             Cfg().gamepadMenuUsesBack ? "BACK" : "START",
+             Cfg().dpadShift ? " dpad=R3+Lstick" : "");
     }
 }
 

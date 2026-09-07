@@ -266,6 +266,20 @@ struct Config {
     // Log the raw OpenVR legacy button masks whenever they change. Touch's
     // button ids differ between runtimes, so if something lands in the wrong
     // place this says which mask it actually set.
+    // Hold R3 to turn the LEFT stick into a D-pad.
+    //
+    // R3 is the modifier rather than L3 because L3 is Sprint, and sprint in
+    // this game is held WHILE running forward -- so "hold L3, push the stick
+    // forward" is already a gesture in play, and reusing it for D-pad up would
+    // mean choosing between them. R3 is the only spare input on the pad: it
+    // emitted RIGHT_THUMB and nothing else. A plain R3 click still emits
+    // RIGHT_THUMB, so nothing that relied on it is lost -- the D-pad only
+    // appears once the left stick is actually deflected.
+    bool  dpadShift        = true;
+
+    // How far the left stick must travel before a shifted press registers.
+    float dpadShiftDeadzone = 0.5f;
+
     bool  gamepadLogButtons = false;
 
     // Which XInput button the left hand's lower face button sends.

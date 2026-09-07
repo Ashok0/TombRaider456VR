@@ -17,6 +17,7 @@ branch.
 | **Phase 5** | **VR controller support** — Touch controllers presented to the game as an Xbox pad | Working. On by default |
 | **Phase 6** | **TR6 support** — alternate-eye rendering for Angel of Darkness, which renders its scene offscreen | Working. Auto-detected per game |
 | **Phase 7** | **Culling fix** — the missing geometry behind Lara, fixed inside the game DLLs | Working. TR4 / TR5 |
+| **Phase 8** | **D-pad input** — hold R3 and the left stick becomes a D-pad | Working. On by default |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -55,6 +56,10 @@ game is running. See [Phase 6: TR6 support](#phase-6-tr6-support).
 traversal reaches from the game camera, so looking away from it finds nothing —
 and the traversal is in the game DLLs, not the exe. See
 [Phase 7: culling fix](#phase-7-culling-fix).
+
+**Phase 8** gives the controllers a D-pad they do not physically have, as a
+shift layer on R3. See
+[Phase 8: D-pad input support](#phase-8-d-pad-input-support).
 
 **Two ini files ship.** `TombRaiderVR.ini` is the Phase 1 bring-up config and
 still selects `Mode=mono`. `TombRaiderVR.working.ini` is the full working
@@ -1120,6 +1125,7 @@ therefore promotes its axis to 1.0 when the analogue value reads low.
 | Sprint | Left stick click | `L3` |
 | System menu | Left lower face button | `BACK` (or `START`) |
 | Photo mode | Left grip + right grip | `LB` + `RB` |
+| D-pad | Right stick click + left stick | `DPAD_*` — see [Phase 8](#phase-8-d-pad-input-support) |
 
 Two of those deliberately differ from the flat-screen defaults, because they
 suit hands better than thumbs:
@@ -1469,6 +1475,62 @@ the table.
 | `DrawAllRoomsClipRect` | `1` | Give every listed room a full-screen clip rect. Off is a diagnostic only |
 | `DrawAllRooms` | `0` | Legacy distance-based appending, kept for A/B |
 | `LogCallsites` | `0` | Log each distinct DLL-side call into `vid_setPass` / `ogl_drawVB` as `module+RVA`. Verbose; a research tool, not a play setting |
+
+---
+
+## Phase 8: D-pad input support
+
+Touch controllers have no D-pad, and the game wants one — menus, the inventory
+ring, and anything else that navigates by discrete directions rather than by
+analogue movement. Phase 8 adds one as a **shift layer**: hold **R3** (click the
+right stick) and the left stick emits D-pad directions instead of movement.
+
+### Why R3 is the modifier
+
+L3 is the obvious candidate and the wrong one. **L3 is Sprint, and sprint in this
+game is held *while* running forward** — so "hold L3, push the left stick
+forward" is already a gesture in live play. Putting D-pad up on the same
+combination would mean choosing between them.
+
+R3 was the only genuinely spare input on the pad: it emitted `RIGHT_THUMB` and
+nothing else.
+
+### Nothing is taken away
+
+The shift is designed so that no existing behaviour is lost:
+
+- **A plain R3 click still emits `RIGHT_THUMB`.** The D-pad only appears once the
+  left stick is actually deflected past the deadzone, so R3 held with the stick
+  centred behaves exactly as it did before, and whatever the game binds it to
+  survives.
+- **The left stick's movement axes are zeroed while shifted.** Otherwise you
+  would walk and press a direction at the same time, which defeats the point of
+  a shift layer.
+
+### Only the dominant axis fires
+
+The larger of `|x|` and `|y|` wins, so the stick cannot emit up and left at
+once. A real D-pad allows diagonals; this deliberately does not, because the
+feature is mostly for menus and inventory — where a diagonal reads as two
+separate navigation events and moves the selection twice for one flick of the
+thumb.
+
+`DpadShiftDeadzone` (default `0.5`) is how far the stick must travel before a
+shifted press registers. Raise it if directions trigger too easily, lower it if
+they feel stiff.
+
+The mapping line in the log records the shift when it is on:
+
+```
+pad: move=Lstick look=Rstick jump=A(R lower) ... sprint=L3 photo=LB+RB dpad=R3+Lstick
+```
+
+### Phase 8 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `DpadShift` | `1` | Hold R3 to turn the left stick into a D-pad |
+| `DpadShiftDeadzone` | `0.5` | Stick travel required before a shifted direction registers, 0–1 |
 
 ---
 

@@ -167,6 +167,8 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.alternateEyeMinOffscreen =
         GetIntAuto(L"AlternateEyeMinOffscreen", g_cfg.alternateEyeMinOffscreen, ini);
     g_cfg.gamepadEnabled      = GetBool (L"GamepadEnabled",     g_cfg.gamepadEnabled,     ini);
+    g_cfg.dpadShift           = GetBool (L"DpadShift",           g_cfg.dpadShift,          ini);
+    g_cfg.dpadShiftDeadzone   = GetFloat(L"DpadShiftDeadzone",   g_cfg.dpadShiftDeadzone,  ini);
     g_cfg.gamepadLogButtons   = GetBool (L"GamepadLogButtons",  g_cfg.gamepadLogButtons,  ini);
     g_cfg.gamepadMenuUsesBack = GetBool (L"GamepadMenuUsesBack", g_cfg.gamepadMenuUsesBack, ini);
     g_cfg.logCallsites        = GetBool (L"LogCallsites",       g_cfg.logCallsites,       ini);
