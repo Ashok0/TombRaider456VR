@@ -275,6 +275,28 @@ struct Config {
     // emitted RIGHT_THUMB and nothing else. A plain R3 click still emits
     // RIGHT_THUMB, so nothing that relied on it is lost -- the D-pad only
     // appears once the left stick is actually deflected.
+    // Hold Y + LT for this long to send the Xbox Menu button (XInput START).
+    //
+    // Touch has no Start or Back of its own, so both have to come from
+    // somewhere. The System button on the left hand's lower face sends one of
+    // them (see gamepadMenuUsesBack); this chord reaches the other without
+    // spending another button.
+    //
+    // A deliberate hold: Y is Action and LT is Equip, so the pair does occur in
+    // ordinary play, and the duration is the only thing separating the chord
+    // from a real grab-and-draw. One second is short enough to be comfortable
+    // but IS within reach of normal play -- if it ever fires when you did not
+    // mean it, this is the number to raise.
+    //
+    // It sends a PRESS, not a latch -- Menu toggles the pause screen itself, and
+    // a held START would never look like a clean press to the game. 0 disables.
+    float menuChordSeconds = 1.0f;
+
+    // How long the synthesised Menu press is held, in seconds. Long enough for
+    // the game to sample it across several frames, short enough not to read as
+    // a second press.
+    float menuChordPressSeconds = 0.15f;
+
     bool  dpadShift        = true;
 
     // How far the left stick must travel before a shifted press registers.
@@ -514,6 +536,17 @@ void  AdjustIpdScale(float factor);
 void  LogTuning(const char* why);
 
 // Log any ini option that the current EyeOffsetMode silently ignores.
+// Write the stock ini to `path` if nothing is there yet.
+//
+// Returns true only when a file was actually created. A fresh install then
+// starts from the documented template rather than bare struct defaults, which
+// matters because the comments in that template carry most of what was learned
+// tuning this -- which settings are load-bearing, which were measured useless,
+// and why.
+//
+// Never overwrites: an existing ini is somebody's tuned setup.
+bool  EnsureConfigFile(const wchar_t* path);
+
 void  WarnIgnoredOptions();
 void  ResetTuning();
 

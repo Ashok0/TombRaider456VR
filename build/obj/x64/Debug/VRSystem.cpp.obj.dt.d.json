@@ -1,12 +1,12 @@
 {
     "Version": "1.2",
     "Data": {
-        "Source": "c:\\dev\\tombraider456vr\\src\\vrsystem.cpp",
+        "Source": "c:\\dev\\tombraidervr\\src\\vrsystem.cpp",
         "ProvidedModule": "",
         "Includes": [
-            "c:\\dev\\tombraider456vr\\src\\vrsystem.h",
-            "c:\\dev\\tombraider456vr\\src\\stereomath.h",
-            "c:\\dev\\tombraider456vr\\src\\engine.h",
+            "c:\\dev\\tombraidervr\\src\\vrsystem.h",
+            "c:\\dev\\tombraidervr\\src\\stereomath.h",
+            "c:\\dev\\tombraidervr\\src\\engine.h",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\cstdint",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\yvals_core.h",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\vcruntime.h",
@@ -43,7 +43,7 @@
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\errno.h",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\vcruntime_string.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\corecrt_wstring.h",
-            "c:\\dev\\tombraider456vr\\src\\gl.h",
+            "c:\\dev\\tombraidervr\\src\\gl.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\um\\windows.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\winapifamily.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\winpackagefamily.h",
@@ -155,7 +155,7 @@
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\um\\imm.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\um\\ime_cmodes.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\um\\gl\\gl.h",
-            "c:\\dev\\tombraider456vr\\third_party\\openvr\\headers\\openvr.h",
+            "c:\\dev\\tombraidervr\\third_party\\openvr\\headers\\openvr.h",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\string",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\xstring",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\__msvc_sanitizer_annotate_container.hpp",
@@ -209,8 +209,8 @@
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\xpolymorphic_allocator.h",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\tuple",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\cctype",
-            "c:\\dev\\tombraider456vr\\src\\config.h",
-            "c:\\dev\\tombraider456vr\\src\\log.h"
+            "c:\\dev\\tombraidervr\\src\\config.h",
+            "c:\\dev\\tombraidervr\\src\\log.h"
         ],
         "ImportedModules": [],
         "ImportedHeaderUnits": []

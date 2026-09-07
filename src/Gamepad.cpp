@@ -75,7 +75,7 @@ uint8_t Trig(float v) {
 //   Look        right stick       Action  Y      Shoot  RT
 //   Duck        LB                Equip   LT     Sprint L3
 //   Walk        LS + RB           System  X      Photo  LB + RB
-//   D-pad       R3 + left stick
+//   D-pad       R3 + left stick   Menu    Y + LT held 3s
 //
 // Two of these are deliberately not the flat-screen defaults, because they suit
 // VR hands better:
@@ -88,6 +88,13 @@ uint8_t Trig(float v) {
 //   System is the left hand's lower face button, sending BACK. Touch has no
 //   Start or Back of its own, and putting either on a chord made it awkward to
 //   reach mid-play.
+// Menu chord state. Wall clock rather than frames: the poll rate belongs to
+// the game, not to us, so "three seconds" must not become "three seconds at
+// whatever frame rate happens to be running".
+uint64_t g_menuChordSince = 0;   // when the chord was first seen held, 0 = not
+uint64_t g_menuPressUntil = 0;   // synthesised START is held until this tick
+bool     g_menuChordFired = false;
+
 void BuildState(XState& out) {
     VRSystem::HandState h[2];
     VR().ReadControllers(h);
@@ -97,6 +104,12 @@ void BuildState(XState& out) {
 
     const VRSystem::HandState& L = h[0];
     const VRSystem::HandState& R = h[1];
+
+    // Set once the Menu chord fires, and honoured where the triggers are
+    // written further down. Declared here because that assignment happens after
+    // this block -- setting out.Gamepad.bLeftTrigger from inside the chord would
+    // simply be overwritten.
+    bool suppressLeftTrigger = false;
 
     uint16_t b = 0;
     if (R.btnLower)   b |= XB_A;               // Jump
@@ -137,6 +150,45 @@ void BuildState(XState& out) {
         b |= Cfg().gamepadMenuUsesBack ? XB_BACK : XB_START;
     }
 
+    // --- Menu chord: Y + LT held ------------------------------------------
+    //
+    // Touch has no Start or Back of its own. The System button above sends one
+    // of them; this reaches the other without spending a second button.
+    //
+    // Y is Action and LT is Equip, so the pair happens in normal play -- hence
+    // the long hold. It fires ONCE per hold: after firing, the chord must be
+    // released before it can fire again, so leaning on it does not machine-gun
+    // the pause screen.
+    //
+    // Y and LT are suppressed from the moment it fires until release. They were
+    // already sent for the three seconds it took to arm, which cannot be undone,
+    // but there is no reason to keep grabbing and drawing weapons afterwards.
+    if (Cfg().menuChordSeconds > 0.0f) {
+        const bool     chord = L.btnUpper && L.trigger > 0.5f;
+        const uint64_t now   = GetTickCount64();
+
+        if (!chord) {
+            g_menuChordSince = 0;
+            g_menuChordFired = false;
+        } else {
+            if (g_menuChordSince == 0) g_menuChordSince = now;
+            const uint64_t needed = (uint64_t)(Cfg().menuChordSeconds * 1000.0f);
+            if (!g_menuChordFired && now - g_menuChordSince >= needed) {
+                g_menuChordFired = true;
+                g_menuPressUntil = now +
+                    (uint64_t)(Cfg().menuChordPressSeconds * 1000.0f);
+                Log("pad: Menu (START) sent -- Y + LT held");
+            }
+        }
+
+        if (now < g_menuPressUntil) b |= XB_START;
+
+        if (g_menuChordFired) {
+            b &= (uint16_t)~XB_Y;          // stop Action
+            suppressLeftTrigger = true;    // stop Equip
+        }
+    }
+
     // Duck, and the left half of the Photo Mode chord.
     if (L.grip > 0.5f) b |= XB_LEFT_SHOULDER;
 
@@ -145,7 +197,8 @@ void BuildState(XState& out) {
     if (R.grip > 0.5f) b |= static_cast<uint16_t>(XB_X | XB_RIGHT_SHOULDER);
 
     out.Gamepad.wButtons      = b;
-    out.Gamepad.bLeftTrigger  = Trig(L.trigger);   // Equip weapon
+    out.Gamepad.bLeftTrigger  = suppressLeftTrigger ? 0
+                                                    : Trig(L.trigger);  // Equip
     out.Gamepad.bRightTrigger = Trig(R.trigger);   // Shoot
     const bool shifted        = (Cfg().dpadShift && R.stickClick);
     out.Gamepad.sThumbLX      = shifted ? 0 : Axis(L.stickX);

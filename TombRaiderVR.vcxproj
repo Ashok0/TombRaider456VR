@@ -49,6 +49,28 @@
     <IntDir>$(SolutionDir)build\obj\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
 
+  <!--
+    Where the game is installed. Building copies the DLL here, and the settings
+    that are actually in force are the ones in this folder.
+
+    The runtime resolves its ini next to the DLL:
+
+        GetModuleFileNameW(g_self, path, MAX_PATH);
+        LoadConfig(dir + L"\\TombRaiderVR.ini");
+
+    so once deployed, GameDir\TombRaiderVR.ini IS the configuration. Nothing in
+    the build copies an ini over it - the repo's TombRaiderVR.ini is a template
+    for a fresh install, and overwriting a tuned setup with it on every build
+    would throw away exactly the values that took a session to find.
+
+    Override on the command line if your install lives elsewhere:
+        msbuild /p:GameDir="D:\Games\Tomb Raider IV-VI Remastered\"
+  -->
+  <PropertyGroup>
+    <GameDir Condition="'$(GameDir)'==''">C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\</GameDir>
+    <DeployToGame Condition="'$(DeployToGame)'==''">true</DeployToGame>
+  </PropertyGroup>
+
   <ItemDefinitionGroup>
     <ClCompile>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -115,6 +137,7 @@
 
   <ItemGroup>
     <ClInclude Include="src\Config.h" />
+    <ClInclude Include="src\DefaultIni.h" />
     <ClInclude Include="src\Engine.h" />
     <ClInclude Include="src\GL.h" />
     <ClInclude Include="src\Hooks.h" />
@@ -135,4 +158,25 @@
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <!--
+    Copy the built DLL into the game folder so a build is a deploy.
+    ContinueOnError: the game holds the DLL open while it runs, and a failed
+    copy then is expected rather than a broken build. The message says what
+    happened so it is not mistaken for success.
+  -->
+  <Target Name="DeployToGameFolder" AfterTargets="Build" Condition="'$(DeployToGame)'=='true'">
+    <Message Importance="high" Text="Deploying $(TargetFileName) to $(GameDir)" />
+    <Copy SourceFiles="$(TargetPath)"
+          DestinationFolder="$(GameDir)"
+          ContinueOnError="true">
+      <Output TaskParameter="CopiedFiles" ItemName="DeployedOk" />
+    </Copy>
+    <Message Importance="high"
+             Condition="'@(DeployedOk)'==''"
+             Text="  NOT deployed -- the file is in use. Quit the game and build again; the ini in $(GameDir) is untouched either way." />
+    <Message Importance="high"
+             Condition="'@(DeployedOk)'!=''"
+             Text="  Deployed. Settings in force: $(GameDir)TombRaiderVR.ini" />
+  </Target>
+
 </Project>

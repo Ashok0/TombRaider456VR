@@ -26,7 +26,15 @@ DWORD WINAPI StartupThread(LPVOID) {
     tr::LogOpen((dir + L"\\TombRaiderVR.log").c_str());
     Log("TombRaiderVR: starting");
 
-    tr::LoadConfig((dir + L"\\TombRaiderVR.ini").c_str());
+    // Create the ini on first run so a fresh install has something to read
+    // and, more usefully, something to READ ABOUT -- the template is heavily
+    // commented and those comments are most of the accumulated knowledge here.
+    const std::wstring iniPath = dir + L"\\TombRaiderVR.ini";
+    if (tr::EnsureConfigFile(iniPath.c_str())) {
+        LogF("config: no ini found, wrote the stock one to %S", iniPath.c_str());
+    }
+
+    tr::LoadConfig(iniPath.c_str());
     tr::WarnIgnoredOptions();
 
     if (!tr::Cfg().enabled) {

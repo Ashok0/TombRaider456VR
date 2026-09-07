@@ -1,7 +1,9 @@
 #include "Config.h"
+#include "DefaultIni.h"
 #include "Log.h"
 
 #include <windows.h>
+#include <string>
 #include <cstdlib>
 #include <cstdio>
 #include <cwchar>
@@ -110,6 +112,39 @@ void LogTuning(const char* why) {
          why, g_liveScale, g_liveIpd, 0.064f * g_liveScale * g_liveIpd);
 }
 
+bool EnsureConfigFile(const wchar_t* path) {
+    // CREATE_NEW rather than "test then write": it fails if the file exists,
+    // so there is no window between the check and the write in which an
+    // existing ini could be clobbered. Overwriting somebody's tuned settings
+    // would be the one truly unrecoverable thing this function could do.
+    HANDLE h = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;   // exists, or unwritable
+
+    // The template carries LF; expand to CRLF so the file opens sanely in
+    // Notepad. The ini API is happy with either.
+    const char* p = DefaultIniText();
+    std::string out;
+    out.reserve(40000);
+    for (; *p; ++p) {
+        if (*p == '\n') out += '\r';
+        out += *p;
+    }
+
+    DWORD written = 0;
+    const BOOL ok = WriteFile(h, out.data(), (DWORD)out.size(), &written, nullptr);
+    CloseHandle(h);
+
+    if (!ok || written != out.size()) {
+        // A half-written ini is worse than none: the next run would read a
+        // truncated file and silently take defaults for everything past the
+        // cut. Remove it and let the caller report nothing was created.
+        DeleteFileW(path);
+        return false;
+    }
+    return true;
+}
+
 void LoadConfig(const wchar_t* ini) {
     if (GetFileAttributesW(ini) == INVALID_FILE_ATTRIBUTES) {
         Log("config: no TombRaiderVR.ini found, using defaults");
@@ -167,6 +202,8 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.alternateEyeMinOffscreen =
         GetIntAuto(L"AlternateEyeMinOffscreen", g_cfg.alternateEyeMinOffscreen, ini);
     g_cfg.gamepadEnabled      = GetBool (L"GamepadEnabled",     g_cfg.gamepadEnabled,     ini);
+    g_cfg.menuChordSeconds    = GetFloat(L"MenuChordSeconds",    g_cfg.menuChordSeconds,   ini);
+    g_cfg.menuChordPressSeconds = GetFloat(L"MenuChordPressSeconds", g_cfg.menuChordPressSeconds, ini);
     g_cfg.dpadShift           = GetBool (L"DpadShift",           g_cfg.dpadShift,          ini);
     g_cfg.dpadShiftDeadzone   = GetFloat(L"DpadShiftDeadzone",   g_cfg.dpadShiftDeadzone,  ini);
     g_cfg.gamepadLogButtons   = GetBool (L"GamepadLogButtons",  g_cfg.gamepadLogButtons,  ini);

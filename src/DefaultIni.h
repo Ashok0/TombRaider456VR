@@ -1,4 +1,21 @@
-; TombRaiderVR.ini -- place next to TombRaiderVR.dll
+// DefaultIni.h -- the stock TombRaiderVR.ini, embedded.
+//
+// GENERATED FILE. Do not edit by hand: change TombRaiderVR.ini in the repo root
+// and run  python tools\\gen_default_ini.py
+//
+// The DLL writes this out when no ini exists beside it, so a fresh install gets
+// the documented, working configuration rather than bare struct defaults -- the
+// comments in the template carry most of what was learned tuning this thing,
+// and a generated key=value dump would throw all of it away.
+//
+// Source: TombRaiderVR.ini, 30141 bytes, 598 lines.
+#pragma once
+
+namespace tr {
+
+// Newlines are LF here; the writer expands them to CRLF on the way out.
+inline const char* DefaultIniText() {
+    return R"INI(; TombRaiderVR.ini -- place next to TombRaiderVR.dll
 ;
 ; If the very first run looks wrong, the fix is almost always one of the two
 ; sign toggles below. The engine renders Y-flipped (ogl_setPerspAngles writes
@@ -285,6 +302,27 @@ GamepadLogButtons=0
 ; move a menu selection twice.
 DpadShift=1
 
+; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
+;
+; Touch has no Start or Back of its own, so both have to come from somewhere.
+; The System button on the left hand's lower face sends one of them (see
+; GamepadMenuUsesBack); this chord reaches the other without spending a button.
+;
+; The hold is what separates the chord from real play: Y is Action and LT is
+; Equip, so the pair does occur naturally. One second is comfortable but IS
+; within reach of normal play -- raise this if it ever fires unintentionally.
+;
+; It sends a PRESS, not a latch -- Menu toggles the pause screen itself, and a
+; held START would never look like a clean press to the game. It fires once per
+; hold; release and re-hold to send another. Y and LT are suppressed from the
+; moment it fires until you let go, so it does not keep grabbing afterwards.
+;
+; 0 disables the chord entirely.
+MenuChordSeconds=1.0
+
+; How long the synthesised Menu press is held, in seconds.
+MenuChordPressSeconds=0.15
+
 ; How far the left stick must travel before a shifted press registers, 0-1.
 ; Raise it if directions trigger too easily, lower it if they feel stiff.
 DpadShiftDeadzone=0.5
@@ -309,20 +347,194 @@ GamepadMenuUsesBack=1
 ; Deduplicated and capped at 64 sites per hook, but still verbose. Off for play.
 LogCallsites=0
 
-; Draw every room in the level, defeating TR4's portal culling. TR4 ONLY.
+; Draw every room in the level, defeating portal culling. TR4 and TR5.
 ;
 ; The engine submits only rooms reached through a camera-facing portal, so
 ; looking away from the game camera finds nothing drawn. The culling lives in
 ; tomb4.dll -- the exe has none, and widening the projection it hands the game
 ; was measured to change nothing.
 ;
-; This hooks tomb4.dll's GetRoomBounds and, after its portal traversal, appends
+; This hooks each DLL's GetRoomBounds and, after its portal traversal, appends
 ; every remaining room to the draw list and gives them full-screen clip rects.
 ; It is exactly what the engine already does for rooms flagged 0x40000.
 ;
 ; COST: no visibility culling at all -- every room every frame. TR4 rooms are
 ; small, but a big level will cost frame rate. Watch the log:
-;   rooms: traversal found 12, forced 78 more, drawing 90 of 90
+;   rooms[TR4]: traversal found 12, forced 78 more, drawing 90 of 90
+;
+; TR6 is a different engine and is not covered yet.
+; NOTE: PortalWiden used to live here -- it widened the engine's portal
+; rectangle, on the theory that VR's wider FOV was being culled away. It was
+; REMOVED after measuring: swept to 200% of screen each way (lateral culling
+; effectively off) it changed neither the geometry nor the frame rate, and the
+; same test on TR6 at 20x was equally inert. The rectangle was never the
+; limiter -- the traversal runs in the game camera's space and does not rotate
+; with your head, so portals beside or behind it fail the near-plane test long
+; before any rectangle is consulted. PortalHops is what actually fixed it.
+
+; Expand the visible set along PORTAL CONNECTIVITY by this many hops. 0 = off.
+; 1 or 2 is the useful range. Numpad + and - adjust it live.
+;
+; MEASURED, and the reason this exists: widening the portal rectangle does NOT
+; fix geometry going missing when you turn your head. Swept to 200% of screen
+; each way -- lateral culling effectively off -- it changed neither the geometry
+; nor the frame rate (44.5 -> 45.0 fps across the whole sweep), and the same
+; test on TR6 at 20x was equally inert.
+;
+; The rect was never the limiter. The traversal runs in the GAME CAMERA's space:
+; VR is injected at the shader uniform, so the engine's own view matrix stays
+; the game's and the culling does not rotate with your head. A portal beside or
+; behind the game camera fails the NEAR-PLANE test inside the clipper, which is
+; checked before the rectangle is ever consulted -- so no rect can rescue it.
+;
+; Connectivity has no orientation bias: a room through the door behind you is
+; one hop away whichever way the game camera faces. It also keeps the property
+; that fixed room 215 -- only rooms joined by a real portal get in, so stacked
+; overlaps and flip twins stay out, because no portal opens onto one.
+
+; Stop the hop expansion after adding this many rooms. 0 = no budget.
+;
+; MEASURED: hop depth is cheap and SATURATES. Going from 2 hops to 3 on a
+; 242-room TR5 level added about ten rooms (30-45 became 42-54) and moved the
+; frame rate not at all -- 44.5-45.0 fps either way. Connectivity runs out long
+; before the draw list does.
+;
+; That makes fixed depth the wrong control on its own: too shallow and geometry
+; goes missing down a long sightline, too deep costs nothing in a corridor but
+; could explode in a dense warren. So the depth above is set generously and this
+; budget binds only where connectivity really is dense. When it binds, the log
+; says so and names the key to raise it.
+;
+; F9 raises it by 16, F8 lowers it. F7 / F6 still adjust the depth.
+
+
+
+; F7 / F6 adjust PortalHops live. Each press logs the new value.
+; NOT numpad +/- : those are ScaleUpKey and ScaleDownKey, and a shared
+; binding runs BOTH actions -- adjusting hops also moved the world scale.
+
+
+; TR6 only. Widen its PORTAL TRAVERSAL by this factor; 1.0 leaves it alone.
+;
+; TR6 culls the way TR4 and TR5 do, with floats instead of shorts: a portal walk
+; that carries a screen-space rectangle and clips it at every doorway. It starts
+; from a root rect of {-1,-1,1,1} -- the flat screen in NDC -- and the headset
+; sees wider than that, so cells off to the side are never visited or drawn.
+; This scales the root rect for the traversal only and restores it immediately,
+; so no engine state is left modified.
+;
+; (Widening the AABB frustum test instead was measured useless: at 20x it
+; changed no geometry and cost no frame rate, because ~90% of its rejections
+; are near/far rather than lateral. The portal rect is the one that hides
+; geometry -- it never reaches that test.)
+;
+; 2.0 is roughly double the lateral reach. Costs draw calls in proportion.
+Tr6CullWiden=1.0
+
+; Put the root rect back after the traversal. Leave at 0.
+; Those four floats are also the frustum bounds the per-object test uses
+; later in the frame, so restoring them culls exactly the cells the wider
+; traversal just found -- measured, that is why widening appeared to do
+; nothing. Here only as a switch in case it ever explains a regression.
+Tr6CullRestore=0
+
+; TR6 only. Reports three times what TR6's offscreen scene framebuffer uses for
+; a depth attachment, and whether it still holds real depth when the frame is
+; presented. Decides whether the second eye could be reprojected from the first
+; instead of alternating frames. Costs a GPU sync on three frames, then nothing.
+Tr6DepthProbe=0
+
+; Synthesise TR6's second eye from the rendered one plus the scene depth buffer,
+; instead of alternating eyes frame by frame.
+;
+; AER shows one eye the previous frame at all times, and that time difference
+; between the eyes IS the judder -- frame rate cannot fix it. This warps the
+; rendered eye into the other one, so both come from the same instant.
+;
+; It cannot invent what the rendered eye never saw: where the second eye should
+; see past an edge the image stretches instead, and transparent surfaces (which
+; write no depth) shift with whatever is behind them. Set to 0 to go back to
+; alternate-eye rendering.
+Tr6Reproject=0
+
+; Warp grid width in cells, height follows at 9/16. Higher tracks depth
+; discontinuities more closely and costs more vertices. 320 is ~115k triangles.
+Tr6ReprojectGrid=320
+
+; Paint the warp grid with its source UV instead of the game image. Diagnostic:
+; a colour gradient in the synthesised eye means the grid is rasterising and the
+; colour fetch is what fails; a black half means the grid is not landing at all.
+;   1 = source UV as colour   -- does the grid rasterise, and where
+;   2 = colour, alpha forced   -- the image fetch, ignoring alpha
+;   3 = colour at a fixed UV   -- the texture binding, ignoring coordinates
+;   4 = the depth the vertex shader read, as greyscale (useless when
+;       the real range is 0.93..1.0 -- that reads as flat white)
+;   5 = the same depth, banded, so any variation is visible
+;   6 = the colour fetch amplified x16 -- tells black from very dark
+;   7 = the DEPTH texture sampled in the fragment stage instead of
+;       the vertex stage, banded
+;   8 = texelFetch instead of texture(): no filtering or sampler state
+Tr6WarpDebug=0
+
+; Diagnostic. DrawAllRooms makes two separate changes: it appends rooms to the
+; draw list, and it widens every listed room's clip rect to the full screen.
+; Set this to 0 to keep the first and drop the second. Forced rooms then will
+; not render at all -- that is expected; it is there to tell the two apart.
+DrawAllRoomsClipRect=1
+
+; Never force a flip room's inactive storage copy into the draw list.
+;
+; A flip room is a second copy of a piece of level holding its other state: the
+; flooded version of a room, the collapsed floor, an area that changes between
+; visits. Both copies are real rooms at the SAME world position and both carry
+; real geometry, but only one is live at a time. Drawing both puts two versions
+; of one space in the frame and lets draw order decide which you see -- geometry
+; from the wrong state of the level, walls you can walk through, walls that are
+; not there at all.
+;
+; The link is read from the engine's own flipped_room field, whose invariant
+; DoFlipMap maintains: the live room names its storage copy, the storage copy
+; holds -1. This replaced an earlier guess that matched rooms by shared world
+; position, which was measured wrong (78 of 242 rooms in Streets of Rome).
+;
+; Leave this on. It is here to A/B the fix, not to be turned off.
+
+; Cap on how many rooms the override may force per frame. -1 = no cap.
+;
+; This is the cost control. The override appends rooms the engine's own portal
+; traversal did not reach, and on a small level that can mean nearly the whole
+; map: TR5 Streets of Rome has 116 rooms, the traversal finds 3 to 12 of them,
+; and forcing the rest drew 115 every frame -- about ten times the engine's own
+; working set, doubled again for stereo. Affordable with stock textures, a
+; slideshow with the HD-texture build.
+;
+; Candidates are sorted nearest-first, so the cap keeps the rooms most likely to
+; be visible and drops the far ones. Numpad 2/3 (+-1), 4/6 (+-10) and 5 (no cap)
+; retune it live in the headset -- fly it up until geometry stops popping in,
+; then put that number here.
+
+; Toggle DrawAllRooms in the headset, numpad 1 by default. Stand still, press
+; it, and the same spot is drawn both ways with nothing else changed.
+DrawAllRoomsKey=0x61
+
+; Room indices the override must never force into the draw list. Comma or space
+; separated. Indices are per level, so a list that helps one level means nothing
+; in another. Rooms the game's own portal traversal reached are unaffected --
+; this only ever removes rooms that would have been forced.
+; MEASURED: room 215 in TR5 is NOT a flip room -- DrawAllRoomsSkipFlip does not
+; catch it, confirmed by a run where dropping the forced-room cap from 20 to 19
+; was what removed it from the list. It is also not explained by its flags: its
+; only unusual one (0x4000) is a lighting bit shared by 19 well-behaved rooms.
+; Cause still unknown, so the per-index exclusion stays until it is understood.
+; LOAD-BEARING AGAIN -- do not clear this without re-testing room 215.
+;
+; It was briefly removed on the argument that portal reachability had fixed 215
+; structurally. That was true only while PortalHops was 0: pure traversal cannot
+; reach a stacked room. Hop expansion CAN -- it adds any portal-connected room,
+; and draws it without a portal clip -- so if a portal reaches 215 it comes back
+; in full and overlaps the space you are standing in. Clearing this broke the
+; culling again; restoring it is part of the revert to the known-good state.
+; DrawAllRoomsExclude=215
 
 ; Issue every draw twice, once per eye. Turn off to keep matrix injection but
 ; draw once -- useful for telling a matrix problem from a duplication problem.
@@ -395,6 +607,13 @@ PortalHeadMargin=0.35
 DrawAllRooms=0
 
 ; Room indices hop expansion must never add. Comma or space separated, per level.
-; Not a fix -- what makes room 215 special has never been identified -- but it is
-; one line and it works while the general mechanisms are still being tried.
+;
+; Not a fix -- what makes room 215 special has never been identified, and three
+; general mechanisms (flip detection, portal-rect widening, AABB overlap) all
+; failed to characterise it. But it is one line and it demonstrably works, so it
+; stays until the head test above is proven.
 DrawAllRoomsExclude=215
+)INI";
+}
+
+} // namespace tr

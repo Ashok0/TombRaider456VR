@@ -56,6 +56,18 @@ bool LastHeadView(Affine& out);
 namespace {
 
 struct GameAddrs {
+    // Which game this row is for (0 = TR4, 1 = TR5) and the PE TimeDateStamp of
+    // the DLL build it was read from. Rows are searched by the pair, so a patch
+    // that swaps the game DLLs is recognised rather than silently landing every
+    // hook in the middle of unrelated code.
+    //
+    // Not hypothetical: installing the HD pack's own game DLLs replaced the
+    // 2026-01-17 set with a 2025-09-10 set, every prologue check failed, and the
+    // result looked exactly like the culling bug this file exists to fix --
+    // because with no hooks installed the game simply culls normally.
+    int      game;
+    uint32_t timestamp;
+
     const wchar_t* module;
     const char*    hookName;
 
@@ -89,17 +101,50 @@ struct GameAddrs {
 const uint8_t kPrologueTR4[] = { 0x48, 0x8B, 0xC4, 0x41, 0x54 };
 const uint8_t kPrologueTR5[] = { 0x48, 0x89, 0x5C, 0x24, 0x10 };
 
-// Indexed by CurrentGame(): 0 = TR4, 1 = TR5.
-const GameAddrs kGames[2] = {
-    { L"tomb4.dll", "TR4!DrawRoomList",
+// Searched by (game, PE timestamp) -- see GameAddrs.
+//
+// The 2025-09-10 rows were ported from the 2026-01-17 ones by the same method
+// used for the exe: signature-match the renderer, then derive each global from
+// the instructions that reference it. Every global moved by a uniform amount
+// within a DLL (+0xF40 in tomb4, -0xC0 in tomb5), and the ROOM_INFO layout was
+// confirmed unchanged first -- GetFloor matched at identical length with every
+// struct offset appearing the same number of times -- so the box maths and the
+// portal walk still hold.
+const GameAddrs kGames[] = {
+    // --- TR4 ---------------------------------------------------------------
+    { 0, 0x696B4999, L"tomb4.dll", "TR4!DrawRoomList",
       0x000C5160, kPrologueTR4, sizeof(kPrologueTR4),
       0x0063DC60, 0x0063DDFC, 200, 0x00660810, 0x00663FC8,
       0x004947D0, 0x004947CC, 0x0049484C, 0x0049485C, 0x0049486C },
-    { L"tomb5.dll", "TR5!DrawRoomList",
+    { 0, 0x68C12FDA, L"tomb4.dll", "TR4!DrawRoomList",
+      0x000C5DC0, kPrologueTR4, sizeof(kPrologueTR4),
+      0x0063EBA0, 0x0063ED3C, 200, 0x00661750, 0x00664F08,
+      0x00495710, 0x0049570C, 0x0049578C, 0x0049579C, 0x004957AC },
+
+    // --- TR5 ---------------------------------------------------------------
+    { 1, 0x696B499C, L"tomb5.dll", "TR5!DrawRoomList",
       0x000B9CA0, kPrologueTR5, sizeof(kPrologueTR5),
       0x0063D6C0, 0x0063D860, 200, 0x0065B2F0, 0x0065EC28,
       0x004EF8CC, 0x004EF8C8, 0x004EF94C, 0x004EF95C, 0x004EF96C },
+    { 1, 0x68C12FE9, L"tomb5.dll", "TR5!DrawRoomList",
+      0x000BA040, kPrologueTR5, sizeof(kPrologueTR5),
+      0x0063D600, 0x0063D7A0, 200, 0x0065B230, 0x0065EB68,
+      0x004EF80C, 0x004EF808, 0x004EF88C, 0x004EF89C, 0x004EF8AC },
 };
+
+// Whichever row matches the DLL actually loaded. Null until the hook installs.
+const GameAddrs* g_addr[2] = { nullptr, nullptr };
+
+const GameAddrs& A(int g) { return *g_addr[g]; }
+
+// The PE TimeDateStamp of a loaded module.
+uint32_t ModuleStamp(uint8_t* base) {
+    auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) return 0;
+    auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
+    return nt->FileHeader.TimeDateStamp;
+}
 
 constexpr size_t kRoomStride = 0x130;
 
@@ -183,7 +228,7 @@ bool PortalFacesHead(const Affine& V, const mat4& P, const float cam[3],
 
 void ForceAllRooms(int g) {
     uint8_t* base = g_base[g];
-    const GameAddrs& a = kGames[g];
+    const GameAddrs& a = A(g);
     auto At = [base](uint32_t rva) { return base + rva; };
 
     int32_t&  count = *reinterpret_cast<int32_t*>(At(a.drawCount));
@@ -272,8 +317,8 @@ void ForceAllRooms(int g) {
                     // and it demonstrably works while the general mechanisms
                     // are still being tried.
                     bool excluded = false;
-                    for (int e = 0; e < Cfg().excludeCount; ++e)
-                        if (Cfg().excludeRooms[e] == adj) { excluded = true; break; }
+                    for (int x = 0; x < Cfg().excludeCount; ++x)
+                        if (Cfg().excludeRooms[x] == adj) { excluded = true; break; }
                     if (excluded) continue;
 
                     bool present = false;
@@ -407,28 +452,48 @@ void RoomCullUpdate() {
     for (int g = 0; g < 2; ++g) {
         if (g_base[g] || g_warned[g]) continue;
 
-        HMODULE h = GetModuleHandleW(kGames[g].module);
+        const wchar_t* module = (g == 0) ? L"tomb4.dll" : L"tomb5.dll";
+        HMODULE h = GetModuleHandleW(module);
         if (!h) continue;                     // not loaded yet; try next frame
 
         uint8_t* base = reinterpret_cast<uint8_t*>(h);
-        if (!g_hook[g].Install(base + kGames[g].renderRooms, kDetours[g], 5,
-                               kGames[g].prologue, kGames[g].prologueLen,
-                               kGames[g].hookName)) {
+
+        // Pick the row for the build actually loaded. Without this the hook is
+        // attempted at an address belonging to a different build: the prologue
+        // check refuses it, correctly, but the log says only "wrong game build"
+        // without saying which, and culling silently reverts to stock.
+        const uint32_t stamp = ModuleStamp(base);
+        g_addr[g] = nullptr;
+        for (const GameAddrs& row : kGames)
+            if (row.game == g && row.timestamp == stamp) { g_addr[g] = &row; break; }
+
+        if (!g_addr[g]) {
+            g_warned[g] = true;
+            LogF("rooms: %S is build 0x%08X, which has no address table -- "
+                 "TR%d culling unchanged. Known builds:", module, stamp, g + 4);
+            for (const GameAddrs& row : kGames)
+                if (row.game == g) LogF("rooms:   0x%08X", row.timestamp);
+            continue;
+        }
+
+        if (!g_hook[g].Install(base + A(g).renderRooms, kDetours[g], 5,
+                               A(g).prologue, A(g).prologueLen,
+                               A(g).hookName)) {
             // Install logs the reason and refuses on a prologue mismatch, so a
             // different game build degrades to stock culling rather than a
             // corrupted instruction stream. Do not retry every frame.
             g_warned[g] = true;
             LogF("rooms: could not hook %S room renderer -- TR%d culling unchanged",
-                 kGames[g].module, g + 4);
+                 module, g + 4);
             continue;
         }
 
         g_base[g] = base;
         if (!g_logged[g]) {
             g_logged[g] = true;
-            LogF("rooms: portal culling extended in %S (list holds %d rooms, "
-                 "hops %d, head test %s)",
-                 kGames[g].module, kGames[g].drawListMax, Cfg().portalHops,
+            LogF("rooms: portal culling extended in %S build 0x%08X (list holds "
+                 "%d rooms, hops %d, head test %s)",
+                 module, A(g).timestamp, A(g).drawListMax, Cfg().portalHops,
                  Cfg().portalHeadTest ? "on" : "off");
         }
     }

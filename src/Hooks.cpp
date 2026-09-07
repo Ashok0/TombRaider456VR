@@ -1371,17 +1371,17 @@ bool InstallHooks() {
     };
 
     const Target targets[] = {
-        { &g_hSetPass,      rva::vid_setPass,   reinterpret_cast<void*>(&Detour_vid_setPass),
+        { &g_hSetPass,      L().vid_setPass,   reinterpret_cast<void*>(&Detour_vid_setPass),
           10, kSetPassPrologue,  sizeof(kSetPassPrologue),  "vid_setPass"   },
-        { &g_hValidateDraw, rva::validate_draw, reinterpret_cast<void*>(&Detour_validate_draw),
+        { &g_hValidateDraw, L().validate_draw, reinterpret_cast<void*>(&Detour_validate_draw),
            6, kValidatePrologue, sizeof(kValidatePrologue), "validate_draw" },
-        { &g_hDraw,         rva::ogl_draw,      reinterpret_cast<void*>(&Detour_ogl_draw),
+        { &g_hDraw,         L().ogl_draw,      reinterpret_cast<void*>(&Detour_ogl_draw),
            5, kDrawPrologue,     sizeof(kDrawPrologue),     "ogl_draw"      },
-        { &g_hDrawVB,       rva::ogl_drawVB,    reinterpret_cast<void*>(&Detour_ogl_drawVB),
+        { &g_hDrawVB,       L().ogl_drawVB,    reinterpret_cast<void*>(&Detour_ogl_drawVB),
            5, kDrawPrologue,     sizeof(kDrawPrologue),     "ogl_drawVB"    },
-        { &g_hPresent,      rva::ogl_present,   reinterpret_cast<void*>(&Detour_ogl_present),
+        { &g_hPresent,      L().ogl_present,   reinterpret_cast<void*>(&Detour_ogl_present),
            6, kPresentPrologue,  sizeof(kPresentPrologue),  "ogl_present"   },
-        { &g_hFmvShow,      rva::fmvShow,       reinterpret_cast<void*>(&Detour_fmvShow),
+        { &g_hFmvShow,      L().fmvShow,       reinterpret_cast<void*>(&Detour_fmvShow),
            7, kFmvShowPrologue,  sizeof(kFmvShowPrologue),  "fmvShow"       },
     };
 

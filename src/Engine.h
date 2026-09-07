@@ -159,6 +159,98 @@ constexpr uint32_t gTargetWidth    = 0x03298680;
 } // namespace drva
 
 // ---------------------------------------------------------------------------
+// Per-build address tables
+// ---------------------------------------------------------------------------
+//
+// Several builds of the exe are in circulation and their addresses do NOT
+// differ by a constant. Between the stock build and the HD pack, .text moved by
+// +688..+816 depending on the function while .data moved by +0x2020, +0x2190,
+// +0x21A0 or +0x21B0 depending on which variable you ask about. So every
+// address is carried per-build rather than derived by a shift.
+//
+// How a table is produced (repeat this for any future build):
+//   functions -- an exact byte signature from the reference build, slid past
+//                any leading RIP-relative displacement, matched uniquely in the
+//                new .text. All six hook prologues are then confirmed
+//                byte-identical, so the stolen bytes need no relocation.
+//   globals   -- for every RIP-relative reference to a global in the reference
+//                .text, the referencing instruction's surroundings are matched
+//                in the new .text with ALL displacements in the window
+//                wildcarded, and the new displacement read back. Accepted only
+//                on agreement between independent reference sites.
+//
+// Then every structural relationship is re-checked: gWidth/gHeight 4 apart,
+// FBO_default/FBO_custom 4, ogl_textures/FBO_custom 8, vid_state_prev 256 above
+// vid_state, shaders 64 above ogl_rt, mView_packed 560 above vid_state,
+// gTargetHeight 24 above gHeight. The one that legitimately differs is mProj,
+// which sits 512 below vid_state in the HD builds rather than 528 -- confirmed
+// by 31 references across mProj[0], mProj[1] and mProj+0x80 all agreeing on
+// +0x21B0. Do not "correct" mProj back into line with its neighbours.
+struct Layout {
+    const char* name;
+    uint32_t    timestamp;      // PE TimeDateStamp -- the build discriminator
+
+    // hook targets
+    uint32_t vid_setPass;
+    uint32_t validate_draw;
+    uint32_t ogl_draw;
+    uint32_t ogl_drawVB;
+    uint32_t ogl_present;
+    uint32_t fmvShow;
+
+    // globals
+    uint32_t gGame;
+    uint32_t XInputGetState;
+    uint32_t vid_state;
+    uint32_t vid_state_prev;
+    uint32_t mProj;
+    uint32_t mView_packed;
+    uint32_t shaders;
+    uint32_t ogl_textures;
+    uint32_t FBO_custom;
+    uint32_t FBO_default;
+    uint32_t ogl_rt;
+    uint32_t gWidth;
+    uint32_t gHeight;
+    uint32_t gTargetWidth;
+    uint32_t gTargetHeight;
+};
+
+// The build every address above was read out of Ghidra for.
+constexpr Layout kBuildStock = {
+    "v1.0.2a stock (2026-01-17)", 0x696B49A7,
+    rva::vid_setPass, rva::validate_draw, rva::ogl_draw,
+    rva::ogl_drawVB,  rva::ogl_present,   rva::fmvShow,
+    drva::gGame,       drva::XInputGetState, drva::vid_state,   drva::vid_state_prev,
+    drva::mProj,       drva::mView_packed,   drva::shaders,     drva::ogl_textures,
+    drva::FBO_custom,  drva::FBO_default,    drva::ogl_rt,
+    drva::gWidth,      drva::gHeight,        drva::gTargetWidth, drva::gTargetHeight,
+};
+
+// The community HD-texture pack. Its two releases so far -- a 2025-07-01 base
+// and the 2025-09-10 one shipped with pack v1.0.2 -- have IDENTICAL layouts:
+// every one of these 21 addresses was derived independently against each and
+// came out the same. They are listed as two rows because the PE timestamp is
+// the discriminator and they carry different ones, not because they differ.
+#define TR_HD_ADDRS                                                     \
+    0x0000C770, 0x00011FF0, 0x00012EF0,                                 \
+    0x00013010, 0x00012920, 0x00011680,                                 \
+    0x0017B3AC, 0x006949F8, 0x0E51EAA0, 0x0E51EBA0,                     \
+    0x0E51E8A0, 0x0E51ECD0, 0x0E9B01D0, 0x0E9B00C0,                     \
+    0x0E9B00B8, 0x0E9B00BC, 0x0E9B0190,                                 \
+    0x0069A804, 0x0069A800, 0x0329A820, 0x0069A818
+
+constexpr Layout kBuildHD1 = {
+    "community HD pack, 2025-07-01 base", 0x68639C21, TR_HD_ADDRS,
+};
+
+constexpr Layout kBuildHD2 = {
+    "community HD pack v1.0.2 (2025-09-10)", 0x68C12FEB, TR_HD_ADDRS,
+};
+
+#undef TR_HD_ADDRS
+
+// ---------------------------------------------------------------------------
 // Structures
 // ---------------------------------------------------------------------------
 
@@ -263,6 +355,11 @@ static_assert(sizeof(OglRenderTarget) == 24, "OglRenderTarget must be 24 bytes")
 bool Bind();
 
 uint64_t Base();
+
+// The address table for whichever build we actually bound to. Only meaningful
+// after a successful Bind(); before that it returns the stock table so a stray
+// early call reads plausible numbers rather than nulls.
+const Layout& L();
 
 inline void* Fn(uint32_t r)  { return reinterpret_cast<void*>(Base() + r); }
 inline void* Var(uint32_t r) { return reinterpret_cast<void*>(Base() + r); }

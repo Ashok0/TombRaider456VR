@@ -1,2 +1,3 @@
-﻿     Creating library C:\dev\TombRaider456VR\build\x64\Debug\winmm.lib and object C:\dev\TombRaider456VR\build\x64\Debug\winmm.exp
-  WinmmProxy.vcxproj -> C:\dev\TombRaider456VR\build\x64\Debug\winmm.dll
+﻿  winmm_proxy.cpp
+     Creating library C:\dev\TombRaiderVR\build\x64\Debug\winmm.lib and object C:\dev\TombRaiderVR\build\x64\Debug\winmm.exp
+  WinmmProxy.vcxproj -> C:\dev\TombRaiderVR\build\x64\Debug\winmm.dll
