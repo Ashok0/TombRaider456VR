@@ -110,6 +110,11 @@ unsigned g_prevWorld = 0, g_prevOffscreen = 0;
 // GPU-side verification of the per-eye view matrix. Re-armed at every health
 // report rather than latched once, so it tracks live IpdScale and
 // WorldUnitsPerMetre changes instead of only ever sampling frame 1.
+// Shader ids seen with no uProjMatrix at all -- the clip-space-direct passes.
+// Logged once each so that if something still refuses to fuse, the log names
+// the shader instead of costing another play session to find.
+int   g_bypassSeen[8]  = { -1, -1, -1, -1, -1, -1, -1, -1 };
+
 bool  g_verifyArmed    = true;
 bool  g_verifyDone[2]  = { false, false };
 float g_gpuViewT[2][3] = {};
@@ -255,6 +260,7 @@ void TraceDraw(bool worldPass) {
 mat4 g_savedProj{};
 mat4 g_savedView{};
 mat4 g_savedModel{};
+mat4 g_savedHud{};
 bool g_modelPatched = false;
 
 bool VrLive() {
@@ -269,6 +275,12 @@ bool VrLive() {
 //
 // ogl_rt is the render-target latch ogl_setRenderTarget writes; colour and
 // depth both zero is the "back to the default framebuffer" case.
+// vid_setPass assigns vid_state.shader before its own range check, so anything
+// indexing shaders[] has to clamp first -- the array is only 0xCA entries.
+bool vs_shader_in_range(int shader) {
+    return shader >= 0 && shader <= 0xC9;
+}
+
 bool TargetIsBackbuffer() {
     const OglRenderTarget& rt = Rt();
     return rt.color_id == 0 && rt.depth_id == 0;
@@ -296,6 +308,19 @@ void ReadBackViewTranslation(uint32_t program, int loc, float out[3]) {
         gl::GetUniformfv(program, loc + row, v);
         out[row] = v[3];
     }
+}
+
+// uProjMatrix is a real mat4, so one location returns all 16 floats. In
+// EyeOffsetMode 3 the per-eye transform lives here rather than in the view
+// matrix, so this is what has to be verified.
+void ReadBackProjTranslation(uint32_t program, int loc, float out[3]) {
+    out[0] = out[1] = out[2] = 0.0f;
+    if (!gl::GetUniformfv || program == 0 || loc < 0) return;
+    float m[16] = {};
+    gl::GetUniformfv(program, loc, m);
+    out[0] = m[12];
+    out[1] = m[13];
+    out[2] = m[14];
 }
 
 // ---------------------------------------------------------------------------
@@ -361,6 +386,111 @@ void __cdecl Detour_validate_draw() {
         if (!inject && VrLive() && VR().poseValid()
             && !Cfg().monoTracking && !TargetIsBackbuffer()) {
             ++g_worldOffscreen;
+        }
+    }
+
+    // Full-screen passes that bypass uProjMatrix entirely: uid[0] < 0 means the
+    // program has no such uniform, so the shader writes clip space directly.
+    // Pre-rendered video runs through here. Nothing we can put in a matrix will
+    // move it, so shift the VIEWPORT for this draw instead -- glDrawElements
+    // runs right after validate_draw returns, and the next draw's
+    // SetEyeViewport puts it back.
+    if (VrLive() && !Cfg().monoTracking && VR().poseValid()
+        && Cfg().videoDepthMetres > 0.0f && TargetIsBackbuffer()
+        && Stereo().valid() && g_inDuplicate
+        && vs_shader_in_range(VidState().shader)
+        && Shaders()[VidState().shader].uid[0] < 0) {
+
+        const int sid = VidState().shader;
+        for (auto& e : g_bypassSeen) {
+            if (e == sid) break;
+            if (e == -1) {
+                e = sid;
+                LogF("bypass: shader %d (0x%02X) has no uProjMatrix -- writes clip "
+                     "space directly. Shifting its viewport per eye.", sid, sid);
+                break;
+            }
+        }
+
+        const Eye be = (g_currentEye == 0) ? Eye::Left : Eye::Right;
+        const float ndc = VR().HudNdcShiftX(be, Cfg().videoDepthMetres);
+        const GLsizei ew = static_cast<GLsizei>(Stereo().eyeWidth());
+        const GLsizei eh = static_cast<GLsizei>(Stereo().eyeHeight());
+        const GLint   x0 = (g_currentEye == 0) ? 0 : static_cast<GLint>(ew);
+        const GLint   dx = static_cast<GLint>(ndc * static_cast<float>(ew) * 0.5f);
+
+        glViewport(x0 + dx, 0, ew, eh);
+        // Keep the scissor on this eye's half so the shifted quad cannot bleed
+        // into the other eye. BeginFrame disables scissor for its full clear, so
+        // it has to be enabled explicitly here.
+        glScissor(x0, 0, ew, eh);
+        glEnable(GL_SCISSOR_TEST);
+    }
+
+    // The flat 2D layer (HUD, menus, subtitles, fades) is drawn with the
+    // engine's ortho projection, identical in both eyes. The headset optics
+    // apply a fixed per-eye correction assuming an asymmetric render, so an
+    // unshifted image is pulled apart and cannot fuse -- which is the double
+    // vision on menus. Give it the same shear the 3D layer gets, plus enough
+    // convergence to sit at HudDepthMetres.
+    if (!inject && !worldPass && VrLive() && !Cfg().monoTracking
+        && VR().poseValid() && Cfg().hudDepthMetres > 0.0f
+        && TargetIsBackbuffer()) {
+        mat4* hudProj = VidState().proj;
+        if (hudProj) {
+            const Eye hudEye = (g_currentEye == 0) ? Eye::Left : Eye::Right;
+            std::memcpy(&g_savedHud, hudProj, sizeof(mat4));
+
+            if (Cfg().hudLockToHead) {
+                // Screen-locked: a flat per-eye NDC shift. Ortho output has
+                // w == 1, so ndc.x moves with m[12] directly.
+                hudProj->m[12] += VR().HudNdcShiftX(hudEye, Cfg().hudDepthMetres);
+            } else {
+                // World-locked: turn the 2D layer into a quad sitting in the
+                // GAME camera's frame, then look at it through the per-eye
+                // transform. Head rotation lands in E, so the panel stays put
+                // while you look around it.
+                //
+                //   Q = P_persp * E * L * P_o
+                //
+                // L maps ortho NDC (x, y, *, 1) to camera space
+                // (W*x, H*y, -Z, 1): the z input is deliberately discarded, so
+                // every 2D element lands on the one plane.
+                const float scale = LiveWorldUnitsPerMetre();
+                const float Z = Cfg().hudDepthMetres * scale;
+                const float halfFov = Cfg().hudSizeDegrees * 0.5f
+                                    * 3.14159265358979f / 180.0f;
+                const float W = Z * std::tan(halfFov);
+                const int   sw = ScreenWidth();
+                const int   sh = ScreenHeight();
+                const float aspect = (sh > 0) ? (float)sw / (float)sh : 1.7778f;
+                const float H = (aspect > 0.0f) ? W / aspect : W;
+
+                float zn = 16.0f, zf = 32768.0f;
+                ExtractNearFar(Proj()[1], zn, zf);
+                if (Z <= zn) zn = Z * 0.5f;
+                if (Z >= zf) zf = Z * 2.0f;
+
+                mat4 Ppersp{};
+                VR().EyeProjection(hudEye, zn, zf, Ppersp);
+
+                mat4 L{};
+                L.m[0]  = W;
+                // Y-down, to match what the per-eye projection expects. See
+                // Config::hudFlipY -- getting this wrong both inverts the image
+                // and reverses winding, so culling removes the whole layer.
+                L.m[5]  = Cfg().hudFlipY ? -H : H;
+                L.m[14] = -Z;
+                L.m[15] = 1.0f;
+
+                const mat4 E = AffineToMat4(VR().EyeView(hudEye));
+                *hudProj = Mul4(Ppersp, Mul4(E, Mul4(L, g_savedHud)));
+            }
+
+            VidState().consts |= kProj;
+            g_hValidateDraw.Original<Fn_validate_draw>()();
+            std::memcpy(hudProj, &g_savedHud, sizeof(mat4));
+            return;
         }
     }
 
@@ -584,8 +714,15 @@ void __cdecl Detour_validate_draw() {
         g_verifyDone[eyeIdx] = true;
         const Shader& sh = Shaders()[vs.shader];
         g_gpuProg[eyeIdx] = static_cast<int>(sh.id);
-        g_gpuLoc[eyeIdx]  = sh.uid[1];
-        ReadBackViewTranslation(sh.id, sh.uid[1], g_gpuViewT[eyeIdx]);
+        if (Cfg().eyeOffsetMode == 3) {
+            // Mode 3 leaves uViewMatrix identical in both eyes ON PURPOSE, so
+            // reading it would report zero separation and look like a failure.
+            g_gpuLoc[eyeIdx] = sh.uid[0];
+            ReadBackProjTranslation(sh.id, sh.uid[0], g_gpuViewT[eyeIdx]);
+        } else {
+            g_gpuLoc[eyeIdx] = sh.uid[1];
+            ReadBackViewTranslation(sh.id, sh.uid[1], g_gpuViewT[eyeIdx]);
+        }
     }
 
     if (g_modelPatched && vs.model) {
@@ -755,8 +892,10 @@ void __cdecl Detour_ogl_present() {
             const float dy = g_gpuViewT[0][1] - g_gpuViewT[1][1];
             const float dz = g_gpuViewT[0][2] - g_gpuViewT[1][2];
             const float sep = std::sqrt(dx*dx + dy*dy + dz*dz);
-            LogF("verify: uViewMatrix ON GPU  eye0=(%.1f, %.1f, %.1f) prog=%d loc=%d  "
-                 "eye1=(%.1f, %.1f, %.1f) prog=%d loc=%d  separation=%.2f world units",
+            LogF("verify: %s ON GPU  eye0=(%.1f, %.1f, %.1f) prog=%d loc=%d  "
+                 "eye1=(%.1f, %.1f, %.1f) prog=%d loc=%d  separation=%.2f",
+                 (Cfg().eyeOffsetMode == 3) ? "uProjMatrix translation column"
+                                            : "uViewMatrix translation",
                  g_gpuViewT[0][0], g_gpuViewT[0][1], g_gpuViewT[0][2],
                  g_gpuProg[0], g_gpuLoc[0],
                  g_gpuViewT[1][0], g_gpuViewT[1][1], g_gpuViewT[1][2],
@@ -765,15 +904,8 @@ void __cdecl Detour_ogl_present() {
                 Log("verify: glGetUniformfv unavailable -- GPU-side check skipped, "
                     "the numbers above are meaningless.");
             } else if (sep < 0.01f) {
-                Log("verify: *** THE GPU HOLDS THE SAME VIEW MATRIX FOR BOTH EYES. "
-                    "The per-eye write reaches mView_packed but not the shader, so "
-                    "the upload is being skipped or overwritten between our write "
-                    "and the draw. Depth is impossible and IpdScale is inert until "
-                    "this line shows a non-zero separation. ***");
-            } else {
-                Log("verify: per-eye view matrices ARE reaching the GPU. If there is "
-                    "still no depth, the fault is downstream: eye viewport, render "
-                    "target, or compositor submit -- capture a frame trace (F10).");
+                Log("verify: *** the two eyes hold the SAME matrix. The per-eye "
+                    "transform is not reaching the shader. ***");
             }
         } else if (VrLive() && !Cfg().monoTracking) {
             Log("verify: no per-eye GPU sample taken this window -- injection is "
@@ -790,14 +922,13 @@ void __cdecl Detour_ogl_present() {
         if (VrLive() && !Cfg().monoTracking) {
             int samples = 0, differing = 0;
             Stereo().CompareHalves(samples, differing);
-            LogF("halves: %d of %d sampled pixels differ between the left and "
-                 "right halves of the eye target", differing, samples);
-            if (samples > 0 && differing == 0) {
-                Log("halves: *** THE TWO HALVES ARE THE SAME IMAGE. Per-eye "
-                    "matrices reach the GPU but both eyes render identical "
-                    "pixels, so the duplication is drawing both eyes into the "
-                    "same region. Depth is impossible regardless of scale. ***");
-            }
+            // NOT a depth measure. It compares the SAME pixel coordinate in
+            // both halves, so it reports image SHIFT: a large constant offset
+            // (the frustum shear) lights it up, while correct parallax of a few
+            // pixels across smooth texture falls under the threshold and reads
+            // as zero. A low number here means nothing is wrong.
+            LogF("halves: %d of %d sampled pixels differ (image shift indicator "
+                 "only -- not a depth measure)", differing, samples);
         }
 
         LogProjHistogram();

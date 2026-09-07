@@ -27,6 +27,7 @@ DWORD WINAPI StartupThread(LPVOID) {
     Log("TombRaiderVR: starting");
 
     tr::LoadConfig((dir + L"\\TombRaiderVR.ini").c_str());
+    tr::WarnIgnoredOptions();
 
     if (!tr::Cfg().enabled) {
         Log("TombRaiderVR: disabled by config, not hooking");

@@ -301,6 +301,33 @@ void VRSystem::EyeProjection(Eye eye, float zNear, float zFar, mat4& out) const 
     BuildEyeProjection(out, l, r, t, b, zNear, zFar, c.flipProjectionY);
 }
 
+float VRSystem::HudNdcShiftX(Eye eye, float depthMetres) const {
+    if (depthMetres <= 0.0f) return 0.0f;
+
+    const auto& c = Cfg();
+    int idx = static_cast<int>(eye);
+    if (c.swapEyes) idx = 1 - idx;
+
+    const float l = m_rawProj[idx][0];
+    const float r = m_rawProj[idx][1];
+    const float rl = r - l;
+    if (std::fabs(rl) < 1e-9f) return 0.0f;
+
+    const float p00 = 2.0f / rl;
+    const float p02 = (r + l) / rl;
+
+    // Half the physical eye separation, in world units, honouring live tuning.
+    const float scale = LiveWorldUnitsPerMetre();
+    const float halfSepM =
+        0.5f * std::fabs(m_eyeFromHead[0].r[0][3] - m_eyeFromHead[1].r[0][3]);
+    const float halfSep = halfSepM * scale * LiveIpdScale();
+    const float depthW  = depthMetres * scale;
+    if (depthW <= 0.0f) return -p02;
+
+    const float s = (idx == 0) ? 1.0f : -1.0f;
+    return -p02 + s * p00 * halfSep / depthW;
+}
+
 void VRSystem::Submit(GLuint tex, uint32_t, uint32_t) {
     if (!m_compositor || !tex) return;
 

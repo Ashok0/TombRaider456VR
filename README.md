@@ -12,6 +12,7 @@ branch.
 |---|---|---|
 | **Phase 1** | Mono head tracking — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
 | **Phase 2** | **Native stereo with 6DOF** — per-eye matrices, double-wide target, positional tracking, compositor submit | Working. `Mode=stereo` |
+| **Phase 3** | **UI fixes** — the flat 2D layer placed on a world-locked panel, and video cutscenes made fusable | Working. On by default in stereo |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -24,6 +25,11 @@ by first proving the same thing in Phase 1.
 positional head tracking, and live scale tuning in the headset. The mechanism
 — including three plausible implementations that fail in instructive ways — is
 in [Phase 2: native stereo with 6DOF](#phase-2-native-stereo-with-6dof).
+
+**Phase 3** fixes the flat layer stereo leaves behind — HUD, menus, subtitles
+and pre-rendered video, which double-vision until they are given the frustum
+shear the 3D layer gets for free. See
+[Phase 3: UI fixes for VR](#phase-3-ui-fixes-for-vr).
 
 Note that the shipped `TombRaiderVR.ini` still selects `Mode=mono`. Set
 `Mode=stereo` for Phase 2.
@@ -727,6 +733,159 @@ Sign-convention toggles, unchanged from Phase 1:
 
 ---
 
+## Phase 3: UI fixes for VR
+
+Phase 2 makes the world stereoscopic. It leaves the flat layer behind, and that
+layer is most of what you look at outside combat: the inventory ring, the map,
+subtitles, load screens, and every pre-rendered cutscene.
+
+The symptom is **double vision** — two copies of the HUD that refuse to fuse —
+and it has a specific cause. The 2D layer is drawn with the engine's ortho
+projection, which is *identical in both eyes*. The headset optics apply a fixed
+per-eye correction that assumes an asymmetric render, roughly 15° each way here.
+3D content carries that shear in its own projection and comes out aligned; the
+ortho layer never had it, so the optics pull the two copies apart and your eyes
+cannot converge on them.
+
+Phase 3 addresses that in four parts: supply the missing shear, put the layer
+somewhere sensible in space, get its Y convention right, and handle the passes
+that no matrix can reach.
+
+### 1. Give the 2D layer the shear it never had
+
+`VRSystem::HudNdcShiftX` computes the horizontal NDC shift the flat layer is
+missing:
+
+```
+shift = −P02  +  s · P00 · halfSeparation / depth
+        ↑                  ↑
+        align with         converge to a
+        the optics         comfortable distance
+```
+
+The first term is the pedestal from Phase 2 — `(r+l)/(r−l)`, the constant
+disparity the optics expect and cancel. Supplying it is what makes the layer
+fusable at all. The second term is genuine convergence, placing the panel at
+`HudDepthMetres` (4 m by default) rather than at infinity. Half the physical eye
+separation is read from the HMD's own `eyeToHead` transforms and honours live
+`WorldUnitsPerMetre` and `IpdScale`, so the panel keeps its place while you tune.
+
+### 2. World-locked panel instead of a head-locked one
+
+Shifting NDC per eye fuses the image but welds it to your face — the HUD swings
+with every head rotation, which is uncomfortable to read and unpleasant to look
+around. So by default (`HudLockToHead=0`) the 2D layer is turned into a **quad
+fixed in the game camera's frame**: it stays where it is in the world while your
+head turns, and you look around it the way you would a physical panel.
+
+The pass's ortho matrix is replaced with
+
+```
+Q = P_persp · E · L · P_o
+```
+
+| Term | What it is |
+|---|---|
+| `P_o` | The engine's own ortho matrix for that pass — whatever it set, left intact |
+| `L` | Lifts ortho NDC `(x, y, *, 1)` onto a plane in camera space, `(W·x, H·y, −Z, 1)`. **The z input is deliberately discarded**, so every 2D element lands on the one plane instead of scattering by draw order |
+| `E` | The per-eye head transform. Head rotation lands *here*, which is exactly why the panel stays put |
+| `P_persp` | The real per-eye projection — the same asymmetric frustum the world gets |
+
+`Z` comes from `HudDepthMetres`; the panel's half-width `W` is `Z·tan(HudSizeDegrees/2)`
+and its height follows the screen aspect. `HudSizeDegrees` defaults to **55°**
+because the engine's 2D layer fills a flat screen edge to edge — mapped onto the
+headset's ~94° field of view unchanged, it would be overwhelming and unreadable
+at the edges. Near and far are inherited from the live perspective matrix and
+widened if the panel would fall outside them.
+
+`HudLockToHead=1` restores the flat per-eye NDC shift (valid because ortho output
+has `w == 1`, so `m[12]` moves NDC x directly). It is kept deliberately: a few
+passes — fades, full-screen colour effects — genuinely want to be screen-locked.
+
+### 3. `HudFlipY`, or: why the HUD disappeared
+
+Getting the Y convention wrong here does not produce an upside-down HUD. It
+produces **no HUD at all**, which is a much harder symptom to read.
+
+The engine's ortho matrix already flips Y, because TR's 2D space is Y-down — so
+`P_o` emits ordinary GL NDC with Y **up**. The per-eye projection is built with
+`FlipProjectionY` and expects Y-**down** input. Feed it Y-up and it flips a
+second time, which inverts the image *and reverses triangle winding* — at which
+point backface culling silently removes the entire layer.
+
+The signature is unmistakable once you know it: **the HUD vanishes except for the
+one element drawn with culling off, and that one is upside down.** `HudFlipY=1`
+(the default) cancels the extra flip.
+
+### 4. Pre-rendered video: the passes no matrix can reach
+
+Some things stayed double-visioned after all of the above, and for a reason that
+no amount of matrix work would have fixed: **five of the engine's shaders write
+`gl_Position = vec4(aCoord, 1.0)`** — straight to clip space, no matrix
+involved. Pre-rendered video cutscenes run through that path. They are identical
+in both eyes, carry no shear, and there is no uniform to correct.
+
+They are detected structurally rather than by shader id: `uid[0] < 0` means the
+program has no `uProjMatrix` uniform at all.
+
+Since no matrix can move them, **the viewport is shifted instead**. The same
+`HudNdcShiftX` is evaluated at `VideoDepthMetres` (6 m) and converted to a pixel
+offset, then `glViewport` is displaced for that one draw — `glDrawElements` runs
+immediately after `validate_draw` returns, and the next draw's `SetEyeViewport`
+puts it back. Scissor is explicitly re-enabled on the eye's own half so the
+shifted quad cannot bleed into the other eye (`BeginFrame` disables scissor for
+its full-target clear, so it cannot be assumed on).
+
+The result is head-locked, which is the right behaviour for a full-screen video
+anyway. Each bypass shader id is logged once, so if something still refuses to
+fuse the log names the shader instead of costing another play session:
+
+```
+bypass: shader 63 (0x3F) has no uProjMatrix -- writes clip space directly.
+        Shifting its viewport per eye.
+```
+
+### Diagnostics corrected along the way
+
+Three instruments from Phase 2 were lying once `EyeOffsetMode=3` became the
+working mode, and a fourth was missing:
+
+- **The GPU verification read the wrong uniform.** Mode 3 leaves `uViewMatrix`
+  identical in both eyes *on purpose*, so sampling it reported zero separation
+  and looked exactly like the failure it was built to detect. It now reads the
+  `uProjMatrix` translation column (`uid[0]`) when mode 3 is active, and the log
+  line names which uniform it sampled.
+- **The `halves:` counter is not a depth measure**, and its alarm has been
+  removed. It compares the *same pixel coordinate* in both halves, so it reports
+  image **shift**: a large constant offset like the frustum shear lights it up,
+  while correct parallax of a few pixels across smooth texture falls under the
+  threshold and reads as zero. A low number there means nothing is wrong — the
+  old "THE TWO HALVES ARE THE SAME IMAGE" warning was firing on healthy frames.
+- **Silently ignored options now say so.** `WarnIgnoredOptions()` runs at
+  startup and logs any ini setting the active `EyeOffsetMode` cannot act on —
+  `PerEyeView=0` and `DebugEyeYawDegrees` are both inert under mode 3, which
+  never writes the view matrix at all.
+- **`shaders[]` indexing is bounds-checked.** `vid_setPass` assigns
+  `vid_state.shader` *before* its own range check, so any code reading
+  `shaders[vid_state.shader]` has to clamp first — the array is only `0xCA`
+  entries and the bypass detection reads it on every draw.
+
+### Phase 3 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `HudDepthMetres` | `4.0` | Distance the 2D layer sits at. `0` disables the fix and it double-visions |
+| `HudSizeDegrees` | `55` | Angular width of the panel, seen from the game camera. Height follows the screen aspect |
+| `HudLockToHead` | `0` | `0` world-locked panel; `1` flat per-eye shift, welded to the head |
+| `HudFlipY` | `1` | Cancels the engine ortho's own Y flip. Leave it on — see above |
+| `VideoDepthMetres` | `6.0` | Distance for clip-space-direct passes, applied as a viewport shift. `0` disables |
+| `FlatHud` | `1` | Keeps the 2D layer on the flat path rather than reprojecting it as world geometry |
+
+None of these keys are present in the shipped `TombRaiderVR.ini`, so the
+built-in defaults above are what runs unless you add them.
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
@@ -740,9 +899,10 @@ These are honest gaps, not oversights.
   latch (`color_id == 0 && depth_id == 0`). Post passes that assume a
   full-target viewport may need per-pass handling. Phase 1 sidesteps this
   entirely by injecting on every world-space pass.
-- **The HUD is drawn into both eyes flat**, at the same screen position, without
-  per-eye matrices. That is a comfortable default but it is not a world-space
-  HUD.
+- **The 2D layer is one flat panel, not true world geometry.** Phase 3 places it
+  on a quad fixed in the game camera's frame, which is stable and readable, but
+  every 2D element lands on the same plane — the z ordering within the layer is
+  discarded rather than depth-sorted.
 - **Only one custom FBO exists in the engine** (`FBO_custom`), and
   `ogl_setRenderTarget` re-attaches colour and depth plus a full
   `glCheckFramebufferStatus` on every target change. We allocate our own FBO

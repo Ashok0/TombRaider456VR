@@ -140,6 +140,30 @@ inline void WritePackedView(mat4& packed, const Affine& a) {
     // floats 12..15 are (1,0,...) and unused by the shader -- leave them.
 }
 
+// Full 4x4 product, column-major: (A*B)[c][r] = sum_k A[k][r] * B[c][k].
+inline mat4 Mul4(const mat4& A, const mat4& B) {
+    mat4 o{};
+    for (int c = 0; c < 4; ++c) {
+        for (int r = 0; r < 4; ++r) {
+            float sum = 0.0f;
+            for (int k = 0; k < 4; ++k) sum += A.m[k * 4 + r] * B.m[c * 4 + k];
+            o.m[c * 4 + r] = sum;
+        }
+    }
+    return o;
+}
+
+// Widen a rigid 3x4 affine to a full 4x4 with bottom row (0,0,0,1).
+inline mat4 AffineToMat4(const Affine& a) {
+    mat4 o{};
+    for (int c = 0; c < 4; ++c) {
+        for (int r = 0; r < 3; ++r) o.m[c * 4 + r] = a.r[r][c];
+    }
+    o.m[3] = o.m[7] = o.m[11] = 0.0f;
+    o.m[15] = 1.0f;
+    return o;
+}
+
 // --- projection -------------------------------------------------------------
 
 // Recover the near/far the engine currently has in mProj[1], so per-eye

@@ -42,6 +42,19 @@ public:
     // the half: left = [0,0.5], right = [0.5,1].
     void Submit(GLuint doubleWideTex, uint32_t texW, uint32_t texH);
 
+    // Horizontal NDC shift for the flat 2D layer (HUD, menus, subtitles) so it
+    // fuses at `depthMetres` instead of tearing apart.
+    //
+    // The 2D layer is drawn with the engine's ortho projection, identical in
+    // both eyes. The headset optics apply a fixed per-eye correction assuming an
+    // asymmetric render -- about 15 degrees each way here -- so an unshifted
+    // image gets pulled apart and cannot fuse. 3D content carries that shear in
+    // its projection; the ortho layer has to be given it explicitly.
+    //
+    //   shift = -P02  +  s * P00 * halfSeparation / depth
+    //           ^align with the optics   ^converge to a comfortable distance
+    float HudNdcShiftX(Eye eye, float depthMetres) const;
+
     bool poseValid() const { return m_poseValid; }
 
 private:

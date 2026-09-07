@@ -70,6 +70,20 @@ void ResetTuning() {
     LogTuning("reset to ini");
 }
 
+void WarnIgnoredOptions() {
+    // Mode 3 never writes the view matrix, so anything that acts on it is inert.
+    if (g_cfg.eyeOffsetMode == 3) {
+        if (!g_cfg.perEyeView) {
+            Log("config: PerEyeView=0 is IGNORED with EyeOffsetMode=3 -- that "
+                "mode never writes the view matrix. Set EyeOffsetMode=0 to use it.");
+        }
+        if (g_cfg.debugEyeYawDegrees != 0.0f) {
+            Log("config: DebugEyeYawDegrees is IGNORED with EyeOffsetMode=3 -- "
+                "it acts on the view matrix, which that mode leaves untouched.");
+        }
+    }
+}
+
 void LogTuning(const char* why) {
     LogF("tuning [%s]: WorldUnitsPerMetre=%.1f  IpdScale=%.3f "
          "(eye separation ~%.1f world units for a 64 mm IPD)",
@@ -114,6 +128,11 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.perEyeView          = GetBool (L"PerEyeView",         g_cfg.perEyeView,         ini);
     g_cfg.debugEyeYawDegrees  = GetFloat(L"DebugEyeYawDegrees", g_cfg.debugEyeYawDegrees, ini);
     g_cfg.eyeOffsetMode       = GetIntAuto(L"EyeOffsetMode",    g_cfg.eyeOffsetMode,      ini);
+    g_cfg.hudDepthMetres      = GetFloat(L"HudDepthMetres",     g_cfg.hudDepthMetres,     ini);
+    g_cfg.hudSizeDegrees      = GetFloat(L"HudSizeDegrees",     g_cfg.hudSizeDegrees,     ini);
+    g_cfg.hudLockToHead       = GetBool (L"HudLockToHead",      g_cfg.hudLockToHead,      ini);
+    g_cfg.hudFlipY            = GetBool (L"HudFlipY",           g_cfg.hudFlipY,           ini);
+    g_cfg.videoDepthMetres    = GetFloat(L"VideoDepthMetres",   g_cfg.videoDepthMetres,   ini);
     g_cfg.perEyeProjection    = GetIntAuto(L"PerEyeProjection", g_cfg.perEyeProjection,   ini);
     g_cfg.flatHud             = GetBool (L"FlatHud",            g_cfg.flatHud,            ini);
     g_cfg.duplicateDraws      = GetBool (L"DuplicateDraws",     g_cfg.duplicateDraws,     ini);

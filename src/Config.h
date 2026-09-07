@@ -104,6 +104,52 @@ struct Config {
     // rather than reprojecting it. vid_setPass tells us which passes those are.
     bool  flatHud          = true;
 
+    // Distance in metres at which the 2D layer (HUD, menus, subtitles) sits.
+    // 0 = leave it alone, which double-visions: see VRSystem::HudNdcShiftX.
+    float hudDepthMetres   = 4.0f;
+
+    // Horizontal angular width of the 2D panel, in degrees, as seen from the
+    // game camera. The engine's 2D layer fills the flat screen; mapped onto the
+    // headset's ~94 degree field of view that would be overwhelming, so it is
+    // placed on a panel of this width instead. Vertical follows the screen
+    // aspect. Only used when hudLockToHead is false.
+    float hudSizeDegrees   = 55.0f;
+
+    // false (default): the 2D layer is a quad fixed in the GAME camera's frame,
+    //   so it stays put in the world while your head turns. Built as
+    //       Q = P_persp * E * L * P_o
+    //   where L lifts ortho NDC onto a plane at hudDepthMetres, E is the per-eye
+    //   head transform, and P_persp is the real per-eye projection.
+    //
+    // true: the old behaviour -- a flat per-eye NDC shift, so the panel is
+    //   welded to your head and swings with every rotation. Kept because a few
+    //   passes (fades, full-screen effects) genuinely want to be screen-locked.
+    bool  hudLockToHead    = false;
+
+    // Distance in metres for full-screen passes that bypass uProjMatrix.
+    //
+    // Five of the engine's shaders write gl_Position = vec4(aCoord, 1.0) --
+    // straight to clip space, no matrix at all. Pre-rendered video cutscenes go
+    // through that path, which is why they stay double-visioned when everything
+    // else is fixed: identical in both eyes, no frustum shear, so the headset
+    // optics pull the two copies apart.
+    //
+    // No matrix can move them, so the viewport is shifted per eye instead. That
+    // leaves them head-locked, which is the right behaviour for a full-screen
+    // video anyway. 0 disables the shift.
+    float videoDepthMetres = 6.0f;
+
+    // Negate Y when lifting the 2D layer onto the panel. Leave at 1.
+    //
+    // The engine's ortho matrix already flips Y, because TR's 2D space is
+    // Y-down, so P_o emits ordinary GL NDC with Y up. The per-eye projection is
+    // built with FlipProjectionY and expects Y-DOWN input, so feeding it Y-up
+    // flips the image a second time -- and reverses triangle winding, which
+    // backface culling then removes entirely. That reads as "the HUD vanished
+    // except the one element drawn with culling off, and that one is upside
+    // down". This cancels the extra flip.
+    bool  hudFlipY         = true;
+
     // Duplicate every world-space draw into both viewport halves. Turning this
     // off leaves per-eye matrix injection running but draws once -- useful for
     // isolating whether a problem is in the matrices or in the duplication.
@@ -247,6 +293,9 @@ float LiveIpdScale();
 void  AdjustWorldScale(float factor);   // multiplicative, e.g. 1.05f
 void  AdjustIpdScale(float factor);
 void  LogTuning(const char* why);
+
+// Log any ini option that the current EyeOffsetMode silently ignores.
+void  WarnIgnoredOptions();
 void  ResetTuning();
 
 } // namespace tr
