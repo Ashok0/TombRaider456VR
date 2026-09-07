@@ -13,6 +13,7 @@ branch.
 | **Phase 1** | Mono head tracking — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
 | **Phase 2** | **Native stereo with 6DOF** — per-eye matrices, double-wide target, positional tracking, compositor submit | Working. `Mode=stereo` |
 | **Phase 3** | **UI fixes** — the flat 2D layer placed on a world-locked panel, and video cutscenes made fusable | Working. On by default in stereo |
+| **Phase 4** | **FMV fixes** — cutscenes captured offscreen and replayed as real world geometry | Working. On by default in stereo |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -30,6 +31,11 @@ in [Phase 2: native stereo with 6DOF](#phase-2-native-stereo-with-6dof).
 and pre-rendered video, which double-vision until they are given the frustum
 shear the 3D layer gets for free. See
 [Phase 3: UI fixes for VR](#phase-3-ui-fixes-for-vr).
+
+**Phase 4** finishes the cutscenes. Phase 3 made them fuse by shifting the
+viewport, which is a fake transform; Phase 4 captures each video frame offscreen
+and replays it as a real quad, so it keystones and rolls like anything else in
+the room. See [Phase 4: FMV fixes](#phase-4-fmv-fixes).
 
 Note that the shipped `TombRaiderVR.ini` still selects `Mode=mono`. Set
 `Mode=stereo` for Phase 2.
@@ -836,14 +842,18 @@ puts it back. Scissor is explicitly re-enabled on the eye's own half so the
 shifted quad cannot bleed into the other eye (`BeginFrame` disables scissor for
 its full-target clear, so it cannot be assumed on).
 
-The result is head-locked, which is the right behaviour for a full-screen video
-anyway. Each bypass shader id is logged once, so if something still refuses to
-fuse the log names the shader instead of costing another play session:
+The result is head-locked, and it fuses. Each bypass shader id is logged once,
+so if something still refuses to fuse the log names the shader instead of
+costing another play session:
 
 ```
 bypass: shader 63 (0x3F) has no uProjMatrix -- writes clip space directly.
         Shifting its viewport per eye.
 ```
+
+This was the first cut, and a shifted viewport is a fake transform — it cannot
+represent size, keystone or roll. [Phase 4](#phase-4-fmv-fixes) replaces it with
+real geometry and keeps this path only as a fallback.
 
 ### Diagnostics corrected along the way
 
@@ -883,6 +893,125 @@ working mode, and a fourth was missing:
 
 None of these keys are present in the shipped `TombRaiderVR.ini`, so the
 built-in defaults above are what runs unless you add them.
+
+---
+
+## Phase 4: FMV fixes
+
+Phase 3 got the pre-rendered cutscenes to fuse. It did it by shifting the
+viewport, which is a *fake* transform — and the ways it stays fake are visible
+the moment you look around during a cutscene.
+
+Phase 4 stops faking it. The video is captured once and replayed as real
+geometry, so it behaves like an object in the room rather than a rectangle
+being nudged around the screen.
+
+### Why the video needs its own path at all
+
+Five of the engine's shaders write `gl_Position = vec4(aCoord, 1.0)` — straight
+to clip space, no matrix involved. FMV cutscenes run through that path. There is
+no `uProjMatrix`, no `uViewMatrix`, nothing to substitute: **every technique
+Phase 2 and Phase 3 rely on is unavailable here.**
+
+They are detected structurally rather than by shader id — `uid[0] < 0` means the
+program has no `uProjMatrix` uniform at all. That condition is never true during
+gameplay, so the whole video path costs nothing outside cutscenes.
+
+### Three attempts at moving something you cannot transform
+
+Each of these fixed the previous one's most visible artefact and left a subtler
+one behind.
+
+| Attempt | What it does | What it gets wrong |
+|---|---|---|
+| **Constant NDC shift** | One per-eye offset from `HudNdcShiftX` | Fuses correctly, but the panel is welded to your face and swings with every head movement |
+| **Project the centre** | Transform a point straight ahead at `VideoDepthMetres` by the eye transform, project it, put the viewport there | Translation only. The panel keeps a **constant angular size** wherever it sits — at the edge of a ~94° field of view it should shrink and foreshorten, and instead it stretches |
+| **Project the four corners** | Fit the viewport to the corners' bounding box | Recovers the size term, so position *and* perspective size are right. What remains is **keystone**: an off-axis quad should go trapezoidal, and a bounding box is always a rectangle |
+
+The corner fit is what `VideoLockToHead=0` does when the offscreen path is
+unavailable, and it is genuinely close. Its residual error grows with panel
+width, which is why a narrower panel also looks flatter — `VideoSizeDegrees`
+of 50–70 is a good cinema size, and much above 90 the keystone starts to show at
+the edges. Corners behind the eye are detected (`clip.w <= 0`) and fall back to
+the constant shift rather than producing a garbage viewport.
+
+### The fix: capture offscreen, replay as geometry
+
+`VideoOffscreen=1` (the default) removes the keystone completely, by not
+approximating a transform at all:
+
+1. **Capture.** The pass is rendered **once** into an offscreen framebuffer at
+   the size the engine expected, with no per-eye trickery — a flag makes the
+   whole per-eye machinery stand aside for the duration.
+2. **Replay.** A genuine quad is drawn per eye, scaled to the panel, placed at
+   `VideoDepthMetres` in the game camera's frame, and put through the real
+   per-eye transform and projection:
+
+```
+MVP = P_eye · E · L
+```
+
+with the same terms as the HUD panel in Phase 3 — `L` scaling the unit quad to
+the panel and pushing it out to `Z`, `E` the per-eye head transform, `P_eye` the
+real asymmetric projection. Y is negated for the same reason as the HUD: the
+per-eye projection is built for Y-down input.
+
+The quad is then ordinary geometry. It keystones, foreshortens and rolls exactly
+like the world does, because it *is* world geometry — there is no residual to
+argue about. It also rasterises the video **once instead of twice**, which very
+nearly pays for the extra pass.
+
+### What that required
+
+**A minimal renderer of our own.** `VideoPanel` carries its own `#version 150`
+vertex/fragment pair (unit quad, `uMVP`, `uTex`, `uFlip`), an RGBA8 colour
+texture with a `DEPTH_COMPONENT24` renderbuffer, a VAO and a VBO. The
+framebuffer's completeness *is* checked — unlike the engine's own, which
+discards the status.
+
+**27 more GL entry points**, for shaders, programs, VAOs, buffers, attributes
+and `glActiveTexture`. They are deliberately kept out of the loader's success
+flag, on the same principle as `glGetUniformfv` in Phase 2: a driver that will
+not hand them over loses the offscreen panel, not stereo. `gl::LoadedShaderApi()`
+reports the outcome and the loader line now says so:
+
+```
+gl: loader ready (shader api ready)
+```
+
+If the panel cannot be built, it says so and the corner-fit path takes over:
+
+```
+video: offscreen panel unavailable, falling back to the viewport fit
+       (residual keystone off-axis)
+```
+
+**Not corrupting the engine's state cache.** This is the part that would break
+everything if it were missed. `Replay` saves and restores the VAO, array buffer,
+program, active texture unit, 2D texture binding, and the depth/blend/cull/
+scissor enables. The panel is opaque and owns its pixels, so depth testing,
+blending and culling are all switched off — which also means quad winding cannot
+matter.
+
+Restoring GL state is not enough on its own, though, because the engine keeps
+its *own* shadow copy of what it last bound and skips redundant calls. We went
+behind its back, so the parts we disturbed are explicitly invalidated in
+`vid_state_prev`: `shader = 0xCA` — the same out-of-range sentinel `init_ogl`
+itself uses — plus null `vb`/`ib` and `tex[0] = 0xFFFFFFFF`. The engine then
+rebinds on its next draw instead of trusting a cache that is no longer true.
+
+### Phase 4 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `VideoOffscreen` | `1` | Capture and replay as real geometry. `0` uses the viewport fit, with residual keystone |
+| `VideoDepthMetres` | `6.0` | Distance the video panel sits at. `0` disables the video path entirely |
+| `VideoSizeDegrees` | `60` | Angular width of the panel. Also caps the keystone error on the fallback path |
+| `VideoLockToHead` | `0` | `0` anchors the panel to the game camera; `1` welds it to your head |
+| `VideoFlipV` | `0` | Flip the captured video on replay. Only needed if a cutscene comes out upside down |
+
+As with Phases 2 and 3, none of these keys are in the shipped
+`TombRaiderVR.ini`, so the built-in defaults are what run.
 
 ---
 

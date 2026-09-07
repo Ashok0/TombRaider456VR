@@ -28,6 +28,16 @@
 #define GL_RGBA8                  0x8058
 #define GL_FRAMEBUFFER_SRGB       0x8DB9
 #define GL_CURRENT_PROGRAM        0x8B8D
+#define GL_VERTEX_SHADER          0x8B31
+#define GL_FRAGMENT_SHADER        0x8B30
+#define GL_COMPILE_STATUS         0x8B81
+#define GL_LINK_STATUS            0x8B82
+#define GL_ARRAY_BUFFER           0x8892
+#define GL_STATIC_DRAW            0x88E4
+#define GL_TEXTURE0               0x84C0
+#define GL_VERTEX_ARRAY_BINDING   0x85B5
+#define GL_ARRAY_BUFFER_BINDING   0x8894
+#define GL_ACTIVE_TEXTURE         0x84E0
 
 typedef ptrdiff_t GLsizeiptr_t;
 
@@ -51,6 +61,38 @@ extern void (APIENTRY* BlitFramebuffer)(GLint, GLint, GLint, GLint,
 // GL 2.0. Used only by the per-eye verification in Hooks.cpp, so its absence is
 // reported but not fatal -- a driver without it loses the diagnostic, not stereo.
 extern void (APIENTRY* GetUniformfv)(GLuint, GLint, GLfloat*);
+
+// GL 2.0/3.0 shader + buffer entry points, used only by VideoPanel.
+extern GLuint (APIENTRY* CreateShader)(GLenum);
+extern void   (APIENTRY* ShaderSource)(GLuint, GLsizei, const char* const*, const GLint*);
+extern void   (APIENTRY* CompileShader)(GLuint);
+extern void   (APIENTRY* GetShaderiv)(GLuint, GLenum, GLint*);
+extern void   (APIENTRY* GetShaderInfoLog)(GLuint, GLsizei, GLsizei*, char*);
+extern void   (APIENTRY* DeleteShader)(GLuint);
+extern GLuint (APIENTRY* CreateProgram)(void);
+extern void   (APIENTRY* AttachShader)(GLuint, GLuint);
+extern void   (APIENTRY* LinkProgram)(GLuint);
+extern void   (APIENTRY* GetProgramiv)(GLuint, GLenum, GLint*);
+extern void   (APIENTRY* GetProgramInfoLog)(GLuint, GLsizei, GLsizei*, char*);
+extern void   (APIENTRY* DeleteProgram)(GLuint);
+extern void   (APIENTRY* UseProgram)(GLuint);
+extern GLint  (APIENTRY* GetUniformLocation)(GLuint, const char*);
+extern void   (APIENTRY* UniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat*);
+extern void   (APIENTRY* Uniform1i)(GLint, GLint);
+extern void   (APIENTRY* GenVertexArrays)(GLsizei, GLuint*);
+extern void   (APIENTRY* BindVertexArray)(GLuint);
+extern void   (APIENTRY* DeleteVertexArrays)(GLsizei, const GLuint*);
+extern void   (APIENTRY* GenBuffers)(GLsizei, GLuint*);
+extern void   (APIENTRY* BindBuffer)(GLenum, GLuint);
+extern void   (APIENTRY* BufferData)(GLenum, GLsizeiptr_t, const void*, GLenum);
+extern void   (APIENTRY* DeleteBuffers)(GLsizei, const GLuint*);
+extern void   (APIENTRY* VertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
+extern void   (APIENTRY* EnableVertexAttribArray)(GLuint);
+extern GLint  (APIENTRY* GetAttribLocation)(GLuint, const char*);
+extern void   (APIENTRY* ActiveTexture)(GLenum);
+
+// True once the shader/buffer set above resolved. VideoPanel needs all of it.
+bool LoadedShaderApi();
 
 // Resolve everything. Requires a current context. Safe to call repeatedly.
 bool Load();

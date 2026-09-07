@@ -6,4 +6,5 @@ C:\dev\TombRaiderVR\src\Hooks.cpp;C:\dev\TombRaiderVR\build\obj\x64\Release\Hook
 C:\dev\TombRaiderVR\src\InlineHook.cpp;C:\dev\TombRaiderVR\build\obj\x64\Release\InlineHook.obj
 C:\dev\TombRaiderVR\src\Log.cpp;C:\dev\TombRaiderVR\build\obj\x64\Release\Log.obj
 C:\dev\TombRaiderVR\src\StereoRenderer.cpp;C:\dev\TombRaiderVR\build\obj\x64\Release\StereoRenderer.obj
+C:\dev\TombRaiderVR\src\VideoPanel.cpp;C:\dev\TombRaiderVR\build\obj\x64\Release\VideoPanel.obj
 C:\dev\TombRaiderVR\src\VRSystem.cpp;C:\dev\TombRaiderVR\build\obj\x64\Release\VRSystem.obj

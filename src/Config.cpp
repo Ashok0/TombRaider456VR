@@ -133,6 +133,10 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.hudLockToHead       = GetBool (L"HudLockToHead",      g_cfg.hudLockToHead,      ini);
     g_cfg.hudFlipY            = GetBool (L"HudFlipY",           g_cfg.hudFlipY,           ini);
     g_cfg.videoDepthMetres    = GetFloat(L"VideoDepthMetres",   g_cfg.videoDepthMetres,   ini);
+    g_cfg.videoLockToHead     = GetBool (L"VideoLockToHead",    g_cfg.videoLockToHead,    ini);
+    g_cfg.videoSizeDegrees    = GetFloat(L"VideoSizeDegrees",   g_cfg.videoSizeDegrees,   ini);
+    g_cfg.videoOffscreen      = GetBool (L"VideoOffscreen",     g_cfg.videoOffscreen,     ini);
+    g_cfg.videoFlipV          = GetBool (L"VideoFlipV",         g_cfg.videoFlipV,         ini);
     g_cfg.perEyeProjection    = GetIntAuto(L"PerEyeProjection", g_cfg.perEyeProjection,   ini);
     g_cfg.flatHud             = GetBool (L"FlatHud",            g_cfg.flatHud,            ini);
     g_cfg.duplicateDraws      = GetBool (L"DuplicateDraws",     g_cfg.duplicateDraws,     ini);

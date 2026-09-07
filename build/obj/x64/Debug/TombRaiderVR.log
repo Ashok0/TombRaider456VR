@@ -6,5 +6,6 @@
   InlineHook.cpp
   Log.cpp
   StereoRenderer.cpp
+  VideoPanel.cpp
   VRSystem.cpp
   TombRaiderVR.vcxproj -> C:\dev\TombRaider456VR\build\x64\Debug\TombRaiderVR.dll

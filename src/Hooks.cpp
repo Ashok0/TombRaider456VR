@@ -35,6 +35,7 @@
 #include "Log.h"
 #include "InlineHook.h"
 #include "StereoRenderer.h"
+#include "VideoPanel.h"
 #include "VRSystem.h"
 
 #include <cstring>
@@ -281,6 +282,51 @@ bool vs_shader_in_range(int shader) {
     return shader >= 0 && shader <= 0xC9;
 }
 
+// True while the video pass is being captured offscreen, so the per-eye
+// machinery stands aside and lets it render plainly.
+bool g_inVideoCapture = false;
+
+// A pass with no uProjMatrix at all writes clip space directly and cannot be
+// moved by any uniform. That is the video path.
+bool IsBypassPass() {
+    const int sid = VidState().shader;
+    return vs_shader_in_range(sid) && Shaders()[sid].uid[0] < 0;
+}
+
+// Model-view-projection for the video quad in one eye: the unit quad is scaled
+// to the panel, placed at videoDepthMetres in the game camera's frame, and then
+// put through the real per-eye transform and projection.
+void BuildVideoMvp(int eye, mat4& out) {
+    const Eye e = (eye == 0) ? Eye::Left : Eye::Right;
+    const float Z = Cfg().videoDepthMetres * LiveWorldUnitsPerMetre();
+
+    float zn = 16.0f, zf = 32768.0f;
+    ExtractNearFar(Proj()[1], zn, zf);
+    if (Z <= zn) zn = Z * 0.5f;
+    if (Z >= zf) zf = Z * 2.0f;
+
+    mat4 P{};
+    VR().EyeProjection(e, zn, zf, P);
+
+    const float halfFov = Cfg().videoSizeDegrees * 0.5f * 3.14159265358979f / 180.0f;
+    const float W = Z * std::tan(halfFov);
+    const int   sw = ScreenWidth();
+    const int   sh = ScreenHeight();
+    const float aspect = (sh > 0) ? (float)sw / (float)sh : 1.7778f;
+    const float H = (aspect > 0.0f) ? W / aspect : W;
+
+    // Unit quad -> panel. Y negated for the same reason as the HUD: the per-eye
+    // projection is built for Y-down input (see Config::hudFlipY).
+    mat4 L{};
+    L.m[0]  = W;
+    L.m[5]  = Cfg().hudFlipY ? -H : H;
+    L.m[10] = 1.0f;
+    L.m[14] = -Z;
+    L.m[15] = 1.0f;
+
+    out = Mul4(P, Mul4(AffineToMat4(VR().EyeView(e)), L));
+}
+
 bool TargetIsBackbuffer() {
     const OglRenderTarget& rt = Rt();
     return rt.color_id == 0 && rt.depth_id == 0;
@@ -397,9 +443,9 @@ void __cdecl Detour_validate_draw() {
     // SetEyeViewport puts it back.
     if (VrLive() && !Cfg().monoTracking && VR().poseValid()
         && Cfg().videoDepthMetres > 0.0f && TargetIsBackbuffer()
-        && Stereo().valid() && g_inDuplicate
-        && vs_shader_in_range(VidState().shader)
-        && Shaders()[VidState().shader].uid[0] < 0) {
+        && Stereo().valid() && g_inDuplicate && !g_inVideoCapture
+        && !(Cfg().videoOffscreen && Video().valid())
+        && IsBypassPass()) {
 
         const int sid = VidState().shader;
         for (auto& e : g_bypassSeen) {
@@ -413,13 +459,85 @@ void __cdecl Detour_validate_draw() {
         }
 
         const Eye be = (g_currentEye == 0) ? Eye::Left : Eye::Right;
-        const float ndc = VR().HudNdcShiftX(be, Cfg().videoDepthMetres);
         const GLsizei ew = static_cast<GLsizei>(Stereo().eyeWidth());
         const GLsizei eh = static_cast<GLsizei>(Stereo().eyeHeight());
         const GLint   x0 = (g_currentEye == 0) ? 0 : static_cast<GLint>(ew);
-        const GLint   dx = static_cast<GLint>(ndc * static_cast<float>(ew) * 0.5f);
 
-        glViewport(x0 + dx, 0, ew, eh);
+        bool  fitted = false;
+        GLint vx = x0, vy = 0;
+        GLsizei vw = ew, vh = eh;
+
+        if (!Cfg().videoLockToHead) {
+            // World-locked: project the panel's four CORNERS and fit the
+            // viewport to their bounding box. The quad fills whatever viewport
+            // it is given, so this lands it where real geometry would --
+            // position AND perspective size. Projecting only the centre gives
+            // translation alone, which is what made it stretch off-axis.
+            const float Z = Cfg().videoDepthMetres * LiveWorldUnitsPerMetre();
+            float zn = 16.0f, zf = 32768.0f;
+            ExtractNearFar(Proj()[1], zn, zf);
+            if (Z <= zn) zn = Z * 0.5f;
+            if (Z >= zf) zf = Z * 2.0f;
+
+            mat4 P{};
+            VR().EyeProjection(be, zn, zf, P);
+            const Affine E = VR().EyeView(be);
+
+            const float halfFov = Cfg().videoSizeDegrees * 0.5f
+                                * 3.14159265358979f / 180.0f;
+            const float W = Z * std::tan(halfFov);
+            const int   sw = ScreenWidth();
+            const int   sh = ScreenHeight();
+            const float aspect = (sh > 0) ? (float)sw / (float)sh : 1.7778f;
+            const float H = (aspect > 0.0f) ? W / aspect : W;
+
+            // Engine camera looks down -Z (ogl_setPerspAngles writes e32 = -1).
+            const float corner[4][3] = {
+                { -W, -H, -Z }, { +W, -H, -Z }, { -W, +H, -Z }, { +W, +H, -Z }
+            };
+            float xmin = 1e30f, xmax = -1e30f, ymin = 1e30f, ymax = -1e30f;
+            bool ok = true;
+            for (int k = 0; k < 4 && ok; ++k) {
+                float ce[3];
+                for (int i = 0; i < 3; ++i) {
+                    ce[i] = E.r[i][0] * corner[k][0] + E.r[i][1] * corner[k][1]
+                          + E.r[i][2] * corner[k][2] + E.r[i][3];
+                }
+                float clip[4];
+                for (int r = 0; r < 4; ++r) {
+                    clip[r] = P.m[0 * 4 + r] * ce[0] + P.m[1 * 4 + r] * ce[1]
+                            + P.m[2 * 4 + r] * ce[2] + P.m[3 * 4 + r];
+                }
+                if (clip[3] <= 1e-6f) { ok = false; break; }   // behind the eye
+                const float nx = clip[0] / clip[3];
+                const float ny = clip[1] / clip[3];
+                if (nx < xmin) xmin = nx;
+                if (nx > xmax) xmax = nx;
+                if (ny < ymin) ymin = ny;
+                if (ny > ymax) ymax = ny;
+            }
+
+            if (ok && xmax > xmin && ymax > ymin) {
+                const float pxMin = (xmin + 1.0f) * 0.5f * (float)ew;
+                const float pxMax = (xmax + 1.0f) * 0.5f * (float)ew;
+                const float pyMin = (ymin + 1.0f) * 0.5f * (float)eh;
+                const float pyMax = (ymax + 1.0f) * 0.5f * (float)eh;
+                vx = x0 + (GLint)pxMin;
+                vy = (GLint)pyMin;
+                vw = (GLsizei)(pxMax - pxMin);
+                vh = (GLsizei)(pyMax - pyMin);
+                if (vw > 0 && vh > 0) fitted = true;
+            }
+        }
+
+        if (!fitted) {
+            // Head-locked, or the panel is behind the eye: constant alignment.
+            const float ndcX = VR().HudNdcShiftX(be, Cfg().videoDepthMetres);
+            vx = x0 + (GLint)(ndcX * (float)ew * 0.5f);
+            vy = 0; vw = ew; vh = eh;
+        }
+
+        glViewport(vx, vy, vw, vh);
         // Keep the scissor on this eye's half so the shifted quad cannot bleed
         // into the other eye. BeginFrame disables scissor for its full clear, so
         // it has to be enabled explicitly here.
@@ -758,6 +876,34 @@ void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
     }
 
     ++g_dupCount;
+
+    // Clip-space-direct passes (video) cannot be moved by any matrix, so
+    // capture the draw once offscreen and replay it as real geometry per eye.
+    // That is the only way to get correct keystone and roll.
+    if (Cfg().videoOffscreen && Video().valid() && IsBypassPass()) {
+        GLint prevFbo = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+
+        g_inVideoCapture = true;
+        Video().BeginCapture();
+        h.Original<Fn>()(args...);
+        g_inVideoCapture = false;
+
+        gl::BindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFbo);
+
+        g_inDuplicate = true;
+        for (int eye = 0; eye < 2; ++eye) {
+            g_currentEye = eye;
+            Stereo().SetEyeViewport(eye);
+            mat4 mvp{};
+            BuildVideoMvp(eye, mvp);
+            Video().Replay(mvp, Cfg().videoFlipV);
+        }
+        g_currentEye = 0;
+        g_inDuplicate = false;
+        return;
+    }
+
     g_inDuplicate = true;
     for (int eye = 0; eye < 2; ++eye) {
         g_currentEye = eye;
@@ -810,6 +956,17 @@ void LazyInit() {
     g_realDefaultFbo = FboDefault();
     FboDefault() = Stereo().fbo();
     LogF("present: redirected FBO_default %u -> %u", g_realDefaultFbo, Stereo().fbo());
+
+    // Offscreen video panel. Optional: if it fails to build, the viewport-fit
+    // path still handles the video, just with residual keystone.
+    if (Cfg().videoOffscreen) {
+        const int vw = ScreenWidth()  > 0 ? ScreenWidth()  : (int)w;
+        const int vh = ScreenHeight() > 0 ? ScreenHeight() : (int)h;
+        if (!Video().Create((uint32_t)vw, (uint32_t)vh)) {
+            Log("video: offscreen panel unavailable, falling back to the "
+                "viewport fit (residual keystone off-axis)");
+        }
+    }
 
     g_ready = true;
     VR().BeginFrame();

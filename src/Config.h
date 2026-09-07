@@ -134,10 +134,55 @@ struct Config {
     // else is fixed: identical in both eyes, no frustum shear, so the headset
     // optics pull the two copies apart.
     //
-    // No matrix can move them, so the viewport is shifted per eye instead. That
-    // leaves them head-locked, which is the right behaviour for a full-screen
-    // video anyway. 0 disables the shift.
+    // No matrix can move them, so the viewport is shifted per eye instead.
+    // 0 disables the shift entirely.
     float videoDepthMetres = 6.0f;
+
+    // false (default): the panel is anchored to the GAME camera. A viewport
+    //   shift cannot reproject a quad, but it can put it where the panel centre
+    //   belongs: transform a point straight ahead at videoDepthMetres by the eye
+    //   transform, project it, and place the viewport there. Head rotation then
+    //   moves it across your view, and it leaves view if you turn away -- which
+    //   is what world-locked means. Roll and foreshortening are not
+    //   representable this way, but for a flat video panel they do not read.
+    //
+    // true: welded to your head, the previous behaviour.
+    bool  videoLockToHead  = false;
+
+    // Horizontal angular width of the video panel, in degrees, seen from the
+    // game camera.
+    //
+    // This also decides how much the panel can distort. Projecting only the
+    // panel's CENTRE gives translation and nothing else, so the quad keeps a
+    // constant angular size wherever it sits -- at the edge of a ~94 degree
+    // field of view it should shrink and foreshorten, and instead it stretches.
+    // Projecting the four CORNERS and fitting the viewport to their bounding
+    // box recovers the size term, so the panel behaves like real geometry.
+    //
+    // What remains is keystone: a quad seen off-axis should go trapezoidal, and
+    // a bounding box stays rectangular. That error grows with panel width, so a
+    // narrower panel is also a flatter-looking one. 50-70 is a good cinema size;
+    // much above 90 and the keystone starts to show at the edges.
+    float videoSizeDegrees = 60.0f;
+
+    // Capture the video pass into an offscreen texture and replay it as a real
+    // quad, instead of shifting the viewport.
+    //
+    // The viewport fit leaves keystone: an off-axis quad should be trapezoidal
+    // and a bounding box is rectangular. Replaying as actual geometry removes
+    // that completely -- the quad keystones, foreshortens and rolls exactly like
+    // the world, because it IS world geometry.
+    //
+    // Costs one framebuffer bind and two quad draws per video frame, and only
+    // during video: the branch is gated on a pass having no uProjMatrix at all,
+    // which never happens in gameplay. It also rasterises the video once rather
+    // than twice, which nearly pays for itself. Falls back to the viewport fit
+    // if the shader API or the framebuffer is unavailable.
+    bool  videoOffscreen   = true;
+
+    // Flip the captured video vertically on replay. Only needed if the cutscene
+    // comes out upside down.
+    bool  videoFlipV       = false;
 
     // Negate Y when lifting the 2D layer onto the panel. Leave at 1.
     //

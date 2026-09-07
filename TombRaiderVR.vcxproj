@@ -106,6 +106,7 @@
     <ClCompile Include="src\InlineHook.cpp" />
     <ClCompile Include="src\Log.cpp" />
     <ClCompile Include="src\StereoRenderer.cpp" />
+    <ClCompile Include="src\VideoPanel.cpp" />
     <ClCompile Include="src\VRSystem.cpp" />
   </ItemGroup>
 
@@ -118,6 +119,7 @@
     <ClInclude Include="src\Log.h" />
     <ClInclude Include="src\StereoMath.h" />
     <ClInclude Include="src\StereoRenderer.h" />
+    <ClInclude Include="src\VideoPanel.h" />
     <ClInclude Include="src\VRSystem.h" />
   </ItemGroup>
 
