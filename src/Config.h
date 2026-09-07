@@ -422,8 +422,29 @@ struct Config {
 
     // Room indices hop expansion must never add. Comma or space separated.
     // Per level, so a list that helps one means nothing in another.
-    int   excludeRooms[64] = {};
-    int   excludeCount     = 0;
+    //
+    // 215 and 12 are the two measured cases, defaulted here and not only in the
+    // template so they still hold for an install whose ini predates them or has
+    // had the line deleted. An index that means nothing in the level you are in
+    // costs one integer compare per portal and changes nothing else.
+    int   excludeRooms[64] = { 215, 12 };
+    int   excludeCount     = 2;
+
+    // Diagnostic. Key that dumps the current draw list to the log, once per
+    // press. 0 = off.
+    //
+    // The log otherwise reports counts only -- "drawing 43 of 242" -- which
+    // cannot tell you what to put in DrawAllRoomsExclude above. Press this
+    // while the bad geometry is on screen and the block names every room hop
+    // expansion appended, which is the only set the exclude list can remove
+    // from, each with the room it was reached through and where it sits
+    // relative to you.
+    // A FUNCTION key, deliberately, like traceKey and dumpKey. The numpad is
+    // the wrong place for a diagnostic: with Num Lock OFF the physical numpad 3
+    // emits VK_NEXT rather than VK_NUMPAD3, so GetAsyncKeyState(VK_NUMPAD3)
+    // never sees the press and the dump silently does nothing. Measured -- a
+    // whole test session produced no block for exactly that reason.
+    int   roomDumpKey      = 0x77;   // VK_F8
 
     // Before adding a hop room, test the portal we would reach it through
     // against the ACTUAL HEADSET FRUSTUM.

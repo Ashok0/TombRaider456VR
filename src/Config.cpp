@@ -40,9 +40,15 @@ int GetIntAuto(const wchar_t* key, int def, const wchar_t* ini) {
 // Read a comma- or space-separated list of room indices. Returns how many were
 // stored. Absent or malformed entries simply yield an empty list -- a bad line
 // must not become an exclusion nobody asked for.
+// Returns how many parsed, or -1 when the key is ABSENT -- which is not the
+// same as present and empty. A caller carrying a built-in list has to tell "the
+// ini says nothing" from "the ini says none", and an empty string cannot hold
+// that difference on its own, so an out-of-band default carries it instead.
 int GetIntList(const wchar_t* key, int* out, int maxOut, const wchar_t* ini) {
     wchar_t buf[512] = {};
-    GetPrivateProfileStringW(L"VR", key, L"", buf, 512, ini);
+    const wchar_t kAbsent[] = L"\x01";
+    GetPrivateProfileStringW(L"VR", key, kAbsent, buf, 512, ini);
+    if (wcscmp(buf, kAbsent) == 0) return -1;
     int n = 0;
     const wchar_t* p = buf;
     while (*p && n < maxOut) {
@@ -170,7 +176,12 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.ipdDownKey          = GetIntAuto(L"IpdDownKey",       g_cfg.ipdDownKey,         ini);
     g_cfg.portalHops          = GetInt  (L"PortalHops",         g_cfg.portalHops,         ini);
     g_cfg.portalHeadTest      = GetBool (L"PortalHeadTest",     g_cfg.portalHeadTest,     ini);
-    g_cfg.excludeCount        = GetIntList(L"DrawAllRoomsExclude", g_cfg.excludeRooms, 64, ini);
+    // Only a line that actually parsed may replace the built-in list. Assigning
+    // the count unconditionally is what would erase the defaults on any install
+    // whose ini predates the key or has had it deleted.
+    const int nExclude = GetIntList(L"DrawAllRoomsExclude", g_cfg.excludeRooms, 64, ini);
+    if (nExclude >= 0) g_cfg.excludeCount = nExclude;
+    g_cfg.roomDumpKey         = GetIntAuto(L"RoomDumpKey",     g_cfg.roomDumpKey,        ini);
     g_cfg.portalHeadMargin    = GetFloat(L"PortalHeadMargin",   g_cfg.portalHeadMargin,   ini);
     g_cfg.drawAllRoomsClip    = GetBool (L"DrawAllRoomsClipRect", g_cfg.drawAllRoomsClip, ini);
     g_cfg.resetTuningKey      = GetIntAuto(L"ResetTuningKey",   g_cfg.resetTuningKey,     ini);

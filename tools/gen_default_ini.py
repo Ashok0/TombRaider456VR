@@ -28,6 +28,30 @@ if bad:
 if (")" + DELIM + '"') in text:
     sys.exit("template contains the raw-string terminator; pick another delimiter")
 
+# MSVC caps a SINGLE string literal at 16380 bytes and rejects anything longer
+# with C2026, truncating it. The template passed that some time ago and took the
+# build with it -- an embedded ini that silently loses its second half would be
+# worse than one that will not compile, so the cap is not the thing to fight.
+#
+# Adjacent string literals concatenate, so the template goes out in chunks split
+# at line boundaries. The resulting const char* is byte-identical to the
+# one-literal form; only the spelling in the header changes.
+CHUNK = 8000
+
+chunks = []
+cur, used = [], 0
+for line in text.splitlines(True):
+    if used and used + len(line.encode()) > CHUNK:
+        chunks.append("".join(cur))
+        cur, used = [], 0
+    cur.append(line)
+    used += len(line.encode())
+if cur:
+    chunks.append("".join(cur))
+
+body = ("\n" + " " * 11).join(
+    'R"%s(%s)%s"' % (DELIM, c, DELIM) for c in chunks)
+
 header = '''// DefaultIni.h -- the stock TombRaiderVR.ini, embedded.
 //
 // GENERATED FILE. Do not edit by hand: change TombRaiderVR.ini in the repo root
@@ -44,12 +68,14 @@ header = '''// DefaultIni.h -- the stock TombRaiderVR.ini, embedded.
 namespace tr {
 
 // Newlines are LF here; the writer expands them to CRLF on the way out.
+// Split into adjacent literals only because MSVC caps one at 16380 bytes;
+// the concatenation is a single continuous string and the seams carry no bytes.
 inline const char* DefaultIniText() {
-    return R"%s(%s)%s";
+    return %s;
 }
 
 } // namespace tr
-''' % (len(text.encode()), text.count("\n"), DELIM, text, DELIM)
+''' % (len(text.encode()), text.count("\n"), body)
 
 io.open(DST, "w", encoding="utf-8", newline="\n").write(header)
 print("wrote %s  (%d bytes, %d lines from the template)"

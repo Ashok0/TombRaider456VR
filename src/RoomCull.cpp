@@ -45,6 +45,9 @@
 #include <windows.h>
 #include <cstdint>
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <cmath>
 
 namespace tr {
 
@@ -148,15 +151,38 @@ uint32_t ModuleStamp(uint8_t* base) {
 
 constexpr size_t kRoomStride = 0x130;
 
-// ROOM_INFO fields, confirmed against GetFloor (tomb5.dll!FUN_1800101f0):
+// ROOM_INFO fields, confirmed against GetFloor (tomb5.dll!FUN_1800101f0) and the
+// per-room light setup (tomb5.dll!FUN_1800f6a80), which does a full AABB test
+// and so names every bound at once:
+//
+//     local_dc = *(int *)(room + 0x28);                        // x min
+//     local_c4 = *(int *)(room + 0x38);                        // y min
+//     local_c8 = *(int *)(room + 0x34);                        // y max
+//     local_e0 = *(short *)(room + 0x3e) * 0x400 + local_dc;   // x max
+//     local_c0 = *(int *)(room + 0x30);                        // z min
+//     local_e4 = *(short *)(room + 0x3c) * 0x400 + local_c0;   // z max
+//
 //   0x08  portal list: int16 count, then 32 bytes per portal
-//   0x28  world X      0x30  world Z
+//   0x28  world X      0x2C  world Y      0x30  world Z
+//   0x34  y max (floor, larger Y -- TR is Y-down)
+//   0x38  y min (ceiling)
+//   0x3C  z size in sectors    0x3E  x size in sectors
 //   0x4C..0x52  render clip rect (left, right, top, bottom) as shorts
 //   0x68  flipped_room, -1 when the room is not half of a flip pair
+//
+// 0x2C is a real field -- the shake path in FUN_1800b9ca0 touches 0x28, 0x2C and
+// 0x30 as one position triple -- but it is ZERO on every room measured, because
+// TR carries absolute Y in the vertex data rather than a room origin. It is
+// therefore useless for telling two rooms apart vertically; 0x34/0x38 are what
+// carry a room's height, and they are what the dump reports.
 constexpr size_t kOffPortals  = 0x08;
 constexpr size_t kOffX        = 0x28;
 constexpr size_t kOffY        = 0x2C;
 constexpr size_t kOffZ        = 0x30;
+constexpr size_t kOffYMax     = 0x34;
+constexpr size_t kOffYMin     = 0x38;
+constexpr size_t kOffZSize    = 0x3C;
+constexpr size_t kOffXSize    = 0x3E;
 constexpr size_t kOffClipL    = 0x4C;
 constexpr size_t kOffFlipRoom = 0x68;
 
@@ -169,6 +195,20 @@ int              g_lastDrawn[2] = { -1, -1 };
 unsigned         g_headTestRejects[2] = { 0, 0 };
 unsigned         g_headTestPasses[2]  = { 0, 0 };
 bool             g_headTestLogged[2]  = { false, false };
+
+// --- draw list dump (RoomDumpKey) -------------------------------------------
+//
+// One block per keypress. The per-frame lines above report counts only, and a
+// count cannot tell you which index belongs in DrawAllRoomsExclude.
+bool     g_dumpKeyDown = false;
+bool     g_dumpArmed   = false;
+
+// Where each appended room came from, indexed by its slot in the draw list, so
+// the dump can name the portal chain rather than only the result. drawListMax
+// is 200 in both builds; 256 covers it with room to spare.
+constexpr int kMaxSlots = 256;
+int16_t  g_addedFrom[kMaxSlots] = {};
+uint8_t  g_addedWave[kMaxSlots] = {};
 
 typedef void (__cdecl* Fn_RenderRooms)(void);
 
@@ -226,7 +266,176 @@ bool PortalFacesHead(const Affine& V, const mat4& P, const float cam[3],
     return !(maxx < -b || minx > b || maxy < -b || miny > b);
 }
 
+// Edge-triggered, not level: held down it would dump every frame and bury the
+// block you actually wanted in a thousand identical ones.
+void PollRoomDumpKey() {
+    const int key = Cfg().roomDumpKey;
+    if (key == 0) { g_dumpKeyDown = false; return; }
+    const bool down = (GetAsyncKeyState(key) & 0x8000) != 0;
+    if (down && !g_dumpKeyDown) g_dumpArmed = true;
+    g_dumpKeyDown = down;
+}
+
+// A room's world bounding box, as the engine's own per-room AABB test builds it
+// (tomb5.dll!FUN_1800f6a80): x and z from the origin plus the sector counts, y
+// straight out of 0x34/0x38. TR is Y-down, so y0 is the CEILING and y1 the
+// floor.
+struct Box { int32_t x0, x1, y0, y1, z0, z1; };
+
+// Everything printed here is read back out of the engine's structures AFTER
+// expansion has finished, so the block describes the list about to be drawn
+// rather than the one we meant to build.
+void DumpDrawList(int g, const int16_t* list, int count, int before,
+                  const uint8_t* rooms, int numRooms, const float cam[3]) {
+    auto RoomBox = [rooms](int r, Box& b) {
+        const uint8_t* rm = rooms + (size_t)r * kRoomStride;
+        b.x0 = *reinterpret_cast<const int32_t*>(rm + kOffX);
+        b.z0 = *reinterpret_cast<const int32_t*>(rm + kOffZ);
+        b.x1 = b.x0 + *reinterpret_cast<const int16_t*>(rm + kOffXSize) * 1024;
+        b.z1 = b.z0 + *reinterpret_cast<const int16_t*>(rm + kOffZSize) * 1024;
+        b.y0 = *reinterpret_cast<const int32_t*>(rm + kOffYMin);
+        b.y1 = *reinterpret_cast<const int32_t*>(rm + kOffYMax);
+    };
+
+    LogF("rooms[TR%d]: ---- draw list dump ----------------------------", g + 4);
+
+    // list[0] is where the engine's traversal started, which is the room the
+    // GAME CAMERA is in -- not necessarily the room your HEAD is in, which is
+    // the whole reason this file exists. It is still the reference everything
+    // below is measured against.
+    const int camRoom = (before > 0) ? (int)(uint16_t)list[0] : -1;
+    if (camRoom >= 0 && camRoom < numRooms) {
+        Box cb;
+        RoomBox(camRoom, cb);
+        LogF("rooms[TR%d]: camera at (%d, %d, %d), in room %d -- x %d..%d  "
+             "z %d..%d  y %d..%d",
+             g + 4, (int)cam[0], (int)cam[1], (int)cam[2], camRoom,
+             cb.x0, cb.x1, cb.z0, cb.z1, cb.y0, cb.y1);
+    } else {
+        LogF("rooms[TR%d]: camera room unknown -- the traversal list was empty",
+             g + 4);
+    }
+
+    // The engine's own set. Every one of these was reached through a real
+    // portal chain and is drawn with a proper clip rect, so none of them is
+    // ever the answer. Printed to bound the search, not to be searched.
+    for (int i = 0; i < before; i += 20) {
+        char line[512];
+        line[0] = 0;
+        const int last = std::min(i + 19, before - 1);
+        for (int j = i; j <= last; ++j) {
+            char tmp[16];
+            _snprintf_s(tmp, sizeof(tmp), _TRUNCATE, " %d", (int)(uint16_t)list[j]);
+            strcat_s(line, sizeof(line), tmp);
+        }
+        LogF("rooms[TR%d]: traversal reached [%d-%d]:%s", g + 4, i, last, line);
+    }
+
+    if (count == before) {
+        LogF("rooms[TR%d]: nothing appended this frame -- if the geometry is "
+             "wrong here, expansion is not what put it there", g + 4);
+    } else {
+        LogF("rooms[TR%d]: appended %d -- these, and only these, are the "
+             "DrawAllRoomsExclude candidates:", g + 4, count - before);
+    }
+
+    // Nearest first, because that is the order suspicion falls in: foreign
+    // geometry laid over your own comes from a room sharing your space, and a
+    // room sharing your space is a near one. Measured from the box CENTRE, not
+    // the origin -- the origin is a corner, so a large room you are standing in
+    // can sort behind a small one across the map.
+    struct Row {
+        int64_t d2;
+        int     room, from, wave;
+        Box     b;
+    };
+    Row row[kMaxSlots];
+    int n = 0;
+    for (int i = before; i < count && n < kMaxSlots; ++i) {
+        const int r = (int)(uint16_t)list[i];
+        if (r < 0 || r >= numRooms) continue;
+        Row& e = row[n];
+        e.room = r;
+        e.from = (i < kMaxSlots) ? (int)g_addedFrom[i] : -1;
+        e.wave = (i < kMaxSlots) ? (int)g_addedWave[i] :  0;
+        RoomBox(r, e.b);
+        const int64_t dx = (e.b.x0 + e.b.x1) / 2 - (int64_t)cam[0];
+        const int64_t dy = (e.b.y0 + e.b.y1) / 2 - (int64_t)cam[1];
+        const int64_t dz = (e.b.z0 + e.b.z1) / 2 - (int64_t)cam[2];
+        e.d2 = dx*dx + dy*dy + dz*dz;
+        ++n;
+    }
+    std::sort(row, row + n, [](const Row& l, const Row& r) { return l.d2 < r.d2; });
+
+    const int32_t cx = (int32_t)cam[0], cy = (int32_t)cam[1], cz = (int32_t)cam[2];
+
+    // Distances are reported in metres because that is the unit you can judge
+    // by eye in a headset. Taken from config rather than hardcoded: the whole
+    // point of WorldUnitsPerMetre is that it gets retuned.
+    const double upm = (Cfg().worldUnitsPerMetre > 1.0f)
+                     ? (double)Cfg().worldUnitsPerMetre : 423.0;
+
+    for (int i = 0; i < n; ++i) {
+        const Row& e = row[i];
+
+        // Where the camera sits relative to this room's actual box. The old
+        // version of this compared ORIGINS against the camera's room and could
+        // never fire: room origin Y is zero on every room, so "same XZ,
+        // different Y" was unsatisfiable. These use the bounds the engine's own
+        // AABB test uses, so they mean what they say.
+        const bool insideXZ = (cx >= e.b.x0 && cx <= e.b.x1 &&
+                               cz >= e.b.z0 && cz <= e.b.z1);
+        const bool insideY  = (cy >= e.b.y0 && cy <= e.b.y1);
+
+        // TR is Y-down: y0 is the ceiling, y1 the floor. Camera above the
+        // ceiling means the room is below you.
+        const char* flag = "";
+        if (insideXZ && insideY) {
+            // A room whose box contains the camera, that the engine's own
+            // traversal did not reach. It is drawn with a full-screen clip
+            // rect, so its walls land across your whole view. This is the
+            // strongest phantom signal there is.
+            flag = "  <-- CONTAINS THE CAMERA";
+        } else if (insideXZ) {
+            flag = (cy < e.b.y0) ? "  <-- STACKED UNDERFOOT"
+                                 : "  <-- STACKED OVERHEAD";
+        }
+
+        char via[48];
+        if (e.wave > 0)
+            _snprintf_s(via, sizeof(via), _TRUNCATE, "via room %3d on hop %d",
+                        e.from, e.wave);
+        else
+            _snprintf_s(via, sizeof(via), _TRUNCATE, "via distance forcing  ");
+
+        LogF("rooms[TR%d]:   room %3d  %s  x %d..%d  z %d..%d  y %d..%d  "
+             "%dm away%s",
+             g + 4, e.room, via,
+             e.b.x0, e.b.x1, e.b.z0, e.b.z1, e.b.y0, e.b.y1,
+             (int)(std::sqrt((double)e.d2) / upm + 0.5), flag);
+    }
+
+    // Echoed so a dump taken with a half-finished exclude list cannot be
+    // misread later as one taken with none.
+    if (Cfg().excludeCount > 0) {
+        char line[512];
+        line[0] = 0;
+        for (int i = 0; i < Cfg().excludeCount; ++i) {
+            char tmp[16];
+            _snprintf_s(tmp, sizeof(tmp), _TRUNCATE, " %d", Cfg().excludeRooms[i]);
+            strcat_s(line, sizeof(line), tmp);
+        }
+        LogF("rooms[TR%d]: DrawAllRoomsExclude already holds:%s", g + 4, line);
+    }
+
+    LogF("rooms[TR%d]: ---- end dump ----------------------------------", g + 4);
+}
+
 void ForceAllRooms(int g) {
+    // First thing, ahead of every early return below: a press must not be
+    // swallowed by a frame that happened to bail out before reaching the dump.
+    PollRoomDumpKey();
+
     uint8_t* base = g_base[g];
     const GameAddrs& a = A(g);
     auto At = [base](uint32_t rva) { return base + rva; };
@@ -343,6 +552,14 @@ void ForceAllRooms(int g) {
                         ++g_headTestPasses[g];
                     }
 
+                    // Provenance for the dump. Recorded here rather than
+                    // reconstructed later: once the wave loop moves on there
+                    // is no way back from a room index to the portal that
+                    // reached it.
+                    if (count < kMaxSlots) {
+                        g_addedFrom[count] = (int16_t)parent;
+                        g_addedWave[count] = (uint8_t)(h + 1);
+                    }
                     list[count++] = (int16_t)adj;
                 }
             }
@@ -376,8 +593,13 @@ void ForceAllRooms(int g) {
         }
         std::sort(cand, cand + n,
                   [](const Cand& l, const Cand& r) { return l.d2 < r.d2; });
-        for (int i = 0; i < n && count < kMaxRooms; ++i)
+        for (int i = 0; i < n && count < kMaxRooms; ++i) {
+            if (count < kMaxSlots) {
+                g_addedFrom[count] = -1;        // wave 0 = not a hop room
+                g_addedWave[count] = 0;
+            }
             list[count++] = (int16_t)cand[i].room;
+        }
     }
 
     // --- clip rects ---------------------------------------------------------
@@ -407,6 +629,13 @@ void ForceAllRooms(int g) {
         g_lastDrawn[g] = count;
         LogF("rooms[TR%d]: %d hop(s) added %d -> drawing %d of %d",
              g + 4, hops, count - before, count, numRooms);
+    }
+
+    // Serviced last, so the block reports the list as the engine will actually
+    // draw it -- clip rects widened and all -- and not an intermediate state.
+    if (g_dumpArmed) {
+        g_dumpArmed = false;
+        DumpDrawList(g, list, count, before, rooms, numRooms, camPos);
     }
 
     // One-shot proof that the head test is doing something, with the ratio it
@@ -492,9 +721,9 @@ void RoomCullUpdate() {
         if (!g_logged[g]) {
             g_logged[g] = true;
             LogF("rooms: portal culling extended in %S build 0x%08X (list holds "
-                 "%d rooms, hops %d, head test %s)",
+                 "%d rooms, hops %d, head test %s, dump key 0x%02X)",
                  module, A(g).timestamp, A(g).drawListMax, Cfg().portalHops,
-                 Cfg().portalHeadTest ? "on" : "off");
+                 Cfg().portalHeadTest ? "on" : "off", Cfg().roomDumpKey);
         }
     }
 }
