@@ -10,7 +10,7 @@ branch.
 
 | | | State |
 |---|---|---|
-| **Phase 1** | Mono head tracking — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
+| **Phase 1** | **Mono head tracking** — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
 | **Phase 2** | **Native stereo with 6DOF** — per-eye matrices, double-wide target, positional tracking, compositor submit | Working. `Mode=stereo` |
 | **Phase 3** | **UI fixes** — the flat 2D layer placed on a world-locked panel, and video cutscenes made fusable | Working. On by default in stereo |
 | **Phase 4** | **FMV fixes** — cutscenes captured offscreen and replayed as real world geometry | Working. On by default in stereo |
