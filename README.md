@@ -14,6 +14,7 @@ branch.
 | **Phase 2** | **Native stereo with 6DOF** — per-eye matrices, double-wide target, positional tracking, compositor submit | Working. `Mode=stereo` |
 | **Phase 3** | **UI fixes** — the flat 2D layer placed on a world-locked panel, and video cutscenes made fusable | Working. On by default in stereo |
 | **Phase 4** | **FMV fixes** — cutscenes captured offscreen and replayed as real world geometry | Working. On by default in stereo |
+| **Phase 5** | **VR controller support** — Touch controllers presented to the game as an Xbox pad | Working. On by default |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -36,6 +37,12 @@ shear the 3D layer gets for free. See
 viewport, which is a fake transform; Phase 4 captures each video frame offscreen
 and replays it as a real quad, so it keystones and rolls like anything else in
 the room. See [Phase 4: FMV fixes](#phase-4-fmv-fixes).
+
+**Phase 5** adds the controllers. The game resolves XInput through a function
+pointer, so the Touch controllers can be presented to it as pad 0 with no driver
+and no code patching — and the engine adopts the Xbox control scheme and prompts
+by itself. See
+[Phase 5: VR controller support](#phase-5-vr-controller-support).
 
 Note that the shipped `TombRaiderVR.ini` still selects `Mode=mono`. Set
 `Mode=stereo` for Phase 2.
@@ -1015,6 +1022,131 @@ As with Phases 2 and 3, none of these keys are in the shipped
 
 ---
 
+## Phase 5: VR controller support
+
+The Touch controllers are presented to the game as an ordinary Xbox pad. No
+virtual-pad driver, no ViGEm, no code patching, and no inline hook — the whole
+mechanism is one overwritten function pointer.
+
+### Why there is nothing to hook, and why that is fine
+
+The game resolves XInput at runtime rather than importing it:
+
+```c
+hMod = LoadLibraryA("xinput1_3.dll");
+if (hMod || (hMod = LoadLibraryA("xinput9_1_0.dll"), hMod)) {
+    _XInputGetState = GetProcAddress(hMod, "XInputGetState");
+    _XInputSetState = GetProcAddress(hMod, "XInputSetState");
+}
+```
+
+So there is no import table entry to patch — but there *is* a function-pointer
+global, exactly the shape the Ghidra trace found `glUniformMatrix4fv` in.
+Overwriting `_XInputGetState` (RVA `0x00692858`) makes the game call us
+directly.
+
+The payoff is larger than it looks, because of what the engine does with the
+result. `inputUpdate()` polls pads 0–3 every frame and, the moment a poll
+returns `ERROR_SUCCESS` with any button or stick active, sets
+`app.input_type = INPUT_TYPE_XB`. **Simply answering the poll switches the game
+to the Xbox control scheme and its on-screen prompts** — no separate work to
+make the button hints say the right thing.
+
+Three details keep it well-behaved:
+
+- **Only pad 0 is claimed.** Indices 1–3 pass straight through to the real
+  XInput, or report "not connected" if there is none.
+- **A physical pad is merged, not replaced.** If one is plugged in, its buttons
+  are OR'd with ours and the larger magnitude wins on each stick axis and
+  trigger — so a real pad keeps working alongside the controllers.
+- **The pointer is re-asserted every frame** from `ogl_present`. It is a couple
+  of instructions, and it means the override survives the game re-resolving
+  XInput and self-heals if the mod loaded before `WinMain` got there. On unload
+  the original pointer is put back.
+
+### Reading the controllers
+
+`VRSystem::ReadControllers` uses OpenVR's **legacy** input API —
+`GetTrackedDeviceIndexForControllerRole` to find each hand, then
+`GetControllerState`. That is a deliberate choice: the mod ships no action
+manifest, so SteamVR runs it in legacy mode and fills these structures in. The
+modern Input API would require a manifest plus per-controller binding files,
+which is a lot of machinery for "act like an Xbox pad".
+
+Axes come from the legacy Touch layout — `rAxis[0]` the stick, `rAxis[1].x` the
+trigger, `rAxis[2].x` the grip — and buttons through `ButtonMaskFromId`, with
+`k_EButton_A` as the lower face button, `ApplicationMenu` as the upper, and
+`SteamVR_Touchpad` as the stick click.
+
+One runtime quirk is handled explicitly: some runtimes report the trigger and
+grip **only as buttons**, with the axis flat. A pressed trigger or grip mask
+therefore promotes its axis to 1.0 when the analogue value reads low.
+
+### The mapping
+
+| Action | Control | XInput |
+|---|---|---|
+| Move | Left stick | `LX` / `LY` |
+| Look | Right stick | `RX` / `RY` |
+| Jump | Right lower face button | `A` |
+| Roll | Right upper face button | `B` |
+| Action | Left upper face button | `Y` |
+| Shoot | Right trigger | `RT` |
+| Equip weapon | Left trigger | `LT` |
+| Duck | Left grip | `LB` |
+| Walk | **Right grip** | `X` + `RB` |
+| Sprint | Left stick click | `L3` |
+| System menu | Left lower face button | `BACK` (or `START`) |
+| Photo mode | Left grip + right grip | `LB` + `RB` |
+
+Two of those deliberately differ from the flat-screen defaults, because they
+suit hands better than thumbs:
+
+- **Walk is the right grip**, not a face button, so it can be held while the
+  left thumb keeps moving. The game binds Walk to XInput `X`, so the grip emits
+  `X` — and `RIGHT_SHOULDER` as well, so that the Photo Mode chord `LB` + `RB`
+  still works. `X` and `RB` never collide in practice.
+- **System is the left hand's lower face button.** Touch has no Start or Back of
+  its own, and putting either on a chord made it awkward to reach mid-play.
+  `GamepadMenuUsesBack=0` sends `START` (pause/inventory) instead —
+  `inputUpdate()` decodes `BACK` to internal key `0x62` and `START` to `0x63`,
+  and which one a given screen treats as "System" lives in the game DLLs, so it
+  stays switchable rather than hard-coded.
+
+### Diagnostics
+
+Touch's legacy button ids differ between runtimes, so a button landing in the
+wrong place is a plausible failure. `GamepadLogButtons=1` dumps the raw mask
+whenever it changes, which says what a button actually set rather than costing a
+play session to find out:
+
+```
+pad: L raw=0x0000000200000002 stick=(+0.00,+0.00) trig=0.00 grip=0.00
+```
+
+The install itself logs once, along with the whole mapping, so the log records
+what the controls were on that run:
+
+```
+pad: Touch controllers presented as an Xbox pad (_XInputGetState ...)
+pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) action=Y(L upper)
+     system=BACK(L lower) walk=LS+RB(R grip) duck=LB(L grip) equip=LT shoot=RT
+     sprint=L3 photo=LB+RB
+```
+
+### Phase 5 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `GamepadEnabled` | `1` | Present the controllers as pad 0. `0` leaves XInput alone entirely |
+| `GamepadMenuUsesBack` | `1` | Left lower face button sends `BACK` (System). `0` sends `START` (pause) |
+| `GamepadLogButtons` | `0` | Log raw legacy button masks on change |
+
+These keys are not in the shipped `TombRaiderVR.ini` either, so the defaults
+above are what run.
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
@@ -1041,6 +1173,14 @@ These are honest gaps, not oversights.
   plausible symptom of an unrelated mistake.
 - **Depth has no stencil anywhere** (`GL_DEPTH_ATTACHMENT` only), so the eye
   target matches that.
+- **Geometry disappears when you look far from the game camera**, and the fix is
+  not in the exe. The culling test lives in `tomb4/5/6.dll` and builds its planes
+  independently of the engine's projection: hooking `ogl_setPersp` and scaling
+  `tanY` by 2 widened the projection from 64.4° to 103.1° and produced no extra
+  geometry at all. That experiment is settled — do not re-run it. Fixing this
+  means finding the frustum/portal test inside the game DLLs.
+- **The controllers are a gamepad, not hands.** Phase 5 maps them to XInput;
+  there is no motion aiming, no hand presence in-world, and no haptics.
 
 ## Safety
 
@@ -1050,6 +1190,18 @@ in — and the hooks verify the exact prologue bytes at every target before
 patching. On a game update the bytes stop matching, every hook is rolled back,
 and the DLL logs `prologue mismatch` instead of corrupting an instruction
 stream. Hooks are installed all-or-nothing.
+
+Stolen prologue bytes must be position-independent once copied to the
+trampoline, and where they are not, the displacement is relocated rather than
+assumed away. `InlineHook::Install` takes the byte offsets of any RIP-relative
+`disp32` fields in the stolen bytes and shifts each by `target - trampoline`,
+refusing the hook if a fixup would fall outside the stolen range or overflow
+`int32`. This is not optional where it applies: a raw copy leaves the
+displacement relative to the trampoline, which can sit up to 2 GB away, so an
+instruction like `83 0D <disp32> 01` (`OR dword ptr [rip+disp32], 1`) would
+corrupt an arbitrary address rather than merely misbehave. None of the five
+permanent hooks currently need it — it was added for temporary hooks used during
+the culling investigation, and it is there for the next target that does.
 
 ## Layout
 

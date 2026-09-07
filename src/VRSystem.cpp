@@ -328,6 +328,49 @@ float VRSystem::HudNdcShiftX(Eye eye, float depthMetres) const {
     return -p02 + s * p00 * halfSep / depthW;
 }
 
+void VRSystem::ReadControllers(HandState out[2]) const {
+    out[0] = HandState();
+    out[1] = HandState();
+    if (!m_system) return;
+
+    const vr::ETrackedControllerRole roles[2] = {
+        vr::TrackedControllerRole_LeftHand,
+        vr::TrackedControllerRole_RightHand
+    };
+
+    for (int h = 0; h < 2; ++h) {
+        const vr::TrackedDeviceIndex_t idx =
+            m_system->GetTrackedDeviceIndexForControllerRole(roles[h]);
+        if (idx == vr::k_unTrackedDeviceIndexInvalid) continue;
+
+        vr::VRControllerState_t st{};
+        if (!m_system->GetControllerState(idx, &st, sizeof(st))) continue;
+
+        HandState& o = out[h];
+        o.valid      = true;
+        o.rawPressed = st.ulButtonPressed;
+
+        // Legacy axis layout for Touch-style controllers.
+        o.stickX  = st.rAxis[0].x;
+        o.stickY  = st.rAxis[0].y;
+        o.trigger = st.rAxis[1].x;
+        o.grip    = st.rAxis[2].x;
+
+        const uint64_t P = st.ulButtonPressed;
+        o.btnLower   = (P & vr::ButtonMaskFromId(vr::k_EButton_A)) != 0;
+        o.btnUpper   = (P & vr::ButtonMaskFromId(vr::k_EButton_ApplicationMenu)) != 0;
+        o.stickClick = (P & vr::ButtonMaskFromId(vr::k_EButton_SteamVR_Touchpad)) != 0;
+
+        // Some runtimes report the trigger and grip only as buttons.
+        if ((P & vr::ButtonMaskFromId(vr::k_EButton_SteamVR_Trigger)) && o.trigger < 0.5f) {
+            o.trigger = 1.0f;
+        }
+        if ((P & vr::ButtonMaskFromId(vr::k_EButton_Grip)) && o.grip < 0.5f) {
+            o.grip = 1.0f;
+        }
+    }
+}
+
 void VRSystem::Submit(GLuint tex, uint32_t, uint32_t) {
     if (!m_compositor || !tex) return;
 

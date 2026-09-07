@@ -55,6 +55,25 @@ public:
     //           ^align with the optics   ^converge to a comfortable distance
     float HudNdcShiftX(Eye eye, float depthMetres) const;
 
+    // --- controllers ---------------------------------------------------------
+    // Read through OpenVR's LEGACY input API. We ship no action manifest, so
+    // SteamVR puts us in legacy mode and this is what it fills in. The new Input
+    // API would need a manifest plus per-controller binding files, which is a
+    // lot of machinery for "act like an Xbox pad".
+    struct HandState {
+        bool     valid      = false;
+        float    stickX     = 0.0f;   // -1..1
+        float    stickY     = 0.0f;
+        float    trigger    = 0.0f;   //  0..1
+        float    grip       = 0.0f;   //  0..1
+        bool     btnLower   = false;  // A on the right hand, X on the left
+        bool     btnUpper   = false;  // B on the right hand, Y on the left
+        bool     stickClick = false;
+        uint64_t rawPressed = 0;      // for the ini-mapping log
+    };
+    // [0] = left hand, [1] = right hand.
+    void ReadControllers(HandState out[2]) const;
+
     bool poseValid() const { return m_poseValid; }
 
 private:

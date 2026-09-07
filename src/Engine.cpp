@@ -76,4 +76,10 @@ bool IsWorldPass() {
     return VidState().proj == &Proj()[1];
 }
 
+
+void* XInputGetStateSlot() {
+    if (!g_base) return nullptr;
+    return reinterpret_cast<void*>(Var(drva::XInputGetState));
+}
+
 } // namespace tr

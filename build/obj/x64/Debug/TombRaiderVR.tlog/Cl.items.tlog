@@ -6,5 +6,6 @@ C:\dev\TombRaider456VR\src\Hooks.cpp;C:\dev\TombRaider456VR\build\obj\x64\Debug\
 C:\dev\TombRaider456VR\src\InlineHook.cpp;C:\dev\TombRaider456VR\build\obj\x64\Debug\InlineHook.obj
 C:\dev\TombRaider456VR\src\Log.cpp;C:\dev\TombRaider456VR\build\obj\x64\Debug\Log.obj
 C:\dev\TombRaider456VR\src\StereoRenderer.cpp;C:\dev\TombRaider456VR\build\obj\x64\Debug\StereoRenderer.obj
+C:\dev\TombRaider456VR\src\Gamepad.cpp;C:\dev\TombRaider456VR\build\obj\x64\Debug\Gamepad.obj
 C:\dev\TombRaider456VR\src\VideoPanel.cpp;C:\dev\TombRaider456VR\build\obj\x64\Debug\VideoPanel.obj
 C:\dev\TombRaider456VR\src\VRSystem.cpp;C:\dev\TombRaider456VR\build\obj\x64\Debug\VRSystem.obj

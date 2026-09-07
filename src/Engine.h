@@ -64,7 +64,33 @@ constexpr uint32_t vid_setPerspOffset = 0x0000B8D0;
 // void ogl_setPerspAngles(float tanX, float tanY, float zNear, float zFar)
 // Builds a symmetric frustum into mProj[1]. Note e11 = -1/tanY: the engine
 // projection is Y-flipped relative to a textbook GL frustum.
+// NOT hooked, and never called on this build: the game reaches the perspective
+// through ogl_setPersp instead. Verified by hooking it and logging -- zero calls.
 constexpr uint32_t ogl_setPerspAngles = 0x00012840;
+
+// void ogl_getPerspAngles(float tanX, float tanY, float zNear, float zFar,
+//                         mat4* out)
+// Misnamed by the PDB: it does not GET anything, it BUILDS a projection matrix
+// into the caller's own buffer. init_ogl installs it in the app vtable, so the
+// game DLL calls into the engine to construct a projection for its own use --
+// deriving cull planes being the plausible reason. NOT hooked, and never called
+// either; verified the same way.
+constexpr uint32_t ogl_getPerspAngles = 0x000127D0;
+
+// void ogl_setPersp(float tanY, int width, int height, float zNear, float zFar)
+// e11 = -1/tanY, e00 = height / (width * tanY). THIS is what the game calls.
+//
+// Widening it does NOT affect culling. Measured: hooking this and scaling tanY
+// by 2 widened the projection from 64.4 to 103.1 degrees and produced no extra
+// geometry at all, so the DLL builds its cull planes independently of the
+// engine's projection. Fixing the geometry that goes missing when you look away
+// from the game camera means finding the frustum/portal test inside
+// tomb4/5/6.dll. Do not re-run the widening experiment; it is settled.
+constexpr uint32_t ogl_setPersp       = 0x000128E0;
+
+// void vid_setPerspMatrix(const float m[16])
+// The game hands over a complete projection. Not called on this build.
+constexpr uint32_t vid_setPerspMatrix = 0x0000B920;
 
 // void vid_setViewMatrix(int* m)  -- 3x4 fixed-point (16384 = 1.0) row-major
 constexpr uint32_t vid_setViewMatrix  = 0x0000B960;
@@ -88,6 +114,12 @@ constexpr uint32_t init_ogl           = 0x00015BA0;
 // Data RVAs
 // ---------------------------------------------------------------------------
 namespace drva {
+
+// _XInputGetState / _XInputSetState: function-pointer globals WinMain fills in
+// from GetProcAddress. There is no XInput import to hook -- overwriting these is
+// how we present the Touch controllers to the game as an Xbox pad.
+constexpr uint32_t XInputGetState  = 0x00692858;
+constexpr uint32_t XInputSetState  = 0x006928B0;
 
 constexpr uint32_t vid_state       = 0x0E51C900;  // RenderState, 240 bytes
 constexpr uint32_t vid_state_prev  = 0x0E51CA00;  // shadow copy, redundancy filter
@@ -224,6 +256,10 @@ inline void* Var(uint32_t r) { return reinterpret_cast<void*>(Base() + r); }
 
 RenderState&     VidState();
 RenderState&     VidStatePrev();
+
+// Address of the engine's _XInputGetState function-pointer global, or nullptr
+// if the module is not bound yet.
+void*            XInputGetStateSlot();
 mat4*            Proj();          // mat4[2]
 mat4&            ViewPacked();
 Shader*          Shaders();

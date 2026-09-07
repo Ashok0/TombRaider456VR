@@ -34,12 +34,25 @@ public:
     // instruction boundary -- both are verified facts from the disassembly, not
     // guesses. All stolen instructions must be position-independent (no
     // RIP-relative operands), which is checked by eye when picking the count.
+    // ripDisp32Offsets lists byte offsets, within the stolen bytes, of RIP-
+    // relative disp32 fields that must be fixed up when the bytes are copied to
+    // the trampoline.
+    //
+    // This is NOT optional where it applies. A raw copy leaves the displacement
+    // pointing relative to the trampoline instead of the original site, and the
+    // trampoline can sit up to 2 GB away, so the instruction reads or writes an
+    // arbitrary address. Several of the engine's prologues start with exactly
+    // that kind of instruction, e.g.
+    //     83 0D <disp32> 01     OR dword ptr [rip+disp32], 1
+    // which would corrupt memory rather than merely misbehave.
     bool Install(void* target,
                  void* detour,
                  size_t stolen,
                  const uint8_t* expectedBytes,
                  size_t expectedLen,
-                 const char* name);
+                 const char* name,
+                 const int* ripDisp32Offsets = nullptr,
+                 size_t ripCount = 0);
 
     void Remove();
 

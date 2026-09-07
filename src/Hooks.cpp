@@ -36,6 +36,7 @@
 #include "InlineHook.h"
 #include "StereoRenderer.h"
 #include "VideoPanel.h"
+#include "Gamepad.h"
 #include "VRSystem.h"
 
 #include <cstring>
@@ -1019,6 +1020,10 @@ void __cdecl Detour_ogl_present() {
     PollTraceKey();
     PollTuningKeys();
 
+    // Re-assert the XInput pointer every frame: cheap, and it self-heals if the
+    // game re-resolves XInput or if we got here before WinMain had.
+    GamepadUpdate();
+
     // Periodic health report, in deltas. A one-shot report at frame 300 only
     // ever sampled the menus, where almost everything legitimately is 2D -- it
     // said "2 injections out of 725 draws" and looked like a bug when it was
@@ -1171,6 +1176,8 @@ bool InstallHooks() {
         const uint8_t*    expect;
         size_t            expectLen;
         const char*       name;
+        const int*        rip;       // RIP-relative disp32 offsets, or nullptr
+        size_t            ripCount;
     };
 
     const Target targets[] = {
@@ -1188,7 +1195,8 @@ bool InstallHooks() {
 
     bool allOk = true;
     for (const Target& t : targets) {
-        if (!t.hook->Install(Fn(t.rva), t.detour, t.stolen, t.expect, t.expectLen, t.name))
+        if (!t.hook->Install(Fn(t.rva), t.detour, t.stolen, t.expect, t.expectLen,
+                             t.name, t.rip, t.ripCount))
             allOk = false;
     }
 
@@ -1203,6 +1211,8 @@ bool InstallHooks() {
 }
 
 void RemoveHooks() {
+    GamepadShutdown();
+
     // Reverse order of installation.
     g_hPresent.Remove();
     g_hDrawVB.Remove();

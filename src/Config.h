@@ -184,6 +184,7 @@ struct Config {
     // comes out upside down.
     bool  videoFlipV       = false;
 
+
     // Negate Y when lifting the 2D layer onto the panel. Leave at 1.
     //
     // The engine's ortho matrix already flips Y, because TR's 2D space is
@@ -207,6 +208,31 @@ struct Config {
     float farClip          = 0.0f;
 
     bool  verboseFirstFrame = true;
+
+    // Present the Oculus Touch controllers to the game as an Xbox pad.
+    //
+    // The game resolves XInput through GetProcAddress into a function-pointer
+    // global, so there is no import to hook and no virtual-pad driver needed --
+    // we overwrite that pointer. inputUpdate() polls it every frame and switches
+    // app.input_type to INPUT_TYPE_XB on the first input, so the game adopts the
+    // Xbox control scheme and prompts by itself. A real pad, if plugged in, is
+    // merged rather than replaced.
+    bool  gamepadEnabled   = true;
+
+    // Log the raw OpenVR legacy button masks whenever they change. Touch's
+    // button ids differ between runtimes, so if something lands in the wrong
+    // place this says which mask it actually set.
+    bool  gamepadLogButtons = false;
+
+    // Which XInput button the left hand's lower face button sends.
+    //
+    // true  = BACK  -- the System menu. This is the default.
+    // false = START -- the pause/inventory menu.
+    //
+    // inputUpdate() decodes BACK to internal key 0x62 and START to 0x63; which
+    // one a given game screen treats as "System" lives in the game DLLs, so this
+    // stays switchable.
+    bool  gamepadMenuUsesBack = true;
 
     // Frame-graph tracer. Logs every render-target transition and how many
     // world-space vs 2D draws happen against each, for TraceFrames frames

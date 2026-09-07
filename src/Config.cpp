@@ -137,6 +137,9 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.videoSizeDegrees    = GetFloat(L"VideoSizeDegrees",   g_cfg.videoSizeDegrees,   ini);
     g_cfg.videoOffscreen      = GetBool (L"VideoOffscreen",     g_cfg.videoOffscreen,     ini);
     g_cfg.videoFlipV          = GetBool (L"VideoFlipV",         g_cfg.videoFlipV,         ini);
+    g_cfg.gamepadEnabled      = GetBool (L"GamepadEnabled",     g_cfg.gamepadEnabled,     ini);
+    g_cfg.gamepadLogButtons   = GetBool (L"GamepadLogButtons",  g_cfg.gamepadLogButtons,  ini);
+    g_cfg.gamepadMenuUsesBack = GetBool (L"GamepadMenuUsesBack", g_cfg.gamepadMenuUsesBack, ini);
     g_cfg.perEyeProjection    = GetIntAuto(L"PerEyeProjection", g_cfg.perEyeProjection,   ini);
     g_cfg.flatHud             = GetBool (L"FlatHud",            g_cfg.flatHud,            ini);
     g_cfg.duplicateDraws      = GetBool (L"DuplicateDraws",     g_cfg.duplicateDraws,     ini);

@@ -3,6 +3,7 @@
 
 #include <windows.h>
 #include <cstring>
+#include <cstdint>
 
 namespace hook {
 namespace {
@@ -66,7 +67,9 @@ bool InlineHook::Install(void* target,
                          size_t stolen,
                          const uint8_t* expectedBytes,
                          size_t expectedLen,
-                         const char* name) {
+                         const char* name,
+                         const int* ripDisp32Offsets,
+                         size_t ripCount) {
     m_name = name;
 
     if (m_installed) {
@@ -116,6 +119,37 @@ bool InlineHook::Install(void* target,
 
     std::memcpy(m_saved, target, stolen);
     std::memcpy(tramp, target, stolen);
+
+    // Fix up RIP-relative displacements in the copied bytes.
+    //
+    // A RIP-relative operand resolves to (end of instruction) + disp32. The
+    // instruction now lives at `tramp` instead of `target`, so to keep the same
+    // absolute address the displacement shifts by exactly (target - tramp) --
+    // the offset of the field within the instruction cancels out.
+    const int64_t shift = static_cast<uint8_t*>(target) - tramp;
+    for (size_t i = 0; i < ripCount; ++i) {
+        const int off = ripDisp32Offsets[i];
+        if (off < 0 || static_cast<size_t>(off) + 4 > stolen) {
+            LogF("hook[%s]: rip fixup offset %d outside stolen bytes (%zu)",
+                 name, off, stolen);
+            VirtualFree(block, 0, MEM_RELEASE);
+            return false;
+        }
+        int32_t disp = 0;
+        std::memcpy(&disp, tramp + off, sizeof(disp));
+        const int64_t fixed = static_cast<int64_t>(disp) + shift;
+        if (fixed > INT32_MAX || fixed < INT32_MIN) {
+            LogF("hook[%s]: rip fixup at +%d overflows int32 (%lld)",
+                 name, off, static_cast<long long>(fixed));
+            VirtualFree(block, 0, MEM_RELEASE);
+            return false;
+        }
+        const int32_t out = static_cast<int32_t>(fixed);
+        std::memcpy(tramp + off, &out, sizeof(out));
+        LogF("hook[%s]: relocated rip disp32 at +%d (%d -> %d)",
+             name, off, disp, out);
+    }
+
     WriteAbsJmp(tramp + stolen, static_cast<uint8_t*>(target) + stolen);
 
     // E9 rel32 from target to bridge, NOP-padded out to `stolen`.
