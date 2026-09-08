@@ -14,6 +14,12 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * Dpad input support
 * Decoupled pitch
 
+## Installation
+[WIP]
+
+## Controls
+[WIP]
+
 ## Development Notes
 
 **A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a,
