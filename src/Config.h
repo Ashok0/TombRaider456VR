@@ -409,6 +409,20 @@ struct Config {
     // to 0 if you would rather walk-and-shoot left pitch alone.
     bool  decoupledPitchChord = true;
 
+    // Hand stick pitch back automatically while Lara is in water.
+    //
+    // Swimming is the one place the decoupled stick is not a comfort win but a
+    // straight loss: TR steers the swim with the LOOK axis, so suppressing
+    // pitch removes the ability to dive or surface at all -- and the head
+    // cannot stand in for it, because the head turns the VIEW while the stick
+    // turns LARA.
+    //
+    // Read from lara.water_status in the game DLL, so it follows Lara and not
+    // the camera. An earlier attempt used the camera room's water flag and
+    // failed exactly where it mattered: at the surface the camera sits in the
+    // AIR room above the water, so it reported dry through an entire swim.
+    bool  decoupledPitchWaterOff = true;
+
     // Which XInput button the left hand's lower face button sends.
     //
     // true  = BACK  -- the System menu. This is the default.

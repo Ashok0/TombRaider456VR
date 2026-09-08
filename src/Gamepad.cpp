@@ -1,5 +1,6 @@
 #include "Gamepad.h"
 #include "Engine.h"
+#include "RoomCull.h"
 #include "Config.h"
 #include "VRSystem.h"
 #include "Log.h"
@@ -54,6 +55,7 @@ bool               g_installed = false;
 uint32_t           g_packet    = 0;
 uint64_t           g_lastRaw[2] = { 0, 0 };
 bool               g_loggedOnce = false;
+int                g_lastWater  = -2;
 
 int16_t Axis(float v) {
     if (v >  1.0f) v =  1.0f;
@@ -288,7 +290,31 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
     //
     // Shoot and Walk are left intact, so holding it costs none of the actions
     // the two buttons already do.
-    if (Cfg().decoupledPitch && !chord) mine.Gamepad.sThumbRY = 0;
+    // Swimming is the exception, and it is not a comfort call. TR steers the
+    // swim with the LOOK axis, so suppressing pitch removes the ability to dive
+    // or surface at all -- and the head cannot stand in for it, because the head
+    // turns the VIEW while the stick turns LARA.
+    //
+    // lara.water_status is Lara's OWN state, so it goes true the moment she is
+    // in the water and false the moment she is out, whatever the camera is
+    // doing. An earlier attempt read the camera room's water flag and failed
+    // exactly where it mattered: during a surface swim the camera sits in the
+    // AIR room above the water and reported dry for the entire swim.
+    //
+    // Anything but ABOVE_WATER counts -- SURFACE and WADE included, since both
+    // steer with the look axis too.
+    const int  water    = Cfg().decoupledPitchWaterOff ? LaraWaterStatus() : -1;
+    const bool swimming = (water > 0);
+    if (water != g_lastWater) {
+        g_lastWater = water;
+        static const char* kNames[5] = { "above water", "UNDERWATER",
+                                         "SURFACE", "flycheat", "WADE" };
+        LogF("pad: water_status=%d (%s) -- stick pitch %s", water,
+             (water >= 0 && water <= 4) ? kNames[water] : "unknown",
+             swimming ? "RESTORED for swimming" : "decoupled");
+    }
+
+    if (Cfg().decoupledPitch && !chord && !swimming) mine.Gamepad.sThumbRY = 0;
 
     *state = mine;
     return ERROR_SUCCESS;

@@ -33,6 +33,19 @@ namespace tr {
 // per frame. Does nothing unless the config asks for it and TR4 is running.
 void RoomCullUpdate();
 
+// Lara's own water state, or -1 when the address is not known for the running
+// game/build.
+//
+//   0 ABOVE_WATER   1 UNDERWATER   2 SURFACE   3 FLYCHEAT   4 WADE
+//
+// Read straight from the game DLL's global, so it is Lara's state rather than
+// the camera's -- which is the whole point. The camera trails behind and above
+// her, and sits in the AIR room during a surface swim, so anything derived from
+// the camera's room reports dry exactly when it matters most.
+//
+// Independent of the culling hook: works with PortalHops=0.
+int LaraWaterStatus();
+
 // Remove the hook.
 void RoomCullShutdown();
 

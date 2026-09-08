@@ -98,6 +98,44 @@ struct GameAddrs {
     uint32_t screenRight;
     uint32_t screenBottom;
     uint32_t camX, camY, camZ;
+
+    // lara.water_status, or 0 when not yet found for this build.
+    //
+    // ABOVE_WATER 0, UNDERWATER 1, SURFACE 2, FLYCHEAT 3, WADE 4 -- the classic
+    // LARA_WATER_STATUS enum. This is the right signal precisely because it is
+    // LARA's state and not the camera's: it is true the moment she is swimming
+    // and false the moment she is not, with no dependence on which room the
+    // camera happens to be trailing in.
+    //
+    // FOUND BY MEMORY DIFF, after disassembly guessed wrong twice. The whole
+    // writable data section was snapshotted on dry land, diffed while swimming
+    // for bytes that went 0 -> 1..4, and the 96 survivors read back in three
+    // states. Exactly one followed the enum:
+    //
+    //     address     surface  underwater  land
+    //     0x4EE74C       2          1        0     <- water_status
+    //     0x4EE720       4          4        0
+    //     0x623AE4       2          1        2
+    //     0x4B79B0       2          2        2
+    //
+    // Do NOT "correct" this to a nearby address from a classic struct layout.
+    // 0x4EE820 was exactly such a guess -- reached down a plausible-looking
+    // disassembly trail -- and it reads 0 forever. The 2/1/0 sequence above is
+    // the only evidence here that means anything.
+    //
+    // TR4's was PORTED rather than re-diffed, by the method this file already
+    // uses across builds. In TR5 the field is written ten times, as a WORD, by
+    // the one function that also tests room+0x6C bit 0. Exactly one TR4
+    // function matches that shape -- FUN_180060fc0, ten word writes to
+    // 0x1804F2E4C -- and that global carries 97 xrefs (TR5's has 106) whose
+    // readers compare it against 0, 1 and 4. Structure, arity and use all
+    // agree, so it is the same field.
+    //
+    // The 2025-09-10 rows are the documented per-DLL shifts applied to those
+    // two (-0xC0 in tomb5, +0xF40 in tomb4) and are UNVERIFIED. All of these
+    // are reads, so a wrong address misbehaves rather than corrupts, and the
+    // pad log prints whatever value it finds.
+    uint32_t laraWaterStatus;
 };
 
 // TR4: mov rax,rsp + push r12.   TR5: mov [rsp+10h],rbx.
@@ -118,21 +156,21 @@ const GameAddrs kGames[] = {
     { 0, 0x696B4999, L"tomb4.dll", "TR4!DrawRoomList",
       0x000C5160, kPrologueTR4, sizeof(kPrologueTR4),
       0x0063DC60, 0x0063DDFC, 200, 0x00660810, 0x00663FC8,
-      0x004947D0, 0x004947CC, 0x0049484C, 0x0049485C, 0x0049486C },
+      0x004947D0, 0x004947CC, 0x0049484C, 0x0049485C, 0x0049486C, 0x004F2E4C },
     { 0, 0x68C12FDA, L"tomb4.dll", "TR4!DrawRoomList",
       0x000C5DC0, kPrologueTR4, sizeof(kPrologueTR4),
       0x0063EBA0, 0x0063ED3C, 200, 0x00661750, 0x00664F08,
-      0x00495710, 0x0049570C, 0x0049578C, 0x0049579C, 0x004957AC },
+      0x00495710, 0x0049570C, 0x0049578C, 0x0049579C, 0x004957AC, 0x004F3D8C },
 
     // --- TR5 ---------------------------------------------------------------
     { 1, 0x696B499C, L"tomb5.dll", "TR5!DrawRoomList",
       0x000B9CA0, kPrologueTR5, sizeof(kPrologueTR5),
       0x0063D6C0, 0x0063D860, 200, 0x0065B2F0, 0x0065EC28,
-      0x004EF8CC, 0x004EF8C8, 0x004EF94C, 0x004EF95C, 0x004EF96C },
+      0x004EF8CC, 0x004EF8C8, 0x004EF94C, 0x004EF95C, 0x004EF96C, 0x004EE74C },
     { 1, 0x68C12FE9, L"tomb5.dll", "TR5!DrawRoomList",
       0x000BA040, kPrologueTR5, sizeof(kPrologueTR5),
       0x0063D600, 0x0063D7A0, 200, 0x0065B230, 0x0065EB68,
-      0x004EF80C, 0x004EF808, 0x004EF88C, 0x004EF89C, 0x004EF8AC },
+      0x004EF80C, 0x004EF808, 0x004EF88C, 0x004EF89C, 0x004EF8AC, 0x004EE68C },
 };
 
 // Whichever row matches the DLL actually loaded. Null until the hook installs.
@@ -726,6 +764,51 @@ void RoomCullUpdate() {
                  Cfg().portalHeadTest ? "on" : "off", Cfg().roomDumpKey);
         }
     }
+}
+
+int LaraWaterStatus() {
+    // Resolved independently of the culling hook: this must work with
+    // PortalHops=0, and it is a plain read of a global rather than a patch, so
+    // there is nothing to install.
+    //
+    // Selected by CurrentGame(), NOT by "whichever DLL is loaded". Both
+    // tomb4.dll and tomb5.dll are mapped for the whole session -- the log shows
+    // the room hook installing in both -- so taking the first module that
+    // resolves would read TR4's global while TR5 is the game being played, and
+    // report a water state belonging to nobody.
+    //
+    // Cached per game, since one process can run either.
+    static const uint8_t* s_addr[2]  = { nullptr, nullptr };
+    static bool           s_looked[2] = { false, false };
+
+    const int g = CurrentGame();          // 0 = TR4, 1 = TR5, 2 = TR6
+    if (g != 0 && g != 1) return -1;      // TR6 has no entry
+
+    if (!s_looked[g]) {
+        for (const GameAddrs& e : kGames) {
+            if (e.game != g || e.laraWaterStatus == 0) continue;
+            HMODULE h = GetModuleHandleW(e.module);
+            if (!h) continue;
+            uint8_t* base = reinterpret_cast<uint8_t*>(h);
+            if (ModuleStamp(base) != e.timestamp) continue;
+            s_addr[g] = base + e.laraWaterStatus;
+            LogF("lara: water_status at %S+0x%06X (build 0x%08X)",
+                 e.module, e.laraWaterStatus, e.timestamp);
+            break;
+        }
+        // Only give up once this game's DLL is actually loaded, or an early
+        // call would latch "unknown" for the whole session.
+        if (s_addr[g] || GetModuleHandleW(g == 0 ? L"tomb4.dll" : L"tomb5.dll")) {
+            s_looked[g] = true;
+            if (!s_addr[g]) {
+                LogF("lara: water_status address not known for TR%d on this "
+                     "build -- the swimming exception is inactive", g + 4);
+            }
+        }
+    }
+
+    if (!s_addr[g]) return -1;
+    return (int)*reinterpret_cast<const uint16_t*>(s_addr[g]);
 }
 
 void RoomCullShutdown() {

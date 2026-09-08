@@ -1474,6 +1474,22 @@ TR5) before patching. A mismatch is logged once and leaves stock culling in
 place rather than retrying every frame. TR4 and TR5 only; TR6 has no entry in
 the table.
 
+**The same per-build table carries more than culling.** Each row also holds
+`laraWaterStatus`, the address of Lara's own water state in that DLL, which
+[Phase 10](#phase-10-decoupled-pitch) uses to restore stick pitch while
+swimming. Two consequences follow from it living here:
+
+- A build whose timestamp is not in the table loses the swimming exception along
+  with the culling fix, and says so in the log rather than reading a wrong
+  address.
+- Both `tomb4.dll` and `tomb5.dll` stay mapped for the whole session, so any
+  lookup in this table must select on `CurrentGame()` rather than on whichever
+  module happens to resolve first — see
+  [Both game DLLs stay loaded](#both-game-dlls-stay-loaded).
+
+The `ROOM_INFO` water bit at `0x6C` documented above was also found during that
+work, not this one.
+
 ### Phase 7 settings
 
 | Setting | Default | What it does |
@@ -1765,12 +1781,144 @@ The binding line in the log states which way the pad is configured:
 pad: move=Lstick look=Rstick(yaw only; hold RT+RB for pitch) jump=A(R lower) ...
 ```
 
+### Swimming is the exception, and it is not a comfort call
+
+Underwater, TR steers the swim with the **look** axis. Suppressing pitch does not
+merely make aiming awkward — it removes the ability to dive or surface at all,
+and the head cannot substitute, because **the head turns the view while the stick
+turns Lara**. So the suppression is lifted automatically whenever Lara is in
+water (`DecoupledPitchWaterOff`, on by default).
+
+Finding out *when she is in water* took four attempts, and the three failures are
+each instructive.
+
+#### Attempt 1: the camera room's water flag — structurally wrong
+
+Every room carries an underwater bit, and `RoomCull` already walks the room array
+every frame (see [Phase 7](#phase-7-culling-fix)), so this looked free. Two
+things had to be established.
+
+**The flag is not where the classic layout puts it.** `flipped_room` is confirmed
+at `0x68`, and classic TR4/TR5 put `unsigned short flags` immediately after it at
+`0x6A` with bit 0 = `ROOM_UNDERWATER`. Here `0x6A` reads `0x0000` in every room.
+Dumping `0x60..0x6F` on every room change found the real one two bytes further
+along:
+
+```
+rooms  2, 15, 30 -> 0x40      rooms 13, 7 -> 0x20
+room   6         -> 0x28      room  0     -> 0x60
+room  32         -> 0x41      <- the water room, the only one with bit 0 set
+```
+
+So it is a byte at **`0x6C`**, bit 0 — later confirmed independently in the
+disassembly, where `TEST byte ptr [room + 0x6C], 0x1` appears throughout both
+game DLLs.
+
+**But the question was wrong.** It worked underwater and failed at the surface,
+and the log said exactly why:
+
+```
+camera room 30  flags@0x6C=0x40  water=no     <- during a surface swim
+     water room 32  flags@0x6C=0x41           <- Lara, directly below
+```
+
+The camera trails behind and **above** Lara. Submerged, it is inside the water
+room and the flag answers correctly; at the surface it sits in the **air** room
+while she swims, and reports dry. No offset fix helps — the camera is simply not
+where Lara is.
+
+#### Attempt 2: patching the surface case geometrically — still wrong
+
+Asking "is the camera standing over a water room, close above it?" — XZ footprint
+containment plus a height limit, to exclude poolside walks and bridges. It did
+not work either, and it was chasing a symptom: the camera's position is not
+Lara's state, however carefully it is interrogated.
+
+#### Attempt 3: `water_status` by disassembly — confidently wrong
+
+The right signal is Lara's own `water_status` (`ABOVE_WATER 0, UNDERWATER 1,
+SURFACE 2, FLYCHEAT 3, WADE 4`). Hunting it statically produced a plausible
+trail: from the rooms-array global, the functions testing `room+0x6C` bit 0, then
+writes of small immediates to a global, landing on a struct at `0x1804EE81x`
+whose readers appeared to compare against 0, 1, 2 and 4.
+
+**It read `0` forever.** The comparison scan looked a few instructions ahead and
+was matching unrelated compares, and the field is written from *registers*, not
+immediates — so the search could not have found it. A byte-window dump of that
+region showed pointers and zeros: not the Lara struct at all.
+
+#### What worked: a memory diff
+
+Stop reasoning about it and measure it. Snapshot the whole writable data section
+on dry land, diff while swimming for bytes that went `0 -> 1..4`, then read the
+survivors back **in three states**:
+
+| address | surface | underwater | land | |
+|---|---|---|---|---|
+| **`0x4EE74C`** | **2** | **1** | **0** | matches the enum exactly |
+| `0x4EE720` | 4 | 4 | 0 | cannot tell surface from submerged |
+| `0x623AE4` | 2 | 1 | 2 | never returns to 0 |
+| `0x4B79B0` | 2 | 2 | 2 | constant |
+| `0x1B6CA7` | 2 | 0 | 0 | wrong underwater |
+
+One address out of 96 followed `SURFACE 2 → UNDERWATER 1 → ABOVE_WATER 0`.
+
+**The third state is what made it conclusive.** With only surface and underwater
+readings, `0x623AE4` looks just as good; it is the return to `0` on dry land that
+eliminates it. Two data points would have shipped the wrong address for the third
+time.
+
+It also sits at `0x4EE74C` — *below* the fixed window dumped in attempt 3, which
+is why that pass found nothing.
+
+#### Porting to TR4
+
+TR4's was derived rather than re-diffed, using TR5 as a template. In TR5 the
+field has a distinctive signature: written **ten times, as a word**, by the one
+function that also tests `room+0x6C` bit 0. Exactly one TR4 function matches —
+ten word writes to `0x1804F2E4C` — and that global independently checks out with
+**97 xrefs** (TR5's has 106) whose readers compare against 0, 1 and 4.
+
+This is the same porting method the
+[per-build address table](#phase-7-culling-fix) already uses across DLL builds,
+and unlike attempt 3 it had a confirmed counterpart to match against — the
+`laraWaterStatus` column lives in that same table.
+
+#### Both game DLLs stay loaded
+
+A bug worth recording, because it only appears once a second game has an address.
+`tomb4.dll` and `tomb5.dll` are **both** mapped for the whole session — the room
+hook installs in both. Resolving "the first module that has an address" would
+therefore read **TR4's** global while TR5 is being played, reporting a water
+state belonging to nobody. The lookup selects on `CurrentGame()` and caches per
+game.
+
+#### What is verified, and what is not
+
+| | Status |
+|---|---|
+| TR5, build `0x696B499C` | **Measured** by diff, confirmed in play |
+| TR4, build `0x696B4999` | **Derived** by signature match from TR5 |
+| Both 2025-09-10 (HD pack) builds | **Unverified** — the documented `−0xC0` / `+0xF40` shifts |
+
+All of these are reads, so a wrong address misbehaves rather than corrupts, and
+the pad log prints the value it finds:
+
+```
+lara: water_status at tomb5.dll+0x4EE74C (build 0x696B499C)
+pad: water_status=2 (SURFACE) -- stick pitch RESTORED for swimming
+pad: water_status=0 (above water) -- stick pitch decoupled
+```
+
+`WADE` counts as water too, since wading also steers with the look axis.
+
 ### Phase 10 settings
 
 | Setting | Default | What it does |
 |---|---|---|
 | `DecoupledPitch` | `1` | Drop the right stick's vertical axis so only the headset pitches the view. `0` restores the stock two-axis stick |
 | `DecoupledPitchChord` | `1` | Hold RT + RB to get stick pitch back while held. Never takes pitch away; does nothing when `DecoupledPitch=0` |
+| `DecoupledPitchWaterOff` | `1` | Restore stick pitch automatically while Lara is in water, read from her own `water_status`. `WADE` counts |
 
 ---
 
