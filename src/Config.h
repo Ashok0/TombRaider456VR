@@ -30,6 +30,29 @@ struct Config {
     // without becoming the VR scene application.
     bool  monoTracking     = false;
 
+    // --- ceiling clearance ---------------------------------------------------
+    //
+    // Stop the tracked head rising through the ceiling in low tunnels and
+    // crawlspaces. The game camera is already near the ceiling there, and our
+    // positional offset pushes the eye straight through it.
+    //
+    // This CLAMPS, it never moves you: the head's height is capped so the eye
+    // stays ceilingMarginUnits below the room's ceiling, and everything below
+    // that cap behaves exactly as before. Nothing is added to your motion,
+    // which is the whole reason it is a clamp rather than a camera that drops
+    // to torso height on its own -- unrequested vertical motion is a comfort
+    // problem, and a clamp can only ever subtract.
+    //
+    // Headroom comes from the camera room's bounding box, so it is exact in a
+    // uniformly low room and over-generous in a low pocket off a tall hall,
+    // where the clamp simply will not engage.
+    bool  ceilingClearance    = true;
+
+    // How close the eye may get to the ceiling, in world units. 128 is about
+    // 0.30 m at the default scale. Raise it if you still clip, lower it if the
+    // cap feels like it arrives too early.
+    float ceilingMarginUnits  = 128.0f;
+
     // Rotation-only head tracking. The safest possible first test: the camera
     // can pivot but can never be displaced into geometry, so a wrong world
     // scale cannot put you inside a wall. Turn positional on once looking

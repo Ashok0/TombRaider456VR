@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "Log.h"
 #include "GL.h"
+#include "RoomCull.h"
 
 #include <cstdio>
 #include <cmath>
@@ -223,8 +224,38 @@ void VRSystem::BeginFrame() {
     const bool wasValid = m_poseValid;
     m_poseValid = hmd.bPoseIsValid && hmd.bDeviceIsConnected;
     if (m_poseValid) {
+        vr::HmdMatrix34_t pose = hmd.mDeviceToAbsoluteTracking;
+
+        // Ceiling clearance. Cap the head's HEIGHT before the pose is inverted,
+        // which is the only place it is still a plain position -- afterwards it
+        // is a view transform whose translation column is -R^T*p, and clamping
+        // that would move the eye sideways as well as down.
+        //
+        // Seated origin means pose Y is height above the seated zero, and the
+        // eye sits at the game camera when that is 0, so the camera rises by
+        // exactly poseY * unitsPerMetre. Cap that at the room's headroom less a
+        // margin. Nothing else is touched: ducking, leaning and every rotation
+        // pass through untouched, and below the cap this is a no-op.
+        float headroom = 0.0f;
+        if (Cfg().ceilingClearance && CameraHeadroom(headroom)) {
+            const float scale = LiveWorldUnitsPerMetre();
+            if (scale > 0.0f) {
+                float maxRise = (headroom - Cfg().ceilingMarginUnits) / scale;
+                if (maxRise < 0.0f) maxRise = 0.0f;   // already at the ceiling
+                if (pose.m[1][3] > maxRise) {
+                    pose.m[1][3] = maxRise;
+                    if (!m_loggedClamp) {
+                        m_loggedClamp = true;
+                        LogF("vr: ceiling clamp active -- headroom %.0f units, "
+                             "head capped at %.2f m above the seated zero",
+                             headroom, maxRise);
+                    }
+                }
+            }
+        }
+
         // mDeviceToAbsoluteTracking is head->tracking; we want tracking->head.
-        m_headFromTracking = InvertRigid(FromHmd(hmd.mDeviceToAbsoluteTracking));
+        m_headFromTracking = InvertRigid(FromHmd(pose));
     }
 
     if (wasValid != m_poseValid) {

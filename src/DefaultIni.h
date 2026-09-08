@@ -52,6 +52,34 @@ PositionalTracking=1
 ; before you have moved at all. Leave this at 1.
 SeatedOrigin=1
 
+; Stop the tracked head rising through the ceiling in low tunnels and
+; crawlspaces. 1 = on and the default; 0 = the stock uncapped head.
+;
+; The game camera already sits near the ceiling in those places, and the
+; positional offset pushes the eye straight through it.
+;
+; This CLAMPS, it never moves you. The head's height is capped so the eye stays
+; CeilingMarginUnits below the room's ceiling, and everything below that cap
+; behaves exactly as before -- ducking, leaning and every rotation pass through
+; untouched. That is deliberate: a camera that drops to torso height on its own
+; would be unrequested vertical motion, which is a comfort problem, and a clamp
+; can only ever subtract motion you would have had.
+;
+; The headroom comes from the camera room's BOUNDING BOX, so it is exact in a
+; uniformly low room -- which is where a head clips through in the first place
+; -- and over-generous in a low pocket off a tall hall, where the clamp simply
+; does not engage. Wrong in the safe direction: it can fail to clamp, but it can
+; never clamp somewhere roomy.
+;
+; Logs once the first time it bites:
+;   vr: ceiling clamp active -- headroom 892 units, head capped at 0.24 m ...
+CeilingClearance=1
+
+; How close the eye may get to the ceiling, in world units. 128 is about 0.30 m
+; at the default scale. Raise it if you still clip through, lower it if the cap
+; feels like it arrives too early.
+CeilingMarginUnits=128
+
 ; TR world units per metre -- the main scale control.
 ;
 ; RAISE IT if the world feels too big and depth feels flat. Those are the same

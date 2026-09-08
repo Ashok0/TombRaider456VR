@@ -46,6 +46,14 @@ void RoomCullUpdate();
 // Independent of the culling hook: works with PortalHops=0.
 int LaraWaterStatus();
 
+// World units from the game camera up to its room's ceiling, as of the last
+// frame the room renderer ran. False before that and in menus -- callers must
+// treat that as "unknown", never as "no headroom".
+//
+// Read from the room's bounding box, so it is exact in a uniformly low room
+// (tunnels, crawlspaces) and over-generous in one with a tall section.
+bool CameraHeadroom(float& units);
+
 // Remove the hook.
 void RoomCullShutdown();
 

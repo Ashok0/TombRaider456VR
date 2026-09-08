@@ -168,6 +168,8 @@ void LoadConfig(const wchar_t* ini) {
 
     g_cfg.positionalTracking  = GetBool (L"PositionalTracking", g_cfg.positionalTracking, ini);
     g_cfg.seatedOrigin        = GetBool (L"SeatedOrigin",       g_cfg.seatedOrigin,       ini);
+    g_cfg.ceilingClearance    = GetBool (L"CeilingClearance",   g_cfg.ceilingClearance,   ini);
+    g_cfg.ceilingMarginUnits  = GetFloat(L"CeilingMarginUnits", g_cfg.ceilingMarginUnits, ini);
     g_cfg.worldUnitsPerMetre  = GetFloat(L"WorldUnitsPerMetre", g_cfg.worldUnitsPerMetre, ini);
     g_cfg.ipdScale            = GetFloat(L"IpdScale",           g_cfg.ipdScale,           ini);
     g_cfg.scaleUpKey          = GetIntAuto(L"ScaleUpKey",       g_cfg.scaleUpKey,         ini);

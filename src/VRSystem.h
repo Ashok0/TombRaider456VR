@@ -76,6 +76,10 @@ public:
 
     bool poseValid() const { return m_poseValid; }
 
+    // One-shot log flag for the ceiling clamp, so it reports the first time it
+    // bites rather than every frame it holds.
+    bool m_loggedClamp = false;
+
 private:
     vr::IVRSystem*     m_system     = nullptr;
     vr::IVRCompositor* m_compositor = nullptr;

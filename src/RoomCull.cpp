@@ -178,6 +178,12 @@ const GameAddrs* g_addr[2] = { nullptr, nullptr };
 
 const GameAddrs& A(int g) { return *g_addr[g]; }
 
+// Distance in world units from the game camera up to the ceiling of the room it
+// stands in, republished every frame the room renderer runs. Not per game: only
+// one of TR4/TR5 renders at a time, and the reader wants the latest.
+float g_headroom      = 0.0f;
+bool  g_headroomValid = false;
+
 // The PE TimeDateStamp of a loaded module.
 uint32_t ModuleStamp(uint8_t* base) {
     auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
@@ -531,6 +537,27 @@ void ForceAllRooms(int g) {
         (float)*reinterpret_cast<int32_t*>(At(a.camZ)),
     };
 
+    // --- ceiling headroom, for the VR head clamp ----------------------------
+    //
+    // list[0] is the room the GAME CAMERA is in, and TR's Y is down-positive,
+    // so a room's YMin is its CEILING and the headroom is camY - YMin.
+    //
+    // This is the room's BOUNDING BOX -- the highest ceiling anywhere in the
+    // room. In a low tunnel or a crawlspace, which is where a head clips
+    // through in the first place, the room is uniformly low and the box is
+    // exact. In a low alcove off a tall hall it reports the hall, and the clamp
+    // simply does not engage. That is wrong in the safe direction: it can fail
+    // to clamp, but it can never clamp somewhere roomy.
+    if (before > 0) {
+        const int camRoom = (int)(uint16_t)list[0];
+        if (camRoom >= 0 && camRoom < numRooms) {
+            const uint8_t* rm = rooms + (size_t)camRoom * kRoomStride;
+            const int32_t ceilY = *reinterpret_cast<const int32_t*>(rm + kOffYMin);
+            g_headroom      = camPos[1] - (float)ceilY;
+            g_headroomValid = true;
+        }
+    }
+
     const int hops = Cfg().portalHops;
     if (hops > 0) {
         int waveStart = 0;
@@ -809,6 +836,12 @@ int LaraWaterStatus() {
 
     if (!s_addr[g]) return -1;
     return (int)*reinterpret_cast<const uint16_t*>(s_addr[g]);
+}
+
+bool CameraHeadroom(float& units) {
+    if (!g_headroomValid) return false;
+    units = g_headroom;
+    return true;
 }
 
 void RoomCullShutdown() {

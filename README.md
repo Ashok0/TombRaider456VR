@@ -20,6 +20,7 @@ branch.
 | **Phase 8** | **D-pad input** — hold R3 and the left stick becomes a D-pad | Working. On by default |
 | **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
 | **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only | Working. On by default |
+| **Phase 11** | **Ceiling clamp** — caps the tracked head so it cannot rise through low ceilings | Working. On by default |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -70,6 +71,10 @@ projection's shear terms, which Phase 2 was overwriting wholesale. See
 **Phase 10** is comfort: the headset already owns pitch, so the right stick is
 reduced to yaw and the conflicting second source of vertical rotation goes away.
 See [Phase 10: decoupled pitch](#phase-10-decoupled-pitch).
+
+**Phase 11** stops the tracked head rising through low ceilings in tunnels and
+crawlspaces, by capping its height rather than moving the camera. See
+[Phase 11: ceiling clamp](#phase-11-ceiling-clamp).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -1919,6 +1924,133 @@ pad: water_status=0 (above water) -- stick pitch decoupled
 | `DecoupledPitch` | `1` | Drop the right stick's vertical axis so only the headset pitches the view. `0` restores the stock two-axis stick |
 | `DecoupledPitchChord` | `1` | Hold RT + RB to get stick pitch back while held. Never takes pitch away; does nothing when `DecoupledPitch=0` |
 | `DecoupledPitchWaterOff` | `1` | Restore stick pitch automatically while Lara is in water, read from her own `water_status`. `WADE` counts |
+
+---
+
+## Phase 11: ceiling clamp
+
+In a low tunnel or a crawlspace the game camera already sits close to the
+ceiling. Add positional tracking on top and leaning or sitting up pushes the eye
+straight through it — you end up looking at the back faces of the level from
+inside the rock.
+
+Phase 11 caps how high the tracked head may rise.
+
+### It clamps; it does not move you
+
+The obvious fix is to drop the camera toward torso height when headroom is
+short. That is rejected deliberately.
+
+A clamp is **subtractive**: it can only ever remove motion you would have had,
+and it never introduces any. Lowering the camera is **additive** — the world
+slides under you without your asking, which is unrequested vertical motion, the
+same class of thing that makes stick pitch uncomfortable. In a headset that
+matters more than the tidier-looking result.
+
+So the head rises until it nearly touches, and then stops. Everything below the
+cap behaves exactly as before: ducking, leaning and every rotation pass through
+untouched, and the whole feature is a no-op until you actually run out of room.
+
+### Where the clamp is applied, and why it must be there
+
+In `VRSystem::BeginFrame`, on the **raw pose, before it is inverted**:
+
+```c
+vr::HmdMatrix34_t pose = hmd.mDeviceToAbsoluteTracking;
+...                                     // cap pose.m[1][3] here
+m_headFromTracking = InvertRigid(FromHmd(pose));
+```
+
+That is the only point at which the head is still a plain **position**. After
+`InvertRigid` it is a view transform whose translation column is `−Rᵀp`, so
+clamping the Y there would move the eye **sideways** as well as down — the
+rotation is mixed into every component.
+
+The arithmetic is then direct. With a seated origin, pose Y is height above the
+seated zero, and the eye sits exactly at the game camera when that is `0`, so the
+camera rises by `poseY × WorldUnitsPerMetre`. Cap that at the room's headroom
+less `CeilingMarginUnits` and the eye cannot pass the ceiling:
+
+```
+maxRise = (headroom − CeilingMarginUnits) / unitsPerMetre
+```
+
+Clamped to zero when it goes negative — that is the case where the camera is
+already at or above the ceiling, and the right answer is "do not rise at all"
+rather than a negative cap that would push you down.
+
+### Where headroom comes from
+
+`RoomCull` already reads the camera position and every room's bounding box each
+frame for the culling fix, so headroom costs nothing extra. `list[0]` is the room
+the game camera is in, and **TR's Y is down-positive**, which makes a room's
+`YMin` its *ceiling*:
+
+```
+headroom = camY − room.YMin
+```
+
+`CameraHeadroom()` publishes it, returning false before the first rendered frame
+and in menus. Callers must read that as **unknown**, never as "no headroom" —
+otherwise the clamp would pin the head to the floor on every menu screen.
+
+### The bounding-box limitation, and why it is acceptable
+
+Headroom is the room's **bounding box**, so it reports the highest ceiling
+anywhere in that room. Two cases:
+
+- **Uniformly low rooms** — tunnels, crawlspaces, ducts. The box is exact, and
+  this is precisely where a head clips through in the first place.
+- **A low alcove off a tall hall** — the box reports the hall, so the clamp
+  simply does not engage.
+
+That is **wrong in the safe direction**: it can fail to clamp, but it can never
+clamp somewhere roomy. A false clamp in an open room would feel like an
+invisible ceiling and be far worse than the artifact it prevents.
+
+Getting it exact would mean calling the engine's own `GetCeiling` for the sector
+under the camera, which costs a new per-build global in the
+[address table](#phase-7-culling-fix) for four builds — worth doing only if the
+box version turns out to miss real cases.
+
+### Shared plumbing
+
+Headroom rides on the same `RoomCull` per-frame room read that
+[Phase 10](#phase-10-decoupled-pitch)'s water detection uses, and resolves
+through the same per-build address table as
+[Phase 7](#phase-7-culling-fix). One consequence worth stating: on a game build
+whose timestamp is not in that table, the culling fix, the swimming exception
+*and* the ceiling clamp all go quiet together. They fail safe and say so in the
+log rather than reading a wrong address.
+
+It logs once, the first time it bites:
+
+```
+vr: ceiling clamp active -- headroom 892 units, head capped at 0.24 m above the seated zero
+```
+
+One-shot rather than per-frame, so a long crawl does not fill the log — which
+does mean it reports *that* it engaged, not how often.
+
+### The comfort cost, stated honestly
+
+Holding the view still while your body keeps rising is itself a mismatch: your
+inner ear says you moved and the image says you did not, and that reads as **the
+ceiling receding from you** rather than as your head stopping. It is a real
+effect and it is the reason an alternative exists — fading to black on
+penetration instead, which moves nothing and simply stops you seeing through the
+geometry.
+
+That alternative is not in this build. The clamp is what is here, and the
+trade-off is: no clipping through ceilings, at the price of a mild sense of the
+world backing away when you sit up in a vent.
+
+### Phase 11 settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `CeilingClearance` | `1` | Cap the tracked head's height so the eye stays below the room's ceiling. `0` restores the uncapped head |
+| `CeilingMarginUnits` | `128` | How close the eye may get to the ceiling, in world units — about 0.30 m at the default scale. Raise if you still clip through; lower if the cap arrives too early |
 
 ---
 
