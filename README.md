@@ -1,4 +1,26 @@
-# Tomb Raider IV-VI Remastered VR Mod
+## Tomb Raider IV-VI Remastered VR Mod
+VR mod for Tomb Raider IV-VI Remastered.  Tomb Raider IV: The Last Revelation and Tomb Raider V: Chronicles work in native stereo with 6DOF.  Tomb Raider VI: Angel of Darkness is not officially supported as it runs off an updated version of Core Engine and is considerably harder to mod.  AOD does work in VR but it only works with AER.  Performance is poor and there are lots of visual glitches.
+
+## AI Usage
+Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions.   
+
+## VR Mod Features
+* Native stereo (TR4/5 only)
+* Culling fixes for VR
+* Camera fixes for tight collision areas
+* UI fixes
+* FMV fixes
+* Gamepad and VR controller support
+* Dpad input support
+* Decoupled pitch
+
+## Installation
+[WIP]
+
+## Controls
+[WIP]
+
+## Development Notes
 
 **A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a,
 2026-01-17 build), driving an OpenVR runtime.
