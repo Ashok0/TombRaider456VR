@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 34059 bytes, 676 lines.
+// Source: TombRaiderVR.ini, 34807 bytes, 691 lines.
 #pragma once
 
 namespace tr {
@@ -645,6 +645,22 @@ CullObjects=1
 ; all with no clue as to why.
 CullDumpKey=0x77
 
+; Draw the HD sky at optical infinity. 1 = on and the default.
+;
+; DrawSkyHD already zeros the translation of the matrix it draws the dome
+; through, so the dome stays centred on the game camera -- that is "at
+; infinity" on a monitor. The stereo path then composes the per-eye
+; transform, whose translation is IPD plus any 6DOF head offset, and the dome
+; gets stereo disparity equal to its mesh radius: a painted sphere a few
+; metres away, sitting in front of distant geometry.
+;
+)INI"
+           R"INI(; On: those draws use the rotation of the eye transform only (looking around
+; still turns the sky; leaning and IPD do not) and the fragments are pushed
+; to the far plane so they never occlude the world. Off: stock finite-dome
+; stereo, for A/B.
+SkyAtInfinity=1
+
 ; Room indices to watch, comma or space separated. Empty = off.
 ;
 ; Any listed room the traversal appends is reported once per distinct route:
@@ -654,8 +670,7 @@ CullDumpKey=0x77
 ;
 ; This is the targeted form of the dump key. A room that only misbehaves for a
 ; moment is hard to catch with a hotkey, and "does the traversal ever reach 215,
-)INI"
-           R"INI(; and how" should not need good reflexes to answer. Silence means it never got
+; and how" should not need good reflexes to answer. Silence means it never got
 ; added, which is itself the answer.
 CullWatchRooms=
 

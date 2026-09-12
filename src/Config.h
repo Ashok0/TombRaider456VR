@@ -556,6 +556,21 @@ struct Config {
     // no block for exactly that reason.
     int   cullDumpKey           = 0x77;   // VK_F8
 
+    // Draw the HD sky at optical infinity. 1 = on and the default.
+    //
+    // DrawSkyHD already zeros the translation of the matrix it draws the dome
+    // through, so the dome stays centred on the game camera -- "at infinity"
+    // on a monitor. The stereo path then composes the per-eye transform, whose
+    // translation is IPD plus any 6DOF head offset, and the dome gets stereo
+    // disparity equal to its mesh radius: a painted sphere a few metres away,
+    // sitting in front of distant geometry.
+    //
+    // On: those draws use the rotation of the eye transform only (head look
+    // still turns the sky; leaning and IPD do not) and the fragments are
+    // pushed to the far plane so they never occlude the world. Off: stock
+    // finite-dome stereo, for A/B.
+    bool  skyAtInfinity         = true;
+
     // Log the DLL-side return address of each distinct call into vid_setPass and
     // ogl_drawVB, as "module+RVA".
     //

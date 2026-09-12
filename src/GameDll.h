@@ -74,6 +74,7 @@ struct GameDllLayout {
     // --- hook targets -------------------------------------------------------
     uint32_t printRoomsList;    // void PrintRoomsList(void)
     uint32_t sGetObjectBounds;  // int  S_GetObjectBounds(int16* bounds)
+    uint32_t drawSkyHD;         // void DrawSkyHD(void) -- HD sky/horizon dome
 
     // PrintRoomsList's prologue differs between TR4 and TR5, so it travels with
     // the row. S_GetObjectBounds' is identical in both and lives in

@@ -40,6 +40,7 @@
 #include "Callsite.h"
 #include "GameDll.h"
 #include "PortalCull.h"
+#include "Sky.h"
 #include "VRSystem.h"
 
 #include <cstring>
@@ -133,8 +134,15 @@ bool     g_loggedOrtho3D = false;
 // through its geometry. Zero during gameplay; the inventory is nothing but.
 unsigned g_offsetDraws   = 0;
 bool     g_loggedOffset  = false;
+
+// Draws issued from inside DrawSkyHD -- the HD sky dome. Per injected eye, so
+// the sky= count in the health report should be non-zero outdoors.
+unsigned g_skyDraws      = 0;
+bool     g_loggedSky     = false;
+
 unsigned g_prevOrtho3D   = 0;
 unsigned g_prevOffset    = 0;
+unsigned g_prevSky       = 0;
 unsigned g_prevWorld = 0, g_prevOffscreen = 0;
 
 // GPU-side verification of the per-eye view matrix. Re-armed at every health
@@ -394,6 +402,14 @@ bool VrLive() {
     if (!Cfg().enabled || !VR().active() || !g_ready) return false;
     // Mono owns no render target, so it has no stereo objects to require.
     return Cfg().monoTracking || Stereo().valid();
+}
+
+// DrawSkyHD is on the stack and the sky-at-infinity path is enabled. Those
+// draws keep the rotation of the eye transform (looking around still turns
+// the sky) and drop its translation (IPD + 6DOF), so the dome fuses at
+// optical infinity instead of at its mesh radius.
+bool SkyInfinity() {
+    return Cfg().skyAtInfinity && SkyPassActive();
 }
 
 // The engine draws its post-processing chain into its own offscreen array
@@ -902,6 +918,24 @@ void __cdecl Detour_validate_draw() {
     }
 
     const Eye eye = (g_currentEye == 0) ? Eye::Left : Eye::Right;
+    const bool skyInfinity = SkyInfinity();
+
+    // Every use of the eye transform below reads this instead of calling
+    // VR().EyeView(eye) again. For a sky draw its translation -- IPD plus any
+    // 6DOF head offset -- is zeroed: that translation is exactly what gives the
+    // dome a finite stereo depth, and dropping it here reaches every mode below
+    // (view matrix, model-matrix redistribution, or projection) uniformly. The
+    // rotation stays, so head-look still turns the sky.
+    Affine eyeXform = VR().EyeView(eye);
+    if (skyInfinity) {
+        eyeXform.r[0][3] = eyeXform.r[1][3] = eyeXform.r[2][3] = 0.0f;
+        ++g_skyDraws;
+        if (!g_loggedSky) {
+            g_loggedSky = true;
+            LogF("sky: first DrawSkyHD draw (shader %d) -- rotation-only eye "
+                 "transform, far-plane depth", vs.shader);
+        }
+    }
 
     mat4 eyeProj{};
     if (doProj) {
@@ -927,7 +961,7 @@ void __cdecl Detour_validate_draw() {
     // still differ in that configuration, the difference was never parallax.
     const Affine gameView  = ReadPackedView(g_savedView);
     Affine finalView = Cfg().perEyeView
-                     ? Mul(VR().EyeView(eye), gameView)
+                     ? Mul(eyeXform, gameView)
                      : gameView;
 
     // Diagnostic: swing the right eye's view by a large, unmistakable angle.
@@ -1001,8 +1035,12 @@ void __cdecl Detour_validate_draw() {
     // Mode 3: livePr <- livePr * E, with E the eye-from-game-camera transform.
     // Column-major, so (P*E)[c][r] = sum_k P[k][r] * E[c][k]; E's bottom row is
     // (0,0,0,1), which is why column 3 picks up P's own column 3.
+    //
+    // For the sky, E's translation has already been zeroed above, so this is
+    // P * R -- head rotation with no IPD. The per-eye frustum shear still
+    // lives in P, which is the HMD optical correction, not stereo depth.
     if (Cfg().eyeOffsetMode == 3) {
-        const Affine E = VR().EyeView(eye);
+        const Affine& E = eyeXform;
         const mat4 P = *livePr;
         mat4 out{};
         for (int c = 0; c < 4; ++c) {
@@ -1146,7 +1184,10 @@ void __cdecl Detour_validate_draw() {
     // The upload has now happened (or been skipped). Ask the GPU what it holds,
     // once per eye per report window. glGetUniformfv forces a pipeline sync, so
     // this must stay rare -- twice per 1800 frames is free.
-    if (g_verifyArmed && !g_verifyDone[eyeIdx]) {
+    // Sky draws deliberately share a translation-free eye transform, so
+    // sampling one would report zero separation and look like an injection
+    // failure -- wait for a non-sky world draw instead.
+    if (g_verifyArmed && !g_verifyDone[eyeIdx] && !skyInfinity) {
         g_verifyDone[eyeIdx] = true;
         const Shader& sh = Shaders()[vs.shader];
         g_gpuProg[eyeIdx] = static_cast<int>(sh.id);
@@ -1185,8 +1226,29 @@ void __cdecl Detour_validate_draw() {
 // is drawn twice at the same screen position -- a flat overlay locked to both
 // eyes, which is what you want before there is a proper world-space HUD.
 
+// Pushes every fragment drawn while it is alive to the far plane, so a sky
+// dome of finite mesh radius cannot win a depth test against the world behind
+// it. Scoped rather than paired manually because DuplicatePerEye below returns
+// from several places, and a depth range left at (1,1) after an early return
+// would flatten everything drawn afterwards.
+struct ScopedSkyDepth {
+    bool active;
+    GLfloat saved[2] = { 0.0f, 1.0f };
+    explicit ScopedSkyDepth(bool enable) : active(enable) {
+        if (active) {
+            glGetFloatv(GL_DEPTH_RANGE, saved);
+            glDepthRange(1.0, 1.0);
+        }
+    }
+    ~ScopedSkyDepth() {
+        if (active) glDepthRange(saved[0], saved[1]);
+    }
+};
+
 template <typename Fn, typename... Args>
 void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
+    const ScopedSkyDepth skyDepth(SkyInfinity() && VrLive());
+
     if (!VrLive() || g_inDuplicate || Cfg().monoTracking
         || !Cfg().duplicateDraws || !TargetIsBackbuffer()) {
         h.Original<Fn>()(args...);
@@ -1388,6 +1450,7 @@ void __cdecl Detour_ogl_present() {
     // Must follow GameDllUpdate: it hooks INSIDE the game DLL, so it needs to
     // know which one is live and which build it is.
     PortalCullUpdate();
+    SkyUpdate();
 
     // Periodic health report, in deltas. A one-shot report at frame 300 only
     // ever sampled the menus, where almost everything legitimately is 2D -- it
@@ -1400,11 +1463,13 @@ void __cdecl Detour_ogl_present() {
         const unsigned dWorld = g_worldDraws      - g_prevWorld;
         const unsigned dOff   = g_worldOffscreen  - g_prevOffscreen;
         const unsigned dO3D   = g_ortho3DDraws    - g_prevOrtho3D;
+        const unsigned dSky   = g_skyDraws        - g_prevSky;
         const unsigned dOfs   = g_offsetDraws     - g_prevOffset;
         g_lastReportFrame = g_frameIndex;
         g_prevDup = g_dupCount; g_prevInj0 = g_injectCount[0]; g_prevInj1 = g_injectCount[1];
         g_prevWorld = g_worldDraws; g_prevOffscreen = g_worldOffscreen;
         g_prevOrtho3D = g_ortho3DDraws;
+        g_prevSky = g_skyDraws;
         g_prevOffset = g_offsetDraws;
 
         // Against total world draws, not against duplications. See g_worldDraws.
@@ -1428,9 +1493,10 @@ void __cdecl Detour_ogl_present() {
 
         LogF("stereo health @frame %u: world draws=%u  duplicated=%u  "
              "injected eye0=%u eye1=%u  (%u%% of world draws got per-eye matrices)  "
-             "offscreen-skipped=%u  classify-mismatch=%u  ortho3D=%u  projoffset=%u",
+             "offscreen-skipped=%u  classify-mismatch=%u  ortho3D=%u  sky=%u  "
+             "projoffset=%u",
              g_frameIndex, dWorld, dDup, dInj0, dInj1, pct, dOff, g_classifyMismatch,
-             dO3D, dOfs);
+             dO3D, dSky, dOfs);
 
         // What the GPU actually held, per eye. This is the load-bearing line:
         // if the two translations match, the per-eye view never reached the
@@ -1661,6 +1727,7 @@ bool InstallHooks() {
 
 void RemoveHooks() {
     GamepadShutdown();
+    SkyShutdown();
     PortalCullShutdown();
     GameDllShutdown();
 

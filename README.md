@@ -13,6 +13,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * Gamepad and VR controller support
 * Dpad input support
 * Decoupled pitch
+* Sky fix — the HD sky dome sits at optical infinity instead of a few metres away
 
 ## Installation
 [WIP]
@@ -43,6 +44,7 @@ branch.
 | **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
 | **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only | Working. On by default |
 | **Phase 11** | **Ceiling clamp** — caps the tracked head so it cannot rise through low ceilings | Working. On by default |
+| **Phase 12** | **Sky fix** — the HD sky dome drawn at optical infinity instead of its mesh radius | Working. TR4 / TR5 |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -97,6 +99,12 @@ See [Phase 10: decoupled pitch](#phase-10-decoupled-pitch).
 **Phase 11** stops the tracked head rising through low ceilings in tunnels and
 crawlspaces, by capping its height rather than moving the camera. See
 [Phase 11: ceiling clamp](#phase-11-ceiling-clamp).
+
+**Phase 12** fixes the sky. `DrawSkyHD` in the game DLL already draws the dome
+through a matrix it has zeroed the translation of, which is monitor-correct;
+the stereo path then adds the per-eye translation back on top, and a dome of
+finite mesh radius gets finite stereo depth. See
+[Phase 12: sky fix](#phase-12-sky-fix).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -236,10 +244,12 @@ active and the rest sit inert.
 | `ogl_drawVB` | `0x00012CF0` | Phase 2 — the other draw path |
 | `fmvShow` | `0x00011350` | Phase 6 — an exact "a video is on screen now" signal, which TR6 needs to tell its cutscenes from its scene composite |
 
-A seventh hook lands **outside the exe**, in `tomb4.dll` / `tomb5.dll`, on the
-room renderer that consumes the portal-traversal draw list. It is installed
-lazily, because the game DLLs load after the mod does, and it is what
-[Phase 7](#phase-7-culling-fix) uses to extend the visible set.
+More hooks land **outside the exe**, in `tomb4.dll` / `tomb5.dll`. They are
+installed lazily, because the game DLLs load after the mod does. `PrintRoomsList`
+and `S_GetObjectBounds` are what [Phase 7](#phase-7-culling-fix) uses to extend
+the visible set; `DrawSkyHD` is what [Phase 12](#phase-12-sky-fix) uses to mark
+every sky draw so stereo can put the dome at optical infinity. `DrawSkyHD` is
+independent of `PortalCulling` — it installs whenever `SkyAtInfinity=1`.
 
 `validate_draw` is the single choke point where every uniform reaches the GPU,
 which makes it the right place to substitute matrices. The substitution is
@@ -2284,14 +2294,99 @@ alternative was nothing, and not reasonable now that the alternative is running
 `pdbdump` against that build's own PDB.
 
 An unrecognised build is named in the log along with the ones that are known, and
-the culling, the ceiling clamp and the swimming exception all stand down for it.
-That is the honest failure: every address would otherwise be a guess, and one of
-them is a hook target.
+the culling, the ceiling clamp, the swimming exception and the sky fix all stand
+down for it. That is the honest failure: every address would otherwise be a
+guess, and one of them is a hook target.
 
 ### TR6
 
 Not addressed. It is a different engine with different room structures, and it
 has no row in the address table, so the culling simply does not install for it.
+The same is true of the sky fix — its scene is rendered offscreen and composited
+whole (see [Phase 6](#phase-6-tr6-support)) rather than duplicated per draw, so
+the per-draw mechanism Phase 12 depends on does not reach it either.
+
+---
+
+## Phase 12: sky fix
+
+**Symptom.** Outdoors, the sky is a painted sphere a few metres away. Distant
+cliffs sit *behind* it, and leaning or IPD makes the dome slide. On a monitor
+the same mesh is fine.
+
+**Cause.** `DrawSkyHD` in `tomb4.dll` / `tomb5.dll` already does the
+classic monitor-correct thing: it pushes a copy of the current matrix onto the
+matrix stack and **zeros its translation** before drawing `hd_sky` through it.
+Confirmed in the disassembly — the pushed copy's three translation floats are
+overwritten with `0` right after the copy is made. The dome is centred on the
+game camera, so there is no parallax from walking. That is optical infinity for
+one viewpoint.
+
+The stereo path then composes the per-eye transform — IPD plus any 6DOF head
+offset — on top (`EyeOffsetMode=3`: `P' = P * E`, or one of the other modes'
+equivalent). The dome's vertices still sit at a finite mesh radius, so that
+translation gives them stereo disparity equal to a few metres, and the engine's
+own depth range is still in effect, so the dome's fragments can win a depth
+test against farther world geometry.
+
+`tools\xrefs.py` against both DLLs reports a single caller:
+
+```
+DrawSkyHD            <- PrintRoomsList (x1)
+```
+
+One hook covers every sky triangle the remaster issues.
+
+**Fix.** `src\Sky.cpp` hooks `DrawSkyHD` and sets a flag for the life of that
+call. Every `validate_draw` that runs underneath it computes the per-eye
+transform once and, when the flag is set, zeros its translation before using it
+— which reaches whichever `EyeOffsetMode` is active, since all four route that
+same transform into the view matrix, the model matrix or the projection.
+Looking around still turns the sky; leaning and IPD do not. Every duplicated
+`ogl_draw` / `ogl_drawVB` underneath it sets `glDepthRange(1, 1)` for that draw
+and restores the engine's range afterwards, so the fragments land on the far
+plane and cannot win a depth test against the world. `SkyAtInfinity=0` is the
+stock behaviour exactly: the hook is not installed.
+
+The stolen window is the same 5-byte PIC `mov [rsp+8], rbx` as
+`S_GetObjectBounds`, and it is the same bytes in both DLLs:
+
+| DLL | `DrawSkyHD` RVA | size |
+|---|---|---|
+| `tomb4.dll` | `0x000C4CA0` | 1207 |
+| `tomb5.dll` | `0x000B97F0` | 1195 |
+
+#### Where the code is
+
+| file | what it holds |
+|---|---|
+| `src\Sky.cpp` | the `DrawSkyHD` hook and the in-sky flag |
+| `src\Hooks.cpp` | the rotation-only eye transform at inject time; far-plane depth around the duplicated draw |
+| `src\GameDll.cpp` | the two-row address table those RVAs live in |
+| `tools\verify_addresses.py` | re-derives both RVAs and the prologue from the PDBs |
+
+#### What to watch
+
+```
+sky: hooked tomb4.dll (Tomb Raider IV) -- sky draws use rotation-only eye transform (optical infinity) and far-plane depth
+sky: first DrawSkyHD draw (shader N) -- rotation-only eye transform, far-plane depth
+```
+
+The health report's `sky=` count is per injected eye. Outdoors it should be
+non-zero; `sky=0` forever with the "hooked" line present means `DrawSkyHD` is
+not running (indoors, or a title screen).
+
+The GPU verify sample skips sky draws on purpose — both eyes share a
+translation-free transform there, so sampling one would report zero separation
+and look like an injection failure.
+
+#### Phase 12 settings
+
+All in `[VR]`, documented in `TombRaiderVR.ini`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `SkyAtInfinity` | `1` | The whole feature. `0` is stock finite-dome stereo, for A/B |
 
 ---
 
@@ -2370,6 +2465,7 @@ src/              the mod: hooks, engine map, OpenVR glue, matrix maths
 src/GameDll.*     binding and address table for tomb4.dll / tomb5.dll
 src/PortalCull.*  head-driven room culling, hooked into the game DLL
 src/PortalGeom.h  the frustum maths behind it, tested by tests/
+src/Sky.*         DrawSkyHD hook: sky draws at optical infinity
 src/Callsite.*    return-address census, from before the DLLs had symbols
 src/DefaultIni.h  the compiled-in ini template, written out when none exists
 src/proxy/        the winmm shim that gets us loaded

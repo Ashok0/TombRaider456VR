@@ -132,7 +132,7 @@ LAYOUT = ['lara', 'camera', 'room', 'number_rooms',
           'outside', 'outside_left', 'outside_right', 'outside_top',
           'outside_bottom',
           'BinocularOn', 'BinocularRange',
-          'PrintRoomsList', 'S_GetObjectBounds']
+          'PrintRoomsList', 'S_GetObjectBounds', 'DrawSkyHD']
 
 rows = []
 for m in re.finditer(
@@ -256,7 +256,7 @@ try:
         check('%s window is free of RIP-relative operands' % label,
               riprel if riprel else 'none', 'none')
 
-    a = arrays_in('Hooks.cpp', 'GameDll.cpp', 'PortalCull.cpp')
+    a = arrays_in('Hooks.cpp', 'GameDll.cpp', 'PortalCull.cpp', 'Sky.cpp')
 
     # tomb456.exe -- the stereo hooks, from Hooks.cpp's Target table.
     hooks = open(os.path.join(ROOT, 'src', 'Hooks.cpp'), encoding='utf-8',
@@ -279,6 +279,9 @@ try:
         if 'kObjectBoundsPrologue' in a:
             window(dll, 'S_GetObjectBounds', a['kObjectBoundsPrologue'],
                    '%s!S_GetObjectBounds' % dll)
+        if 'kDrawSkyHDPrologue' in a:
+            window(dll, 'DrawSkyHD', a['kDrawSkyHDPrologue'],
+                   '%s!DrawSkyHD' % dll)
 
 except ImportError:
     print('  SKIPPED -- pip install pefile capstone to run this section')

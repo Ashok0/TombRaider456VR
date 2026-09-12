@@ -44,7 +44,7 @@ const uint8_t kPrintRoomsListTR5[] = { 0x48, 0x89, 0x5C, 0x24, 0x10 };
 
 // Every RVA read out of the matching PDB, by name.
 //
-//   python tools\pdbdump.py <dir>\tomb4.dll draw_rooms w2v_matrix PrintRoomsList
+//   python tools\pdbdump.py <dir>\tomb4.dll draw_rooms w2v_matrix PrintRoomsList DrawSkyHD
 //
 // ONLY BUILDS WITH A PDB APPEAR HERE. The old table carried a second pair of
 // rows for the 2025-09-10 build, derived by applying a uniform per-DLL shift to
@@ -73,6 +73,7 @@ constexpr GameDllLayout kDlls[] = {
       /* BinocularRange  */ 0x001BB24C,
       /* PrintRoomsList  */ 0x000C5160,
       /* S_GetObjectB..  */ 0x000B8210,
+      /* DrawSkyHD       */ 0x000C4CA0,
       kPrintRoomsListTR4, sizeof(kPrintRoomsListTR4) },
 
     { 1, 0x696B499C, L"tomb5.dll", "Tomb Raider V",
@@ -95,6 +96,7 @@ constexpr GameDllLayout kDlls[] = {
       /* BinocularRange  */ 0x001B6C98,
       /* PrintRoomsList  */ 0x000B9CA0,
       /* S_GetObjectB..  */ 0x000ABB20,
+      /* DrawSkyHD       */ 0x000B97F0,
       kPrintRoomsListTR5, sizeof(kPrintRoomsListTR5) },
 };
 

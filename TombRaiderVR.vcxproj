@@ -131,6 +131,7 @@
     <ClCompile Include="src\Callsite.cpp" />
     <ClCompile Include="src\GameDll.cpp" />
     <ClCompile Include="src\PortalCull.cpp" />
+    <ClCompile Include="src\Sky.cpp" />
     <ClCompile Include="src\Gamepad.cpp" />
     <ClCompile Include="src\VideoPanel.cpp" />
     <ClCompile Include="src\VRSystem.cpp" />
@@ -150,6 +151,7 @@
     <ClInclude Include="src\GameDll.h" />
     <ClInclude Include="src\PortalCull.h" />
     <ClInclude Include="src\PortalGeom.h" />
+    <ClInclude Include="src\Sky.h" />
     <ClInclude Include="src\Gamepad.h" />
     <ClInclude Include="src\VideoPanel.h" />
     <ClInclude Include="src\VRSystem.h" />
