@@ -7,7 +7,8 @@ C:\dev\TombRaider456VR\src\InlineHook.cpp;C:\dev\TombRaider456VR\build\obj\x64\R
 C:\dev\TombRaider456VR\src\Log.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\Log.obj
 C:\dev\TombRaider456VR\src\StereoRenderer.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\StereoRenderer.obj
 C:\dev\TombRaider456VR\src\Callsite.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\Callsite.obj
-C:\dev\TombRaider456VR\src\RoomCull.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\RoomCull.obj
+C:\dev\TombRaider456VR\src\GameDll.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\GameDll.obj
+C:\dev\TombRaider456VR\src\PortalCull.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\PortalCull.obj
 C:\dev\TombRaider456VR\src\Gamepad.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\Gamepad.obj
 C:\dev\TombRaider456VR\src\VideoPanel.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\VideoPanel.obj
 C:\dev\TombRaider456VR\src\VRSystem.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\VRSystem.obj

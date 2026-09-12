@@ -456,106 +456,88 @@ struct Config {
     // stays switchable.
     bool  gamepadMenuUsesBack = true;
 
-    // Draw every room in the level, defeating TR4's portal culling.
+    // --- room culling --------------------------------------------------------
     //
-    // The engine only submits rooms reached through a camera-facing portal, so
-    // looking away from the game camera finds nothing drawn. The culling is in
-    // tomb4.dll -- the exe has none, and widening the projection it hands the
-    // game was measured to change nothing.
+    // The engine draws only the rooms its portal traversal reaches from the
+    // GAME CAMERA. Look somewhere the game camera is not pointing and the
+    // geometry that should be there was never submitted. PortalCull.cpp runs
+    // the same traversal from the tracked head instead, with the headset's
+    // frustum, and appends whatever it finds; nothing the engine listed is ever
+    // removed, so turning this off returns the stock behaviour exactly.
     //
-    // This appends every room to the draw list after traversal (exactly what the
-    // engine already does for rooms flagged 0x40000) and gives them full-screen
-    // clip rects. TR4 only: the addresses are that DLL's.
-    //
-    // Cost: no visibility culling at all. TR4 rooms are small, but a large level
-    // will cost frame rate. Off by default -- turn it on and watch the log line
-    // that reports how many rooms were forced.
-    // Expand the engine's visible set along PORTAL CONNECTIVITY by this many
-    // hops. 0 = off. This is the mechanism that fixes geometry going missing
-    // when you turn your head.
-    //
-    // The engine's traversal runs in the GAME CAMERA's space -- VR is injected
-    // at the shader uniform, so the engine's own view matrix never rotates with
-    // your head. A portal beside or behind the camera fails the near-plane test
-    // inside the clipper, so no amount of widening its rectangle helps (that
-    // was measured: 200% of screen each way changed nothing). Connectivity has
-    // no orientation bias: a room through the door behind you is one hop away
-    // whichever way the camera faces.
-    //
-    // 2 is conservative, 3 covers deeper sightlines and costs about ten more
-    // rooms and no measurable frame rate. Deeper than that is where rooms start
-    // appearing that you cannot actually see -- which is what the head test
-    // below exists to catch.
-    int   portalHops       = 3;
+    // THIS REPLACES PortalHops, DrawAllRooms, PortalHeadTest, PortalHeadMargin,
+    // DrawAllRoomsExclude and DrawAllRoomsClip. Those keys are still READ, only
+    // so that an old ini gets a log line telling it they are gone rather than
+    // silently doing nothing.
+    bool  portalCulling         = true;
 
-    // Room indices hop expansion must never add. Comma or space separated.
-    // Per level, so a list that helps one means nothing in another.
+    // Angle added to each half of the culling frustum, in degrees.
     //
-    // 215 and 12 are the two measured cases, defaulted here and not only in the
-    // template so they still hold for an install whose ini predates them or has
-    // had the line deleted. An index that means nothing in the level you are in
-    // costs one integer compare per portal and changes nothing else.
-    int   excludeRooms[64] = { 215, 12 };
-    int   excludeCount     = 2;
+    // Two things need covering and neither is large: the traversal runs once
+    // from the head rather than once per eye, so the couple of degrees a canted
+    // display puts between the two frusta has to be allowed for, and the pose
+    // that culls a frame is a few milliseconds older than the pose that renders
+    // it. Raise it if geometry pops in at the very edge of vision when you turn
+    // quickly; every degree costs a little more draw.
+    float cullFovMarginDegrees  = 8.0f;
 
-    // Diagnostic. Key that dumps the current draw list to the log, once per
-    // press. 0 = off.
+    // How many doorways deep the traversal may go, and how many portals it may
+    // look at in one frame.
     //
-    // The log otherwise reports counts only -- "drawing 43 of 242" -- which
-    // cannot tell you what to put in DrawAllRoomsExclude above. Press this
-    // while the bad geometry is on screen and the block names every room hop
-    // expansion appended, which is the only set the exclude list can remove
-    // from, each with the room it was reached through and where it sits
-    // relative to you.
-    // A FUNCTION key, deliberately, like traceKey and dumpKey. The numpad is
-    // the wrong place for a diagnostic: with Num Lock OFF the physical numpad 3
-    // emits VK_NEXT rather than VK_NUMPAD3, so GetAsyncKeyState(VK_NUMPAD3)
-    // never sees the press and the dump silently does nothing. Measured -- a
-    // whole test session produced no block for exactly that reason.
-    int   roomDumpKey      = 0x77;   // VK_F8
+    // NEITHER IS A VISIBILITY CRITERION -- the frustum shrinking at every
+    // doorway is what stops the traversal, and these only bound the worst case
+    // so a pathological level cannot spend the frame in here. If the log ever
+    // reports budgets being hit during normal play, raise them.
+    int   cullMaxDepth          = 16;
+    int   cullMaxPortals        = 4096;
 
-    // Before adding a hop room, test the portal we would reach it through
-    // against the ACTUAL HEADSET FRUSTUM.
+    // Optional distance limit in world units, 0 for none. A sector is 1024.
     //
-    // Hop expansion adds any portal-connected room and draws it WITHOUT a
-    // portal clip, so a room that is connected but not actually visible through
-    // that doorway still gets drawn -- and if it happens to share world space
-    // with somewhere you can see, you get foreign geometry laid over your own.
-    // That is the room-215 class of bug.
-    //
-    // The engine performs exactly this test already; it just performs it from
-    // the game camera. Doing it from the head is the piece that was missing.
-    // The portal's four corners go world -> eye -> clip using the view matrix
-    // we actually injected and the VR projection, so handedness and field of
-    // view come from the projection rather than being restated here.
-    // DEFAULT OFF until it is proven. The first version transformed portals
-    // with the view matrix's translation column, which is not what a textbook
-    // view matrix carries; the error scaled with world coordinates, so it
-    // behaved on a 116-room level and rejected essentially every portal on a
-    // 242-room one. Fixed to use rotation only, with the camera position taken
-    // from the engine's own globals -- but unproven, so opt in.
-    bool  portalHeadTest   = false;
+    // Default off deliberately. The engine's own phd_zfar is 65536 units, which
+    // culls nothing, and a room you can see down a long corridor is a room you
+    // should be able to see. This exists as a frame-rate lever, not a fix.
+    float cullFarUnits          = 0.0f;
 
-    // How far outside the frustum a portal may sit and still count as visible,
-    // in NDC (0.35 = 35% of half-width). Generous on purpose: losing geometry
-    // is the worse failure, so raise this if anything vanishes at the edges and
-    // lower it if unwanted rooms get through.
-    float portalHeadMargin = 0.35f;
-
-    // Give every listed room a full-screen clip rect. Leave on.
+    // Widen every listed room's clip rectangle to the whole target. Leave on.
     //
-    // Required, not lazy: the engine's portal-clipped rects are screen boxes
-    // computed for the game camera's view, and we render from the HMD's, so
-    // under head rotation they scissor the wrong part of the screen. Off is a
-    // diagnostic that separates "the list changed" from "the rects changed".
-    bool  drawAllRoomsClip = true;
+    // This is the old DrawAllRoomsClip, and it is still required for the same
+    // reason: the engine's portal-clipped rects are screen boxes computed for
+    // the game camera's view, and we render from the HMD's, so under head
+    // rotation they scissor the wrong part of the screen.
+    bool  cullWidenBounds       = true;
 
-    // Legacy: append rooms by DISTANCE from the camera, ignoring portals.
+    // Extend the same fix to items.
     //
-    // Superseded by portalHops and kept only for A/B. Proximity is the wrong
-    // criterion -- it will happily add a stacked room that shares world space
-    // with the one you are standing in and that no portal reaches.
-    bool  drawAllRooms     = false;
+    // S_GetObjectBounds rejects an item whose bounding box misses the game
+    // camera's screen rect or sits behind its near plane, which is every item
+    // in every room this feature adds. Without it the added rooms draw with
+    // their furniture, enemies and pickups missing -- which is what the hop
+    // expansion did, because it never touched this. Answers are only ever
+    // promoted from "invisible" to "visible, clip it", never the other way.
+    bool  cullObjects           = true;
+
+    // Room indices to watch, and how many were given.
+    //
+    // Any listed room that the traversal appends is reported once per distinct
+    // route, with the doorway it came through and how deep it was. This is the
+    // targeted form of the dump key: a room that only misbehaves for a moment
+    // is hard to catch with a hotkey, and "does the traversal ever reach 215,
+    // and how" is a question that should not need good reflexes to answer.
+    //
+    // Empty by default. It costs one integer compare per appended room.
+    int   cullWatchRooms[16] = {};
+    int   cullWatchCount     = 0;
+
+    // Virtual-key code that dumps the current draw list to the log, 0 to
+    // disable. Prints which rooms the engine found and which the head frustum
+    // added, which is the first thing worth knowing about any culling glitch.
+    //
+    // A FUNCTION key, deliberately. The numpad is the wrong place for a
+    // diagnostic: with Num Lock OFF the physical numpad 3 emits VK_NEXT rather
+    // than VK_NUMPAD3, so GetAsyncKeyState(VK_NUMPAD3) never sees the press and
+    // the dump silently does nothing. Measured -- a whole test session produced
+    // no block for exactly that reason.
+    int   cullDumpKey           = 0x77;   // VK_F8
 
     // Log the DLL-side return address of each distinct call into vid_setPass and
     // ogl_drawVB, as "module+RVA".

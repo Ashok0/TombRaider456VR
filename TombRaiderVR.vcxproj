@@ -129,7 +129,8 @@
     <ClCompile Include="src\Log.cpp" />
     <ClCompile Include="src\StereoRenderer.cpp" />
     <ClCompile Include="src\Callsite.cpp" />
-    <ClCompile Include="src\RoomCull.cpp" />
+    <ClCompile Include="src\GameDll.cpp" />
+    <ClCompile Include="src\PortalCull.cpp" />
     <ClCompile Include="src\Gamepad.cpp" />
     <ClCompile Include="src\VideoPanel.cpp" />
     <ClCompile Include="src\VRSystem.cpp" />
@@ -146,7 +147,9 @@
     <ClInclude Include="src\StereoMath.h" />
     <ClInclude Include="src\StereoRenderer.h" />
     <ClInclude Include="src\Callsite.h" />
-    <ClInclude Include="src\RoomCull.h" />
+    <ClInclude Include="src\GameDll.h" />
+    <ClInclude Include="src\PortalCull.h" />
+    <ClInclude Include="src\PortalGeom.h" />
     <ClInclude Include="src\Gamepad.h" />
     <ClInclude Include="src\VideoPanel.h" />
     <ClInclude Include="src\VRSystem.h" />

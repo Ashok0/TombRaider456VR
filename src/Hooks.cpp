@@ -38,7 +38,8 @@
 #include "VideoPanel.h"
 #include "Gamepad.h"
 #include "Callsite.h"
-#include "RoomCull.h"
+#include "GameDll.h"
+#include "PortalCull.h"
 #include "VRSystem.h"
 
 #include <cstring>
@@ -99,9 +100,6 @@ bool  g_loggedFrame  = false;
 bool  g_loggedEye[2] = { false, false };
 float g_eyeViewT[2][3] = {};
 
-// The world -> eye matrix last injected, for RoomCull's head test.
-Affine g_lastHeadView      = Affine::Identity();
-bool   g_lastHeadViewValid = false;
 bool  g_reportedSeparation = false;
 // Per-eye injection counts. If eye 1 never gets injected, the duplication loop
 // is not reaching validate_draw with the right eye selected.
@@ -932,14 +930,6 @@ void __cdecl Detour_validate_draw() {
                      ? Mul(VR().EyeView(eye), gameView)
                      : gameView;
 
-    // Publish it for RoomCull's head-oriented portal test. This is the only
-    // place the head's world-space orientation exists: the engine's own view
-    // matrix is the game camera's, and mView_packed is never rotated by VR.
-    // Either eye will do -- they differ by an IPD, which is nothing against a
-    // 1024-unit sector, and the test carries a margin far larger.
-    g_lastHeadView      = finalView;
-    g_lastHeadViewValid = true;
-
     // Diagnostic: swing the right eye's view by a large, unmistakable angle.
     if (Cfg().debugEyeYawDegrees != 0.0f && eye == Eye::Right) {
         finalView = Mul(RotY(Cfg().debugEyeYawDegrees), finalView);
@@ -1385,13 +1375,19 @@ void __cdecl Detour_ogl_present() {
     PollTraceKey();
     PollDumpKey();
     PollTuningKeys();
+    PortalCullPollKey();
 
     // Re-assert the XInput pointer every frame: cheap, and it self-heals if the
     // game re-resolves XInput or if we got here before WinMain had.
     GamepadUpdate();
 
-    // The game DLLs load after we do, so this hook installs lazily.
-    RoomCullUpdate();
+    // The game DLLs load after we do, and the player can switch between TR4 and
+    // TR5 without restarting, so both of these run every frame.
+    GameDllUpdate();
+
+    // Must follow GameDllUpdate: it hooks INSIDE the game DLL, so it needs to
+    // know which one is live and which build it is.
+    PortalCullUpdate();
 
     // Periodic health report, in deltas. A one-shot report at frame 300 only
     // ever sampled the menus, where almost everything legitimately is 2D -- it
@@ -1485,6 +1481,23 @@ void __cdecl Detour_ogl_present() {
         }
 
         LogProjHistogram();
+
+        // Room culling, averaged over the window. `added` is the whole point:
+        // zero of it means either the head never left the game camera's cone or
+        // the traversal is not running, and the two are told apart by whether
+        // the "cull: head-frustum portal traversal live" line ever appeared.
+        {
+            const PortalCullStats cs = PortalCullTakeStats();
+            if (cs.frames) {
+                LogF("cull: %.1f rooms/frame from the engine + %.1f added by the "
+                     "head frustum, %.1f items rescued/frame%s",
+                     double(cs.rooms) / cs.frames,
+                     double(cs.added) / cs.frames,
+                     double(cs.items) / cs.frames,
+                     cs.truncated ? "  *** A BUDGET WAS HIT -- raise "
+                                    "CullMaxPortals/CullMaxDepth ***" : "");
+            }
+        }
 
         if (dWorld > 200 && pct < 25) {
             LogF("stereo health: *** only %u%% of world draws got per-eye matrices "
@@ -1599,15 +1612,6 @@ void __cdecl Detour_ogl_present() {
 
 } // namespace
 
-// Hand RoomCull the head's world-space orientation. False until the first
-// stereo frame has been injected, so the caller can fall back to adding rooms
-// unconditionally rather than rejecting everything before VR is up.
-bool LastHeadView(Affine& out) {
-    if (!g_lastHeadViewValid) return false;
-    out = g_lastHeadView;
-    return true;
-}
-
 bool InstallHooks() {
     if (!Bind()) return false;
 
@@ -1657,7 +1661,8 @@ bool InstallHooks() {
 
 void RemoveHooks() {
     GamepadShutdown();
-    RoomCullShutdown();
+    PortalCullShutdown();
+    GameDllShutdown();
 
     // Reverse order of installation.
     g_hFmvShow.Remove();

@@ -1331,6 +1331,13 @@ All three are TR6-only: `gGame != 2` takes the TR4/TR5 path regardless.
 
 ## Phase 7: culling fix
 
+> **Superseded by Phase 7B.** Everything below is what was built without
+> symbols and how it was reasoned about; the hop expansion, its exclude list
+> and its head test have since been replaced by a real portal traversal. The
+> measurements here still hold and are the reason several obvious approaches
+> are not tried again — read it for those, not for the settings, which are
+> gone.
+
 Turn your head far enough away from where the game camera is pointing and there
 is nothing drawn — no walls, no floor, just void behind Lara. Phase 7 fixes it.
 
@@ -1497,17 +1504,161 @@ work, not this one.
 
 ### Phase 7 settings
 
-| Setting | Default | What it does |
+**All of these are retired.** See Phase 7B for what replaced them; an ini
+that still sets one gets a log line on startup saying so.
+
+| Retired setting | Replaced by |
+|---|---|
+| `PortalHops` | nothing — depth is decided by the geometry |
+| `PortalHeadTest`, `PortalHeadMargin` | the traversal itself, always on; `CullFovMarginDegrees` for the margin |
+| `DrawAllRoomsExclude` | nothing — a real traversal cannot reach the rooms it existed to exclude |
+| `DrawAllRoomsClipRect` | `CullWidenBounds`, same job |
+| `DrawAllRooms` | nothing |
+| `RoomDumpKey` | `CullDumpKey` |
+
+| Kept | Default | What it does |
 |---|---|---|
-| `PortalHops` | `3` | Expand the visible set this many portal hops. `0` disables the fix |
-| `PortalHeadTest` | `0` | Test each connecting portal against the real headset frustum before adding its room. Unproven — opt in |
-| `PortalHeadMargin` | `0.35` | How far outside the frustum a portal may sit and still count as visible, in NDC. Raise if anything vanishes at the edges |
-| `DrawAllRoomsExclude` | *(empty)* | Room indices hop expansion must never add. Comma or space separated, per level |
-| `DrawAllRoomsClipRect` | `1` | Give every listed room a full-screen clip rect. Off is a diagnostic only |
-| `DrawAllRooms` | `0` | Legacy distance-based appending, kept for A/B |
 | `LogCallsites` | `0` | Log each distinct DLL-side call into `vid_setPass` / `ogl_drawVB` as `module+RVA`. Verbose; a research tool, not a play setting |
 
 ---
+
+## Phase 7B: the culling fix, done properly
+
+Phase 7 stopped the void. It did not decide what to draw — it decided how far to
+spread. This replaces it with the thing the engine itself does, run from the head
+instead of from the game camera.
+
+**What changed underneath: the game DLLs turned out to ship private PDBs.**
+Everything Phase 7 recovered by tracing call sites and reading a decompiler is in
+`tomb4.pdb` and `tomb5.pdb` by name. `FUN_18002ea30` is `GetRoomBounds`.
+`DAT_18063dc60` is `draw_rooms`. The function hooked as "DrawRoomList" is
+`PrintRoomsList`. Re-deriving the whole table from the symbols and diffing it
+against the old one is now `tools\verify_addresses.py`, and the first run of it
+matched on all 155 checks — including the two that were hardest to trust:
+
+* `camX/camY/camZ` were three separate globals in the old table. They are
+  `w2v_matrix[3]`, `[7]` and `[11]`: one matrix, and the same one the game's own
+  culling uses.
+* `laraWaterStatus`, found by snapshotting the writable data section on dry land
+  and diffing it while swimming, is `lara` + 12 — exactly where TR1-3's PDBs put
+  `lara_info::water_status`.
+
+### The mechanism: narrow the frustum at every doorway
+
+`src\PortalCull.cpp` hooks `PrintRoomsList` — the same consumer-side hook point
+Phase 7 chose, and for the same reason — and walks portals out from the camera's
+room a second time. The apex is the tracked head. The frustum is the headset's,
+widened to a symmetric superset that contains both eyes.
+
+At each doorway the portal quad is transformed into eye space, clipped against
+the planes arriving from the previous room, and a new plane is built from the
+head through each surviving edge. A room enters the list only if it can really be
+seen through that chain of openings. The engine's own back-face test is kept
+unchanged, with the head substituted for the camera — which is free, because the
+world-to-eye transform is orthogonal, so `dot(A*n, A*(p-c) + t)` equals
+`dot(n, p - headPos)` and the comparison survives being done in eye space.
+
+| | Phase 7 | Phase 7B |
+|---|---|---|
+| criterion | hop count `N` | whether the head can see through the doorways |
+| depth | `PortalHops`, tuned per level | decided by the geometry; the budgets only bound the worst case |
+| rooms you cannot see | drawn, then excluded by index (`DrawAllRoomsExclude=215,12`) | not reached |
+| flip storage rooms | reached, then filtered by `flipped_room` | unreachable by construction |
+| addresses | `FUN_18002ea30`, `DAT_18063dc60` | `PrintRoomsList`, `draw_rooms`, by name |
+
+The flip-room line deserves its own sentence, because it cost a debugging
+session. A flip map's inactive half is a real entry in the room array at the same
+world position as its live twin, so any mechanism that adds rooms the traversal
+never reached will happily add both and draw one over the other. No live room's
+portals name a storage room, so a real traversal cannot reach one — the same
+reason the engine's own never draws one. There is no exclusion list here because
+there is nothing to exclude.
+
+### The lever Phase 7 missed: items
+
+Fixing the room list is not enough, because the same camera-shaped assumption is
+baked in one level further down. `S_GetObjectBounds` answers 1 / −1 / 0 for an
+item's bounding box, and zero is reached two ways — every corner behind
+`phd_znear`, or the projected rectangle missing the screen rect. Both are the
+**game camera's** opinion. An enemy behind the camera fails the first; one beside
+it fails the second.
+
+So the rooms Phase 7 forced in were drawn with their furniture, enemies and
+pickups missing. `CullObjects` hooks that test and second-guesses the zero answer
+— only ever upward, to −1 ("visible, clip it"), never the other way.
+
+No menu gate is needed, and that was checked rather than assumed: scanning both
+DLLs for direct calls gives only world-drawing paths (`CalcItemMatrices`,
+`CalculateLaraMatrices`, `CalcLaraMatricesHDAnim`, `DrawStaticObjects`,
+`DrawRooms` and per-object helpers). The inventory ring draws through
+`DrawAllInvItems` / `DrawThisInvItemSpecifically`, which do not call it.
+
+### `bound_active`, and a rule that turned out to be unnecessary
+
+Phase 7 deliberately never wrote `room+0x4B`, on the grounds that it fed an
+item-relocation pass and that writing it was what once let Lara walk through a
+wall. The PDBs settle it: that byte is `ROOM_INFO::bound_active`, and scanning
+both DLLs for every one-byte access at `+0x4B` finds it touched by exactly four
+functions — `GetVisibleRooms`, `GetRoomBounds`, `SetRoomBounds` and
+`PrintRoomsList` — plus level load and savegame. `ItemNewRoom` is not among them.
+
+What the old code was most likely hitting is that the engine keeps an **enqueue
+count** in the upper bits, and only bit 0 means "already in `draw_rooms`".
+Assigning the byte clobbers that count for a room still sitting in `bound_list`.
+Phase 7B ORs bit 0 in and never assigns, which lets it use the engine's own dedup
+instead of a linear scan of the draw list per portal.
+
+One wrinkle needed handling: after the traversal, `GetVisibleRooms` appends every
+room flagged `0x40000` straight into `draw_rooms` **without** touching
+`bound_active`. Trusting the bit alone would append those twice, so the list is
+marked once up front before the traversal starts.
+
+### One space, one sign
+
+The whole thing turns on a single relationship. The game's culling works in **phd
+view space** — `v = R*(p − camPos)`, X right, Y down, **+Z forward**
+(`SetRoomBounds` tests `z < 1` for "behind the camera"). The mod's matrices work
+in the space `mView_packed` defines, which is the same transform with its **third
+rotation row negated**, i.e. −Z forward.
+
+That is not inferred. `vid_setViewMatrix` (`tomb456.exe` RVA `0x0000B960`) builds
+it from the same `int[12]`: it scales the nine rotation terms by 1/16384, negates
+exactly `m[8]`, `m[9]` and `m[10]`, and writes `m[3]`, `m[7]` and `m[11]` through
+**raw**.
+
+That last detail explains a Phase 7 bug. The translation column is not the `−R*p`
+a textbook view matrix carries — when the input is `w2v_matrix` it is the
+camera's world position, unscaled. Using it as though it were `−R*p` produces an
+error that scales with world coordinates, which is exactly why the first head
+test behaved on a 116-room level and rejected essentially every portal on a
+242-room one. Nothing in Phase 7B uses the packed matrix at all; the camera
+position comes from `w2v_matrix` directly.
+
+### What to watch
+
+The health report prints it every 1800 frames:
+
+```
+cull: 31.2 rooms/frame from the engine + 8.4 added by the head frustum, 12.1 items rescued/frame
+```
+
+`added = 0` forever means either the head never left the game camera's cone or
+the traversal is not running; the `cull: head-frustum portal traversal live` line
+tells the two apart. `CullDumpKey` (F8) prints the whole list with the added
+rooms starred, which turns "that wall is missing" into a room number.
+
+### Phase 7B settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PortalCulling` | `1` | The whole feature. `0` is stock engine behaviour |
+| `CullFovMarginDegrees` | `8` | Angle added to each half of the culling frustum — covers canted displays and the few ms between the pose that culls and the pose that renders |
+| `CullMaxDepth` | `16` | Doorways deep. A worst-case bound, not a visibility criterion |
+| `CullMaxPortals` | `4096` | Portals per frame. Same |
+| `CullFarUnits` | `0` | Optional distance limit in world units, off by default. A frame-rate lever, not a fix |
+| `CullWidenBounds` | `1` | Widen every listed room's clip rect to the whole target (the old `DrawAllRoomsClipRect`) |
+| `CullObjects` | `1` | Extend the fix to items, so the added rooms are not empty |
+| `CullDumpKey` | `0x77` | F8. Dump the draw list, added rooms starred |
 
 ## Phase 8: D-pad input support
 
@@ -1799,8 +1950,8 @@ each instructive.
 
 #### Attempt 1: the camera room's water flag — structurally wrong
 
-Every room carries an underwater bit, and `RoomCull` already walks the room array
-every frame (see [Phase 7](#phase-7-culling-fix)), so this looked free. Two
+Every room carries an underwater bit, and the culling already walks the room
+array every frame (see [Phase 7](#phase-7-culling-fix)), so this looked free. Two
 things had to be established.
 
 **The flag is not where the classic layout puts it.** `flipped_room` is confirmed
@@ -1981,10 +2132,12 @@ rather than a negative cap that would push you down.
 
 ### Where headroom comes from
 
-`RoomCull` already reads the camera position and every room's bounding box each
-frame for the culling fix, so headroom costs nothing extra. `list[0]` is the room
-the game camera is in, and **TR's Y is down-positive**, which makes a room's
-`YMin` its *ceiling*:
+The culling already reads the camera position and every room's bounding box each
+frame, so headroom costs nothing extra. `list[0]` is the room the game camera is
+in, and **TR's Y is down-positive**, which makes a room's `YMin` its *ceiling*:
+
+(Phase 7B moved this into `GameDll.cpp` and made it read the camera's own room
+on demand, so it no longer goes stale when the culling is switched off.)
 
 ```
 headroom = camY − room.YMin
@@ -2015,7 +2168,7 @@ box version turns out to miss real cases.
 
 ### Shared plumbing
 
-Headroom rides on the same `RoomCull` per-frame room read that
+Headroom rides on the same `GameDll` per-frame room read that
 [Phase 10](#phase-10-decoupled-pitch)'s water detection uses, and resolves
 through the same per-build address table as
 [Phase 7](#phase-7-culling-fix). One consequence worth stating: on a game build
@@ -2054,6 +2207,26 @@ world backing away when you sit up in a vent.
 
 ---
 
+### Builds, and what happens to an unknown one
+
+The address table now carries **only builds with a PDB**. The old table had a
+second pair of rows derived by applying a uniform per-DLL shift to the newer
+build's addresses, marked UNVERIFIED — a reasonable thing to do when the
+alternative was nothing, and not reasonable now that the alternative is running
+`pdbdump` against that build's own PDB.
+
+An unrecognised build is named in the log along with the ones that are known, and
+the culling, the ceiling clamp and the swimming exception all stand down for it.
+That is the honest failure: every address would otherwise be a guess, and one of
+them is a hook target.
+
+### TR6
+
+Not addressed. It is a different engine with different room structures, and it
+has no row in the address table, so the culling simply does not install for it.
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
@@ -2081,15 +2254,18 @@ These are honest gaps, not oversights.
   plausible symptom of an unrelated mistake.
 - **Depth has no stencil anywhere** (`GL_DEPTH_ATTACHMENT` only), so the eye
   target matches that.
-- **The culling fix is coverage, not correctness.** [Phase 7](#phase-7-culling-fix)
-  expands the visible set by portal connectivity, which is orientation-free and
-  therefore over-inclusive: rooms are drawn that you could not actually see
-  through that doorway. Where such a room shares world space with one you can
-  see, foreign geometry is laid over your own — the room-215 bug, still worked
-  around by index rather than understood. `PortalHeadTest` is the intended
-  general fix and is unproven.
-- **The culling fix is TR4 and TR5 only.** TR6's traversal has not been mapped,
-  so Angel of Darkness still culls to the game camera.
+- **Room 215 is expected to be fixed, and has not been confirmed.**
+  [Phase 7B](#phase-7b-the-culling-fix-done-properly) narrows the frustum at
+  every doorway, so a room that is connected but not visible through that
+  doorway is no longer reached — which is precisely the mechanism
+  [Phase 7](#phase-7-culling-fix) diagnosed behind the room-215 bug, and the
+  reason `DrawAllRoomsExclude` is gone rather than carried forward. It is a
+  prediction from the diagnosis, not a measurement. If 215 comes back, press
+  `CullDumpKey` while it is on screen: the dump names the doorway it was reached
+  through, and that would mean the room really is visible along some sightline
+  and the cause lies elsewhere.
+- **The culling fix is TR4 and TR5 only.** TR6 is a different engine and has no
+  row in the address table, so Angel of Darkness still culls to the game camera.
 - **The controllers are a gamepad, not hands.** Phase 5 maps them to XInput;
   there is no motion aiming, no hand presence in-world, and no haptics.
 - **TR6 updates each eye at half the frame rate.** Alternate-eye rendering is a
@@ -2123,13 +2299,16 @@ the culling investigation, and it is there for the next target that does.
 
 ```
 src/              the mod: hooks, engine map, OpenVR glue, matrix maths
-src/RoomCull.*    the DLL-side portal-culling fix (TR4/TR5)
-src/Callsite.*    return-address census, for locating code in the PDB-less DLLs
+src/GameDll.*     binding and address table for tomb4.dll / tomb5.dll
+src/PortalCull.*  head-driven room culling, hooked into the game DLL
+src/PortalGeom.h  the frustum maths behind it, tested by tests/
+src/Callsite.*    return-address census, from before the DLLs had symbols
 src/DefaultIni.h  the compiled-in ini template, written out when none exists
 src/proxy/        the winmm shim that gets us loaded
-tools/            fetch_openvr.ps1, gen_winmm_forwards.ps1, vrprobe
-tests/            selftest (hooks + maths), proxytest (loader behaviour)
-docs/             engine-map.html -- the full renderer map
+PDB/              tomb456.exe + tomb4/tomb5.dll and their PDBs
+tools/            PDB extraction, disassembly, address verification, vrprobe
+tests/            selftest (hooks + maths + frustum), proxytest (loader)
+docs/             engine-map.html — the full renderer map
+TombRaiderVR.ini  the ini template; src/DefaultIni.h is generated from it
 trace.txt         the Ghidra session that produced src/Engine.h
-(the ini is generated at runtime from src/DefaultIni.h, not stored here)
 ```

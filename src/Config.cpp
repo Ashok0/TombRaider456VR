@@ -176,16 +176,9 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.scaleDownKey        = GetIntAuto(L"ScaleDownKey",     g_cfg.scaleDownKey,       ini);
     g_cfg.ipdUpKey            = GetIntAuto(L"IpdUpKey",         g_cfg.ipdUpKey,           ini);
     g_cfg.ipdDownKey          = GetIntAuto(L"IpdDownKey",       g_cfg.ipdDownKey,         ini);
-    g_cfg.portalHops          = GetInt  (L"PortalHops",         g_cfg.portalHops,         ini);
-    g_cfg.portalHeadTest      = GetBool (L"PortalHeadTest",     g_cfg.portalHeadTest,     ini);
     // Only a line that actually parsed may replace the built-in list. Assigning
     // the count unconditionally is what would erase the defaults on any install
     // whose ini predates the key or has had it deleted.
-    const int nExclude = GetIntList(L"DrawAllRoomsExclude", g_cfg.excludeRooms, 64, ini);
-    if (nExclude >= 0) g_cfg.excludeCount = nExclude;
-    g_cfg.roomDumpKey         = GetIntAuto(L"RoomDumpKey",     g_cfg.roomDumpKey,        ini);
-    g_cfg.portalHeadMargin    = GetFloat(L"PortalHeadMargin",   g_cfg.portalHeadMargin,   ini);
-    g_cfg.drawAllRoomsClip    = GetBool (L"DrawAllRoomsClipRect", g_cfg.drawAllRoomsClip, ini);
     g_cfg.resetTuningKey      = GetIntAuto(L"ResetTuningKey",   g_cfg.resetTuningKey,     ini);
     g_cfg.scaleStep           = GetFloat(L"ScaleStep",          g_cfg.scaleStep,          ini);
     if (g_cfg.scaleStep < 1.01f) g_cfg.scaleStep = 1.01f;
@@ -233,8 +226,20 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.decoupledPitchChord = GetBool (L"DecoupledPitchChord", g_cfg.decoupledPitchChord, ini);
     g_cfg.decoupledPitchWaterOff = GetBool (L"DecoupledPitchWaterOff", g_cfg.decoupledPitchWaterOff, ini);
     g_cfg.gamepadMenuUsesBack = GetBool (L"GamepadMenuUsesBack", g_cfg.gamepadMenuUsesBack, ini);
+    g_cfg.portalCulling       = GetBool (L"PortalCulling",      g_cfg.portalCulling,      ini);
+    g_cfg.cullFovMarginDegrees = GetFloat(L"CullFovMarginDegrees", g_cfg.cullFovMarginDegrees, ini);
+    g_cfg.cullMaxDepth        = GetInt  (L"CullMaxDepth",       g_cfg.cullMaxDepth,       ini);
+    g_cfg.cullMaxPortals      = GetInt  (L"CullMaxPortals",     g_cfg.cullMaxPortals,     ini);
+    g_cfg.cullFarUnits        = GetFloat(L"CullFarUnits",       g_cfg.cullFarUnits,       ini);
+    g_cfg.cullWidenBounds     = GetBool (L"CullWidenBounds",    g_cfg.cullWidenBounds,    ini);
+    g_cfg.cullObjects         = GetBool (L"CullObjects",        g_cfg.cullObjects,        ini);
+    g_cfg.cullDumpKey         = GetIntAuto(L"CullDumpKey",      g_cfg.cullDumpKey,        ini);
+    {
+        const int nWatch = GetIntList(L"CullWatchRooms", g_cfg.cullWatchRooms, 16, ini);
+        if (nWatch >= 0) g_cfg.cullWatchCount = nWatch;
+    }
+
     g_cfg.logCallsites        = GetBool (L"LogCallsites",       g_cfg.logCallsites,       ini);
-    g_cfg.drawAllRooms        = GetBool (L"DrawAllRooms",       g_cfg.drawAllRooms,       ini);
     g_cfg.perEyeProjection    = GetIntAuto(L"PerEyeProjection", g_cfg.perEyeProjection,   ini);
     g_cfg.flatHud             = GetBool (L"FlatHud",            g_cfg.flatHud,            ini);
     g_cfg.duplicateDraws      = GetBool (L"DuplicateDraws",     g_cfg.duplicateDraws,     ini);
@@ -253,6 +258,42 @@ void LoadConfig(const wchar_t* ini) {
     if (g_cfg.superSample > 4.0f)  g_cfg.superSample = 4.0f;
     if (g_cfg.worldUnitsPerMetre < 1.0f) g_cfg.worldUnitsPerMetre = 1.0f;
 
+    // Culling budgets. The lower bounds are not taste: a depth or portal budget
+    // of zero would silently turn the feature into a no-op that still logs as
+    // active, and the upper bounds keep a typo out of the render thread.
+    if (g_cfg.cullMaxDepth   < 1)     g_cfg.cullMaxDepth   = 1;
+    if (g_cfg.cullMaxDepth   > 64)    g_cfg.cullMaxDepth   = 64;
+    if (g_cfg.cullMaxPortals < 64)    g_cfg.cullMaxPortals = 64;
+    if (g_cfg.cullMaxPortals > 65536) g_cfg.cullMaxPortals = 65536;
+    if (g_cfg.cullFovMarginDegrees < 0.0f)  g_cfg.cullFovMarginDegrees = 0.0f;
+    if (g_cfg.cullFovMarginDegrees > 45.0f) g_cfg.cullFovMarginDegrees = 45.0f;
+    if (g_cfg.cullFarUnits < 0.0f)          g_cfg.cullFarUnits = 0.0f;
+
+    // Keys the head-frustum traversal retired. An ini that predates it is a
+    // working ini, so this is a log line and not an error -- but a player who
+    // set PortalHops=6 to chase missing geometry deserves to be told it is not
+    // doing anything any more, rather than left wondering.
+    {
+        static const wchar_t* const kRetired[] = {
+            L"PortalHops", L"DrawAllRooms", L"DrawAllRoomsClipRect",
+            L"DrawAllRoomsExclude", L"PortalHeadTest", L"PortalHeadMargin",
+            L"RoomDumpKey",
+        };
+        wchar_t found[256] = {};
+        for (const wchar_t* k : kRetired) {
+            wchar_t buf[8] = {};
+            if (GetPrivateProfileStringW(L"VR", k, L"", buf, 8, ini) == 0) continue;
+            if (found[0]) wcscat_s(found, L", ");
+            wcscat_s(found, k);
+        }
+        if (found[0]) {
+            LogF("config: these keys were retired when the culling became a real "
+                 "portal traversal and are now IGNORED: %S. PortalCulling and "
+                 "the Cull* keys replace all of them; CullDumpKey replaces "
+                 "RoomDumpKey.", found);
+        }
+    }
+
     LogF("config: mode=%s tracking=%s origin=%s units/m=%.1f ss=%.2f "
          "flipProjY=%d flipViewY=%d dup=%d flatHud=%d",
          g_cfg.monoTracking ? "MONO head-tracking" : "stereo",
@@ -261,6 +302,11 @@ void LoadConfig(const wchar_t* ini) {
          g_cfg.worldUnitsPerMetre, g_cfg.superSample,
          g_cfg.flipProjectionY, g_cfg.flipViewY,
          g_cfg.duplicateDraws, g_cfg.flatHud);
+    LogF("config: culling=%s margin=%.1fdeg depth<=%d portals<=%d far=%.0f "
+         "widen=%d objects=%d",
+         g_cfg.portalCulling ? "head frustum" : "ENGINE (rooms will vanish)",
+         g_cfg.cullFovMarginDegrees, g_cfg.cullMaxDepth, g_cfg.cullMaxPortals,
+         g_cfg.cullFarUnits, g_cfg.cullWidenBounds, g_cfg.cullObjects);
     if (g_cfg.traceFrames > 0) {
         LogF("config: frame-graph trace armed -- %d frame(s), hotkey vk=0x%02X",
              g_cfg.traceFrames, g_cfg.traceKey);
