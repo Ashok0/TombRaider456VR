@@ -131,6 +131,7 @@ LAYOUT = ['lara', 'camera', 'room', 'number_rooms',
           'phd_winxmax', 'phd_winymax',
           'outside', 'outside_left', 'outside_right', 'outside_top',
           'outside_bottom',
+          'BinocularOn', 'BinocularRange',
           'PrintRoomsList', 'S_GetObjectBounds']
 
 rows = []

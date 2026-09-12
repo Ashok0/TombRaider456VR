@@ -69,6 +69,8 @@ constexpr GameDllLayout kDlls[] = {
       /* outside_right   */ 0x0084E160,
       /* outside_top     */ 0x0084E168,
       /* outside_bottom  */ 0x0084E164,
+      /* BinocularOn     */ 0x001BB244,
+      /* BinocularRange  */ 0x001BB24C,
       /* PrintRoomsList  */ 0x000C5160,
       /* S_GetObjectB..  */ 0x000B8210,
       kPrintRoomsListTR4, sizeof(kPrintRoomsListTR4) },
@@ -89,6 +91,8 @@ constexpr GameDllLayout kDlls[] = {
       /* outside_right   */ 0x00847A40,
       /* outside_top     */ 0x00847A5C,
       /* outside_bottom  */ 0x00847A58,
+      /* BinocularOn     */ 0x001B6C90,
+      /* BinocularRange  */ 0x001B6C98,
       /* PrintRoomsList  */ 0x000B9CA0,
       /* S_GetObjectB..  */ 0x000ABB20,
       kPrintRoomsListTR5, sizeof(kPrintRoomsListTR5) },
@@ -181,6 +185,19 @@ uint64_t             GameDllBase()  { return g_base; }
 int LaraWaterStatus() {
     if (!g_dll) return -1;
     return Read<int16_t>(g_dll->lara + off::lara_water_status);
+}
+
+bool IsOpticsZoomed() {
+    if (!g_dll) return false;
+
+    // The exact two fields ProcessLooking itself checks before deciding whether
+    // the right stick drives ordinary look-around or the zoom camera --
+    // decompiled and confirmed, not guessed. BinocularRange is a ramp counter
+    // nonzero for the whole entering/leaving transition; BinocularOn goes
+    // negative on the way out. Either being nonzero means the zoom camera, not
+    // the normal one, currently owns the stick.
+    return Read<int32_t>(g_dll->binocularOn)    != 0
+        || Read<int32_t>(g_dll->binocularRange) != 0;
 }
 
 bool CameraHeadroom(float& units) {

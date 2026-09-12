@@ -56,6 +56,7 @@ uint32_t           g_packet    = 0;
 uint64_t           g_lastRaw[2] = { 0, 0 };
 bool               g_loggedOnce = false;
 int                g_lastWater  = -2;
+int                g_lastZoom   = -1;   // 0/1, -1 = not yet logged
 
 int16_t Axis(float v) {
     if (v >  1.0f) v =  1.0f;
@@ -314,7 +315,23 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
              swimming ? "RESTORED for swimming" : "decoupled");
     }
 
-    if (Cfg().decoupledPitch && !chord && !swimming) mine.Gamepad.sThumbRY = 0;
+    // Zoom (binoculars, or a weapon combined with a laser sight) is the same
+    // exception for the same reason: the game's own zoom camera reads stick Y
+    // directly for vertical aim once it has taken over, and the head cannot
+    // stand in for it there any more than it can underwater. Checked from
+    // BinocularOn/BinocularRange in the game DLL -- the same two fields the
+    // game's own ProcessLooking reads to decide whether the stick means "look"
+    // or "aim the zoom camera" -- so this is the game's own boundary, not an
+    // approximation of one.
+    const bool zooming = Cfg().decoupledPitchZoomOff && IsOpticsZoomed();
+    const int  zoomLog = zooming ? 1 : 0;
+    if (zoomLog != g_lastZoom) {
+        g_lastZoom = zoomLog;
+        LogF("pad: optics zoom %s -- stick pitch %s", zooming ? "ENTERED" : "left",
+             zooming ? "RESTORED for the zoom camera" : "decoupled");
+    }
+
+    if (Cfg().decoupledPitch && !chord && !swimming && !zooming) mine.Gamepad.sThumbRY = 0;
 
     *state = mine;
     return ERROR_SUCCESS;

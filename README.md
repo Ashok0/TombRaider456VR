@@ -2090,6 +2090,51 @@ pad: water_status=0 (above water) -- stick pitch decoupled
 
 `WADE` counts as water too, since wading also steers with the look axis.
 
+### Zoom is the same exception, for the same reason
+
+Binoculars, and any weapon combined with a laser sight, hand the camera to a
+dedicated zoom camera (`BinocularCamera_TR4`/`BinocularCamera_TR5`) that reads
+the right stick's Y axis directly for vertical aim. With `DecoupledPitch=1`
+suppressing that axis, holding the zoom got a scope that panned sideways and
+never up or down — mechanically identical to the swimming bug, and missed for
+the same reason: the head is not a substitute for the stick where the *stick*
+is what the game reads.
+
+Confirmed by decompiling `ProcessLooking`, the function that decides — every
+frame — whether the right stick means "look around" or "hand off to the zoom
+camera". It makes that call from exactly two fields:
+
+```c
+if (BinocularRange != 0)  { /* mid-transition, either direction */ }
+if (BinocularOn < 0)      { /* leaving */ }
+```
+
+`BinocularRange` is a ramp counter, nonzero for the whole entering/leaving
+transition; `BinocularOn` goes negative on the way out and (per `CalculateNewCamera`,
+which sets it) settles to a steady nonzero value once fully zoomed in. So
+`BinocularOn != 0 || BinocularRange != 0` is not an approximation of "currently
+zoomed" — it is the game's own boundary, read rather than guessed, exposed as
+`IsOpticsZoomed()` next to `LaraWaterStatus()` in `GameDll.cpp`.
+
+`DecoupledPitchZoomOff` (on by default) hands stick pitch back for exactly the
+same lifetime this reports true:
+
+```
+pad: optics zoom ENTERED -- stick pitch RESTORED for the zoom camera
+pad: optics zoom left -- stick pitch decoupled
+```
+
+Two more symptoms were reported alongside the frozen pitch — the wrong vignette
+(binocular instead of sniper scope) when zoomed with a laser-sighted rifle, and
+the laser dot sitting off from where the shot actually goes — and both are
+**confirmed fixed by the same change**, not a separate one. Neither was
+investigated on its own; both are exactly what a frozen vertical aim looks like
+one layer further downstream, the zoom camera's own state no longer tracking
+where the head is actually looking the moment its stick input got zeroed, with
+the overlay and the laser dot both drawn from that same stuck aim vector. One
+root cause, three symptoms, confirmed in play after `DecoupledPitchZoomOff`
+landed.
+
 ### Phase 10 settings
 
 | Setting | Default | What it does |
@@ -2097,6 +2142,7 @@ pad: water_status=0 (above water) -- stick pitch decoupled
 | `DecoupledPitch` | `1` | Drop the right stick's vertical axis so only the headset pitches the view. `0` restores the stock two-axis stick |
 | `DecoupledPitchChord` | `1` | Hold RT + RB to get stick pitch back while held. Never takes pitch away; does nothing when `DecoupledPitch=0` |
 | `DecoupledPitchWaterOff` | `1` | Restore stick pitch automatically while Lara is in water, read from her own `water_status`. `WADE` counts |
+| `DecoupledPitchZoomOff` | `1` | Restore stick pitch automatically while zoomed through binoculars or a laser-sighted weapon, read from the same `BinocularOn`/`BinocularRange` fields the game itself checks |
 
 ---
 

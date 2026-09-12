@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 32617 bytes, 649 lines.
+// Source: TombRaiderVR.ini, 34059 bytes, 676 lines.
 #pragma once
 
 namespace tr {
@@ -450,6 +450,33 @@ DecoupledPitch=1
 ; while it is held; nothing is taken away to pay for it.
 DecoupledPitchChord=1
 
+; Hand stick pitch back automatically while Lara is in the water. Leave at 1.
+;
+; The one place DecoupledPitch=1 is not a comfort win but a straight loss: TR
+; steers the swim with the LOOK axis, so suppressing pitch removes the ability
+; to dive or surface at all -- and the head cannot stand in for it, because the
+; head turns the VIEW while the stick turns LARA herself.
+;
+; Read from Lara's own water_status in the game DLL, so it follows HER and not
+; the camera. An earlier attempt read the camera room's water flag instead and
+; failed exactly where it mattered: during a surface swim the camera sits in
+; the air room above the water and reports dry for the whole swim.
+DecoupledPitchWaterOff=1
+
+; Hand stick pitch back automatically while looking through an optic --
+; binoculars, or a weapon combined with a laser sight. Leave at 1.
+;
+; The same failure as swimming, for the same reason: the game's own zoom
+; camera reads the right stick's Y axis directly for vertical aim once it has
+; taken over, and the head cannot stand in for it there either. Without this,
+; holding the zoom (hold the right stick click) gets you a scope that pans
+; sideways but never up or down.
+;
+; Read from the same two fields the game's own look-handling code checks to
+; decide whether the stick means "look around" or "aim the zoom camera", so
+; this follows the game's own notion of "currently zoomed" rather than a guess.
+DecoupledPitchZoomOff=1
+
 ; Hold R3 (right stick click) to turn the LEFT stick into a D-pad.
 ;
 ; R3 is the modifier rather than L3 because L3 is Sprint, and sprint here is
@@ -466,7 +493,8 @@ DecoupledPitchChord=1
 ; move a menu selection twice.
 DpadShift=1
 
-; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
+)INI"
+           R"INI(; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
 ;
 ; Touch has no Start or Back of its own, so both have to come from somewhere.
 ; The System button on the left hand's lower face sends one of them (see
@@ -496,8 +524,7 @@ DpadShiftDeadzone=0.5
 ;   0 = START -- the pause/inventory menu.
 ; inputUpdate() decodes BACK to internal key 0x62 and START to 0x63; which one a
 ; given screen treats as System lives in the game DLLs, so this stays switchable.
-)INI"
-           R"INI(GamepadMenuUsesBack=1
+GamepadMenuUsesBack=1
 
 ; --- reverse engineering ----------------------------------------------------
 
@@ -627,7 +654,8 @@ CullDumpKey=0x77
 ;
 ; This is the targeted form of the dump key. A room that only misbehaves for a
 ; moment is hard to catch with a hotkey, and "does the traversal ever reach 215,
-; and how" should not need good reflexes to answer. Silence means it never got
+)INI"
+           R"INI(; and how" should not need good reflexes to answer. Silence means it never got
 ; added, which is itself the answer.
 CullWatchRooms=
 
@@ -655,8 +683,7 @@ CullWatchRooms=
 ; legitimate pairs at once.
 ;
 ; THE VIEW MATRIX'S TRANSLATION COLUMN IS THE CAMERA POSITION. It is not the
-)INI"
-           R"INI(; -R*p a textbook view matrix carries. vid_setViewMatrix (tomb456.exe RVA
+; -R*p a textbook view matrix carries. vid_setViewMatrix (tomb456.exe RVA
 ; 0x0000B960) scales the nine rotation terms by 1/16384, negates exactly the
 ; third row, and writes m[3], m[7] and m[11] through RAW. Using it as though it
 ; were -R*p produces an error that scales with world coordinates, so it behaves

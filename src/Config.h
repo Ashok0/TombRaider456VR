@@ -446,6 +446,23 @@ struct Config {
     // AIR room above the water, so it reported dry through an entire swim.
     bool  decoupledPitchWaterOff = true;
 
+    // Hand stick pitch back automatically while looking through an optic --
+    // binoculars, or a weapon combined with a laser sight.
+    //
+    // The same failure as swimming, for the same reason: the game's own zoom
+    // camera (BinocularCamera_TR4/TR5) reads the right stick's Y axis directly
+    // for vertical aim while zoomed, and the head cannot stand in for it --
+    // decoupledPitch exists to let the HEAD look around independently of where
+    // LARA is aimed, and inside a scope those two are supposed to be the same
+    // thing. Without this, holding the zoom (right stick click, held) gets you
+    // a scope that pans sideways but never up or down.
+    //
+    // Read from BinocularOn / BinocularRange in the game DLL -- the same two
+    // fields the game's own ProcessLooking checks to decide whether the stick
+    // means "look" or "aim the zoom camera", so this follows the game's own
+    // notion of "currently zoomed" rather than a guess at one.
+    bool  decoupledPitchZoomOff = true;
+
     // Which XInput button the left hand's lower face button sends.
     //
     // true  = BACK  -- the System menu. This is the default.

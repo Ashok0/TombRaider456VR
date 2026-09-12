@@ -225,6 +225,7 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.decoupledPitch      = GetBool (L"DecoupledPitch",     g_cfg.decoupledPitch,     ini);
     g_cfg.decoupledPitchChord = GetBool (L"DecoupledPitchChord", g_cfg.decoupledPitchChord, ini);
     g_cfg.decoupledPitchWaterOff = GetBool (L"DecoupledPitchWaterOff", g_cfg.decoupledPitchWaterOff, ini);
+    g_cfg.decoupledPitchZoomOff  = GetBool (L"DecoupledPitchZoomOff",  g_cfg.decoupledPitchZoomOff,  ini);
     g_cfg.gamepadMenuUsesBack = GetBool (L"GamepadMenuUsesBack", g_cfg.gamepadMenuUsesBack, ini);
     g_cfg.portalCulling       = GetBool (L"PortalCulling",      g_cfg.portalCulling,      ini);
     g_cfg.cullFovMarginDegrees = GetFloat(L"CullFovMarginDegrees", g_cfg.cullFovMarginDegrees, ini);

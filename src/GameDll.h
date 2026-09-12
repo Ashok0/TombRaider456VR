@@ -67,6 +67,10 @@ struct GameDllLayout {
     uint32_t outsideTop;
     uint32_t outsideBottom;
 
+    // --- state read by IsOpticsZoomed ----------------------------------------
+    uint32_t binocularOn;       // int32  0 = off, transitions through here
+    uint32_t binocularRange;    // int32  ramp counter, nonzero while entering/leaving
+
     // --- hook targets -------------------------------------------------------
     uint32_t printRoomsList;    // void PrintRoomsList(void)
     uint32_t sGetObjectBounds;  // int  S_GetObjectBounds(int16* bounds)
@@ -99,6 +103,23 @@ uint64_t GameDllBase();
 // her and sits in the air room during a surface swim, so anything derived from
 // the camera's room reports dry exactly when it matters most.
 int LaraWaterStatus();
+
+// True while Lara is looking through an optic -- binoculars, or a weapon
+// combined with a laser sight -- and the game's own zoom camera
+// (BinocularCamera_TR4/TR5) has taken over the view instead of the normal one.
+//
+// Read from BinocularOn and BinocularRange in the game DLL, the same two
+// fields ProcessLooking itself checks (decompiled and confirmed, not guessed)
+// before deciding whether the right stick drives ordinary look-around or the
+// zoom camera: BinocularRange is a ramp counter that is nonzero while entering
+// or leaving the zoomed view, and BinocularOn goes negative on the way out.
+// Either being nonzero means the zoom camera owns the stick, so this reports
+// true for the whole lifetime of the zoom -- entering, steady, and leaving --
+// not only the fully-settled middle of it.
+//
+// False (rather than -1, since there is no "unknown" state here the way there
+// is for water) when no game DLL is bound.
+bool IsOpticsZoomed();
 
 // World units from the game camera up to its room's ceiling.
 //
