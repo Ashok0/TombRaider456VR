@@ -61,6 +61,10 @@ hook::InlineHook g_hTr6MapCalcVisibleRooms;
 hook::InlineHook g_hTr6DrawRoomList;
 hook::InlineHook g_hTr6ClippedObb;
 hook::InlineHook g_hTr6DrawProjectedShadows;
+hook::InlineHook g_hTr6EffectsUpdate;
+hook::InlineHook g_hTr6FxCamDist;
+hook::InlineHook g_hTr6FxBoundsClip;
+hook::InlineHook g_hTr6FxNodeBoundsClip;
 
 typedef void(__cdecl* Fn_vid_setPass)(int shader, float* params, int cull, int blend);
 typedef void(__cdecl* Fn_validate_draw)();
@@ -105,6 +109,11 @@ struct alignas(16) Tr6CameraView {
     uint8_t tail[208];
 };
 static_assert(sizeof(Tr6CameraView) == 400, "TR6 camera-view layout changed");
+
+typedef void(__fastcall* Fn_tr6_effects_update)(
+    const Tr6CameraView* cameraView);
+typedef float(__fastcall* Fn_tr6_fx_cam_dist)(const float* position);
+typedef int32_t(__fastcall* Fn_tr6_fx_bounds_clip)(const float* bounds);
 
 typedef void(__fastcall* Fn_tr6_calculate)(
     void* crp, void* drawBuffer, void* matrixStack, void* roomPool,
@@ -181,6 +190,32 @@ const uint8_t kTr6ClippedObbPrologue[] =
 const uint8_t kTr6DrawProjectedShadowsPrologue[] =
     { 0x4C, 0x8B, 0xDC, 0x49, 0x89, 0x53, 0x10 };
 
+// App_DrawEffects_UpdateRenderData: MOV RAX,RSP ; PUSH R12.
+const uint8_t kTr6EffectsUpdatePrologue[] =
+    { 0x48, 0x8B, 0xC4, 0x41, 0x54 };
+
+// fxCamDist: SUB RSP,0x28 followed by a RIP-relative read of
+// gcamCamera.Position.x. The displacement starts at byte 8 and is relocated in
+// the trampoline.
+const uint8_t kTr6FxCamDistPrologue[] =
+    { 0x48, 0x83, 0xEC, 0x28, 0xF3, 0x0F, 0x10, 0x0D,
+      0xA4, 0x5C, 0x1F, 0x00 };
+const int kTr6FxCamDistRipOffsets[] = { 8 };
+
+// mathIsBoundsClipped: SUB RSP,0x48 followed by a RIP-relative security-cookie
+// read. Only the call made by fxProcessBox's local-light case is overridden.
+const uint8_t kTr6FxBoundsClipPrologue[] =
+    { 0x48, 0x83, 0xEC, 0x48, 0x48, 0x8B, 0x05,
+      0x55, 0xE7, 0x0E, 0x00 };
+const int kTr6FxBoundsClipRipOffsets[] = { 7 };
+
+// mathIsBoundsClippedAlt has the same stack/cookie prologue. mapDrawRoomList
+// uses its sign to set every FX node's primary 0x100 off-camera flag.
+const uint8_t kTr6FxNodeBoundsClipPrologue[] =
+    { 0x48, 0x83, 0xEC, 0x48, 0x48, 0x8B, 0x05,
+      0x05, 0xE6, 0x0E, 0x00 };
+const int kTr6FxNodeBoundsClipRipOffsets[] = { 7 };
+
 constexpr uint32_t kTr6DllTimestamp     = 0x696B49A4;
 constexpr uint32_t kTr6RenderSceneRva   = 0x001B1CA0;
 constexpr uint32_t kTr6CalculateRva     = 0x001A6DB0;
@@ -188,6 +223,10 @@ constexpr uint32_t kTr6MapCalcRva       = 0x001A8290;
 constexpr uint32_t kTr6DrawRoomListRva  = 0x0014E370;
 constexpr uint32_t kTr6ClippedObbRva    = 0x001A4380;
 constexpr uint32_t kTr6DrawProjectedShadowsRva = 0x001B8270;
+constexpr uint32_t kTr6EffectsUpdateRva = 0x001A28D0;
+constexpr uint32_t kTr6FxCamDistRva      = 0x00107890;
+constexpr uint32_t kTr6FxBoundsClipRva   = 0x0019F8E0;
+constexpr uint32_t kTr6FxNodeBoundsClipRva = 0x0019FA30;
 
 // Render-list globals identified by the tomb6 PDB. gmapRoomClip is exactly
 // MAP_ROOMCLIP[192]; the current GMX stores its active room count at +0x7A0.
@@ -201,6 +240,14 @@ constexpr uint32_t kTr6RoomBoundsMaxOff = 0x000000B0;
 constexpr uint32_t kTr6RoomIsFlipOff    = 0x00000218;
 constexpr uint32_t kTr6CameraMatrixRva  = 0x0029DCC0;
 constexpr uint32_t kTr6PerspGameRva     = 0x003A13E0;
+constexpr uint32_t kTr6GcamCameraRva    = 0x002FD540;
+// The instruction immediately after fxProcessBox's call to
+// mathIsBoundsClipped. That call gates fxInsertFXLight, which supplies such
+// effects as the pools of light beneath street lamps.
+constexpr uint32_t kTr6FxLightBoundsReturnRva = 0x00115FDB;
+constexpr uint32_t kTr6FxNodeBoundsReturnRva  = 0x0014E545;
+constexpr uint32_t kTr6FxProcessBoxRva         = 0x00109020;
+constexpr uint32_t kTr6FxProcessBoxSize        = 55064;
 
 // TR6's stock 65536-unit far plane is visible in a headset because the wider
 // tracked view exposes long sightlines the third-person monitor camera rarely
@@ -334,6 +381,10 @@ bool g_loggedTr6AllRooms         = false;
 bool g_loggedTr6ObjectCull       = false;
 bool g_loggedTr6FarPlane         = false;
 bool g_loggedTr6ShadowIsolation  = false;
+bool g_loggedTr6EffectsCamera    = false;
+bool g_loggedTr6FxDistance        = false;
+bool g_loggedTr6FxBounds          = false;
+bool g_loggedTr6FxNodeBounds      = false;
 bool g_tr6VrCalculateActive      = false;
 bool g_inTr6ShadowDepthPass      = false;
 int32_t g_tr6HeadRoomList        = -1;
@@ -353,7 +404,11 @@ uint32_t ModuleTimestamp(HMODULE module) {
 
 bool NativeTr6HookReady() {
     return g_hTr6RenderScene.installed()
-        && g_hTr6DrawProjectedShadows.installed();
+        && g_hTr6DrawProjectedShadows.installed()
+        && g_hTr6EffectsUpdate.installed()
+        && g_hTr6FxCamDist.installed()
+        && g_hTr6FxBoundsClip.installed()
+        && g_hTr6FxNodeBoundsClip.installed();
 }
 
 bool NativeTr6Capable() {
@@ -1553,6 +1608,137 @@ void __cdecl Detour_ogl_drawVB(int fvf, void* vb, void* ib, int stride,
 // ---------------------------------------------------------------------------
 // TR6 App_Render_Scene -- full offscreen scene replay per eye
 // ---------------------------------------------------------------------------
+float __fastcall Detour_Tr6FxCamDist(const float* position) {
+    const auto original = g_hTr6FxCamDist.Original<Fn_tr6_fx_cam_dist>();
+    const uintptr_t returnAddress =
+        reinterpret_cast<uintptr_t>(_ReturnAddress());
+    const bool fromFxProcessBox = g_tr6ModuleBase
+        && returnAddress >= g_tr6ModuleBase + kTr6FxProcessBoxRva
+        && returnAddress < g_tr6ModuleBase + kTr6FxProcessBoxRva
+                                            + kTr6FxProcessBoxSize;
+    if (!NativeTr6Active() || !fromFxProcessBox || !position) {
+        return original(position);
+    }
+
+    // fxProcessBox normally measures emitter range from gcamCamera.Position.
+    // Rotating the third-person camera moves that position around the player,
+    // so dust emitters cross their range thresholds even though neither Lara
+    // nor the emitter moved. LookAt is the stable gameplay focal point during
+    // an orbit and keeps those decisions independent of camera-stick yaw.
+    const float* gcam = reinterpret_cast<const float*>(
+        g_tr6ModuleBase + kTr6GcamCameraRva);
+    const float dx = gcam[4] - position[0];
+    const float dy = gcam[5] - position[1];
+    const float dz = gcam[6] - position[2];
+
+    if (!g_loggedTr6FxDistance) {
+        g_loggedTr6FxDistance = true;
+        Log("tr6 effects: fxProcessBox emitter range now uses the stable "
+            "camera target instead of the orbiting chase-camera position");
+    }
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+int32_t __fastcall Detour_Tr6FxBoundsClip(const float* bounds) {
+    const auto original =
+        g_hTr6FxBoundsClip.Original<Fn_tr6_fx_bounds_clip>();
+    const uintptr_t returnAddress =
+        reinterpret_cast<uintptr_t>(_ReturnAddress());
+
+    // This exact fxProcessBox call guards fxInsertFXLight. Its frustum is still
+    // the third-person camera's, so a lamp pool can disappear while it remains
+    // inside the tracked VR view. Other users of mathIsBoundsClipped (including
+    // actor simulation) retain the engine's original result.
+    if (NativeTr6Active() && g_tr6ModuleBase
+        && returnAddress == g_tr6ModuleBase + kTr6FxLightBoundsReturnRva) {
+        if (!g_loggedTr6FxBounds) {
+            g_loggedTr6FxBounds = true;
+            Log("tr6 effects: fxProcessBox local-light frustum reject disabled "
+                "for native stereo");
+        }
+        return 0;
+    }
+    return original(bounds);
+}
+
+int32_t __fastcall Detour_Tr6FxNodeBoundsClip(const float* bounds) {
+    const auto original =
+        g_hTr6FxNodeBoundsClip.Original<Fn_tr6_fx_bounds_clip>();
+    const uintptr_t returnAddress =
+        reinterpret_cast<uintptr_t>(_ReturnAddress());
+
+    // mapDrawRoomList converts the sign of this result into bit 0x100 on the
+    // FX node. Most fxProcessBox particle/light cases test that bit before any
+    // of their type-specific logic and return immediately when it is set.
+    if (NativeTr6Active() && g_tr6ModuleBase
+        && returnAddress == g_tr6ModuleBase + kTr6FxNodeBoundsReturnRva) {
+        if (!g_loggedTr6FxNodeBounds) {
+            g_loggedTr6FxNodeBounds = true;
+            Log("tr6 effects: primary mapDrawRoomList FX-node off-camera flag "
+                "disabled for native stereo");
+        }
+        return 0;
+    }
+    return original(bounds);
+}
+
+void __fastcall Detour_Tr6EffectsUpdate(const Tr6CameraView* cameraView) {
+    const auto original = g_hTr6EffectsUpdate.Original<Fn_tr6_effects_update>();
+    if (!NativeTr6Active() || !g_inNativeTr6Scene || !cameraView
+        || !g_tr6ModuleBase) {
+        original(cameraView);
+        return;
+    }
+
+    // Particle and light-beam vertices are generated before the main draw.
+    // Most builders use the camera matrix in SYS_DRAW_CAMERA_VIEW, while
+    // fxParticleAddSquareCamFacing reads gcamCamera.Position/LookAt directly.
+    // Feed both paths the same tracked HEAD-CENTRE view. Head centre (rather
+    // than either eye) keeps billboard geometry identical in both scene passes;
+    // the ordinary draw injection supplies the actual per-eye parallax later.
+    alignas(16) Tr6CameraView adjusted;
+    std::memcpy(&adjusted, cameraView, sizeof(adjusted));
+    adjusted.camera = Mul4(AffineToMat4(VR().HeadView()), adjusted.camera);
+    adjusted.cameraProject = Mul4(adjusted.project, adjusted.camera);
+
+    auto* gcam = reinterpret_cast<float*>(
+        g_tr6ModuleBase + kTr6GcamCameraRva);
+    float savedPositionLookAt[8];
+    std::memcpy(savedPositionLookAt, gcam, sizeof(savedPositionLookAt));
+
+    // Invert the rigid view matrix at the origin: position = -R^T*t. The
+    // engine camera looks down -Z, so world forward is -R^T*(0,0,1).
+    const float position[3] = {
+        -(adjusted.camera.m[0] * adjusted.camera.m[12]
+          + adjusted.camera.m[1] * adjusted.camera.m[13]
+          + adjusted.camera.m[2] * adjusted.camera.m[14]),
+        -(adjusted.camera.m[4] * adjusted.camera.m[12]
+          + adjusted.camera.m[5] * adjusted.camera.m[13]
+          + adjusted.camera.m[6] * adjusted.camera.m[14]),
+        -(adjusted.camera.m[8] * adjusted.camera.m[12]
+          + adjusted.camera.m[9] * adjusted.camera.m[13]
+          + adjusted.camera.m[10] * adjusted.camera.m[14])
+    };
+    const float forward[3] = {
+        -adjusted.camera.m[2],
+        -adjusted.camera.m[6],
+        -adjusted.camera.m[10]
+    };
+    for (int axis = 0; axis < 3; ++axis) {
+        gcam[axis] = position[axis];
+        gcam[4 + axis] = position[axis] + forward[axis] * 1024.0f;
+    }
+
+    original(&adjusted);
+    std::memcpy(gcam, savedPositionLookAt, sizeof(savedPositionLookAt));
+
+    if (!g_loggedTr6EffectsCamera) {
+        g_loggedTr6EffectsCamera = true;
+        Log("tr6 effects: particle billboards and light-beam render data now "
+            "face the tracked head camera; game camera restored");
+    }
+}
+
 void __fastcall Detour_Tr6DrawProjectedShadows(void* drawBuffer) {
     const auto original = g_hTr6DrawProjectedShadows
         .Original<Fn_tr6_draw_projected_shadows>();
@@ -2197,16 +2383,63 @@ void TryInstallTr6Hooks() {
 
     if (wantScene) {
         g_tr6SceneAttempted = true;
+        auto* fxCamDistTarget = reinterpret_cast<uint8_t*>(module)
+                              + kTr6FxCamDistRva;
+        auto* fxBoundsTarget = reinterpret_cast<uint8_t*>(module)
+                             + kTr6FxBoundsClipRva;
+        auto* fxNodeBoundsTarget = reinterpret_cast<uint8_t*>(module)
+                                 + kTr6FxNodeBoundsClipRva;
         auto* shadowTarget = reinterpret_cast<uint8_t*>(module)
                            + kTr6DrawProjectedShadowsRva;
+        auto* effectsTarget = reinterpret_cast<uint8_t*>(module)
+                            + kTr6EffectsUpdateRva;
         auto* sceneTarget = reinterpret_cast<uint8_t*>(module)
                           + kTr6RenderSceneRva;
-        bool ok = g_hTr6DrawProjectedShadows.Install(shadowTarget,
+        bool ok = g_hTr6FxCamDist.Install(fxCamDistTarget,
+                reinterpret_cast<void*>(&Detour_Tr6FxCamDist),
+                sizeof(kTr6FxCamDistPrologue),
+                kTr6FxCamDistPrologue, sizeof(kTr6FxCamDistPrologue),
+                "TR6 fxCamDist", kTr6FxCamDistRipOffsets,
+                sizeof(kTr6FxCamDistRipOffsets)
+                    / sizeof(kTr6FxCamDistRipOffsets[0]));
+        if (ok) {
+            ok = g_hTr6FxBoundsClip.Install(fxBoundsTarget,
+                reinterpret_cast<void*>(&Detour_Tr6FxBoundsClip),
+                sizeof(kTr6FxBoundsClipPrologue),
+                kTr6FxBoundsClipPrologue,
+                sizeof(kTr6FxBoundsClipPrologue),
+                "TR6 mathIsBoundsClipped (FX light)",
+                kTr6FxBoundsClipRipOffsets,
+                sizeof(kTr6FxBoundsClipRipOffsets)
+                    / sizeof(kTr6FxBoundsClipRipOffsets[0]));
+        }
+        if (ok) {
+            ok = g_hTr6FxNodeBoundsClip.Install(fxNodeBoundsTarget,
+                reinterpret_cast<void*>(&Detour_Tr6FxNodeBoundsClip),
+                sizeof(kTr6FxNodeBoundsClipPrologue),
+                kTr6FxNodeBoundsClipPrologue,
+                sizeof(kTr6FxNodeBoundsClipPrologue),
+                "TR6 mathIsBoundsClippedAlt (FX nodes)",
+                kTr6FxNodeBoundsClipRipOffsets,
+                sizeof(kTr6FxNodeBoundsClipRipOffsets)
+                    / sizeof(kTr6FxNodeBoundsClipRipOffsets[0]));
+        }
+        if (ok) {
+            ok = g_hTr6DrawProjectedShadows.Install(shadowTarget,
                 reinterpret_cast<void*>(&Detour_Tr6DrawProjectedShadows),
                 sizeof(kTr6DrawProjectedShadowsPrologue),
                 kTr6DrawProjectedShadowsPrologue,
                 sizeof(kTr6DrawProjectedShadowsPrologue),
                 "TR6 App_DrawChar_DrawProjectedShadows");
+        }
+        if (ok) {
+            ok = g_hTr6EffectsUpdate.Install(effectsTarget,
+                reinterpret_cast<void*>(&Detour_Tr6EffectsUpdate),
+                sizeof(kTr6EffectsUpdatePrologue),
+                kTr6EffectsUpdatePrologue,
+                sizeof(kTr6EffectsUpdatePrologue),
+                "TR6 App_DrawEffects_UpdateRenderData");
+        }
         if (ok) {
             ok = g_hTr6RenderScene.Install(sceneTarget,
                 reinterpret_cast<void*>(&Detour_Tr6RenderScene),
@@ -2216,16 +2449,25 @@ void TryInstallTr6Hooks() {
         }
         if (!ok) {
             // Native stereo must never run without identifying the light-view
-            // shadow pass: the generic offscreen injection would distort it.
+            // shadow pass or head-facing effect builder: the generic offscreen
+            // path would distort shadows and leave billboards camera-bound.
             g_hTr6RenderScene.Remove();
+            g_hTr6EffectsUpdate.Remove();
             g_hTr6DrawProjectedShadows.Remove();
-            Log("tr6: native scene/shadow hook pair failed its byte/safety "
+            g_hTr6FxNodeBoundsClip.Remove();
+            g_hTr6FxBoundsClip.Remove();
+            g_hTr6FxCamDist.Remove();
+            Log("tr6: native scene/shadow/effects hook set failed its "
+                "byte/safety "
                 "checks; "
                 "using AER fallback");
         } else {
-            LogF("tr6: native scene/shadow hooks installed (scene +0x%X, "
-                 "projected shadows +0x%X)", kTr6RenderSceneRva,
-                 kTr6DrawProjectedShadowsRva);
+            LogF("tr6: native scene/shadow/effects hooks installed (scene +0x%X, "
+                 "projected shadows +0x%X, effects +0x%X, FX range +0x%X, "
+                 "FX bounds +0x%X, FX-node bounds +0x%X)",
+                 kTr6RenderSceneRva, kTr6DrawProjectedShadowsRva,
+                 kTr6EffectsUpdateRva, kTr6FxCamDistRva,
+                 kTr6FxBoundsClipRva, kTr6FxNodeBoundsClipRva);
         }
     }
 }
@@ -2681,7 +2923,11 @@ void RemoveHooks() {
 
     // The game-DLL hooks were installed dynamically after the shared hooks.
     g_hTr6RenderScene.Remove();
+    g_hTr6EffectsUpdate.Remove();
     g_hTr6DrawProjectedShadows.Remove();
+    g_hTr6FxNodeBoundsClip.Remove();
+    g_hTr6FxBoundsClip.Remove();
+    g_hTr6FxCamDist.Remove();
     g_hTr6ClippedObb.Remove();
     g_hTr6DrawRoomList.Remove();
     g_hTr6MapCalcVisibleRooms.Remove();

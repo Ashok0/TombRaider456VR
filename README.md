@@ -1,12 +1,13 @@
 ## Tomb Raider IV-VI Remastered VR Mod
-VR mod for Tomb Raider IV-VI Remastered. Tomb Raider IV: The Last Revelation, Tomb Raider V: Chronicles, and Tomb Raider VI: Angel of Darkness work in native stereo with 6DOF. TR6 uses a separate full-scene replay path for its offscreen renderer; AER remains the automatic fallback. TR6 also has its own correctness-first culling path, documented in [Phase 17](#phase-17-tr6-culling).
+VR mod for Tomb Raider IV-VI Remastered. Tomb Raider IV: The Last Revelation, Tomb Raider V: Chronicles, and Tomb Raider VI: Angel of Darkness work in native stereo with 6DOF. TR6 uses a separate full-scene replay path for its offscreen renderer; AER remains the automatic fallback. TR6 also has its own correctness-first geometry and effects visibility paths, documented in [Phase 17](#phase-17-tr6-culling) and [Phase 19](#phase-19-tr6-effects-visibility).
 
 ## AI Usage
 Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions.   
 
-OpenAI Codex was used for Phases 16 and 17 to inspect the newly supplied `tomb6.pdb`
+OpenAI Codex was used for Phases 16 through 19 to inspect the newly supplied `tomb6.pdb`
 and matching DLL, identify and verify the complete TR6 scene-render boundary,
 implement its guarded per-eye replay, trace TR6's separate room-culling pipeline,
+isolate projected-shadow cameras and trace its room-attached effects pipeline,
 build and deploy the mod, and document the results after in-headset validation.
 
 ## VR Mod Features
@@ -92,6 +93,7 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 16** | **TR6 Native Stereo Support** — the complete Angel of Darkness scene and postprocess chain rendered once per eye | Working. Confirmed in-headset |
 | **Phase 17** | **TR6 Culling** — rooms, props and distant geometry retained independently of the third-person camera | Working. Confirmed in-headset. TR6 only |
 | **Phase 18** | **TR6 projected-shadow fix** — character shadow maps kept on their light camera instead of inheriting headset-eye transforms | Working. Confirmed in-headset. TR6 only |
+| **Phase 19** | **TR6 effects visibility** — dust particles and street-lamp lighting retained independently of the orbiting right-stick camera | Working. Confirmed in-headset. TR6 only |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -170,6 +172,13 @@ light camera, so allowing the generic offscreen stereo injector to treat it as
 a player-camera pass distorted Lara's shadow differently for each eye. The
 light-camera pass is now isolated while final shadow projection remains stereo.
 See [Phase 18: TR6 Projected-Shadow Fix](#phase-18-tr6-projected-shadow-fix).
+
+**Phase 19** fixes TR6's camera-dependent particle and local-light popping.
+Room-attached effects had their own primary off-camera flag, emitter-distance
+test and local-light bounds test after Phase 17's room geometry was already
+accepted. Native stereo now keeps those effect decisions independent of the
+orbiting right-stick camera. See
+[Phase 19: TR6 Effects Visibility](#phase-19-tr6-effects-visibility).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -3398,11 +3407,13 @@ the runtime byte comparison used by the other TR6 hooks.
 
 ### Safety, isolation and fallback
 
-The projected-shadow hook and `App_Render_Scene` hook are an atomic native-
-stereo pair. `NativeTr6HookReady()` returns true only when both are installed.
-If either entry point fails its build or byte checks, both hooks are removed
-and TR6 uses the existing AER fallback. This prevents native stereo from ever
-running with the known distorted-shadow path.
+The projected-shadow hook and `App_Render_Scene` hook are members of the atomic
+TR6 native-stereo hook set. Phase 19 expands that set to include the effects
+builder and its three visibility safeguards; `NativeTr6HookReady()` returns
+true only when all six are installed. If any entry point fails its build or
+byte checks, the complete set is removed and TR6 uses the existing AER
+fallback. This prevents native stereo from running with either the known
+distorted-shadow path or a partially installed effects fix.
 
 The suppression flag is active only while all of these conditions are true:
 
@@ -3418,7 +3429,7 @@ A successful run includes:
 
 ```text
 hook[TR6 App_DrawChar_DrawProjectedShadows]: ... (stole 7, tramp ...)
-tr6: native scene/shadow hooks installed (scene +0x1B1CA0, projected shadows +0x1B8270)
+tr6: native scene/shadow/effects hooks installed (scene +0x1B1CA0, projected shadows +0x1B8270, ...)
 tr6 shadow: projected-character light-camera depth pass isolated from headset view injection
 ```
 
@@ -3431,6 +3442,168 @@ proportions and world-locked motion.
 
 All Phase 18 implementation is in `src\Hooks.cpp`; no new configuration entry
 was required.
+
+---
+
+## Phase 19: TR6 Effects Visibility
+
+After room, prop and far-plane culling were fixed, some TR6 effects still
+followed the third-person camera rather than the view rendered in the headset.
+Rotating the camera with the right stick made dust particles and the pools or
+glows of light beneath street lamps disappear and reappear, even though the
+effect remained visible from the tracked VR view.
+
+This was not another Phase 17 room-geometry failure. TR6 has a separate
+visibility pipeline for room-attached FX nodes. Walls and props could remain
+submitted while an effect in the same room was independently marked
+off-camera before its particle or lighting code ran.
+
+### Traced cause
+
+The supplied `tomb6.pdb` identifies the relevant path:
+
+```text
+mapDrawRoomList
+  mathIsBoundsClippedAlt(FX-node bounds)
+  convert the result's sign into bit 0x100 on tagMAP_FXNODE
+  fxProcessBox(node)
+    most dust/particle/light cases return immediately if bit 0x100 is set
+    type-specific emitter-distance and local-light tests run only afterward
+```
+
+The critical instructions in `mapDrawRoomList` are:
+
+```text
+tomb6.dll+0x0014E540  call mathIsBoundsClippedAlt
+tomb6.dll+0x0014E545  mov  edx,[rsi+0x8c]
+                      ...
+                      cmovns edx,ecx     ; clear bit 0x100 when visible
+                      ...
+tomb6.dll+0x0014E56B  call fxProcessBox
+```
+
+`mathIsBoundsClippedAlt` returns `-1` for a rejected node and `0` otherwise.
+`mapDrawRoomList` turns that into the `0x100` flag. The many effect cases in
+the 55,064-byte `fxProcessBox` function test that flag before doing any useful
+work. This primary gate explains why changing billboard orientation, emitter
+distance or the later lamp-light check alone produced no visible improvement:
+those paths were never reached for a node that already carried `0x100`.
+
+Two secondary camera dependencies can still cause popping after the primary
+flag is cleared:
+
+- `fxCamDist` measures effect distance from `gcamCamera.Position`. The chase
+  camera position orbits Lara when the right stick rotates, so a stationary
+  emitter can cross a distance threshold without Lara or the emitter moving.
+- The local-light case calls `mathIsBoundsClipped` immediately before
+  `fxInsertFXLight`, adding another third-person-camera frustum reject to such
+  effects as street-lamp illumination.
+
+The final render-data builder also has two camera sources. Most light-beam and
+particle builders receive `SYS_DRAW_CAMERA_VIEW`, while
+`fxParticleAddSquareCamFacing` reads `gcamCamera.Position` and `LookAt`
+directly. Those sources must agree with the tracked view so surviving
+billboards do not become edge-on or camera-bound.
+
+| Symbol | RVA | PDB size | Phase 19 role |
+|---|---:|---:|---|
+| `fxCamDist` | `0x00107890` | 104 bytes | Distance gate used nine times by `fxProcessBox` |
+| `fxProcessBox` | `0x00109020` | 55,064 bytes | Dispatches room-attached particle and lighting effects |
+| `fxParticleAddSquareCamFacing` | `0x001961A0` | 611 bytes | Builds camera-facing particle quads from `gcamCamera` |
+| `fxFillGeoBufParticleSystem` | `0x00196600` | 583 bytes | Builds both above-water and underwater particle buffers |
+| `mathIsBoundsClipped` | `0x0019F8E0` | 163 bytes | Secondary bounds gate before `fxInsertFXLight` |
+| `mathIsBoundsClippedAlt` | `0x0019FA30` | 138 bytes | Primary FX-node reject used by `mapDrawRoomList` |
+| `App_DrawEffects_UpdateRenderData` | `0x001A28D0` | 2,122 bytes | Builds debris, particles, snow, gas and light-beam render data |
+| `gcamCamera` | `0x002FD540` | 160 bytes | Legacy camera position and look-at data used by FX code |
+
+### Fix
+
+Phase 19 applies four coordinated safeguards:
+
+1. At only the `mapDrawRoomList` return address `0x0014E545`, the
+   `mathIsBoundsClippedAlt` detour returns `0`. The primary `0x100` off-camera
+   flag therefore stays clear for room-attached effects prepared for TR6
+   native stereo.
+2. Calls to `fxCamDist` originating inside the verified `fxProcessBox` address
+   range measure from `gcamCamera.LookAt`, the stable gameplay focal point,
+   instead of the orbiting chase-camera position. This keeps particle-emitter
+   range stable while Lara and the effect remain stationary.
+3. At only the `fxProcessBox` return address `0x00115FDB`, the secondary
+   `mathIsBoundsClipped` result before `fxInsertFXLight` is forced visible.
+   Other bounds tests, including actor and gameplay tests, remain original.
+4. During `App_DrawEffects_UpdateRenderData`, a private copy of
+   `SYS_DRAW_CAMERA_VIEW` receives the tracked head-centre view. The matching
+   tracked position/look-at direction is temporarily published through
+   `gcamCamera` for the legacy billboard builder, then all eight original
+   position/look-at floats are restored immediately after the builder returns.
+
+The order is important: the primary FX-node flag must be cleared before the
+secondary distance, local-light and render-data corrections can have any
+effect. Head centre rather than an individual eye is used to generate common
+billboard geometry; the ordinary native scene replay supplies the distinct
+left- and right-eye projections afterward.
+
+### Hook safety and TR4/TR5 isolation
+
+All Phase 19 behavior requires `NativeTr6Active()`. Installation additionally
+requires the supported `tomb6.dll` timestamp `0x696B49A4` and exact prologue
+bytes at every target. The three small visibility functions have RIP-relative
+instructions in their stolen prologues, so their trampoline displacement
+fields are explicitly relocated:
+
+```text
+fxCamDist
+  48 83 EC 28                         sub rsp,0x28
+  F3 0F 10 0D A4 5C 1F 00            movss xmm1,[rip+gcamCamera]
+  relocated disp32 offset: +8
+
+mathIsBoundsClipped
+  48 83 EC 48                         sub rsp,0x48
+  48 8B 05 55 E7 0E 00               mov rax,[rip+__security_cookie]
+  relocated disp32 offset: +7
+
+mathIsBoundsClippedAlt
+  48 83 EC 48                         sub rsp,0x48
+  48 8B 05 05 E6 0E 00               mov rax,[rip+__security_cookie]
+  relocated disp32 offset: +7
+```
+
+`NativeTr6HookReady()` now requires six hooks as one atomic TR6 native-stereo
+set: `App_Render_Scene`, projected-shadow drawing, effects render-data update,
+`fxCamDist`, `mathIsBoundsClipped` and `mathIsBoundsClippedAlt`. If any hook
+fails its timestamp, byte, allocation or relocation check, all six are removed
+and TR6 uses the existing AER fallback. A partial effects fix cannot remain
+active.
+
+The primary and secondary bounds overrides are filtered by exact return
+address, and the distance override is filtered to callers inside
+`fxProcessBox`. No global clipping function is disabled. None of these hooks
+can run for TR4 or TR5, and their rendering, particles and existing Phase 7
+culling path are unchanged. No new configuration entry is required.
+
+### Logs and validation
+
+A successful Phase 19 run includes:
+
+```text
+hook[TR6 fxCamDist]: ...
+hook[TR6 mathIsBoundsClipped (FX light)]: ...
+hook[TR6 mathIsBoundsClippedAlt (FX nodes)]: ...
+tr6: native scene/shadow/effects hooks installed (scene +0x1B1CA0, projected shadows +0x1B8270, effects +0x1A28D0, FX range +0x107890, FX bounds +0x19F8E0, FX-node bounds +0x19FA30)
+tr6 effects: primary mapDrawRoomList FX-node off-camera flag disabled for native stereo
+tr6 effects: fxProcessBox emitter range now uses the stable camera target instead of the orbiting chase-camera position
+tr6 effects: fxProcessBox local-light frustum reject disabled for native stereo
+tr6 effects: particle billboards and light-beam render data now face the tracked head camera; game camera restored
+```
+
+The final release build completed with zero warnings and errors. Deployment
+was verified by hashing the build artifact and installed DLL; both matched at
+SHA-256
+`5037064EA06E5351D453A09F29B461287030863D652007DCD472671719935E0B`.
+Final in-headset validation confirmed that dust particles and street-lamp
+lighting no longer disappear and reappear when the right-stick camera rotates.
+
+All Phase 19 implementation is in `src\Hooks.cpp`.
 
 ---
 
@@ -3493,9 +3666,10 @@ and the DLL logs `prologue mismatch` instead of corrupting an instruction
 stream. The shared engine hooks are installed all-or-nothing.
 
 The TR6 scene and culling hooks are installed later, after `tomb6.dll` is
-resident. The scene hook has its own build/prologue guard and selects AER if it
-cannot be installed. Phase 17's four culling hooks install atomically: a failure
-removes the complete group and leaves stock TR6 visibility active.
+resident. The six-hook native scene/shadow/effects set has its own
+build/prologue guard and selects AER if any member cannot be installed. Phase
+17's four culling hooks install atomically as a separate group: a failure
+removes that complete group and leaves stock TR6 visibility active.
 
 Stolen prologue bytes must be position-independent once copied to the
 trampoline, and where they are not, the displacement is relocated rather than
@@ -3505,9 +3679,10 @@ refusing the hook if a fixup would fall outside the stolen range or overflow
 `int32`. This is not optional where it applies: a raw copy leaves the
 displacement relative to the trampoline, which can sit up to 2 GB away, so an
 instruction like `83 0D <disp32> 01` (`OR dword ptr [rip+disp32], 1`) would
-corrupt an arbitrary address rather than merely misbehave. None of the current
-hooks need such a relocation — it was added for temporary hooks used during the
-culling investigation, and it is there for the next target that does.
+corrupt an arbitrary address rather than merely misbehave. Phase 19 uses this
+for `fxCamDist`, `mathIsBoundsClipped` and `mathIsBoundsClippedAlt`; their
+verified displacement fields are relocated at offsets `+8`, `+7` and `+7`
+respectively.
 
 ## Layout
 
