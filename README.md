@@ -1,13 +1,13 @@
 ## Tomb Raider IV-VI Remastered VR Mod
-VR mod for Tomb Raider IV-VI Remastered. Tomb Raider IV: The Last Revelation, Tomb Raider V: Chronicles, and Tomb Raider VI: Angel of Darkness work in native stereo with 6DOF. TR6 uses a separate full-scene replay path for its offscreen renderer; AER remains the automatic fallback. TR6 still lacks several game-specific fixes described under [Known limits](#known-limits).
+VR mod for Tomb Raider IV-VI Remastered. Tomb Raider IV: The Last Revelation, Tomb Raider V: Chronicles, and Tomb Raider VI: Angel of Darkness work in native stereo with 6DOF. TR6 uses a separate full-scene replay path for its offscreen renderer; AER remains the automatic fallback. TR6 also has its own correctness-first culling path, documented in [Phase 17](#phase-17-tr6-culling).
 
 ## AI Usage
 Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions.   
 
-OpenAI Codex was used for Phase 16 to inspect the newly supplied `tomb6.pdb`
+OpenAI Codex was used for Phases 16 and 17 to inspect the newly supplied `tomb6.pdb`
 and matching DLL, identify and verify the complete TR6 scene-render boundary,
-implement its guarded per-eye replay, build and deploy the mod, and document the
-result after in-headset validation.
+implement its guarded per-eye replay, trace TR6's separate room-culling pipeline,
+build and deploy the mod, and document the results after in-headset validation.
 
 ## VR Mod Features
 * Native stereo with 6DOF (TR4/5/6)
@@ -88,6 +88,7 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 14** | **Hide vignettes** — the binocular, scope and infra-red overlays stubbed out, keeping the aiming dot | Working. On by default |
 | **Phase 15** | **The stick stops displacing you** — the head's offset integrated in world space, so only the headset moves your eye | Working. On by default |
 | **Phase 16** | **TR6 Native Stereo Support** — the complete Angel of Darkness scene and postprocess chain rendered once per eye | Working. Confirmed in-headset |
+| **Phase 17** | **TR6 Culling** — active rooms and their render runs retained independently of the third-person camera | Working substantially better in-headset. TR6 only |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -154,6 +155,12 @@ symbols identify a render-only function around Angel of Darkness's complete
 offscreen scene pipeline, so that function can run once for each eye while the
 game loop still advances once. See
 [Phase 16: TR6 Native Stereo Support](#phase-16-tr6-native-stereo-support).
+
+**Phase 17** addresses TR6's separate culling pipeline. Angel of Darkness was
+still discarding rooms and individual room runs according to its third-person
+right-stick camera, even though the headset rendered in another direction. The
+final path submits every active room and keeps its render runs available to the
+VR view. See [Phase 17: TR6 Culling](#phase-17-tr6-culling).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -3075,9 +3082,176 @@ stereo works correctly.
 | `TombRaiderVR.ini` | User-facing native/AER controls and exact behavior |
 | `src\DefaultIni.h` | Regenerated embedded configuration for fresh installs |
 
-This phase changes TR6's stereo renderer only. Its game-specific culling,
-ceiling, sky, optics and world-locked camera-offset gaps remain separate work
-because TR6 still has no corresponding row in `GameDll.cpp`.
+This phase changes TR6's stereo renderer only. Its culling work is documented
+separately in Phase 17; its ceiling, sky, optics and world-locked camera-offset
+gaps remain separate work because TR6 still has no corresponding row in
+`GameDll.cpp`.
+
+---
+
+## Phase 17: TR6 Culling
+
+TR6 native stereo exposed a second camera problem. Turning the headset away
+from Angel of Darkness's third-person camera revealed blue holes where walls,
+floors and other room geometry had vanished. Lara facing the missing geometry
+did not help. Rotating the **right stick until the game camera was directly
+behind Lara** made geometry in front of her return.
+
+That distinction identified the owner of the visibility decision: this was not
+Lara-facing logic and not a stereo-eye error. TR6 was still culling against the
+third-person camera while the headset was rendering a different direction.
+TR4 and TR5 do not use this code; their culling fix remains Phase 7/7B.
+
+### Why the TR4/TR5 fix cannot be reused
+
+TR4 and TR5 expose their room traversal through `PrintRoomsList` and use the
+layouts in `GameDll.cpp` and `PortalCull.cpp`. TR6 is a different engine. Its
+room selection, portal rectangles, render-run flags and final room drawing all
+live in `tomb6.dll`, with different structures and call boundaries.
+
+The supplied TR6 symbols made the relevant path identifiable:
+
+| Symbol | RVA | PDB size | Role |
+|---|---:|---:|---|
+| `ClippedOBB_CPP` | `0x001A4380` | 645 bytes | Shared oriented-bounds test used by room runs, meshes, shadows and gameplay |
+| `SYS_DRAW_CRP::Calculate` | `0x001A6DB0` | 4,303 bytes | Builds portal rectangles and the render CRP |
+| `mapCalcVisibleRooms` | `0x001A8290` | 1,246 bytes | Builds the map-side linked list of visible rooms |
+| `mapDrawRoomList` | `0x0014E370` | 1,009 bytes | Prepares room data after simulation |
+| `ClipRoom_SYS_D3D_ROOM` | `0x001AF7F0` | 362 bytes | Sets visibility bits for the 0x40-byte render runs in one room |
+| `App_Render_Scene_Main` | `0x001B1640` | 1,624 bytes | Consumes the completed CRP and draws rooms |
+
+The associated layouts matter as much as the function names:
+
+- `SYS_DRAW_CAMERA_VIEW` is 400 bytes: projection at `+0`, camera at `+64`,
+  combined camera-projection at `+128`, viewport at `+192`, and its embedded
+  `SYS_DRAW_CRP` at `+224`.
+- Every `SYS_DRAW_ITEM_POOL` has a 24-byte header containing capacity, item
+  count, needed count and data pointer.
+- A `SYS_DRAW_CRP::ROOM_PORTALS_DESC` is eight bytes: room index, first portal
+  rectangle and portal count.
+- Both the CRP room pool and level room table have a verified maximum of 192.
+- The current GMX holds its room-pointer table at `+0x1A0` and count at
+  `+0x7A0`. `ROOM_HEADER_TAG::bIsFlipRoom` at `+0x218` identifies inactive
+  alternate room copies that must not be submitted.
+
+### What was tried, and what each result proved
+
+The first attempt changed only `SYS_DRAW_CRP::Calculate`. For the two verified
+render call sites it copied the 400-byte camera view, widened its projection to
+contain both headset eyes plus `CullFovMarginDegrees`, pre-multiplied the game
+camera by the tracked head transform, rebuilt the combined matrix, and passed
+the copy to the original function. The render camera itself stayed untouched,
+avoiding a second application of the head transform in the shaders.
+
+The hook activated and logged a roughly 124 by 126 degree culling frustum, but
+the blue holes remained. This proved that adjusting the final CRP calculation
+alone did not reach the visibility decision responsible for most missing room
+geometry.
+
+The second attempt moved upstream. `mapCalcVisibleRooms` first ran normally,
+then ran privately with the head camera. Its linked room list and all 192
+`MAP_ROOMCLIP` records were saved, while the stock list and records were
+restored before simulation continued. `mapDrawRoomList` temporarily exposed the
+union only during render preparation and restored the globals afterward. AI,
+triggers and gameplay therefore never observed the experimental head-visible
+set.
+
+The diagnostic result was decisive:
+
+```text
+tr6 cull: render preparation received 1 stock rooms + 0 head-only rooms (1 in the head list); simulation globals restored
+```
+
+The missing geometry was still present even though both traversals selected
+the same single room. Whole-room selection was not the only culling tier.
+
+Disassembly of `App_Render_Scene_Main` then exposed the next tier. It calls
+`ClipRoom_SYS_D3D_ROOM`, which loops over 0x40-byte room runs and calls
+`ClippedOBB_CPP` before setting each run's pass bit. A separate direct OBB test
+rejects static meshes. Both still used the third-person camera. Returning "not
+clipped" at only the verified room-run return address `0x001AF8AD` and static-
+mesh return address `0x001B1814` helped somewhat, confirming this layer was
+real, but many blue holes remained because absent rooms never reached it.
+
+### The final correctness-first room path
+
+The working path removes the game-camera dependency at both room levels during
+the main TR6 render calculation:
+
+```text
+map/simulation visibility remains stock
+  main SYS_DRAW_CRP::Calculate call
+    replace its input seeds with every active, non-flip GMX room
+    run the original Calculate with the wide tracked-head camera
+    replace the calculated room descriptors with one per active room
+    assign every descriptor the full-screen portal rectangle [-1,-1,+1,+1]
+  App_Render_Scene_Main
+    submit every active room
+    keep room runs and static meshes at the two render-only OBB sites
+    let normal GPU depth and near/far clipping finish visibility
+```
+
+Seeding before the original calculation lets TR6 prepare room-associated draw
+data normally. Replacing the resulting descriptors afterward prevents its
+portal traversal from removing a room merely because the right-stick camera
+cannot see that portal. The full-screen rectangle is the identity clip region
+expected by `mapLoadClipMatrix`; it is not an arbitrary large coordinate.
+
+Inactive flip-room copies remain excluded, so the active and alternate forms
+of a room are not drawn together. Capacity and pointers are checked before the
+pools are touched. If the verified 192-room capacity is unavailable, the
+override declines instead of writing past the engine allocation.
+
+The OBB detour is deliberately not global. `ClippedOBB_CPP` is also used by
+gameplay, shadows and several object paths. Only the two exact return addresses
+inside main room rendering return visible; every other caller executes the
+original function.
+
+### Scope, safety and TR4/TR5 isolation
+
+Phase 17 is TR6-only. Installation requires all of the following:
+
+- `CurrentGame() == 2`;
+- `PortalCulling=1` and an active tracked VR view;
+- `tomb6.dll` PE timestamp `0x696B49A4`;
+- the exact verified prologue bytes at `SYS_DRAW_CRP::Calculate`,
+  `mapCalcVisibleRooms`, `mapDrawRoomList` and `ClippedOBB_CPP`.
+
+The four culling hooks are one atomic mechanism. If any installation fails,
+all four are removed and stock visibility remains active. The TR6 scene-replay
+hook has its own independent guard and AER fallback.
+
+No Phase 17 address exists in `tomb4.dll` or `tomb5.dll`, and none of these
+detours can run while `CurrentGame()` is TR4 or TR5. Their established
+`PortalCull.cpp` implementation is unchanged.
+
+### Logs, validation and cost
+
+A successful run reports the layers independently:
+
+```text
+tr6 cull: upstream visibility hooks installed (Calculate +0x1A6DB0, mapCalc +0x1A8290, drawRooms +0x14E370, room OBB +0x1A4380)
+tr6 cull: SYS_DRAW_CRP::Calculate now follows the tracked head for the private room pass and render passes (... degrees, including margin)
+tr6 cull: render-only static-mesh and room-run OBB rejection disabled; accepted rooms now retain all geometry for head look
+tr6 cull: correctness-first room submission active -- ... map seeds, ... portal-visible rooms expanded to ... active rooms
+```
+
+This is intentionally correctness-first. Submitting every active room costs
+more CPU and GPU time than portal culling, and Phase 16 already renders TR6's
+complete scene twice per frame. Hardware that was close to its frame-time limit
+may need lower game render settings. Depth testing, near/far clipping and all
+non-targeted object/shadow tests remain enabled.
+
+The release build completed with zero warnings and errors, the existing symbol
+and address suite passed all 219 checks, and the deployed DLL matched the build
+artifact at SHA-256
+`071853E1D7CD4F99002C85A9A910C2F9DBECE77C3C091EF01BBF9232A906AFE2`.
+In-headset testing reported that this final all-active-room build works much
+better than the earlier camera-frustum and room-run-only versions.
+
+All Phase 17 implementation is in `src\Hooks.cpp`. `PortalCulling` and
+`CullFovMarginDegrees` retain their existing configuration entries; no new INI
+setting was required.
 
 ---
 
@@ -3118,8 +3292,10 @@ These are honest gaps, not oversights.
   `CullDumpKey` while it is on screen: the dump names the doorway it was reached
   through, and that would mean the room really is visible along some sightline
   and the cause lies elsewhere.
-- **The culling fix is TR4 and TR5 only.** TR6 is a different engine and has no
-  row in the address table, so Angel of Darkness still culls to the game camera.
+- **TR6 culling is correctness-first.** Phase 17 submits every active room to
+  prevent the third-person camera from opening blue holes in the headset view.
+  This costs more than portal culling, and current in-headset validation says it
+  works substantially better rather than claiming every scene is perfect.
 - **The controllers are a gamepad, not hands.** Phase 5 maps them to XInput;
   there is no motion aiming, no hand presence in-world, and no haptics.
 - **TR6 native stereo roughly doubles the scene work.** It replays the whole
@@ -3137,9 +3313,10 @@ patching. On a game update the bytes stop matching, every hook is rolled back,
 and the DLL logs `prologue mismatch` instead of corrupting an instruction
 stream. The shared engine hooks are installed all-or-nothing.
 
-The optional TR6 scene hook is installed later, after `tomb6.dll` is resident.
-If its independent build or prologue check fails, the shared hooks stay live
-and TR6 selects AER.
+The TR6 scene and culling hooks are installed later, after `tomb6.dll` is
+resident. The scene hook has its own build/prologue guard and selects AER if it
+cannot be installed. Phase 17's four culling hooks install atomically: a failure
+removes the complete group and leaves stock TR6 visibility active.
 
 Stolen prologue bytes must be position-independent once copied to the
 trampoline, and where they are not, the displacement is relocated rather than

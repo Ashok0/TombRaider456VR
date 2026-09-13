@@ -7,10 +7,13 @@
   Log.cpp
   StereoRenderer.cpp
   Callsite.cpp
-  RoomCull.cpp
+  GameDll.cpp
+  PortalCull.cpp
+  Overlay.cpp
+  Sky.cpp
   Gamepad.cpp
   VideoPanel.cpp
   VRSystem.cpp
-  TombRaiderVR.vcxproj -> C:\dev\TombRaider456VR\build\x64\Debug\TombRaiderVR.dll
+  TombRaiderVR.vcxproj -> C:\dev\astra6\TombRaider456VR\build\x64\Debug\TombRaiderVR.dll
   Deploying TombRaiderVR.dll to C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\
     Deployed. Settings in force: C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\TombRaiderVR.ini

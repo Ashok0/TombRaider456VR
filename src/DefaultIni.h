@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 41204 bytes, 812 lines.
+// Source: TombRaiderVR.ini, 41289 bytes, 814 lines.
 #pragma once
 
 namespace tr {
@@ -663,24 +663,23 @@ LogCallsites=0
 
 ; --- room culling -----------------------------------------------------------
 ;
-; THE PROBLEM. The engine decides what to draw by walking portals out from the
-; room the GAME CAMERA is in, carrying a screen rectangle that is clipped at
-; every doorway. A room is submitted only if some chain of doorways lands on the
-; game camera's screen. That is exactly right for a monitor and exactly wrong
-; for a headset: you see wider than the game camera, and you can look somewhere
-; it is not pointing at all. Turn far enough and the geometry that should be
-; there was never drawn.
+; THE PROBLEM. The engines decide what to draw from the GAME CAMERA. That is
+; right for a monitor and wrong for a headset: you see wider than the game
+; camera, and you can look somewhere it is not pointing at all. Turn far enough
+; and the geometry that should be there was never drawn.
 ;
-; THE FIX. The same traversal is run a second time from the tracked HEAD, in
-; world space, with the headset's frustum, and anything it finds is appended.
-; At every doorway the frustum is clipped to the opening -- the portal quad is
-; cut against the incoming planes and a new plane is built from the head through
-; each surviving edge -- so a room is added only if it can really be seen
-; through that chain of doorways.
+; TR4/5 FIX. Their room traversal is run a second time from the tracked HEAD,
+; with the headset frustum, and anything it finds is appended. At every doorway
+; the frustum is clipped to the opening, so a room is added only if it really is
+; visible through that chain.
 ;
-; Nothing the engine listed is ever removed, so PortalCulling=0 gives the stock
-; behaviour exactly, and with your head aligned to the game camera the result is
-; what the engine would have drawn anyway.
+; TR6 FIX. mapCalcVisibleRooms first runs normally for gameplay, then a second
+; time into private storage with a tracked-head camera. The stock globals are
+; restored before mapProcess continues. Only mapDrawRoomList sees the union of
+; stock and head-visible rooms, and it uses the same head camera while preparing
+; render data. Downstream SYS_DRAW_CRP::Calculate calls also use that camera.
+;
+; PortalCulling=0 gives stock behaviour exactly in all three games.
 ;
 ; WHAT HAPPENED TO PortalHops AND FRIENDS. They are gone, and so is the whole
 ; problem they were managing. Hop expansion added every room N doorways away
@@ -697,14 +696,17 @@ LogCallsites=0
 ;   cull: hooked tomb4.dll (Tomb Raider IV)
 ;   cull: head-frustum portal traversal live on Tomb Raider IV -- ...
 ;   cull: 31.2 rooms/frame from the engine + 8.4 added by the head frustum, ...
+; TR6 instead logs:
+;   tr6 cull: upstream visibility hooks installed ...
+;   tr6 cull: render preparation received 8 stock rooms + 6 head-only rooms ...
 PortalCulling=1
 
 ; Angle added to each half of the culling frustum, in degrees.
 ;
-; Covers two small things: the traversal runs once from the head rather than
-; once per eye, so the couple of degrees a canted display puts between the two
-; frusta has to be allowed for, and the pose that culls a frame is a few
-; milliseconds older than the pose that renders it.
+; Covers two small things: culling runs once from the head rather than once per
+; eye, so the couple of degrees a canted display puts between the two frusta has
+; to be allowed for, and the pose that culls a frame is a few milliseconds older
+; than the pose that renders it. Used by both the TR4/5 and TR6 fixes.
 ;
 ; Raise it if geometry pops in at the very edge of vision when you turn quickly.
 ; Every degree costs a little more draw.
@@ -807,9 +809,9 @@ CullWatchRooms=
 ; projection matrix, and a portal beside or behind the camera fails the
 ; near-plane test inside SetRoomBounds before any rectangle is looked at.
 ;
-; PROXIMITY IS THE WRONG CRITERION. Appending rooms by distance from the camera
 )INI"
-           R"INI(; happily adds a stacked room that shares world space with the one you are
+           R"INI(; PROXIMITY IS THE WRONG CRITERION. Appending rooms by distance from the camera
+; happily adds a stacked room that shares world space with the one you are
 ; standing in and that no portal reaches, which draws foreign geometry over your
 ; own. This is why the fix is a traversal and not a radius.
 ;

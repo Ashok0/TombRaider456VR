@@ -589,12 +589,15 @@ struct Config {
 
     // --- room culling --------------------------------------------------------
     //
-    // The engine draws only the rooms its portal traversal reaches from the
-    // GAME CAMERA. Look somewhere the game camera is not pointing and the
-    // geometry that should be there was never submitted. PortalCull.cpp runs
-    // the same traversal from the tracked head instead, with the headset's
-    // frustum, and appends whatever it finds; nothing the engine listed is ever
-    // removed, so turning this off returns the stock behaviour exactly.
+    // The engine draws only what its visibility pass reaches from the GAME
+    // CAMERA. Look somewhere that camera is not pointing and the geometry that
+    // should be there was never submitted. TR4/5 fix this in PortalCull.cpp by
+    // running their room-portal traversal from the tracked head and appending
+    // its results. TR6 calculates a private head-visible room list, restores
+    // the stock list before simulation continues, then unions the two only in
+    // mapDrawRoomList while render data is prepared. Its downstream Calculate
+    // calls receive the same head-centred HMD frustum. Turning this off is stock
+    // behaviour exactly in all three games.
     //
     // THIS REPLACES PortalHops, DrawAllRooms, PortalHeadTest, PortalHeadMargin,
     // DrawAllRoomsExclude and DrawAllRoomsClip. Those keys are still READ, only
@@ -604,12 +607,11 @@ struct Config {
 
     // Angle added to each half of the culling frustum, in degrees.
     //
-    // Two things need covering and neither is large: the traversal runs once
-    // from the head rather than once per eye, so the couple of degrees a canted
-    // display puts between the two frusta has to be allowed for, and the pose
-    // that culls a frame is a few milliseconds older than the pose that renders
-    // it. Raise it if geometry pops in at the very edge of vision when you turn
-    // quickly; every degree costs a little more draw.
+    // Two things need covering and neither is large: culling runs once from the
+    // head rather than once per eye, so the couple of degrees a canted display
+    // puts between the two frusta has to be allowed for, and the pose that
+    // culls a frame is a few milliseconds older than the pose that renders it.
+    // Shared by the TR4/5 portal traversal and TR6 Calculate-camera path.
     float cullFovMarginDegrees  = 8.0f;
 
     // How many doorways deep the traversal may go, and how many portals it may

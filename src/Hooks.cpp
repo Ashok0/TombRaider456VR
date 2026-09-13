@@ -56,6 +56,10 @@ hook::InlineHook g_hDrawVB;
 hook::InlineHook g_hPresent;
 hook::InlineHook g_hFmvShow;
 hook::InlineHook g_hTr6RenderScene;
+hook::InlineHook g_hTr6Calculate;
+hook::InlineHook g_hTr6MapCalcVisibleRooms;
+hook::InlineHook g_hTr6DrawRoomList;
+hook::InlineHook g_hTr6ClippedObb;
 
 typedef void(__cdecl* Fn_vid_setPass)(int shader, float* params, int cull, int blend);
 typedef void(__cdecl* Fn_validate_draw)();
@@ -64,6 +68,60 @@ typedef void(__cdecl* Fn_ogl_drawVB)(int fvf, void* vb, void* ib, int stride,
                                      unsigned first, unsigned count, int strip);
 typedef void(__cdecl* Fn_ogl_present)();
 typedef void(__cdecl* Fn_tr6_render_scene)();
+typedef void(__cdecl* Fn_tr6_void)();
+typedef bool(__fastcall* Fn_tr6_clipped_obb)(
+    const mat4* cameraProject, const void* viewport,
+    const void* boundsMin, const void* boundsMax);
+
+// PDB: every SYS_DRAW_ITEM_POOL is the same 24-byte header. These two pools
+// are the input room-pointer list passed to Calculate and the rooms/portal
+// rectangles at the front of SYS_DRAW_CRP.
+struct Tr6ItemPool {
+    uint32_t maxItems;
+    uint32_t items;
+    uint32_t itemsNeeded;
+    uint32_t padding;
+    void*    data;
+};
+static_assert(sizeof(Tr6ItemPool) == 24, "TR6 item-pool layout changed");
+
+struct Tr6RoomPortalsDesc {
+    uint32_t roomIndex;
+    uint16_t firstPortal;
+    uint16_t portalCount;
+};
+static_assert(sizeof(Tr6RoomPortalsDesc) == 8,
+              "TR6 room descriptor layout changed");
+
+// PDB: SYS_DRAW_CAMERA_VIEW is 400 bytes. Calculate receives it as const and
+// only the first three matrices need changing; the opaque tail is copied so
+// every other field reaches the original function byte-for-byte.
+struct alignas(16) Tr6CameraView {
+    mat4    project;
+    mat4    camera;
+    mat4    cameraProject;
+    uint8_t tail[208];
+};
+static_assert(sizeof(Tr6CameraView) == 400, "TR6 camera-view layout changed");
+
+typedef void(__fastcall* Fn_tr6_calculate)(
+    void* crp, void* drawBuffer, void* matrixStack, void* roomPool,
+    const Tr6CameraView* cameraView, uint32_t flags, float lodScale,
+    const void* clipMin, const void* clipMax);
+
+// PDB: MAP_ROOMCLIP is one entry in the fixed 192-room gmapRoomClip array.
+// mapCalcVisibleRooms writes Bounds/flags/next; the cache pointers are retained
+// verbatim when the stock list is temporarily replaced for render preparation.
+struct Tr6MapRoomClip {
+    float   bounds[4];
+    void*   portalCache[32];
+    int32_t flags;
+    int32_t cacheFlags;
+    int32_t clipped;
+    int32_t next;
+};
+static_assert(sizeof(Tr6MapRoomClip) == 288, "TR6 room-clip layout changed");
+constexpr int kTr6MaxRooms = 192;
 
 // --- verified prologue bytes ------------------------------------------------
 // Read out of Ghidra's disassembly of this exact build. Install() refuses to
@@ -96,8 +154,57 @@ const uint8_t kFmvShowPrologue[]  = { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 }
 const uint8_t kTr6RenderScenePrologue[] =
     { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 };
 
+// SYS_DRAW_CRP::Calculate, RVA 0x001A6DB0:
+//   48 8B C4              mov rax, rsp
+//   55                    push rbp
+//   53                    push rbx
+// Five complete, position-independent bytes.
+const uint8_t kTr6CalculatePrologue[] = { 0x48, 0x8B, 0xC4, 0x55, 0x53 };
+
+// mapCalcVisibleRooms: MOV R11,RSP ; PUSH RBP ; PUSH RBX.
+const uint8_t kTr6MapCalcPrologue[] = { 0x4C, 0x8B, 0xDC, 0x55, 0x53 };
+
+// mapDrawRoomList: MOV [RSP+0x10],RBX.
+const uint8_t kTr6DrawRoomListPrologue[] = { 0x48, 0x89, 0x5C, 0x24, 0x10 };
+
+// ClippedOBB_CPP: MOV RAX,RSP ; MOV [RAX+8],RBX. The function is shared by
+// gameplay and shadows, so its detour changes only two verified render-room
+// return addresses below.
+const uint8_t kTr6ClippedObbPrologue[] =
+    { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 };
+
 constexpr uint32_t kTr6DllTimestamp     = 0x696B49A4;
 constexpr uint32_t kTr6RenderSceneRva   = 0x001B1CA0;
+constexpr uint32_t kTr6CalculateRva     = 0x001A6DB0;
+constexpr uint32_t kTr6MapCalcRva       = 0x001A8290;
+constexpr uint32_t kTr6DrawRoomListRva  = 0x0014E370;
+constexpr uint32_t kTr6ClippedObbRva    = 0x001A4380;
+
+// Render-list globals identified by the tomb6 PDB. gmapRoomClip is exactly
+// MAP_ROOMCLIP[192]; the current GMX stores its active room count at +0x7A0.
+constexpr uint32_t kTr6GmapGMXCurRva    = 0x04CC7238;
+constexpr uint32_t kTr6GmapRoomListRva  = 0x00CA5848;
+constexpr uint32_t kTr6GmapRoomClipRva  = 0x00CA5860;
+constexpr uint32_t kTr6GmxRoomsOff      = 0x000001A0;
+constexpr uint32_t kTr6GmxRoomCountOff  = 0x000007A0;
+constexpr uint32_t kTr6RoomIsFlipOff    = 0x00000218;
+constexpr uint32_t kTr6CameraMatrixRva  = 0x0029DCC0;
+constexpr uint32_t kTr6PerspGameRva     = 0x003A13E0;
+
+// Return addresses immediately after the two render-side Calculate calls.
+// A third caller, mapCalcVisibleRooms (return RVA 0x001A8501), belongs to map
+// processing rather than rendering and must retain the game camera.
+constexpr uint32_t kTr6MainCalculateReturnRva       = 0x001B1E9D;
+constexpr uint32_t kTr6ReflectionCalculateReturnRva = 0x001B0F20;
+constexpr uint32_t kTr6MapCalculateReturnRva        = 0x001A8501;
+
+// App_Render_Scene_Main first rejects a transformed static mesh directly, then
+// ClipRoom_SYS_D3D_ROOM rejects individual 0x40-byte render runs. Both tests
+// are downstream of the room-list builder and both use the third-person game
+// camera. Returning "not clipped" at only these sites preserves all other OBB
+// tests while making every run of an accepted room available to the VR view.
+constexpr uint32_t kTr6MainRoomGroupObbReturnRva = 0x001B1814;
+constexpr uint32_t kTr6ClipRoomObbReturnRva      = 0x001AF8AD;
 
 // --- per-frame state --------------------------------------------------------
 
@@ -181,8 +288,20 @@ bool g_aerLatched = false;
 // boundary (input, physics, audio and game state) still runs once.
 bool g_inNativeTr6Scene    = false;
 bool g_loggedNativeTr6     = false;
+bool g_loggedTr6Cull       = false;
 bool g_warnedTr6Build      = false;
-bool g_tr6HookAttempted    = false;
+bool g_tr6SceneAttempted   = false;
+bool g_tr6CullAttempted    = false;
+uintptr_t g_tr6ModuleBase  = 0;
+bool g_tr6BuildingHeadVisibility = false;
+bool g_tr6HeadVisibilityValid    = false;
+bool g_loggedTr6RoomUnion        = false;
+bool g_loggedTr6RoomRuns         = false;
+bool g_loggedTr6AllRooms         = false;
+int32_t g_tr6HeadRoomList        = -1;
+int32_t g_tr6HeadRoomCount       = 0;
+Tr6MapRoomClip g_tr6HeadRoomClips[kTr6MaxRooms] = {};
+Tr6MapRoomClip g_tr6StockRoomClips[kTr6MaxRooms] = {};
 
 uint32_t ModuleTimestamp(HMODULE module) {
     if (!module) return 0;
@@ -218,7 +337,7 @@ bool AlternateEyeCapable() {
         && Stereo().monoValid();
 }
 
-void TryInstallTr6NativeHook();
+void TryInstallTr6Hooks();
 
 // TR6 renders its scene offscreen, so per-draw duplication cannot reach it.
 // Each frame is one eye instead -- but only while there IS an offscreen scene.
@@ -1425,39 +1544,496 @@ void __cdecl Detour_Tr6RenderScene() {
     }
 }
 
-void TryInstallTr6NativeHook() {
-    if (g_hTr6RenderScene.installed() || g_tr6HookAttempted
-        || !Cfg().nativeStereoGame6 || CurrentGame() != 2) {
+// Build the conservative frustum used by TR6's render-list builder. Preserve
+// the game's near/far plane and any other depth convention, but replace the
+// monitor-sized X/Y field of view with the union of the original projection
+// and both headset eyes. Keeping the original angular extent prevents a narrow
+// scripted projection or unusual aspect ratio from clipping the tracked view.
+void WidenTr6CullProjection(mat4& projection, float& outTanX, float& outTanY) {
+    float hmdTanX = 1.6f;
+    float hmdTanY = 1.6f;
+    VR().CullTangents(hmdTanX, hmdTanY);
+    const float margin = Cfg().cullFovMarginDegrees;
+    if (margin > 0.0f) {
+        constexpr float kPi = 3.14159265358979323846f;
+        const float k = std::tan(margin * kPi / 180.0f);
+        const float ex = (hmdTanX + k) / (1.0f - hmdTanX * k);
+        const float ey = (hmdTanY + k) / (1.0f - hmdTanY * k);
+        if (ex > hmdTanX && ex < 60.0f) hmdTanX = ex;
+        if (ey > hmdTanY && ey < 60.0f) hmdTanY = ey;
+    }
+
+    // For an asymmetric perspective matrix the farthest horizontal edge is
+    // (1 + abs(shearX)) / abs(scaleX), and likewise for Y. Keep that edge if
+    // it is wider than the headset so scripted/cutscene views cannot regress.
+    const float ax = std::fabs(projection.m[0]);
+    const float ay = std::fabs(projection.m[5]);
+    const float gameTanX = ax > 1.0e-6f
+        ? (1.0f + std::fabs(projection.m[8])) / ax : hmdTanX;
+    const float gameTanY = ay > 1.0e-6f
+        ? (1.0f + std::fabs(projection.m[9])) / ay : hmdTanY;
+    outTanX = gameTanX > hmdTanX ? gameTanX : hmdTanX;
+    outTanY = gameTanY > hmdTanY ? gameTanY : hmdTanY;
+
+    const float signX = projection.m[0] < 0.0f ? -1.0f : 1.0f;
+    const float signY = projection.m[5] < 0.0f ? -1.0f : 1.0f;
+    projection.m[0] = signX / outTanX;
+    projection.m[5] = signY / outTanY;
+    projection.m[8] = 0.0f;
+    projection.m[9] = 0.0f;
+}
+
+bool IsTr6RenderCalculateCall(const void* returnAddress) {
+    if (!g_tr6ModuleBase) return false;
+    const uintptr_t caller = reinterpret_cast<uintptr_t>(returnAddress);
+    return caller == g_tr6ModuleBase + kTr6MainCalculateReturnRva
+        || caller == g_tr6ModuleBase + kTr6ReflectionCalculateReturnRva;
+}
+
+bool Tr6CullActive() {
+    if (!g_tr6ModuleBase || !Cfg().enabled || !Cfg().portalCulling) return false;
+    if (!Cfg().perEyeView && Cfg().eyeOffsetMode != 3) return false;
+    if (!VR().active() || !VR().poseValid()) return false;
+    return Cfg().monoTracking || NativeTr6Capable() || AlternateEyeActive();
+}
+
+// TR6 has a second visibility tier after mapCalcVisibleRooms: static meshes and
+// the individual mesh runs inside SYS_D3D_ROOM are tested by ClippedOBB_CPP.
+// Those are the blue-hole culprit: their bits follow the third-person camera,
+// so merely turning Lara toward geometry cannot restore it; rotating that
+// camera behind her can. Do not substitute the head matrix here because the
+// second group test includes an additional local transform. Instead, bypass
+// these render-only rejects. The accepted room list remains conservative, so
+// this exposes all geometry only within rooms selected by the stock/head union.
+__declspec(noinline) bool __fastcall Detour_Tr6ClippedObb(
+    const mat4* cameraProject, const void* viewport,
+    const void* boundsMin, const void* boundsMax) {
+    const auto original = g_hTr6ClippedObb.Original<Fn_tr6_clipped_obb>();
+    const uintptr_t returnRva = g_tr6ModuleBase
+        ? reinterpret_cast<uintptr_t>(_ReturnAddress()) - g_tr6ModuleBase
+        : 0;
+    const bool roomRenderTest =
+        returnRva == kTr6MainRoomGroupObbReturnRva
+        || returnRva == kTr6ClipRoomObbReturnRva;
+    if (!roomRenderTest || !Tr6CullActive()) {
+        return original(cameraProject, viewport, boundsMin, boundsMax);
+    }
+
+    if (!g_loggedTr6RoomRuns) {
+        g_loggedTr6RoomRuns = true;
+        Log("tr6 cull: render-only static-mesh and room-run OBB rejection "
+            "disabled; accepted rooms now retain all geometry for head look");
+    }
+    return false; // ClippedOBB_CPP: false means the bounds remain visible.
+}
+
+// Replace TR6's monitor-camera room seeds with every active room in the level.
+// The engine's fixed pool is already sized to the same 192-room maximum. Flip
+// rooms are alternate copies and must stay excluded, exactly as Calculate's
+// stock seed loop excludes ROOM_HEADER_TAG::bIsFlipRoom at +0x218.
+int32_t SeedAllActiveTr6Rooms(void* roomPool) {
+    if (!g_tr6ModuleBase || !roomPool) return -1;
+    auto** currentGmx = reinterpret_cast<uint8_t**>(
+        g_tr6ModuleBase + kTr6GmapGMXCurRva);
+    if (!currentGmx || !*currentGmx) return -1;
+
+    const int32_t roomCount = *reinterpret_cast<int32_t*>(
+        *currentGmx + kTr6GmxRoomCountOff);
+    auto* pool = reinterpret_cast<Tr6ItemPool*>(roomPool);
+    if (roomCount <= 0 || roomCount > kTr6MaxRooms
+        || !pool->data || pool->maxItems < static_cast<uint32_t>(roomCount)) {
+        return -1;
+    }
+
+    auto** source = reinterpret_cast<void**>(*currentGmx + kTr6GmxRoomsOff);
+    auto** destination = reinterpret_cast<void**>(pool->data);
+    uint32_t active = 0;
+    for (int32_t room = 0; room < roomCount; ++room) {
+        auto* header = reinterpret_cast<uint8_t*>(source[room]);
+        if (!header || *reinterpret_cast<int32_t*>(
+                           header + kTr6RoomIsFlipOff) != 0) {
+            continue;
+        }
+        destination[active++] = header;
+    }
+    pool->items = active;
+    pool->itemsNeeded = 0;
+    return static_cast<int32_t>(active);
+}
+
+// SYS_DRAW_CRP begins with a room-descriptor pool followed by a RECTF portal
+// pool. Give every active seed one full-screen portal. App_Render_Scene_Main
+// will therefore submit all active room geometry, independent of the right-
+// stick camera, while the GPU's ordinary depth and near/far clipping remain.
+bool ForceAllTr6RoomsVisible(void* crp, int32_t activeRooms,
+                             uint32_t calculatedRooms,
+                             uint32_t originalSeeds) {
+    if (!crp || activeRooms <= 0) return false;
+    auto* rooms = reinterpret_cast<Tr6ItemPool*>(crp);
+    auto* portals = reinterpret_cast<Tr6ItemPool*>(
+        reinterpret_cast<uint8_t*>(crp) + sizeof(Tr6ItemPool));
+    if (!rooms->data || !portals->data
+        || rooms->maxItems < static_cast<uint32_t>(activeRooms)
+        || portals->maxItems == 0) {
+        return false;
+    }
+
+    auto* fullRect = reinterpret_cast<float*>(portals->data);
+    fullRect[0] = -1.0f;
+    fullRect[1] = -1.0f;
+    fullRect[2] =  1.0f;
+    fullRect[3] =  1.0f;
+    portals->items = 1;
+    portals->itemsNeeded = 0;
+
+    auto* desc = reinterpret_cast<Tr6RoomPortalsDesc*>(rooms->data);
+    for (int32_t room = 0; room < activeRooms; ++room) {
+        desc[room].roomIndex = static_cast<uint32_t>(room);
+        desc[room].firstPortal = 0;
+        desc[room].portalCount = 1;
+    }
+    rooms->items = static_cast<uint32_t>(activeRooms);
+    rooms->itemsNeeded = 0;
+
+    if (!g_loggedTr6AllRooms) {
+        g_loggedTr6AllRooms = true;
+        LogF("tr6 cull: correctness-first room submission active -- %u map "
+             "seeds, %u portal-visible rooms expanded to %d active rooms",
+             originalSeeds, calculatedRooms, activeRooms);
+    }
+    return true;
+}
+
+bool GetTr6MapGlobals(int32_t*& roomList, Tr6MapRoomClip*& roomClips,
+                      int32_t& roomCount) {
+    if (!g_tr6ModuleBase) return false;
+    auto** currentGmx = reinterpret_cast<uint8_t**>(
+        g_tr6ModuleBase + kTr6GmapGMXCurRva);
+    if (!currentGmx || !*currentGmx) return false;
+
+    roomCount = *reinterpret_cast<int32_t*>(*currentGmx + kTr6GmxRoomCountOff);
+    if (roomCount <= 0 || roomCount > kTr6MaxRooms) return false;
+
+    roomList = reinterpret_cast<int32_t*>(
+        g_tr6ModuleBase + kTr6GmapRoomListRva);
+    roomClips = reinterpret_cast<Tr6MapRoomClip*>(
+        g_tr6ModuleBase + kTr6GmapRoomClipRva);
+    return true;
+}
+
+bool ValidateTr6RoomList(int32_t first, const Tr6MapRoomClip* clips,
+                         int32_t roomCount, bool* seen,
+                         int32_t& tail, int32_t& length) {
+    std::memset(seen, 0, sizeof(bool) * kTr6MaxRooms);
+    tail = -1;
+    length = 0;
+    for (int32_t room = first; room != -1; room = clips[room].next) {
+        if (room < 0 || room >= roomCount || seen[room]
+            || length >= roomCount) {
+            return false;
+        }
+        seen[room] = true;
+        tail = room;
+        ++length;
+    }
+    return true;
+}
+
+// mapCalcVisibleRooms is part of mapProcess, and its result drives both actor
+// processing and the later rendering-preparation pass. Run it normally first,
+// then once more with the Calculate detour redirected to the tracked head. The
+// head result is saved privately and the stock globals are restored before
+// mapProcess continues, so AI/triggers never observe the VR visibility set.
+void __cdecl Detour_Tr6MapCalcVisibleRooms() {
+    const auto original = g_hTr6MapCalcVisibleRooms.Original<Fn_tr6_void>();
+    original();
+
+    g_tr6HeadVisibilityValid = false;
+    if (!Tr6CullActive()) return;
+
+    int32_t* roomList = nullptr;
+    Tr6MapRoomClip* roomClips = nullptr;
+    int32_t roomCount = 0;
+    if (!GetTr6MapGlobals(roomList, roomClips, roomCount)) return;
+
+    const int32_t stockList = *roomList;
+    std::memcpy(g_tr6StockRoomClips, roomClips,
+                sizeof(Tr6MapRoomClip) * roomCount);
+
+    g_tr6BuildingHeadVisibility = true;
+    original();
+    g_tr6BuildingHeadVisibility = false;
+
+    bool seen[kTr6MaxRooms];
+    int32_t tail = -1;
+    int32_t length = 0;
+    const int32_t headList = *roomList;
+    if (ValidateTr6RoomList(headList, roomClips, roomCount,
+                            seen, tail, length)) {
+        g_tr6HeadRoomList = headList;
+        g_tr6HeadRoomCount = roomCount;
+        std::memcpy(g_tr6HeadRoomClips, roomClips,
+                    sizeof(Tr6MapRoomClip) * roomCount);
+        g_tr6HeadVisibilityValid = true;
+    }
+
+    *roomList = stockList;
+    std::memcpy(roomClips, g_tr6StockRoomClips,
+                sizeof(Tr6MapRoomClip) * roomCount);
+}
+
+// gameEndFrame calls mapDrawRoomList after simulation is finished. This is the
+// safe place to expose the union of stock and head-visible rooms and to use the
+// same head-centred camera for its CPU-side bounds tests. All globals are put
+// back immediately after the render data has been prepared.
+void __cdecl Detour_Tr6DrawRoomList() {
+    const auto original = g_hTr6DrawRoomList.Original<Fn_tr6_void>();
+    if (!Tr6CullActive() || !g_tr6HeadVisibilityValid) {
+        original();
         return;
     }
+
+    int32_t* roomList = nullptr;
+    Tr6MapRoomClip* roomClips = nullptr;
+    int32_t roomCount = 0;
+    if (!GetTr6MapGlobals(roomList, roomClips, roomCount)
+        || roomCount != g_tr6HeadRoomCount) {
+        original();
+        return;
+    }
+
+    const int32_t stockList = *roomList;
+    std::memcpy(g_tr6StockRoomClips, roomClips,
+                sizeof(Tr6MapRoomClip) * roomCount);
+
+    bool stockSeen[kTr6MaxRooms];
+    bool headSeen[kTr6MaxRooms];
+    int32_t stockTail = -1, stockLength = 0;
+    int32_t headTail = -1, headLength = 0;
+    const bool listsValid =
+        ValidateTr6RoomList(stockList, roomClips, roomCount,
+                            stockSeen, stockTail, stockLength)
+        && ValidateTr6RoomList(g_tr6HeadRoomList, g_tr6HeadRoomClips,
+                               roomCount, headSeen, headTail, headLength);
+    if (!listsValid) {
+        original();
+        return;
+    }
+
+    int32_t added = 0;
+    for (int32_t room = g_tr6HeadRoomList; room != -1;
+         room = g_tr6HeadRoomClips[room].next) {
+        // Bounds were projected with the tracked-head camera. Use them even
+        // for a room that was already in the stock list; its game-camera rect
+        // is the wrong clip rectangle for the view mapDrawRoomList now tests.
+        std::memcpy(roomClips[room].bounds,
+                    g_tr6HeadRoomClips[room].bounds,
+                    sizeof(roomClips[room].bounds));
+        roomClips[room].flags = g_tr6HeadRoomClips[room].flags;
+
+        if (stockSeen[room]) continue;
+        stockSeen[room] = true;
+        roomClips[room].cacheFlags = g_tr6HeadRoomClips[room].cacheFlags;
+        roomClips[room].clipped = g_tr6HeadRoomClips[room].clipped;
+        roomClips[room].next = -1;
+        if (stockTail >= 0) roomClips[stockTail].next = room;
+        else                *roomList = room;
+        stockTail = room;
+        ++added;
+    }
+
+    auto* camera = reinterpret_cast<mat4*>(
+        g_tr6ModuleBase + kTr6CameraMatrixRva);
+    auto* projection = reinterpret_cast<mat4*>(
+        g_tr6ModuleBase + kTr6PerspGameRva);
+    const mat4 stockCamera = *camera;
+    const mat4 stockProjection = *projection;
+    mat4 headProjection = stockProjection;
+    float tanX = 0.0f, tanY = 0.0f;
+    WidenTr6CullProjection(headProjection, tanX, tanY);
+    *camera = Mul4(AffineToMat4(VR().HeadView()), stockCamera);
+    *projection = headProjection;
+
+    original();
+
+    *camera = stockCamera;
+    *projection = stockProjection;
+    *roomList = stockList;
+    std::memcpy(roomClips, g_tr6StockRoomClips,
+                sizeof(Tr6MapRoomClip) * roomCount);
+
+    if (!g_loggedTr6RoomUnion) {
+        g_loggedTr6RoomUnion = true;
+        LogF("tr6 cull: render preparation received %d stock rooms + %d "
+             "head-only rooms (%d in the head list); simulation globals restored",
+             stockLength, added, headLength);
+    }
+}
+
+__declspec(noinline) void __fastcall Detour_Tr6Calculate(
+    void* crp, void* drawBuffer, void* matrixStack, void* roomPool,
+    const Tr6CameraView* cameraView, uint32_t flags, float lodScale,
+    const void* clipMin, const void* clipMax) {
+    const auto original = g_hTr6Calculate.Original<Fn_tr6_calculate>();
+
+    // Calculate also runs from mapProcess. That caller is redirected only
+    // during our private second pass; its normal gameplay pass remains stock.
+    // The other two accepted return addresses are render-only scene calls.
+    const void* returnAddress = _ReturnAddress();
+    const bool renderCall = IsTr6RenderCalculateCall(returnAddress);
+    const bool headVisibilityCall = g_tr6BuildingHeadVisibility
+        && reinterpret_cast<uintptr_t>(returnAddress)
+           == g_tr6ModuleBase + kTr6MapCalculateReturnRva;
+    const bool mainRenderCall = reinterpret_cast<uintptr_t>(returnAddress)
+        == g_tr6ModuleBase + kTr6MainCalculateReturnRva;
+    const bool renderedViewTracksHead = Cfg().monoTracking
+        || g_inNativeTr6Scene || AlternateEyeActive();
+    const bool active = cameraView
+        && (headVisibilityCall || (renderCall && renderedViewTracksHead))
+        && Cfg().enabled && Cfg().portalCulling
+        && (Cfg().perEyeView || Cfg().eyeOffsetMode == 3)
+        && VR().active() && VR().poseValid();
+    if (!active) {
+        original(crp, drawBuffer, matrixStack, roomPool, cameraView, flags,
+                 lodScale, clipMin, clipMax);
+        return;
+    }
+
+    uint32_t originalSeeds = 0;
+    int32_t activeRooms = -1;
+    if (mainRenderCall && roomPool) {
+        originalSeeds = reinterpret_cast<Tr6ItemPool*>(roomPool)->items;
+        activeRooms = SeedAllActiveTr6Rooms(roomPool);
+    }
+
+    alignas(16) Tr6CameraView adjusted;
+    std::memcpy(&adjusted, cameraView, sizeof(adjusted));
+
+    float tanX = 0.0f;
+    float tanY = 0.0f;
+    WidenTr6CullProjection(adjusted.project, tanX, tanY);
+    adjusted.camera = Mul4(AffineToMat4(VR().HeadView()), adjusted.camera);
+    adjusted.cameraProject = Mul4(adjusted.project, adjusted.camera);
+
+    if (!g_loggedTr6Cull) {
+        g_loggedTr6Cull = true;
+        const float radToDeg = 180.0f / 3.14159265358979323846f;
+        LogF("tr6 cull: SYS_DRAW_CRP::Calculate now follows the tracked head "
+             "for the private room pass and render passes (%.1f x %.1f "
+             "degrees, including margin)",
+             2.0f * std::atan(tanX) * radToDeg,
+             2.0f * std::atan(tanY) * radToDeg);
+    }
+
+    original(crp, drawBuffer, matrixStack, roomPool, &adjusted, flags,
+             lodScale, clipMin, clipMax);
+
+    if (mainRenderCall && activeRooms > 0) {
+        const uint32_t calculatedRooms =
+            reinterpret_cast<Tr6ItemPool*>(crp)->items;
+        ForceAllTr6RoomsVisible(crp, activeRooms, calculatedRooms,
+                                originalSeeds);
+    }
+}
+
+void TryInstallTr6Hooks() {
+    if (CurrentGame() != 2) {
+        return;
+    }
+
+    const bool wantScene = Cfg().nativeStereoGame6
+        && !g_hTr6RenderScene.installed() && !g_tr6SceneAttempted;
+    const bool wantCull = Cfg().portalCulling
+        && !g_hTr6Calculate.installed() && !g_tr6CullAttempted;
+    if (!wantScene && !wantCull) return;
 
     HMODULE module = GetModuleHandleW(L"tomb6.dll");
     if (!module) return;
 
-    g_tr6HookAttempted = true;
     const uint32_t stamp = ModuleTimestamp(module);
     if (stamp != kTr6DllTimestamp) {
+        if (wantScene) g_tr6SceneAttempted = true;
+        if (wantCull)  g_tr6CullAttempted = true;
         if (!g_warnedTr6Build) {
             g_warnedTr6Build = true;
-            LogF("tr6: native stereo unavailable -- tomb6.dll timestamp "
-                 "0x%08X is not supported (expected 0x%08X); using AER fallback",
+            LogF("tr6: build-specific scene/culling hooks unavailable -- "
+                 "tomb6.dll timestamp 0x%08X is not supported (expected "
+                 "0x%08X); native stereo uses AER and culling stays stock",
                  stamp, kTr6DllTimestamp);
         }
         return;
     }
 
-    auto* target = reinterpret_cast<uint8_t*>(module) + kTr6RenderSceneRva;
-    if (!g_hTr6RenderScene.Install(target,
-            reinterpret_cast<void*>(&Detour_Tr6RenderScene),
-            sizeof(kTr6RenderScenePrologue),
-            kTr6RenderScenePrologue, sizeof(kTr6RenderScenePrologue),
-            "TR6 App_Render_Scene")) {
-        Log("tr6: native scene hook failed its byte/safety checks; using AER fallback");
-        return;
+    g_tr6ModuleBase = reinterpret_cast<uintptr_t>(module);
+
+    if (wantCull) {
+        g_tr6CullAttempted = true;
+        auto* calculate = reinterpret_cast<uint8_t*>(module) + kTr6CalculateRva;
+        auto* mapCalc = reinterpret_cast<uint8_t*>(module) + kTr6MapCalcRva;
+        auto* drawRooms = reinterpret_cast<uint8_t*>(module) + kTr6DrawRoomListRva;
+        auto* clippedObb = reinterpret_cast<uint8_t*>(module) + kTr6ClippedObbRva;
+
+        bool ok = g_hTr6Calculate.Install(calculate,
+                reinterpret_cast<void*>(&Detour_Tr6Calculate),
+                sizeof(kTr6CalculatePrologue),
+                kTr6CalculatePrologue, sizeof(kTr6CalculatePrologue),
+                "TR6 SYS_DRAW_CRP::Calculate");
+        if (ok) {
+            ok = g_hTr6MapCalcVisibleRooms.Install(mapCalc,
+                reinterpret_cast<void*>(&Detour_Tr6MapCalcVisibleRooms),
+                sizeof(kTr6MapCalcPrologue),
+                kTr6MapCalcPrologue, sizeof(kTr6MapCalcPrologue),
+                "TR6 mapCalcVisibleRooms");
+        }
+        if (ok) {
+            ok = g_hTr6DrawRoomList.Install(drawRooms,
+                reinterpret_cast<void*>(&Detour_Tr6DrawRoomList),
+                sizeof(kTr6DrawRoomListPrologue),
+                kTr6DrawRoomListPrologue, sizeof(kTr6DrawRoomListPrologue),
+                "TR6 mapDrawRoomList");
+        }
+        if (ok) {
+            ok = g_hTr6ClippedObb.Install(clippedObb,
+                reinterpret_cast<void*>(&Detour_Tr6ClippedObb),
+                sizeof(kTr6ClippedObbPrologue),
+                kTr6ClippedObbPrologue, sizeof(kTr6ClippedObbPrologue),
+                "TR6 ClippedOBB_CPP");
+        }
+
+        if (!ok) {
+            // The four hooks are one mechanism. A partial installation would
+            // either calculate a head list nobody consumes or consume stale
+            // data, so roll the entire culling path back atomically.
+            g_hTr6ClippedObb.Remove();
+            g_hTr6DrawRoomList.Remove();
+            g_hTr6MapCalcVisibleRooms.Remove();
+            g_hTr6Calculate.Remove();
+            g_tr6HeadVisibilityValid = false;
+            Log("tr6 cull: upstream hook set failed its byte/safety checks; "
+                "leaving stock visibility active");
+        } else {
+            LogF("tr6 cull: upstream visibility hooks installed (Calculate "
+                 "+0x%X, mapCalc +0x%X, drawRooms +0x%X, room OBB +0x%X)",
+                 kTr6CalculateRva, kTr6MapCalcRva, kTr6DrawRoomListRva,
+                 kTr6ClippedObbRva);
+        }
     }
 
-    LogF("tr6: native scene hook installed (tomb6.dll+0x%X)",
-         kTr6RenderSceneRva);
+    if (wantScene) {
+        g_tr6SceneAttempted = true;
+        auto* target = reinterpret_cast<uint8_t*>(module) + kTr6RenderSceneRva;
+        if (!g_hTr6RenderScene.Install(target,
+                reinterpret_cast<void*>(&Detour_Tr6RenderScene),
+                sizeof(kTr6RenderScenePrologue),
+                kTr6RenderScenePrologue, sizeof(kTr6RenderScenePrologue),
+                "TR6 App_Render_Scene")) {
+            Log("tr6: native scene hook failed its byte/safety checks; "
+                "using AER fallback");
+        } else {
+            LogF("tr6: native scene hook installed (tomb6.dll+0x%X)",
+                 kTr6RenderSceneRva);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1587,9 +2163,10 @@ void __cdecl Detour_ogl_present() {
     // TR5 without restarting, so both of these run every frame.
     GameDllUpdate();
 
-    // TR6's render boundary lives in tomb6.dll rather than the shared engine.
-    // Install it only after that DLL is live and has been identified exactly.
-    TryInstallTr6NativeHook();
+    // TR6's render boundary and visibility builder live in tomb6.dll rather
+    // than the shared engine. Install them only after that DLL is live and has
+    // been identified exactly.
+    TryInstallTr6Hooks();
 
     // Must follow GameDllUpdate: it hooks INSIDE the game DLL, so it needs to
     // know which one is live and which build it is.
@@ -1908,8 +2485,12 @@ void RemoveHooks() {
     PortalCullShutdown();
     GameDllShutdown();
 
-    // The game-DLL hook was installed dynamically after the shared hooks.
+    // The game-DLL hooks were installed dynamically after the shared hooks.
     g_hTr6RenderScene.Remove();
+    g_hTr6ClippedObb.Remove();
+    g_hTr6DrawRoomList.Remove();
+    g_hTr6MapCalcVisibleRooms.Remove();
+    g_hTr6Calculate.Remove();
 
     // Reverse order of shared-hook installation.
     g_hFmvShow.Remove();
@@ -1924,7 +2505,13 @@ void RemoveHooks() {
     }
     g_ready = false;
     g_inNativeTr6Scene = false;
-    g_tr6HookAttempted = false;
+    g_tr6SceneAttempted = false;
+    g_tr6CullAttempted = false;
+    g_tr6ModuleBase = 0;
+    g_tr6BuildingHeadVisibility = false;
+    g_tr6HeadVisibilityValid = false;
+    g_tr6HeadRoomList = -1;
+    g_tr6HeadRoomCount = 0;
     g_aerLatched = false;
 }
 
