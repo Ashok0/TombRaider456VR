@@ -24,7 +24,8 @@ result after in-headset validation.
 [WIP]
 
 ## Controls
-[WIP]
+|---|---|
+| **Phase 1** | **Mono head tracking** — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
 
 ## Development Notes
 
@@ -35,24 +36,28 @@ The mod loads into the game, reads the head pose from an OpenVR runtime, and
 composes it onto the game camera. Its development phases share one binary and
 one set of hooks; settings select optional paths at runtime.
 
-| | | State |
-|---|---|---|
-| **Phase 1** | **Mono head tracking** — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
-| **Phase 2** | **Native stereo with 6DOF** — per-eye matrices, double-wide target, positional tracking, compositor submit | Working. `Mode=stereo` |
-| **Phase 3** | **UI fixes** — the flat 2D layer placed on a world-locked panel, and video cutscenes made fusable | Working. On by default in stereo |
-| **Phase 4** | **FMV fixes** — cutscenes captured offscreen and replayed as real world geometry | Working. On by default in stereo |
-| **Phase 5** | **VR controller support** — Touch controllers presented to the game as an Xbox pad | Working. On by default |
-| **Phase 6** | **TR6 support** — alternate-eye fallback for Angel of Darkness's offscreen renderer | Working. Used when native stereo is disabled or unavailable |
-| **Phase 7** | **Culling fix** — the missing geometry behind Lara, fixed inside the game DLLs | Working. TR4 / TR5 |
-| **Phase 8** | **D-pad input** — hold R3 and the left stick becomes a D-pad | Working. On by default |
-| **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
-| **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only | Working. On by default |
-| **Phase 11** | **Ceiling clamp** — caps the tracked head so it cannot rise through low ceilings | Working. On by default |
-| **Phase 12** | **Sky fix** — the HD sky dome drawn at optical infinity instead of its mesh radius | Working. TR4 / TR5 |
-| **Phase 13** | **Laser sight fix** — the dot and the bullet made to agree, by putting the head centre back on the aim line | Working. On by default |
-| **Phase 14** | **Hide vignettes** — the binocular, scope and infra-red overlays stubbed out, keeping the aiming dot | Working. On by default |
-| **Phase 15** | **The stick stops displacing you** — the head's offset integrated in world space, so only the headset moves your eye | Working. On by default |
-| **Phase 16** | **TR6 Native Stereo Support** — the complete Angel of Darkness scene and postprocess chain rendered once per eye | Working. Confirmed in-headset |
+| | |
+| Move | Left Stick (LS) |
+| Walk | RB + LS |
+| Dash | L3 |
+| Look | Right Stick (RS) |
+| Zoom | R3 |
+| Jump | A |
+| Action | Y |
+| Equip Weapon | LT (Hold) |
+| Shoot | RT |
+| Roll | B |
+| Duck | LB |
+| Photo Mode | L3 + R3 |
+| Photo Mode Select | R3 (Dpad) + LS |
+| Ledge Grab | RT |
+| Ledge Drop | B |
+| Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) | 
+| 180 Frontflip/Blackflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
+| Swan Dive | Jump (A) + Move (LS) + Roll (B) | 
+| Toggle Classic Graphics | Y + LT |
+| Adjust Camera Pitch | RT + RB + RS |
+| Menu | X |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
