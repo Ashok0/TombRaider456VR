@@ -1,8 +1,5 @@
 // Hooks.cpp -- the stereo injection layer.
 //
-// Five hooks. Two of them do the VR work; three are plumbing that stereo
-// cannot function without.
-//
 //   vid_setPass     REQUIRED WORK. Classifies each pass as world-space or 2D by
 //                   reading which matrix vid_state.proj was pointed at. This is
 //                   the only signal in the engine that distinguishes "3D scene"
@@ -22,11 +19,11 @@
 //   ogl_present     PLUMBING. The frame boundary: submit to the compositor,
 //                   mirror to the window, then WaitGetPoses for the next frame.
 //
-// The engine is never asked to render the scene twice. Each draw call is issued
-// twice into the two halves of one double-wide target, with different matrices
-// and a different viewport. That needs no shader changes, which matters: this
-// build has 202 shader pairs and a GL 3.2 Core context, so GL_OVR_multiview2
-// would mean editing 404 GLSL sources.
+// TR4/TR5 issue each draw twice into the halves of one double-wide target. TR6
+// has a separate PDB-identified render-only hook which replays its complete
+// offscreen scene chain once per eye. Neither path needs shader changes, which
+// matters: this build has 202 shader pairs and a GL 3.2 Core context, so
+// GL_OVR_multiview2 would mean editing 404 GLSL sources.
 #include "Hooks.h"
 #include "Engine.h"
 #include "StereoMath.h"
@@ -58,6 +55,7 @@ hook::InlineHook g_hDraw;
 hook::InlineHook g_hDrawVB;
 hook::InlineHook g_hPresent;
 hook::InlineHook g_hFmvShow;
+hook::InlineHook g_hTr6RenderScene;
 
 typedef void(__cdecl* Fn_vid_setPass)(int shader, float* params, int cull, int blend);
 typedef void(__cdecl* Fn_validate_draw)();
@@ -65,6 +63,7 @@ typedef void(__cdecl* Fn_ogl_draw)(void* vb, unsigned firstIndex, unsigned count
 typedef void(__cdecl* Fn_ogl_drawVB)(int fvf, void* vb, void* ib, int stride,
                                      unsigned first, unsigned count, int strip);
 typedef void(__cdecl* Fn_ogl_present)();
+typedef void(__cdecl* Fn_tr6_render_scene)();
 
 // --- verified prologue bytes ------------------------------------------------
 // Read out of Ghidra's disassembly of this exact build. Install() refuses to
@@ -89,6 +88,16 @@ const uint8_t kPresentPrologue[]  = { 0x48, 0x83, 0xEC, 0x28, 0x33, 0xC9 };
 
 // MOV RAX,RSP ; MOV [RAX+8],RBX  -- 3 + 4 = 7 bytes, no RIP-relative operand.
 const uint8_t kFmvShowPrologue[]  = { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 };
+
+// tomb6.dll v1.0.2a (timestamp 0x696B49A4), App_Render_Scene, RVA 0x001B1CA0:
+//   48 8B C4              mov rax, rsp
+//   48 89 58 08           mov [rax+8], rbx
+// Seven bytes, both complete and position-independent.
+const uint8_t kTr6RenderScenePrologue[] =
+    { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 };
+
+constexpr uint32_t kTr6DllTimestamp     = 0x696B49A4;
+constexpr uint32_t kTr6RenderSceneRva   = 0x001B1CA0;
 
 // --- per-frame state --------------------------------------------------------
 
@@ -168,12 +177,48 @@ unsigned g_offscreenWorldPrev = 0;
 // halfway would leave the frame split across two targets.
 bool g_aerLatched = false;
 
+// The hook runs App_Render_Scene twice, but everything outside that render-only
+// boundary (input, physics, audio and game state) still runs once.
+bool g_inNativeTr6Scene    = false;
+bool g_loggedNativeTr6     = false;
+bool g_warnedTr6Build      = false;
+bool g_tr6HookAttempted    = false;
+
+uint32_t ModuleTimestamp(HMODULE module) {
+    if (!module) return 0;
+    const auto base = reinterpret_cast<uintptr_t>(module);
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) return 0;
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
+    return nt->FileHeader.TimeDateStamp;
+}
+
+bool NativeTr6HookReady() {
+    return g_hTr6RenderScene.installed();
+}
+
+bool NativeTr6Capable() {
+    return Cfg().nativeStereoGame6
+        && !Cfg().monoTracking
+        && CurrentGame() == 2
+        && NativeTr6HookReady()
+        && Stereo().monoValid();
+}
+
+bool NativeTr6Active() {
+    return NativeTr6Capable();
+}
+
 bool AlternateEyeCapable() {
     return Cfg().alternateEyeGame6
+        && !(Cfg().nativeStereoGame6 && NativeTr6HookReady())
         && !Cfg().monoTracking
         && CurrentGame() == 2
         && Stereo().monoValid();
 }
+
+void TryInstallTr6NativeHook();
 
 // TR6 renders its scene offscreen, so per-draw duplication cannot reach it.
 // Each frame is one eye instead -- but only while there IS an offscreen scene.
@@ -628,7 +673,8 @@ void __cdecl Detour_validate_draw() {
                      && worldPass
                      && !ortho3D
                      && (Cfg().monoTracking || TargetIsBackbuffer()
-                         || AlternateEyeActive());
+                         || AlternateEyeActive()
+                         || (NativeTr6Active() && g_inNativeTr6Scene));
 
     // Count every world-space draw, injected or not, and separately the ones
     // rejected purely because the engine was drawing offscreen. Those two
@@ -1252,6 +1298,14 @@ template <typename Fn, typename... Args>
 void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
     const ScopedSkyDepth skyDepth(SkyInfinity() && VrLive());
 
+    // App_Render_Scene itself is already being replayed once per eye. Every
+    // draw inside it must therefore execute exactly once; duplicating here as
+    // well would produce four scene passes and overwrite both eye results.
+    if (g_inNativeTr6Scene) {
+        h.Original<Fn>()(args...);
+        return;
+    }
+
     if (!VrLive() || g_inDuplicate || Cfg().monoTracking
         || !Cfg().duplicateDraws || !TargetIsBackbuffer()) {
         h.Original<Fn>()(args...);
@@ -1325,6 +1379,88 @@ void __cdecl Detour_ogl_drawVB(int fvf, void* vb, void* ib, int stride,
 }
 
 // ---------------------------------------------------------------------------
+// TR6 App_Render_Scene -- full offscreen scene replay per eye
+// ---------------------------------------------------------------------------
+void __cdecl Detour_Tr6RenderScene() {
+    const auto original = g_hTr6RenderScene.Original<Fn_tr6_render_scene>();
+
+    // The latch deliberately stays off for menus and FMVs. Re-entry is not
+    // expected, but the guard makes it safe to call through if the scene
+    // renderer ever invokes itself through a path hidden by the symbols.
+    if (!NativeTr6Active() || g_inNativeTr6Scene || !VrLive()
+        || !VR().poseValid() || !Stereo().monoValid()) {
+        original();
+        return;
+    }
+
+    const GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    g_inNativeTr6Scene = true;
+
+    // TR6 owns several full-size intermediate colour/depth targets. Let it use
+    // those normally and replay the entire chain sequentially. The final
+    // composite for each pass lands in the single-eye scratch target and is
+    // copied out before the next eye overwrites any intermediates.
+    for (int eye = 0; eye < 2; ++eye) {
+        g_currentEye = eye;
+        FboDefault() = Stereo().monoFbo();
+        Stereo().BeginMono();
+        original();
+        Stereo().BlitMonoToHalf(eye);
+    }
+
+    // App_Render_Scene has completed, but TR6 may still draw UI before
+    // ogl_present. Put the ordinary stereo target back so those draws retain
+    // the established per-draw stereo/HUD path.
+    FboDefault() = Stereo().fbo();
+    gl::BindFramebuffer(GL_FRAMEBUFFER, Stereo().fbo());
+    if (scissorWasEnabled) glEnable(GL_SCISSOR_TEST);
+    else                   glDisable(GL_SCISSOR_TEST);
+    g_currentEye = 0;
+    g_inNativeTr6Scene = false;
+
+    if (!g_loggedNativeTr6) {
+        g_loggedNativeTr6 = true;
+        Log("tr6: native stereo active -- App_Render_Scene and its complete "
+            "offscreen/postprocess chain now render once per eye");
+    }
+}
+
+void TryInstallTr6NativeHook() {
+    if (g_hTr6RenderScene.installed() || g_tr6HookAttempted
+        || !Cfg().nativeStereoGame6 || CurrentGame() != 2) {
+        return;
+    }
+
+    HMODULE module = GetModuleHandleW(L"tomb6.dll");
+    if (!module) return;
+
+    g_tr6HookAttempted = true;
+    const uint32_t stamp = ModuleTimestamp(module);
+    if (stamp != kTr6DllTimestamp) {
+        if (!g_warnedTr6Build) {
+            g_warnedTr6Build = true;
+            LogF("tr6: native stereo unavailable -- tomb6.dll timestamp "
+                 "0x%08X is not supported (expected 0x%08X); using AER fallback",
+                 stamp, kTr6DllTimestamp);
+        }
+        return;
+    }
+
+    auto* target = reinterpret_cast<uint8_t*>(module) + kTr6RenderSceneRva;
+    if (!g_hTr6RenderScene.Install(target,
+            reinterpret_cast<void*>(&Detour_Tr6RenderScene),
+            sizeof(kTr6RenderScenePrologue),
+            kTr6RenderScenePrologue, sizeof(kTr6RenderScenePrologue),
+            "TR6 App_Render_Scene")) {
+        Log("tr6: native scene hook failed its byte/safety checks; using AER fallback");
+        return;
+    }
+
+    LogF("tr6: native scene hook installed (tomb6.dll+0x%X)",
+         kTr6RenderSceneRva);
+}
+
+// ---------------------------------------------------------------------------
 // fmvShow -- "a video is on screen this frame"
 // ---------------------------------------------------------------------------
 typedef void (__cdecl* Fn_fmvShow)(void);
@@ -1368,13 +1504,14 @@ void LazyInit() {
     FboDefault() = Stereo().fbo();
     LogF("present: redirected FBO_default %u -> %u", g_realDefaultFbo, Stereo().fbo());
 
-    // Alternate-eye scratch, at the engine's own render size.
-    if (Cfg().alternateEyeGame6) {
+    // Single-eye scratch, at the engine's own render size. Native TR6 stereo
+    // reuses it for each full scene pass; AER uses it for one whole frame.
+    if (Cfg().nativeStereoGame6 || Cfg().alternateEyeGame6) {
         const int mw = ScreenWidth()  > 0 ? ScreenWidth()  : (int)(w * 2);
         const int mh = ScreenHeight() > 0 ? ScreenHeight() : (int)h;
         if (!Stereo().CreateMono((uint32_t)mw, (uint32_t)mh)) {
-            Log("stereo: mono scratch unavailable -- TR6 alternate-eye will "
-                "flicker, because the engine's clears reach both halves");
+            Log("stereo: mono scratch unavailable -- TR6 native stereo and "
+                "alternate-eye fallback are disabled");
         }
     }
 
@@ -1450,6 +1587,10 @@ void __cdecl Detour_ogl_present() {
     // TR5 without restarting, so both of these run every frame.
     GameDllUpdate();
 
+    // TR6's render boundary lives in tomb6.dll rather than the shared engine.
+    // Install it only after that DLL is live and has been identified exactly.
+    TryInstallTr6NativeHook();
+
     // Must follow GameDllUpdate: it hooks INSIDE the game DLL, so it needs to
     // know which one is live and which build it is.
     PortalCullUpdate();
@@ -1509,10 +1650,12 @@ void __cdecl Detour_ogl_present() {
                               / double(freq.QuadPart);
             if (secs > 0.0) {
                 const double fps = 1800.0 / secs;
-                LogF("perf: %.1f fps rendered%s", fps,
-                     AlternateEyeActive()
+                const char* mode = NativeTr6Active()
+                    ? " -- TR6 native stereo, two scene passes per frame"
+                    : (AlternateEyeActive()
                        ? " -- alternate-eye, so each EYE updates at half that"
                        : "");
+                LogF("perf: %.1f fps rendered%s", fps, mode);
             }
         }
         g_lastReportTime = now;
@@ -1660,22 +1803,25 @@ void __cdecl Detour_ogl_present() {
     // Latch poses for the frame we are about to render, then re-arm the target.
     VR().BeginFrame();
 
-    // Decide whether the coming frame uses alternate-eye, from what the frame
-    // just drawn contained. Menus and FMVs fall back to ordinary per-draw
-    // duplication, which runs at full rate and looks better for 2D.
+    // Native stereo is scoped by the real App_Render_Scene call and needs no
+    // heuristic. Only AER must decide whether the coming whole frame has TR6's
+    // offscreen 3D scene. Menus and FMVs use ordinary per-draw duplication.
     {
         g_offscreenWorldPrev = g_offscreenWorld;
         g_offscreenWorld = 0;
-        const bool want = AlternateEyeCapable()
-            && g_offscreenWorldPrev >=
-               static_cast<unsigned>(Cfg().alternateEyeMinOffscreen < 0
-                                     ? 0 : Cfg().alternateEyeMinOffscreen);
-        if (want != g_aerLatched) {
+        const unsigned threshold =
+            static_cast<unsigned>(Cfg().alternateEyeMinOffscreen < 0
+                                  ? 0 : Cfg().alternateEyeMinOffscreen);
+        const bool hasScene = g_offscreenWorldPrev >= threshold;
+        const bool wantAer = AlternateEyeCapable() && hasScene;
+
+        if (wantAer != g_aerLatched) {
             LogF("tr6: alternate-eye %s (%u offscreen world draws last frame)",
-                 want ? "ON -- offscreen 3D scene" : "off -- 2D, full rate",
+                 wantAer ? "ON -- native hook unavailable"
+                         : "off -- native stereo or 2D",
                  g_offscreenWorldPrev);
         }
-        g_aerLatched = want;
+        g_aerLatched = wantAer;
     }
 
     if (AlternateEyeActive()) {
@@ -1693,6 +1839,10 @@ void __cdecl Detour_ogl_present() {
                 "are stereo-correct; each updates at half the frame rate.");
         }
     } else {
+        // Native stereo also starts from a cleared double-wide destination.
+        // App_Render_Scene will clear and reuse the single-eye scratch itself
+        // before each eye pass, then copy both completed composites here.
+        FboDefault() = Stereo().fbo();
         Stereo().BeginFrame();
     }
 
@@ -1758,7 +1908,10 @@ void RemoveHooks() {
     PortalCullShutdown();
     GameDllShutdown();
 
-    // Reverse order of installation.
+    // The game-DLL hook was installed dynamically after the shared hooks.
+    g_hTr6RenderScene.Remove();
+
+    // Reverse order of shared-hook installation.
     g_hFmvShow.Remove();
     g_hPresent.Remove();
     g_hDrawVB.Remove();
@@ -1770,6 +1923,9 @@ void RemoveHooks() {
         FboDefault() = g_realDefaultFbo;
     }
     g_ready = false;
+    g_inNativeTr6Scene = false;
+    g_tr6HookAttempted = false;
+    g_aerLatched = false;
 }
 
 } // namespace tr

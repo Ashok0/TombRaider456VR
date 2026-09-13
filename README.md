@@ -1,11 +1,16 @@
 ## Tomb Raider IV-VI Remastered VR Mod
-VR mod for Tomb Raider IV-VI Remastered.  Tomb Raider IV: The Last Revelation and Tomb Raider V: Chronicles work in native stereo with 6DOF.  Tomb Raider VI: Angel of Darkness is not officially supported as it runs off an updated version of Core Engine and is considerably harder to mod.  AOD does work in VR but it only works with AER.  Performance is poor and there are lots of visual glitches.
+VR mod for Tomb Raider IV-VI Remastered. Tomb Raider IV: The Last Revelation, Tomb Raider V: Chronicles, and Tomb Raider VI: Angel of Darkness work in native stereo with 6DOF. TR6 uses a separate full-scene replay path for its offscreen renderer; AER remains the automatic fallback. TR6 still lacks several game-specific fixes described under [Known limits](#known-limits).
 
 ## AI Usage
 Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions.   
 
+OpenAI Codex was used for Phase 16 to inspect the newly supplied `tomb6.pdb`
+and matching DLL, identify and verify the complete TR6 scene-render boundary,
+implement its guarded per-eye replay, build and deploy the mod, and document the
+result after in-headset validation.
+
 ## VR Mod Features
-* Native stereo (TR4/5 only)
+* Native stereo with 6DOF (TR4/5/6)
 * Culling fixes for VR
 * Camera fixes for tight collision areas
 * UI fixes
@@ -27,9 +32,8 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 2026-01-17 build), driving an OpenVR runtime.
 
 The mod loads into the game, reads the head pose from an OpenVR runtime, and
-composes it onto the game camera. It is built in two phases that share one
-binary and one set of hooks — the phase boundary is a config switch, not a
-branch.
+composes it onto the game camera. Its development phases share one binary and
+one set of hooks; settings select optional paths at runtime.
 
 | | | State |
 |---|---|---|
@@ -38,7 +42,7 @@ branch.
 | **Phase 3** | **UI fixes** — the flat 2D layer placed on a world-locked panel, and video cutscenes made fusable | Working. On by default in stereo |
 | **Phase 4** | **FMV fixes** — cutscenes captured offscreen and replayed as real world geometry | Working. On by default in stereo |
 | **Phase 5** | **VR controller support** — Touch controllers presented to the game as an Xbox pad | Working. On by default |
-| **Phase 6** | **TR6 support** — alternate-eye rendering for Angel of Darkness, which renders its scene offscreen | Working. Auto-detected per game |
+| **Phase 6** | **TR6 support** — alternate-eye fallback for Angel of Darkness's offscreen renderer | Working. Used when native stereo is disabled or unavailable |
 | **Phase 7** | **Culling fix** — the missing geometry behind Lara, fixed inside the game DLLs | Working. TR4 / TR5 |
 | **Phase 8** | **D-pad input** — hold R3 and the left stick becomes a D-pad | Working. On by default |
 | **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
@@ -48,6 +52,7 @@ branch.
 | **Phase 13** | **Laser sight fix** — the dot and the bullet made to agree, by putting the head centre back on the aim line | Working. On by default |
 | **Phase 14** | **Hide vignettes** — the binocular, scope and infra-red overlays stubbed out, keeping the aiming dot | Working. On by default |
 | **Phase 15** | **The stick stops displacing you** — the head's offset integrated in world space, so only the headset moves your eye | Working. On by default |
+| **Phase 16** | **TR6 Native Stereo Support** — the complete Angel of Darkness scene and postprocess chain rendered once per eye | Working. Confirmed in-headset |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -77,10 +82,10 @@ and no code patching — and the engine adopts the Xbox control scheme and promp
 by itself. See
 [Phase 5: VR controller support](#phase-5-vr-controller-support).
 
-**Phase 6** adds TR6. Angel of Darkness renders its scene into offscreen
-textures and composites at the end, so per-draw duplication cannot reach it at
-all; it gets alternate-eye rendering instead, selected automatically from which
-game is running. See [Phase 6: TR6 support](#phase-6-tr6-support).
+**Phase 6** adds the original TR6 fallback. Angel of Darkness renders its scene
+into offscreen textures and composites at the end, so per-draw duplication
+cannot reach it. Alternate-eye rendering made that pipeline stereo-correct at
+half the update rate per eye. See [Phase 6: TR6 support](#phase-6-tr6-support).
 
 **Phase 7** fixes the void behind Lara. The engine only draws rooms its portal
 traversal reaches from the game camera, so looking away from it finds nothing —
@@ -108,6 +113,12 @@ through a matrix it has zeroed the translation of, which is monitor-correct;
 the stereo path then adds the per-eye translation back on top, and a dome of
 finite mesh radius gets finite stereo depth. See
 [Phase 12: sky fix](#phase-12-sky-fix).
+
+**Phase 16** replaces TR6's AER path during normal play. The newly supplied
+symbols identify a render-only function around Angel of Darkness's complete
+offscreen scene pipeline, so that function can run once for each eye while the
+game loop still advances once. See
+[Phase 16: TR6 Native Stereo Support](#phase-16-tr6-native-stereo-support).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -1227,13 +1238,14 @@ All three are set explicitly in the generated `TombRaiderVR.ini`.
 
 ## Phase 6: TR6 support
 
-Everything up to here was built against TR4 and TR5, which draw the world
-straight to the backbuffer. **TR6 (Angel of Darkness) does not**, and that single
-difference invalidates the technique the whole stereo path is built on.
+> **Superseded by [Phase 16](#phase-16-tr6-native-stereo-support) for normal
+> play.** Phase 6 is retained as the history and implementation of the AER
+> fallback used when native TR6 stereo is disabled or its build check fails.
 
-Phase 6 adds a second rendering strategy for TR6 — **alternate-eye rendering**,
-or AER — and the per-game detection to switch between them. Which game is
-running is read from a global (`gGame`: `0` = TR4, `1` = TR5, `2` = TR6).
+Everything up to here was built against TR4 and TR5, which draw the world
+straight to the backbuffer. **TR6 (Angel of Darkness) does not**, so it needs a
+different stereo boundary. Which game is running is read from `gGame` (`0` =
+TR4, `1` = TR5, `2` = TR6).
 
 ### Why per-draw duplication cannot work in TR6
 
@@ -1256,17 +1268,9 @@ TR6 there is almost nothing on the backbuffer to duplicate, and the pieces that
 
 ### Alternate-eye rendering
 
-So instead of splitting each draw, **each frame is rendered entirely as one
-eye** — mono, through the engine's normal path, at its own size — and blitted
-into that eye's half of the stereo target. The other half keeps the frame it was
-given. Nothing is resized and nothing is duplicated.
-
-Both eyes are stereo-correct, because each frame carries its own eye's matrices.
-
-**The cost is honest and unavoidable: each eye updates at half the frame rate** —
-45 Hz out of 90. Full-rate stereo would mean running the entire offscreen chain
-twice into parallel target sets, which is a substantially larger piece of work.
-`AlternateEyeGame6=0` turns it off, and TR6 then renders flat at full rate.
+Each frame is rendered entirely as one eye and blitted into that eye's half.
+The other half keeps its preceding image. Both eyes are stereo-correct, but each
+updates at half the rendered frame rate. `AlternateEyeGame6=0` disables AER.
 
 #### The scratch target, and the flicker it prevents
 
@@ -1277,18 +1281,16 @@ engine issues wipes both halves**. That reads as a hard flicker at half the fram
 rate, with no head movement needed at all.
 
 AER therefore points `FBO_default` at a **single-eye scratch framebuffer** sized
-to the engine's own render resolution. The engine clears and renders into it
-exactly as it would a normal backbuffer, and `ogl_present` blits the result into
-one half of the eye target. The other half is never bound, so nothing can
-disturb it. The blit rescales, which is correct — the per-eye projection already
-carries the HMD's aspect.
+to the engine's own render resolution and copies the result into the selected
+eye at present. The blit rescales, which is correct — the per-eye projection
+already carries the HMD's aspect.
 
 If the scratch cannot be created, that is logged plainly rather than silently
 degrading:
 
 ```
-stereo: mono scratch unavailable -- TR6 alternate-eye will flicker,
-        because the engine's clears reach both halves
+stereo: mono scratch unavailable -- TR6 native stereo and
+        alternate-eye fallback are disabled
 ```
 
 #### AER only where it earns its cost
@@ -1341,22 +1343,18 @@ now consult the same `VideoOffscreenActive()`.
 
 ### Frame-rate reporting
 
-Because AER halves the per-eye rate, the health report now measures wall-clock
-frame rate over its 1800-frame window and says what each eye is actually
-getting:
+Because AER halves the per-eye rate, the health report says what each eye is
+actually getting:
 
 ```
 perf: 89.7 fps rendered -- alternate-eye, so each EYE updates at half that
 ```
 
-That is the number that decides whether the judder is worth chasing, and it was
-guesswork before.
-
 ### Phase 6 settings
 
 | Setting | Default | What it does |
 |---|---|---|
-| `AlternateEyeGame6` | `1` | Alternate-eye rendering in TR6. `0` renders TR6 flat at full rate |
+| `AlternateEyeGame6` | `1` | Enable AER; Phase 16 uses it as the fallback when native stereo is disabled or unavailable |
 | `AlternateEyeMinOffscreen` | `50` | Offscreen world draws per frame before AER engages. Raise it if a menu drops to half rate; lower it if gameplay does not engage; `0` forces AER on for every TR6 frame |
 | `VideoSkipGame6` | `1` | In TR6, use the offscreen video panel only while `fmvShow` says a video is playing |
 
@@ -2864,6 +2862,190 @@ All in `[VR]`, documented in `TombRaiderVR.ini`.
 
 ---
 
+## Phase 16: TR6 Native Stereo Support
+
+Phase 6 made Angel of Darkness stereo-correct with AER, but its two eyes came
+from different game frames. Phase 16 renders **both eyes from the same game
+frame** by replaying TR6's complete render-only scene boundary. This is the
+native stereo path now used by default, and it has been confirmed working in
+the headset on the supported `tomb6.dll` build.
+
+### Why TR4/TR5's native path still cannot be reused
+
+TR4 and TR5 render most world draws directly into the target represented by
+`FBO_default`. Their native path can change the viewport and issue each draw
+twice, once into each half of the double-wide VR texture.
+
+TR6 renders 98.8% of its measured world draws into engine-owned offscreen
+textures instead. Its final composite samples those textures over their full
+0–1 UV range. Splitting those individual draws between two halves either leaves
+the final target with almost nothing to duplicate or corrupts the intermediate
+textures that the composite expects to be whole. Native TR6 stereo therefore
+has to sit **above the complete offscreen pipeline**, not inside each final draw
+call.
+
+### The PDB supplied the missing boundary
+
+The new `tomb6.pdb` exposes names and exact RVAs for the scene pipeline:
+
+| Symbol | RVA | PDB size | Role |
+|---|---:|---:|---|
+| `App_Render_Scene_PlanarReflection` | `0x001B0AC0` | 2,208 bytes | Builds and renders the planar-reflection pass |
+| `App_Render_Scene_PostProcess_SpecialCameras` | `0x001B1360` | 724 bytes | Processes special-camera targets |
+| `App_Render_Scene_Main` | `0x001B1640` | 1,624 bytes | Renders the main scene from prepared draw data |
+| `App_Render_Scene` | `0x001B1CA0` | 2,192 bytes | Owns the complete scene, reflection, postprocess and final-composite sequence |
+
+The decorated name `?App_Render_Scene@@YAXXZ` proves the hook signature is
+`void App_Render_Scene()`. Disassembly shows one game-loop call at RVA
+`0x000BD59A`, immediately followed by `sysEndScene` at `0x000BD59F`.
+`App_Render_Scene` itself constructs its local draw state, calculates visible
+render data, updates room/character/effect render data, renders planar
+reflections, calls `App_Render_Scene_Main`, runs the special-camera postprocess,
+flushes commands and performs the final scene extras. It is therefore a
+self-contained render boundary rather than a function that only consumes a
+one-shot queue prepared by simulation.
+
+That placement is the crucial fact: invoking this function twice repeats
+rendering, while input, physics, animation control, audio, the outer game loop,
+`sysEndScene` and `ogl_present` still execute once.
+
+### One game frame, two complete scene passes
+
+The detour performs this sequence:
+
+```text
+TR6 game loop advances once
+  App_Render_Scene detour
+    left eye
+      select eye 0 matrices
+      clear and bind the single-eye scratch FBO
+      run the original App_Render_Scene in full
+      blit the finished composite to the left half of the VR target
+    right eye
+      select eye 1 matrices
+      clear and reuse the same scratch FBO
+      run the original App_Render_Scene in full
+      blit the finished composite to the right half of the VR target
+    restore the double-wide stereo FBO
+  sysEndScene runs once
+  ogl_present submits both halves together
+```
+
+Both eye images consequently use the same simulation state and current tracked
+pose. They differ only through the eye selected by `g_currentEye`, which drives
+the existing asymmetric HMD projection, IPD offset and 6DOF head transform.
+
+### Reusing TR6's intermediate targets safely
+
+The implementation does not clone or widen TR6's private render targets. Each
+eye runs sequentially through the engine's original target layout. When the
+left pass finishes, its final composite is copied into the double-wide VR
+texture before the right pass begins; the right pass can then overwrite every
+intermediate without touching the saved left image.
+
+The final composite for each pass is redirected through `FBO_default` into the
+single-eye scratch framebuffer already developed for AER. The scratch uses the
+engine's render dimensions, while `BlitMonoToHalf` scales the result to the
+runtime-recommended per-eye dimensions. The per-eye projection already carries
+the headset aspect, so that rescale is intentional.
+
+After the second blit, the detour restores `FBO_default` and the bound framebuffer
+to the double-wide stereo target. Anything TR6 draws between the scene return
+and `ogl_present`—including ordinary UI—continues through the established
+per-draw stereo/HUD path. The scissor-test enable state is also restored because
+the blits temporarily disable it.
+
+### How the existing draw hooks change inside the replay
+
+Two small gates make the full-scene replay compose correctly with the original
+TR4/TR5 stereo machinery:
+
+- `g_inNativeTr6Scene` makes `DuplicatePerEye` call each low-level draw only
+  once. The whole scene function is already running per eye; duplicating each
+  draw again would render four scene passes and overwrite the results.
+- `validate_draw` accepts offscreen world passes while that flag is set. TR6's
+  world matrices therefore receive the selected eye transform throughout the
+  intermediate pipeline instead of only when the engine targets its logical
+  backbuffer.
+
+Outside `App_Render_Scene`, the flag is false and the existing TR4/TR5, menu,
+HUD and FMV behavior is unchanged.
+
+### Exact-build hook and automatic AER fallback
+
+The new hook is installed dynamically after `tomb6.dll` is resident and
+`gGame == 2`. The supported DLL has PE timestamp `0x696B49A4`; the supplied DLL
+and the installed Steam DLL were also confirmed byte-identical. At
+`App_Render_Scene` the installer requires this position-independent seven-byte
+prologue:
+
+```text
+48 8B C4             mov rax, rsp
+48 89 58 08          mov [rax+8], rbx
+```
+
+Both the timestamp and bytes are checked before anything is patched. A future
+game build with a different timestamp, a moved function or a changed prologue
+is left untouched. If `AlternateEyeGame6=1`, the established AER path then
+engages automatically rather than risking an unknown address.
+
+Native mode does not use `AlternateEyeMinOffscreen`. The real
+`App_Render_Scene` call is its scope, so menus and FMVs need no heuristic.
+The offscreen-draw threshold remains only for AER, where the entire coming game
+frame must be assigned to one eye before any of it renders.
+
+### Configuration, logs and performance
+
+| Setting | Default | What it does |
+|---|---|---|
+| `NativeStereoGame6` | `1` | Run the complete TR6 render scene once per eye |
+| `AlternateEyeGame6` | `1` | Fall back to AER if native stereo is disabled or its hook cannot be installed safely |
+| `AlternateEyeMinOffscreen` | `50` | AER-only gameplay/menu threshold; ignored by native stereo |
+
+An older installed INI does not need editing: a missing `NativeStereoGame6`
+key inherits the compiled default of `1`. Set it explicitly to `0` for an A/B
+test or to force the AER fallback.
+
+Successful activation produces these one-shot log lines:
+
+```text
+hook[TR6 App_Render_Scene]: ... (stole 7, tramp ...)
+tr6: native scene hook installed (tomb6.dll+0x1B1CA0)
+tr6: native stereo active -- App_Render_Scene and its complete offscreen/postprocess chain now render once per eye
+```
+
+The periodic performance report distinguishes the cost from AER:
+
+```text
+perf: 72.4 fps rendered -- TR6 native stereo, two scene passes per frame
+```
+
+Native stereo roughly doubles TR6's scene-rendering work, but unlike AER it
+does not deliberately halve the update frequency of each eye. If the system
+maintains 90 game frames per second, both eyes receive 90 newly rendered images
+from the same 90 simulation frames.
+
+### Validation and code locations
+
+The release build completed with zero compiler warnings and errors. The
+installed `tomb6.dll` matched the symbolized input, its timestamp and hook bytes
+were read directly from the installed file, and the existing address verifier
+still passed all 219 checks. Final in-headset testing confirmed that TR6 native
+stereo works correctly.
+
+| File | What changed |
+|---|---|
+| `src\Hooks.cpp` | TR6 build detection, dynamic scene hook, two-eye replay, offscreen injection gate, draw-duplication guard and AER fallback selection |
+| `src\Config.h` / `src\Config.cpp` | `NativeStereoGame6`, enabled by default |
+| `TombRaiderVR.ini` | User-facing native/AER controls and exact behavior |
+| `src\DefaultIni.h` | Regenerated embedded configuration for fresh installs |
+
+This phase changes TR6's stereo renderer only. Its game-specific culling,
+ceiling, sky, optics and world-locked camera-offset gaps remain separate work
+because TR6 still has no corresponding row in `GameDll.cpp`.
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
@@ -2905,11 +3087,11 @@ These are honest gaps, not oversights.
   row in the address table, so Angel of Darkness still culls to the game camera.
 - **The controllers are a gamepad, not hands.** Phase 5 maps them to XInput;
   there is no motion aiming, no hand presence in-world, and no haptics.
-- **TR6 updates each eye at half the frame rate.** Alternate-eye rendering is a
-  consequence of the engine compositing from offscreen targets, not a shortcut.
-  Full-rate stereo would mean running the whole offscreen chain twice into
-  parallel target sets — a substantially larger piece of work than anything in
-  Phases 1–6.
+- **TR6 native stereo roughly doubles the scene work.** It replays the whole
+  render/postprocess chain for both eyes each game frame. This is confirmed
+  working in-headset; the remaining limitation is performance on hardware that
+  cannot sustain the requested VR frame rate. AER remains available as a
+  half-rate fallback with `NativeStereoGame6=0`.
 
 ## Safety
 
@@ -2918,7 +3100,11 @@ These are honest gaps, not oversights.
 in — and the hooks verify the exact prologue bytes at every target before
 patching. On a game update the bytes stop matching, every hook is rolled back,
 and the DLL logs `prologue mismatch` instead of corrupting an instruction
-stream. Hooks are installed all-or-nothing.
+stream. The shared engine hooks are installed all-or-nothing.
+
+The optional TR6 scene hook is installed later, after `tomb6.dll` is resident.
+If its independent build or prologue check fails, the shared hooks stay live
+and TR6 selects AER.
 
 Stolen prologue bytes must be position-independent once copied to the
 trampoline, and where they are not, the displacement is relocated rather than
@@ -2928,9 +3114,9 @@ refusing the hook if a fixup would fall outside the stolen range or overflow
 `int32`. This is not optional where it applies: a raw copy leaves the
 displacement relative to the trampoline, which can sit up to 2 GB away, so an
 instruction like `83 0D <disp32> 01` (`OR dword ptr [rip+disp32], 1`) would
-corrupt an arbitrary address rather than merely misbehave. None of the five
-permanent hooks currently need it — it was added for temporary hooks used during
-the culling investigation, and it is there for the next target that does.
+corrupt an arbitrary address rather than merely misbehave. None of the current
+hooks need such a relocation — it was added for temporary hooks used during the
+culling investigation, and it is there for the next target that does.
 
 ## Layout
 

@@ -306,7 +306,20 @@ struct Config {
     // comes out upside down.
     bool  videoFlipV       = false;
 
-    // Alternate-eye rendering for TR6 (Angel of Darkness).
+    // Native stereo for TR6 (Angel of Darkness).
+    //
+    // TR6's PDB identifies App_Render_Scene as the complete render-only scene
+    // boundary. Running that function once per eye lets the whole offscreen
+    // chain complete normally, then copies its final composite into the
+    // corresponding half of the VR target. Simulation still advances once.
+    // The two passes reuse TR6's intermediate targets sequentially; the left
+    // result is copied out before the right pass overwrites them.
+    //
+    // This is currently verified for the stock tomb6.dll build whose PDB is in
+    // the development symbol set. An unknown DLL build falls back to AER.
+    bool  nativeStereoGame6 = true;
+
+    // Alternate-eye fallback for TR6 (Angel of Darkness).
     //
     // TR4 and TR5 draw straight to the backbuffer, so every world draw can be
     // issued twice into the two halves of one double-wide target. TR6 cannot
@@ -322,13 +335,12 @@ struct Config {
     // half keeps the previous frame. Nothing is resized and nothing is
     // duplicated.
     //
-    // The cost is honest and unavoidable: each eye updates at half the frame
-    // rate. At 90 Hz that is 45 Hz per eye. Full-rate stereo would mean running
-    // the whole offscreen chain twice into parallel target sets, which is a much
-    // larger piece of work.
+    // Used only when NativeStereoGame6 is disabled or its exact render hook is
+    // unavailable. Each eye then updates at half the rendered frame rate.
     bool  alternateEyeGame6 = true;
 
-    // How many offscreen world draws a frame needs before alternate-eye engages.
+    // How many offscreen world draws a frame needs before the AER fallback
+    // engages. Native stereo uses the actual App_Render_Scene call instead.
     //
     // AER is only worth its half-rate cost when there is an offscreen 3D scene
     // to reach. The TR6 main menu and the FMVs are 2D: they draw straight to the
