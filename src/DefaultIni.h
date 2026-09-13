@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 34807 bytes, 691 lines.
+// Source: TombRaiderVR.ini, 36641 bytes, 723 lines.
 #pragma once
 
 namespace tr {
@@ -477,6 +477,39 @@ DecoupledPitchWaterOff=1
 ; this follows the game's own notion of "currently zoomed" rather than a guess.
 DecoupledPitchZoomOff=1
 
+; Hold the head CENTRE at the game camera while looking through an optic, so the
+; LASER SIGHT hits what it points at. Leave at 1.
+;
+; THIS IS NOT A STEREO SWITCH. Your eyes still straddle the centre by half an IPD
+; each, so the world keeps all of its depth. What is held off is the 6DOF
+; displacement, through the same line PositionalTracking=0 uses.
+;
+; WHAT IT FIXES. The laser dot is not an object in the world -- it is a
+; screen-centre crosshair drawn in the 2D overlay pass. The bullet is real
+; geometry, fired along a ray out of the game camera. So the dot and the impact
+; are two points on ONE LINE through the camera, which is exactly why they agree
+; perfectly on a flat screen: your eye is on that line. In VR it is not, so the
+; dot (on the panel at HudDepthMetres) and the impact (on the wall) pull apart --
+)INI"
+           R"INI(; about h*(D/Z - 1), or 0.45 m for 0.3 m of head offset, a 10 m target and a 4 m
+; panel. It reads as purely vertical because seated your sideways offset is
+; nearly nothing while your height offset is not.
+;
+; Put the head centre back on the line and the two agree at EVERY distance, with
+; no need to know where the shot landed. The leftover per-eye 32 mm is equal and
+; opposite, so it cancels in what you see and leaves the dot floating slightly in
+; front of the wall rather than resting on it. That is a depth artefact, not an
+; aiming error.
+;
+; THE COST: raising an optic moves your viewpoint to the game camera. That is
+; motion you did not ask for -- bounded by how far your head is from the camera,
+; on a deliberate button press, and unavoidable, since putting your eye on the
+; aim line means moving it there. Logged both ways:
+;   optics: head centre HELD AT THE GAME CAMERA -- laser sight and bullet agree ...
+;
+; 0 gives the stock behaviour back, misalignment included.
+OpticsHeadAtCamera=1
+
 ; Hold R3 (right stick click) to turn the LEFT stick into a D-pad.
 ;
 ; R3 is the modifier rather than L3 because L3 is Sprint, and sprint here is
@@ -493,8 +526,7 @@ DecoupledPitchZoomOff=1
 ; move a menu selection twice.
 DpadShift=1
 
-)INI"
-           R"INI(; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
+; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
 ;
 ; Touch has no Start or Back of its own, so both have to come from somewhere.
 ; The System button on the left hand's lower face sends one of them (see
@@ -618,7 +650,8 @@ CullWidenBounds=1
 
 ; Extend the same fix to items: furniture, enemies, pickups, statics.
 ;
-; The engine rejects an item whose bounding box misses the game camera's screen
+)INI"
+           R"INI(; The engine rejects an item whose bounding box misses the game camera's screen
 ; rect or sits behind its near plane -- which is every item in every room this
 ; feature adds. Hop expansion never touched this, so the rooms it forced in drew
 ; EMPTY. With CullObjects=0 you get that behaviour back.
@@ -654,8 +687,7 @@ CullDumpKey=0x77
 ; gets stereo disparity equal to its mesh radius: a painted sphere a few
 ; metres away, sitting in front of distant geometry.
 ;
-)INI"
-           R"INI(; On: those draws use the rotation of the eye transform only (looking around
+; On: those draws use the rotation of the eye transform only (looking around
 ; still turns the sky; leaning and IPD do not) and the fragments are pushed
 ; to the far plane so they never occlude the world. Off: stock finite-dome
 ; stereo, for A/B.

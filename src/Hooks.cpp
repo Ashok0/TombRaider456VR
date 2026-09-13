@@ -1452,6 +1452,28 @@ void __cdecl Detour_ogl_present() {
     PortalCullUpdate();
     SkyUpdate();
 
+    // Latch "an optic is up" ONCE, here, rather than letting anything poll it
+    // per draw. Everything that reads the eye transform during a frame -- world
+    // draws, the 2D panel, the video panel, the culling frustum -- has to agree
+    // about where the head is, and a value read out of game memory mid-frame
+    // could flip between them and leave the panel in a different space from the
+    // geometry behind it.
+    //
+    // Reading it at the frame boundary means it trails the game's own control
+    // phase by one frame. That is 1/60 s of staleness on the way into and out of
+    // a zoom whose ramp is tens of frames long, and it buys the consistency
+    // above; polling it later would cost that and buy nothing.
+    {
+        const bool hold = Cfg().opticsHeadAtCamera && IsOpticsZoomed();
+        if (hold != VR().headAtCamera()) {
+            VR().SetHeadAtCamera(hold);
+            LogF("optics: head centre %s -- laser sight and bullet %s (eyes keep "
+                 "their offsets either way, so world depth is unchanged)",
+                 hold ? "HELD AT THE GAME CAMERA" : "released to the tracked pose",
+                 hold ? "agree at every distance" : "diverge by head offset");
+        }
+    }
+
     // Periodic health report, in deltas. A one-shot report at frame 300 only
     // ever sampled the menus, where almost everything legitimately is 2D -- it
     // said "2 injections out of 725 draws" and looked like a bug when it was

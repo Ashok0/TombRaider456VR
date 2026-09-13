@@ -93,6 +93,31 @@ public:
 
     bool poseValid() const { return m_poseValid; }
 
+    // Hold the head CENTRE at the game camera, keeping the per-eye offsets.
+    //
+    // This is not a stereo switch and it is not mono: the eyes still straddle
+    // the centre by half an IPD each, so the world keeps every bit of its depth.
+    // What goes away is the 6DOF DISPLACEMENT -- the same thing
+    // PositionalTracking=0 drops, and through the same line of code.
+    //
+    // WHY ANYTHING WOULD WANT THAT: the laser sight. Its dot is not a world
+    // object, it is a screen-centre crosshair in the 2D overlay pass, so the mod
+    // draws it on the flat panel at HudDepthMetres while the bullet lands on the
+    // wall -- two points on ONE LINE out of camera.pos. They project to the same
+    // pixel only from an eye that is on that line, and a displaced head is not.
+    // Put the head centre back on it and the two agree at every distance, with
+    // no need to know where the shot landed. The residual per-eye ±32 mm is
+    // equal and opposite, so it cancels in the fused direction and shows up as
+    // the dot floating in front of the wall rather than as an aiming error.
+    //
+    // LATCHED ONCE PER FRAME by the caller, never polled per draw. Every use of
+    // the eye transform in a frame -- world draws, the 2D panel, the video panel,
+    // the culling frustum -- has to agree about where the head is, and a value
+    // read from game memory mid-frame could flip between them and put the panel
+    // in a different space from the geometry behind it.
+    void SetHeadAtCamera(bool on) { m_headAtCamera = on; }
+    bool headAtCamera() const     { return m_headAtCamera; }
+
     // One-shot log flag for the ceiling clamp, so it reports the first time it
     // bites rather than every frame it holds.
     bool m_loggedClamp = false;
@@ -106,6 +131,7 @@ private:
     Affine m_eyeFromHead[2]   = { Affine::Identity(), Affine::Identity() };
     float  m_rawProj[2][4]    = {};                  // l, r, t, b per eye
     bool   m_poseValid        = false;
+    bool   m_headAtCamera     = false;
     unsigned m_poseLogTick    = 0;
 
     uint32_t m_eyeW = 0, m_eyeH = 0;

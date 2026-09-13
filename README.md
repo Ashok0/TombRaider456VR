@@ -45,6 +45,7 @@ branch.
 | **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only | Working. On by default |
 | **Phase 11** | **Ceiling clamp** — caps the tracked head so it cannot rise through low ceilings | Working. On by default |
 | **Phase 12** | **Sky fix** — the HD sky dome drawn at optical infinity instead of its mesh radius | Working. TR4 / TR5 |
+| **Phase 13** | **Laser sight fix** — the dot and the bullet made to agree, by putting the head centre back on the aim line | Working. On by default |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -2387,6 +2388,200 @@ All in `[VR]`, documented in `TombRaiderVR.ini`.
 | Setting | Default | What it does |
 |---|---|---|
 | `SkyAtInfinity` | `1` | The whole feature. `0` is stock finite-dome stereo, for A/B |
+
+---
+
+## Phase 13: laser sight fix
+
+**Symptom.** Hold R3 to raise a scope with the laser sight combined, put the red
+dot on something and shoot: the bullet lands about a **foot above** the dot.
+Horizontally it is dead on. On a monitor the two agree exactly, which is the
+whole point of the laser sight.
+
+### The dot is not in the world
+
+That was the assumption worth killing first, because it makes the bug look
+impossible: if the dot and the impact were both world geometry rendered through
+one view, no rendering error could separate them.
+
+`DrawBinoculars` (`tomb5.dll` RVA `0x000C5540`) takes a `LaserSight` branch at
+`+0x66`, and what it does there is build a **screen-space quad**:
+
+```
+rbx = target_mesh_ptr
+sx  = (phd_scr_right  - phd_scr_left + 1) / (mesh[0x30] - mesh[0x48])
+sy  = (phd_scr_bottom - phd_scr_top  + 1) / (mesh[0x02] - mesh[0x32])
+for each vertex:
+    raw_vbuf[i].x = v.x * sx + 160.0      ; the old 320x240 half-extents
+    raw_vbuf[i].y = v.y * sy + 120.0
+    raw_vbuf[i].z = 0                     ; <- no depth at all
+```
+
+`160.0` and `120.0` are literal floats in `.rdata` (`0x0019C200`, `0x0019C1D8`),
+and `z` is written as zero. `tools\xrefs.py` places the whole thing in the 2D
+pass:
+
+```
+DrawBinoculars       <- S_OutputPolyList (x1)
+DrawNormalLaserSight <- DrawBinoculars (x1)
+```
+
+So the dot is a **screen-centre crosshair drawn in the overlay pass**, scaled to
+fill the screen rect. It has no world position and never did.
+
+Both DLLs carry the same code at different addresses — the sizes are identical to
+the byte, which is the cross-check that says they are one source:
+
+| | `tomb4.dll` | `tomb5.dll` | size |
+|---|---|---|---|
+| `DrawBinoculars` | `0x000D2270` | `0x000C5540` | 1412 |
+| `DrawNormalLaserSight` | `0x000D1E40` | `0x000C5110` | 869 |
+| `GetTargetOnLOS` | `0x00015860` | `0x000132F0` | 2385 / 3792 |
+
+Nothing here is hooked or patched. The addresses are the evidence trail for the
+diagnosis, not an interface the fix depends on — which is why this phase needs no
+row in the address table and works on both games without knowing which is live.
+
+### The bullet is
+
+`BinocularCamera_TR5` (`0x000D7C20`) raycasts twice, and both calls take the same
+two arguments:
+
+```
+0x000D84E1  lea  rdx, [camera+0x10]      ; camera.target
+0x000D84EE  lea  rcx, [camera]           ; camera.pos
+0x000D84F5  call GetTargetOnLOS          ; r8d = 1  -> this one fires
+...
+0x000D8502  lea  rdx, [camera+0x10]
+0x000D850C  lea  rcx, [camera]
+0x000D8513  call GetTargetOnLOS          ; r8d = 0  -> this one only looks
+```
+
+`GetTargetOnLOS` (`0x000132F0`) copies the target into a **local** at `rbp-0x31`
+before handing it to `LOS`, so `camera.target` itself is never clipped — the hit
+point exists only on that stack frame, where `TriggerRicochetSpark` and
+`DoBloodSplat` consume it. The impact is real world geometry at the end of a ray
+out of `camera.pos`, and nothing global remembers where it landed.
+
+### Why VR pulls them apart
+
+Both things are on **one line through `camera.pos`** — that is why they agree on a
+monitor, where your eye is on that line by construction. `phd_LookAt` builds the
+view from `camera.pos` toward `camera.target`, so the crosshair's screen centre
+*is* the ray.
+
+The mod draws the 2D layer on the world-locked panel at `HudDepthMetres` (4 m),
+so the crosshair ends up 4 m along that line while the impact is at the wall.
+**Two points on a line project to the same pixel only from an eye that is on the
+line**, and a tracked head is displaced from the game camera. The error at the
+target is
+
+```
+error = h * (D / Z - 1)
+```
+
+for a head offset `h`, target distance `D` and panel depth `Z`. At `h = 0.3 m`,
+`D = 10 m`, `Z = 4 m` that is **0.45 m** — the reported foot and a half. It reads
+as purely vertical because seated your lateral offset is nearly zero while your
+height offset is not; the same session's log had the head 1.21 m above the seated
+zero (`vr: ceiling clamp active`).
+
+The mechanism is falsifiable from the ini alone, without a rebuild: raising
+`HudDepthMetres` shrinks the error and lowering it doubles it, because `Z` is
+right there in the formula.
+
+### Fix: put the head centre back on the line
+
+Not the depth. Matching depths would mean knowing where the shot landed — a sixth
+game-DLL hook on `LOS`, filtered to the call whose `start` is `&camera` — and it
+would drag the **whole 2D layer's depth** along with the raycast, so sweeping the
+scope from a crate at 2 m to a corridor at 50 m would haul the overlay through
+the entire vergence range every frame. Worse artefact than the bug.
+
+Instead, `OpticsHeadAtCamera` holds the head **centre** at the game camera for
+the life of the optic. Every point on the aim line then projects to one pixel at
+**every distance**, and the mod never has to learn the hit point at all.
+
+**The IPD stays, and that is the part that matters.** The crosshair sits at
+`(0, 0, -Z)` in the camera's frame — on the aim axis for *any* `Z` — so with the
+head centre on `camera.pos` the **midpoint between the eyes is on the aim line
+even though neither pupil is**. The two eyes' errors are equal and opposite:
+they cancel in the fused direction, leaving the dot floating slightly in front of
+the wall rather than resting on it. A vergence artefact, not an aiming error, and
+the shot goes where the dot points. So the world keeps every bit of its stereo
+depth — this is not a mono switch, and it does not need to be.
+
+It reuses the drop that already existed. `VRSystem::HeadView` and
+`VRSystem::EyeView` both zero the head pose's three translation floats when
+`PositionalTracking=0`; the flag is OR-ed into that same condition, and
+`m_eyeFromHead` is deliberately left alone:
+
+```cpp
+Affine head = m_headFromTracking;
+if (!c.positionalTracking || m_headAtCamera) {
+    head.r[0][3] = head.r[1][3] = head.r[2][3] = 0.0f;
+}
+```
+
+Which is why the fix could be **tested before it was written**: run the whole
+session at `PositionalTracking=0`, raise the scope, and the dot lines up. The
+shipped version is that behaviour narrowed to the zoom.
+
+**Latched once per frame**, in `Detour_ogl_present` beside the other game-DLL
+reads, gated on the `IsOpticsZoomed()` Phase 10 already added. Not polled per
+draw, and that is not an optimisation: the world draws, the 2D panel, the video
+panel and the culling frustum all read the eye transform within one frame and all
+have to agree about where the head is. A value read out of game memory mid-frame
+could flip between them and leave the panel in a different space from the
+geometry behind it. The cost of latching at the frame boundary is that it trails
+the game's own control phase by one frame — 1/60 s, on the way into a zoom ramp
+that is tens of frames long.
+
+Culling follows it deliberately. With the head back at the camera the engine's
+own visible set is the correct one again, so the Phase 7B head frustum simply
+stops adding rooms for as long as the optic is up.
+
+### What it costs
+
+Raising an optic **moves your viewpoint** to the game camera. That is unrequested
+motion, which this mod otherwise refuses to do — see Phase 11, where the ceiling
+clamp only ever *subtracts* motion for exactly this reason. Three things make it
+acceptable rather than hypocritical: it is bounded by how far your head is from
+the camera, it happens on a deliberate button press, and it is **inherent** —
+putting your eye on the aim line means moving it there. Any fix that does not
+move your eye has to match the crosshair's depth to the target instead, with the
+vergence problem above.
+
+`OpticsHeadAtCamera=0` restores the stock behaviour, misalignment included.
+
+#### Where the code is
+
+| file | what it holds |
+|---|---|
+| `src\VRSystem.h` | `SetHeadAtCamera` / `headAtCamera`, and why the IPD survives it |
+| `src\VRSystem.cpp` | the two places the head translation is dropped (`HeadView`, `EyeView`) |
+| `src\Hooks.cpp` | the once-per-frame latch in `Detour_ogl_present` |
+| `src\GameDll.cpp` | `BinocularOn` / `BinocularRange`, which `IsOpticsZoomed()` reads |
+
+#### What to watch
+
+```
+optics: head centre HELD AT THE GAME CAMERA -- laser sight and bullet agree at every distance (eyes keep their offsets either way, so world depth is unchanged)
+optics: head centre released to the tracked pose -- laser sight and bullet diverge by head offset
+```
+
+One line each way per zoom, never per frame. If neither line ever appears while
+the scope is up, the latch is not firing and any alignment on screen is
+`PositionalTracking=0` still being set globally.
+
+#### Phase 13 settings
+
+All in `[VR]`, documented in `TombRaiderVR.ini`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `OpticsHeadAtCamera` | `1` | The whole feature. `0` is the stock displaced head, for A/B |
+| `HudDepthMetres` | `4.0` | Phase 3's panel depth. Not part of the fix, but it is the `Z` in the error formula — the knob that proves the diagnosis |
 
 ---
 

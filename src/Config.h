@@ -463,6 +463,44 @@ struct Config {
     // notion of "currently zoomed" rather than a guess at one.
     bool  decoupledPitchZoomOff = true;
 
+    // Hold the head CENTRE at the game camera while looking through an optic, so
+    // the LASER SIGHT hits what it points at. On by default.
+    //
+    // NOT a stereo switch. The eyes keep straddling the centre by half an IPD,
+    // so the world keeps all of its depth; only the 6DOF displacement is held
+    // off, through the same line PositionalTracking=0 uses.
+    //
+    // THE BUG IT FIXES. The dot is not a world object. DrawBinoculars' LaserSight
+    // branch takes target_mesh_ptr, scales it to the screen rect and writes it
+    // into raw_vbuf with z = 0, reached from S_OutputPolyList -- it is a
+    // screen-centre crosshair in the 2D overlay pass. The shot is real geometry:
+    // BinocularCamera_TR4/TR5 raycast camera.pos -> camera.target through
+    // GetTargetOnLOS and the impact comes out of TriggerRicochetSpark at the
+    // clipped hit point. So the crosshair and the impact are two points on ONE
+    // LINE out of camera.pos -- which is why they agree perfectly on a flat
+    // screen, and why they cannot agree in VR: the mod draws the crosshair on the
+    // flat panel at hudDepthMetres while the impact is at the wall, and two
+    // points on a line project to the same pixel only from an eye that is ON that
+    // line. Measured error is h*(D/Z - 1) for a head offset h: 0.3 m of head at a
+    // 10 m target with a 4 m panel is 0.45 m, and it reads as vertical because
+    // seated your lateral offset is nearly zero while your vertical one is not.
+    //
+    // WHY THE IPD CAN STAY, which is the whole reason this does not cost depth:
+    // the crosshair sits at (0, 0, -Z) in the camera's frame -- on the aim axis
+    // for ANY panel depth -- and with the head centre back on camera.pos the
+    // MIDPOINT between the eyes is on the aim line even though neither pupil is.
+    // The two eyes' errors are equal and opposite, so they cancel in the fused
+    // direction and what is left is the dot appearing to float in front of the
+    // wall instead of resting on it. A vergence artefact, not an aiming error.
+    //
+    // WHAT IT COSTS: raising an optic moves your viewpoint to the game camera,
+    // which is unrequested motion -- the one thing this mod otherwise refuses to
+    // do. It is bounded by how far your head is from the camera, it happens on a
+    // deliberate button press, and it is inherent: putting the eye on the aim
+    // line means moving it there. 0 gives the stock behaviour back, with the
+    // misalignment.
+    bool  opticsHeadAtCamera = true;
+
     // Which XInput button the left hand's lower face button sends.
     //
     // true  = BACK  -- the System menu. This is the default.

@@ -279,8 +279,13 @@ Affine VRSystem::HeadView() const {
     // Head pose, with positional dropped when only rotation is wanted. This is
     // honoured in stereo as well as mono -- it used to apply only to mono, which
     // made PositionalTracking=0 silently do nothing once stereo was on.
+    //
+    // m_headAtCamera drops it for the duration of an optic, for the laser
+    // sight's sake. See SetHeadAtCamera. Culling follows it on purpose: with the
+    // head back at the camera the engine's own visible set is the right one
+    // again, so the head frustum simply stops adding rooms.
     Affine head = m_headFromTracking;
-    if (!c.positionalTracking) {
+    if (!c.positionalTracking || m_headAtCamera) {
         head.r[0][3] = head.r[1][3] = head.r[2][3] = 0.0f;
     }
     return ToEngineSpace(head, LiveWorldUnitsPerMetre(), c.flipViewY);
@@ -318,8 +323,11 @@ Affine VRSystem::EyeView(Eye eye) const {
         return HeadView();
     }
 
+    // The head CENTRE only. m_eyeFromHead below is deliberately left alone --
+    // that is what keeps both eyes, and so the world's depth, while the 6DOF
+    // displacement goes away. See SetHeadAtCamera.
     Affine head = m_headFromTracking;
-    if (!c.positionalTracking) {
+    if (!c.positionalTracking || m_headAtCamera) {
         head.r[0][3] = head.r[1][3] = head.r[2][3] = 0.0f;
     }
 
