@@ -61,7 +61,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Toggle Classic Graphics | Y + LT |
 | Adjust Camera Pitch | RT + RB + RS |
 | Menu | X |
-| Sneak (TR6 only) | RB+Y |
+| Sneak (TR6 only) | RB + Y |
 
 ## Development Notes
 
