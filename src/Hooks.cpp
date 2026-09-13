@@ -187,9 +187,17 @@ constexpr uint32_t kTr6GmapRoomListRva  = 0x00CA5848;
 constexpr uint32_t kTr6GmapRoomClipRva  = 0x00CA5860;
 constexpr uint32_t kTr6GmxRoomsOff      = 0x000001A0;
 constexpr uint32_t kTr6GmxRoomCountOff  = 0x000007A0;
+constexpr uint32_t kTr6RoomBoundsMinOff = 0x000000A0;
+constexpr uint32_t kTr6RoomBoundsMaxOff = 0x000000B0;
 constexpr uint32_t kTr6RoomIsFlipOff    = 0x00000218;
 constexpr uint32_t kTr6CameraMatrixRva  = 0x0029DCC0;
 constexpr uint32_t kTr6PerspGameRva     = 0x003A13E0;
+
+// TR6's stock 65536-unit far plane is visible in a headset because the wider
+// tracked view exposes long sightlines the third-person monitor camera rarely
+// frames. Four times the stock distance keeps the level geometry inside the
+// render frustum without materially compromising a 24-bit depth buffer.
+constexpr float kTr6VrFarPlane = 262144.0f;
 
 // Return addresses immediately after the two render-side Calculate calls.
 // A third caller, mapCalcVisibleRooms (return RVA 0x001A8501), belongs to map
@@ -205,6 +213,22 @@ constexpr uint32_t kTr6MapCalculateReturnRva        = 0x001A8501;
 // tests while making every run of an accepted room available to the VR view.
 constexpr uint32_t kTr6MainRoomGroupObbReturnRva = 0x001B1814;
 constexpr uint32_t kTr6ClipRoomObbReturnRva      = 0x001AF8AD;
+
+// Object-list builders perform their own OBB reject after a room has survived
+// portal traversal. These are the instructions immediately after the calls to
+// ClippedOBB_CPP in the matching SYS_DRAW_CRP methods.
+constexpr uint32_t kTr6CharacterObbReturnRva       = 0x001A6058;
+constexpr uint32_t kTr6AnimatedDynamicObbReturnRva = 0x001A6368;
+constexpr uint32_t kTr6AnimatedStaticObbReturnRva  = 0x001A66DD;
+constexpr uint32_t kTr6WaterObbReturnRva0          = 0x001A6BB3;
+constexpr uint32_t kTr6WaterObbReturnRva1          = 0x001A6C37;
+constexpr uint32_t kTr6WaterObbReturnRva2          = 0x001A6CFB;
+
+struct Tr6RoomBoundsSnapshot {
+    uint8_t* header;
+    float boundsMin[3];
+    float boundsMax[3];
+};
 
 // --- per-frame state --------------------------------------------------------
 
@@ -298,6 +322,9 @@ bool g_tr6HeadVisibilityValid    = false;
 bool g_loggedTr6RoomUnion        = false;
 bool g_loggedTr6RoomRuns         = false;
 bool g_loggedTr6AllRooms         = false;
+bool g_loggedTr6ObjectCull       = false;
+bool g_loggedTr6FarPlane         = false;
+bool g_tr6VrCalculateActive      = false;
 int32_t g_tr6HeadRoomList        = -1;
 int32_t g_tr6HeadRoomCount       = 0;
 Tr6MapRoomClip g_tr6HeadRoomClips[kTr6MaxRooms] = {};
@@ -1116,7 +1143,20 @@ void __cdecl Detour_validate_draw() {
             zf = 32768.0f;
         }
         if (Cfg().nearClip > 0.0f) zn = Cfg().nearClip;
-        if (Cfg().farClip  > 0.0f) zf = Cfg().farClip;
+        if (Cfg().farClip > 0.0f) {
+            zf = Cfg().farClip;
+        } else if (CurrentGame() == 2 && g_inNativeTr6Scene
+                   && Cfg().portalCulling) {
+            // Match the conservative TR6 CPU culling projection below. This
+            // is deliberately automatic only when FarClip is unset; an
+            // explicit user value remains authoritative.
+            if (zf < kTr6VrFarPlane) zf = kTr6VrFarPlane;
+            if (!g_loggedTr6FarPlane) {
+                g_loggedTr6FarPlane = true;
+                LogF("tr6 cull: native-stereo far plane extended to %.0f "
+                     "world units", zf);
+            }
+        }
 
         VR().EyeProjection(eye, zn, zf, eyeProj);
         std::memcpy(livePr, &eyeProj, sizeof(mat4));
@@ -1544,11 +1584,11 @@ void __cdecl Detour_Tr6RenderScene() {
     }
 }
 
-// Build the conservative frustum used by TR6's render-list builder. Preserve
-// the game's near/far plane and any other depth convention, but replace the
-// monitor-sized X/Y field of view with the union of the original projection
-// and both headset eyes. Keeping the original angular extent prevents a narrow
-// scripted projection or unusual aspect ratio from clipping the tracked view.
+// Build the conservative frustum used by TR6's render-list builder. Replace
+// the monitor-sized X/Y field of view with the union of the original projection
+// and both headset eyes, and extend the stock far plane to cover VR sightlines.
+// Keeping the original angular extent prevents a narrow scripted projection or
+// unusual aspect ratio from clipping the tracked view.
 void WidenTr6CullProjection(mat4& projection, float& outTanX, float& outTanY) {
     float hmdTanX = 1.6f;
     float hmdTanY = 1.6f;
@@ -1581,6 +1621,17 @@ void WidenTr6CullProjection(mat4& projection, float& outTanX, float& outTanY) {
     projection.m[5] = signY / outTanY;
     projection.m[8] = 0.0f;
     projection.m[9] = 0.0f;
+
+    float zn = 0.0f, zf = 0.0f;
+    if (ExtractNearFar(projection, zn, zf)) {
+        const float requestedFar = Cfg().farClip > 0.0f
+            ? Cfg().farClip : (zf < kTr6VrFarPlane ? kTr6VrFarPlane : zf);
+        if (requestedFar > zn) {
+            projection.m[10] = (zn + requestedFar) / (zn - requestedFar);
+            projection.m[14] = (2.0f * zn * requestedFar)
+                             / (zn - requestedFar);
+        }
+    }
 }
 
 bool IsTr6RenderCalculateCall(const void* returnAddress) {
@@ -1597,14 +1648,12 @@ bool Tr6CullActive() {
     return Cfg().monoTracking || NativeTr6Capable() || AlternateEyeActive();
 }
 
-// TR6 has a second visibility tier after mapCalcVisibleRooms: static meshes and
-// the individual mesh runs inside SYS_D3D_ROOM are tested by ClippedOBB_CPP.
-// Those are the blue-hole culprit: their bits follow the third-person camera,
-// so merely turning Lara toward geometry cannot restore it; rotating that
-// camera behind her can. Do not substitute the head matrix here because the
-// second group test includes an additional local transform. Instead, bypass
-// these render-only rejects. The accepted room list remains conservative, so
-// this exposes all geometry only within rooms selected by the stock/head union.
+// TR6 has a second visibility tier after mapCalcVisibleRooms: static meshes,
+// room runs, characters, animated objects and water all have independent OBB
+// rejection. Those bits follow the third-person camera, so merely turning Lara
+// toward geometry cannot restore it; rotating that camera behind her can. Do
+// not substitute the head matrix here because some tests include additional
+// local transforms. Instead, bypass only the verified render-list call sites.
 __declspec(noinline) bool __fastcall Detour_Tr6ClippedObb(
     const mat4* cameraProject, const void* viewport,
     const void* boundsMin, const void* boundsMax) {
@@ -1615,7 +1664,16 @@ __declspec(noinline) bool __fastcall Detour_Tr6ClippedObb(
     const bool roomRenderTest =
         returnRva == kTr6MainRoomGroupObbReturnRva
         || returnRva == kTr6ClipRoomObbReturnRva;
-    if (!roomRenderTest || !Tr6CullActive()) {
+    const bool objectListTest =
+        returnRva == kTr6CharacterObbReturnRva
+        || returnRva == kTr6AnimatedDynamicObbReturnRva
+        || returnRva == kTr6AnimatedStaticObbReturnRva
+        || returnRva == kTr6WaterObbReturnRva0
+        || returnRva == kTr6WaterObbReturnRva1
+        || returnRva == kTr6WaterObbReturnRva2;
+    const bool bypass = roomRenderTest
+        || (objectListTest && g_tr6VrCalculateActive);
+    if (!bypass || !Tr6CullActive()) {
         return original(cameraProject, viewport, boundsMin, boundsMax);
     }
 
@@ -1623,6 +1681,11 @@ __declspec(noinline) bool __fastcall Detour_Tr6ClippedObb(
         g_loggedTr6RoomRuns = true;
         Log("tr6 cull: render-only static-mesh and room-run OBB rejection "
             "disabled; accepted rooms now retain all geometry for head look");
+    }
+    if (objectListTest && !g_loggedTr6ObjectCull) {
+        g_loggedTr6ObjectCull = true;
+        Log("tr6 cull: render-list character, animated-object and water OBB "
+            "rejection disabled; props no longer follow the right-stick camera");
     }
     return false; // ClippedOBB_CPP: false means the bounds remain visible.
 }
@@ -1659,6 +1722,73 @@ int32_t SeedAllActiveTr6Rooms(void* roomPool) {
     pool->items = active;
     pool->itemsNeeded = 0;
     return static_cast<int32_t>(active);
+}
+
+// Calculate accepts a room seed only when the game-camera point lies inside
+// that room's header AABB. Merely putting every room pointer into the input
+// pool therefore still populated object lists for only a few camera-facing
+// rooms. Temporarily make every active seed contain the camera while Calculate
+// runs; restoring the exact six floats immediately afterward prevents this
+// render-only policy from leaking into simulation or later engine work.
+int32_t ExpandTr6SeedBounds(void* roomPool, int32_t activeRooms,
+                           const mat4& camera,
+                           Tr6RoomBoundsSnapshot* snapshots) {
+    if (!roomPool || !snapshots || activeRooms <= 0
+        || activeRooms > kTr6MaxRooms) {
+        return 0;
+    }
+    auto* pool = reinterpret_cast<Tr6ItemPool*>(roomPool);
+    if (!pool->data || pool->items < static_cast<uint32_t>(activeRooms)) return 0;
+
+    // For a rigid view matrix, the camera's world position is -R^T*t.
+    const float cameraWorld[3] = {
+        -(camera.m[0] * camera.m[12] + camera.m[1] * camera.m[13]
+          + camera.m[2] * camera.m[14]),
+        -(camera.m[4] * camera.m[12] + camera.m[5] * camera.m[13]
+          + camera.m[6] * camera.m[14]),
+        -(camera.m[8] * camera.m[12] + camera.m[9] * camera.m[13]
+          + camera.m[10] * camera.m[14])
+    };
+
+    auto** rooms = reinterpret_cast<uint8_t**>(pool->data);
+    int32_t saved = 0;
+    for (int32_t room = 0; room < activeRooms; ++room) {
+        uint8_t* header = rooms[room];
+        if (!header) continue;
+        Tr6RoomBoundsSnapshot& snapshot = snapshots[saved++];
+        snapshot.header = header;
+        std::memcpy(snapshot.boundsMin, header + kTr6RoomBoundsMinOff,
+                    sizeof(snapshot.boundsMin));
+        std::memcpy(snapshot.boundsMax, header + kTr6RoomBoundsMaxOff,
+                    sizeof(snapshot.boundsMax));
+        float* boundsMin = reinterpret_cast<float*>(
+            header + kTr6RoomBoundsMinOff);
+        float* boundsMax = reinterpret_cast<float*>(
+            header + kTr6RoomBoundsMaxOff);
+        for (int axis = 0; axis < 3; ++axis) {
+            // A small guard band avoids equality/LOD-margin edge cases while
+            // keeping the temporary bounds finite and close to level scale.
+            const float cameraMin = cameraWorld[axis] - 1024.0f;
+            const float cameraMax = cameraWorld[axis] + 1024.0f;
+            if (boundsMin[axis] > cameraMin) boundsMin[axis] = cameraMin;
+            if (boundsMax[axis] < cameraMax) boundsMax[axis] = cameraMax;
+        }
+    }
+    return saved;
+}
+
+void RestoreTr6SeedBounds(const Tr6RoomBoundsSnapshot* snapshots,
+                          int32_t count) {
+    for (int32_t room = 0; room < count; ++room) {
+        uint8_t* header = snapshots[room].header;
+        if (!header) continue;
+        std::memcpy(header + kTr6RoomBoundsMinOff,
+                    snapshots[room].boundsMin,
+                    sizeof(snapshots[room].boundsMin));
+        std::memcpy(header + kTr6RoomBoundsMaxOff,
+                    snapshots[room].boundsMax,
+                    sizeof(snapshots[room].boundsMax));
+    }
 }
 
 // SYS_DRAW_CRP begins with a room-descriptor pool followed by a RECTF portal
@@ -1901,6 +2031,8 @@ __declspec(noinline) void __fastcall Detour_Tr6Calculate(
 
     uint32_t originalSeeds = 0;
     int32_t activeRooms = -1;
+    Tr6RoomBoundsSnapshot roomBounds[kTr6MaxRooms] = {};
+    int32_t savedRoomBounds = 0;
     if (mainRenderCall && roomPool) {
         originalSeeds = reinterpret_cast<Tr6ItemPool*>(roomPool)->items;
         activeRooms = SeedAllActiveTr6Rooms(roomPool);
@@ -1914,6 +2046,10 @@ __declspec(noinline) void __fastcall Detour_Tr6Calculate(
     WidenTr6CullProjection(adjusted.project, tanX, tanY);
     adjusted.camera = Mul4(AffineToMat4(VR().HeadView()), adjusted.camera);
     adjusted.cameraProject = Mul4(adjusted.project, adjusted.camera);
+    if (mainRenderCall && activeRooms > 0) {
+        savedRoomBounds = ExpandTr6SeedBounds(
+            roomPool, activeRooms, adjusted.camera, roomBounds);
+    }
 
     if (!g_loggedTr6Cull) {
         g_loggedTr6Cull = true;
@@ -1925,8 +2061,12 @@ __declspec(noinline) void __fastcall Detour_Tr6Calculate(
              2.0f * std::atan(tanY) * radToDeg);
     }
 
+    g_tr6VrCalculateActive = renderCall;
     original(crp, drawBuffer, matrixStack, roomPool, &adjusted, flags,
              lodScale, clipMin, clipMax);
+    g_tr6VrCalculateActive = false;
+
+    RestoreTr6SeedBounds(roomBounds, savedRoomBounds);
 
     if (mainRenderCall && activeRooms > 0) {
         const uint32_t calculatedRooms =

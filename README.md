@@ -3119,6 +3119,10 @@ The supplied TR6 symbols made the relevant path identifiable:
 | `mapDrawRoomList` | `0x0014E370` | 1,009 bytes | Prepares room data after simulation |
 | `ClipRoom_SYS_D3D_ROOM` | `0x001AF7F0` | 362 bytes | Sets visibility bits for the 0x40-byte render runs in one room |
 | `App_Render_Scene_Main` | `0x001B1640` | 1,624 bytes | Consumes the completed CRP and draws rooms |
+| `SYS_DRAW_CRP::CalculateCharacters` | `0x001A5E50` | 843 bytes | Builds the character draw pool and performs its own OBB reject |
+| `SYS_DRAW_CRP::CalculateObjectsAnimated_DynamicLight` | `0x001A61A0` | 903 bytes | Builds dynamic-lit animated-object entries |
+| `SYS_DRAW_CRP::CalculateObjectsAnimated_StaticLight` | `0x001A6530` | 862 bytes | Builds static-lit animated-object entries, including furniture props |
+| `SYS_DRAW_CRP::CalculateWater` | `0x001A6A60` | 840 bytes | Builds water entries through three additional OBB call sites |
 
 The associated layouts matter as much as the function names:
 
@@ -3133,6 +3137,9 @@ The associated layouts matter as much as the function names:
 - The current GMX holds its room-pointer table at `+0x1A0` and count at
   `+0x7A0`. `ROOM_HEADER_TAG::bIsFlipRoom` at `+0x218` identifies inactive
   alternate room copies that must not be submitted.
+- Each room header stores its world AABB minimum at `+0xA0` and maximum at
+  `+0xB0`. `Calculate` accepts an input seed only if the camera lies inside
+  that AABB, even when the room pointer is already present in the input pool.
 
 ### What was tried, and what each result proved
 
@@ -3173,28 +3180,44 @@ clipped" at only the verified room-run return address `0x001AF8AD` and static-
 mesh return address `0x001B1814` helped somewhat, confirming this layer was
 real, but many blue holes remained because absent rooms never reached it.
 
-### The final correctness-first room path
+### The final headset-validated correctness-first path
 
-The working path removes the game-camera dependency at both room levels during
+The working path removes the game-camera dependency from room submission,
+room-associated object-list construction and the final per-object tests during
 the main TR6 render calculation:
 
 ```text
 map/simulation visibility remains stock
   main SYS_DRAW_CRP::Calculate call
     replace its input seeds with every active, non-flip GMX room
+    temporarily expand each seed AABB just enough to contain the tracked camera
     run the original Calculate with the wide tracked-head camera
+    restore every room AABB before returning to the engine
     replace the calculated room descriptors with one per active room
     assign every descriptor the full-screen portal rectangle [-1,-1,+1,+1]
   App_Render_Scene_Main
     submit every active room
     keep room runs and static meshes at the two render-only OBB sites
-    let normal GPU depth and near/far clipping finish visibility
+    keep characters, animated objects and water at their render-list OBB sites
+    let normal GPU depth clipping finish visibility
 ```
 
-Seeding before the original calculation lets TR6 prepare room-associated draw
-data normally. Replacing the resulting descriptors afterward prevents its
+Seeding alone was insufficient. Before traversing portals, `Calculate` tests
+whether the camera point lies inside each seed room's AABB; in the observed
+level this reduced 46 active seeds to five calculated rooms. The final room
+descriptor replacement made all 46 room shells draw, but the character,
+animated-object, static-object and water pools had already been built from
+those five rooms. This is why walls improved while cabinets and drawers could
+still lose geometry when the right-stick camera rotated.
+
+During only the main render `Calculate` call, Phase 17 now saves the six AABB
+floats for every active seed and extends each axis only far enough to contain
+the tracked camera plus a 1024-unit guard band. The original function can then
+populate every room-associated object pool through its normal code. All saved
+bounds are restored immediately after that call, before the game resumes any
+other work. Replacing the resulting descriptors afterward still prevents
 portal traversal from removing a room merely because the right-stick camera
-cannot see that portal. The full-screen rectangle is the identity clip region
+cannot see its portal. The full-screen rectangle is the identity clip region
 expected by `mapLoadClipMatrix`; it is not an arbitrary large coordinate.
 
 Inactive flip-room copies remain excluded, so the active and alternate forms
@@ -3203,9 +3226,25 @@ pools are touched. If the verified 192-room capacity is unavailable, the
 override declines instead of writing past the engine allocation.
 
 The OBB detour is deliberately not global. `ClippedOBB_CPP` is also used by
-gameplay, shadows and several object paths. Only the two exact return addresses
-inside main room rendering return visible; every other caller executes the
-original function.
+gameplay and shadows. The room-run and static-mesh return addresses always
+return visible while TR6 VR culling is active. The verified character,
+animated-dynamic, animated-static and three water return addresses do so only
+while the render-only CRP calculation is on the stack. Every other caller,
+including normal simulation work, executes the original function.
+
+### Distant geometry and the far plane
+
+The remaining distant blue edge was a separate clipping tier. TR6's stock
+perspective ends at 65,536 world units. Native stereo exposes wider, longer
+sightlines, so the physical GPU far plane could cut distant geometry even
+after every CPU room and object reject had been neutralized.
+
+When TR6 native stereo and `PortalCulling` are active, Phase 17 automatically
+uses a 262,144-unit far plane for both the conservative CPU culling projection
+and the per-eye GPU projection. The near plane is unchanged. A user-provided
+positive `FarClip` value remains authoritative, so the automatic extension
+does not override explicit tuning. This code is inside the TR6-only scene and
+culling gates and cannot change TR4 or TR5 projections.
 
 ### Scope, safety and TR4/TR5 isolation
 
@@ -3233,21 +3272,29 @@ A successful run reports the layers independently:
 tr6 cull: upstream visibility hooks installed (Calculate +0x1A6DB0, mapCalc +0x1A8290, drawRooms +0x14E370, room OBB +0x1A4380)
 tr6 cull: SYS_DRAW_CRP::Calculate now follows the tracked head for the private room pass and render passes (... degrees, including margin)
 tr6 cull: render-only static-mesh and room-run OBB rejection disabled; accepted rooms now retain all geometry for head look
+tr6 cull: render-list character, animated-object and water OBB rejection disabled; props no longer follow the right-stick camera
 tr6 cull: correctness-first room submission active -- ... map seeds, ... portal-visible rooms expanded to ... active rooms
+tr6 cull: native-stereo far plane extended to 262144 world units
 ```
 
 This is intentionally correctness-first. Submitting every active room costs
 more CPU and GPU time than portal culling, and Phase 16 already renders TR6's
 complete scene twice per frame. Hardware that was close to its frame-time limit
 may need lower game render settings. Depth testing, near/far clipping and all
-non-targeted object/shadow tests remain enabled.
+non-targeted object/shadow tests remain enabled. The far plane is extended, not
+disabled, and an explicit `FarClip` setting can still replace it.
 
 The release build completed with zero warnings and errors, the existing symbol
 and address suite passed all 219 checks, and the deployed DLL matched the build
 artifact at SHA-256
-`071853E1D7CD4F99002C85A9A910C2F9DBECE77C3C091EF01BBF9232A906AFE2`.
-In-headset testing reported that this final all-active-room build works much
-better than the earlier camera-frustum and room-run-only versions.
+`3584C1B9B4A6AD994354183B7C079B608562BC5B2F876E768DB81689AF88B89B`.
+Final in-headset testing confirmed that the complete path works correctly. The
+early seed-AABB expansion fixes cabinets, drawers and other room-associated
+geometry that previously disappeared when the right-stick camera rotated. The
+render-only object OBB bypass prevents those populated entries from being
+rejected again, and the 262,144-unit CPU/GPU far plane removes the remaining
+distant blue holes. Room walls retain the improvement from the all-active-room
+submission path.
 
 All Phase 17 implementation is in `src\Hooks.cpp`. `PortalCulling` and
 `CullFovMarginDegrees` retain their existing configuration entries; no new INI
