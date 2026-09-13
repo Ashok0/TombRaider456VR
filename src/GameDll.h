@@ -151,6 +151,20 @@ bool IsOpticsZoomed();
 // camera's own room, like everything else here.
 bool CameraHeadroom(float& units);
 
+// The game camera's world-to-view frame: `rot` is w2v_matrix's rotation with its
+// rows unscaled to unit length (phd view space -- X right, Y down, +Z FORWARD),
+// and `pos` is the camera's world position.
+//
+// The translation columns are the camera's WORLD POSITION, unscaled -- not the
+// -R*p a textbook view matrix carries. That is the same reading PortalCull.cpp
+// works from, and getting it wrong is what made the first head-frustum test
+// scale its error with world coordinates.
+//
+// False until the matrix holds a real rotation, which it does not before the
+// first camera update of a level. A caller MUST honour that: a zeroed rotation
+// would collapse every offset onto the camera itself.
+bool CameraViewFrame(float rot[3][3], float pos[3]);
+
 // Drop the binding. Called from RemoveHooks.
 void GameDllShutdown();
 

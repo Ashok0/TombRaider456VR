@@ -46,6 +46,31 @@ struct Config {
     // Headroom comes from the camera room's bounding box, so it is exact in a
     // uniformly low room and over-generous in a low pocket off a tall hall,
     // where the clamp simply will not engage.
+    // Where the head's positional offset lives: WORLD space (true, the default)
+    // or the game camera's frame (false, the old behaviour).
+    //
+    // This is what makes PositionalTracking=1 behave like 1 for the HEADSET and
+    // like 0 for the ANALOG STICK, which is the whole point of it.
+    //
+    // In the camera's frame the offset is rotated by the camera, so rotating the
+    // view sweeps the eye on an arc of radius |offset| while you sit perfectly
+    // still -- the look stick walks your viewpoint sideways into walls, and camera
+    // pitch turns a forward lean into rise and fall. World space instead
+    // integrates the offset from what the HEADSET did:
+    //
+    //     offsetWorld += R_camera^T * (thisFrame - lastFrame)
+    //
+    // so stick rotation moves nothing, head motion moves you in the direction you
+    // are facing at the moment you move, and camera translation still carries you
+    // along. See WorldLockOffset in VRSystem.cpp for the derivation and the cost:
+    // the offset is state, so it can drift from your physical centre, which
+    // recentreKey and an automatic re-anchor on camera jumps take care of.
+    bool  headOffsetWorld     = true;
+
+    // Re-anchor the head offset to the game camera. Numpad 5 -- the middle of the
+    // numpad tuning cluster, and the only key in it that was free.
+    int   recentreKey         = 0x65;   // VK_NUMPAD5
+
     bool  ceilingClearance    = true;
 
     // How close the eye may get to the ceiling, in world units. 128 is about

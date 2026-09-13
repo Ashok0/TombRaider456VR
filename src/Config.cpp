@@ -168,6 +168,13 @@ void LoadConfig(const wchar_t* ini) {
 
     g_cfg.positionalTracking  = GetBool (L"PositionalTracking", g_cfg.positionalTracking, ini);
     g_cfg.seatedOrigin        = GetBool (L"SeatedOrigin",       g_cfg.seatedOrigin,       ini);
+    // HeadOffsetFrame = world | camera
+    {
+        wchar_t frame[32] = {};
+        GetPrivateProfileStringW(L"VR", L"HeadOffsetFrame", L"world", frame, 32, ini);
+        g_cfg.headOffsetWorld = (_wcsicmp(frame, L"camera") != 0);
+    }
+    g_cfg.recentreKey         = GetIntAuto(L"RecentreKey",      g_cfg.recentreKey,        ini);
     g_cfg.ceilingClearance    = GetBool (L"CeilingClearance",   g_cfg.ceilingClearance,   ini);
     g_cfg.ceilingMarginUnits  = GetFloat(L"CeilingMarginUnits", g_cfg.ceilingMarginUnits, ini);
     g_cfg.worldUnitsPerMetre  = GetFloat(L"WorldUnitsPerMetre", g_cfg.worldUnitsPerMetre, ini);

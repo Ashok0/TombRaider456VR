@@ -197,6 +197,161 @@ void VRSystem::GetEyeSize(uint32_t& w, uint32_t& h) const {
     h = m_eyeH;
 }
 
+// ---------------------------------------------------------------------------
+// WorldLockOffset -- the headset displaces the eye; the stick never does
+// ---------------------------------------------------------------------------
+//
+// THE PROBLEM. Composing finalView = EyeView * gameView puts the eye at
+//
+//     p_eye = camPos - R_g^T * R_e^T * t_e
+//
+// with R_g the GAME CAMERA's rotation. The head's offset is therefore carried in
+// a frame the game rotates, so rotating the camera SWEEPS the eye on an arc of
+// radius |offset| while the player stands perfectly still. Turn with the look
+// stick and your viewpoint travels sideways into walls; the game's own camera
+// collision keeps camPos clear and knows nothing about that arc. Camera pitch
+// does the same thing vertically, turning a forward lean into rise and fall.
+//
+// PositionalTracking=0 only appeared to fix it by making the offset zero.
+//
+// WHAT THIS DOES INSTEAD. The offset is kept in WORLD units and updated only by
+// what the headset actually did:
+//
+//     offsetWorld += R_g^T * (v(t) - v(t-1))
+//     p_eye        = camPos + offsetWorld
+//
+// Rotate the camera with the stick and v does not change, so offsetWorld does not
+// change, so the eye does not move -- exactly PositionalTracking=0's behaviour for
+// anything the camera does. Move your head and the delta is applied in the frame
+// you are facing AT THAT MOMENT, so leaning forward always goes into the screen
+// and full 6DOF is intact -- exactly PositionalTracking=1's behaviour for the
+// headset. Camera TRANSLATION still carries you along, because the offset is
+// measured from camPos.
+//
+// Integrating the delta rather than freezing a reference frame is the whole
+// trick. A frozen frame would keep "forward" pointing wherever it pointed when
+// the anchor was set, which in a game whose camera re-aims itself constantly
+// decays into "leaning does something arbitrary" within a minute.
+//
+// WHAT IT COSTS. The offset becomes state, so it can drift away from your
+// physical centre: lean out, turn 90 degrees, lean back, and the two legs cancel
+// in different world directions. It is bounded by how far you actually move,
+// RecentreKey re-anchors it on demand, and a camera jump re-anchors it
+// automatically -- which covers level loads, cutscene cuts and flyby starts,
+// where a carried-over offset would be meaningless.
+//
+// WHY THE POSE. This is the only place the head is still a plain POSITION. After
+// InvertRigid it is a view transform whose translation column is -R^T*p, and
+// editing that moves the eye along two axes at once.
+//
+// AND THE POSE'S OWN ROTATION CANCELS OUT of the conversion, which is what keeps
+// this cheap. Writing the pose as (R_p, P) and following the real code path:
+//
+//     headFromTracking = (R_p^T, -R_p^T P)
+//     ToEngineSpace conjugates by F = diag(1,-1,1) and scales the translation,
+//     so H = (F R_p^T F, -s F R_p^T P)
+//     the head's position in H's own space is -R_h^T t_h = s F P
+//
+// -- the rotation drops out, as it must: where the head IS does not depend on
+// where it is LOOKING. So the head's offset in the engine's view space is just
+// its tracked position, scaled, with the Y flip applied, plus one sign on Z to
+// go from the mod's -Z-forward eye space to phd view's +Z-forward. Checked
+// numerically against that chain rather than trusted.
+void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
+    const auto& c = Cfg();
+    const float s = LiveWorldUnitsPerMetre();
+
+    // Rotation-only tracking zeroes the offset downstream anyway, and the camera
+    // mode is the old behaviour by request.
+    if (!c.positionalTracking || !c.headOffsetWorld || !(s > 0.0f)) {
+        m_offsetValid = false;
+        return;
+    }
+
+    float rot[3][3], camPos[3];
+    if (!CameraViewFrame(rot, camPos)) {
+        // No level, or the camera has not been set up yet. Pass the pose through
+        // and re-anchor on the first frame that has a real camera, so nothing is
+        // integrated against a frame that does not exist.
+        m_offsetValid = false;
+        return;
+    }
+
+    const float fy = c.flipViewY ? -1.0f : 1.0f;
+    const float v[3] = {      s * pose.m[0][3],
+                        fy *  s * pose.m[1][3],
+                             -s * pose.m[2][3] };
+
+    // A camera jump -- level load, cutscene cut, flyby, teleport -- makes a
+    // carried-over offset meaningless. Two sectors is far enough that no walk or
+    // camera swing reaches it in one frame.
+    bool anchor = !m_offsetValid || m_recentreRequested;
+    if (!anchor) {
+        const float dx = camPos[0] - m_lastCamPos[0];
+        const float dy = camPos[1] - m_lastCamPos[1];
+        const float dz = camPos[2] - m_lastCamPos[2];
+        if (dx * dx + dy * dy + dz * dz > 2048.0f * 2048.0f) anchor = true;
+    }
+
+    if (anchor) {
+        // Start from what the old camera-framed behaviour would have given right
+        // now, so re-anchoring never jumps the view.
+        for (int i = 0; i < 3; ++i) {
+            m_offsetWorld[i] = rot[0][i] * v[0] + rot[1][i] * v[1] + rot[2][i] * v[2];
+        }
+        if (m_recentreRequested) {
+            m_recentreRequested = false;
+            Log("vr: head offset re-anchored to the game camera");
+        }
+    } else {
+        const float dv[3] = { v[0] - m_lastView[0],
+                              v[1] - m_lastView[1],
+                              v[2] - m_lastView[2] };
+        for (int i = 0; i < 3; ++i) {
+            m_offsetWorld[i] += rot[0][i] * dv[0] + rot[1][i] * dv[1]
+                              + rot[2][i] * dv[2];
+        }
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        m_lastView[i]   = v[i];
+        m_lastCamPos[i] = camPos[i];
+    }
+    m_offsetValid = true;
+
+    // Ceiling clearance, now applied to the offset that is actually used rather
+    // than to tracking-space height -- which was only the same quantity while the
+    // camera had no pitch. Clamped on the way OUT, leaving the integrated state
+    // alone, so walking into a taller room gives your real height back.
+    //
+    // TR is Y-DOWN: the eye is above the camera when out[1] is negative, and the
+    // ceiling sits headroom units above, so out[1] >= margin - headroom.
+    float out[3] = { m_offsetWorld[0], m_offsetWorld[1], m_offsetWorld[2] };
+    float headroom = 0.0f;
+    if (c.ceilingClearance && CameraHeadroom(headroom)) {
+        const float floorLimit = c.ceilingMarginUnits - headroom;
+        if (out[1] < floorLimit) {
+            out[1] = floorLimit;
+            if (!m_loggedClamp) {
+                m_loggedClamp = true;
+                LogF("vr: ceiling clamp active -- headroom %.0f units, eye held "
+                     "%.0f units above the camera", headroom, -floorLimit);
+            }
+        }
+    }
+
+    // Back to a pose position that reproduces `out` in the camera's current
+    // frame. Everything downstream -- both eyes, the culling frustum, the 2D
+    // panel -- then sees one consistent head, and 1/fy == fy for +-1.
+    float ve[3];
+    for (int i = 0; i < 3; ++i) {
+        ve[i] = rot[i][0] * out[0] + rot[i][1] * out[1] + rot[i][2] * out[2];
+    }
+    pose.m[0][3] =      ve[0] / s;
+    pose.m[1][3] = fy * ve[1] / s;
+    pose.m[2][3] =     -ve[2] / s;
+}
+
 void VRSystem::BeginFrame() {
     if (!m_system) return;
 
@@ -226,33 +381,10 @@ void VRSystem::BeginFrame() {
     if (m_poseValid) {
         vr::HmdMatrix34_t pose = hmd.mDeviceToAbsoluteTracking;
 
-        // Ceiling clearance. Cap the head's HEIGHT before the pose is inverted,
-        // which is the only place it is still a plain position -- afterwards it
-        // is a view transform whose translation column is -R^T*p, and clamping
-        // that would move the eye sideways as well as down.
-        //
-        // Seated origin means pose Y is height above the seated zero, and the
-        // eye sits at the game camera when that is 0, so the camera rises by
-        // exactly poseY * unitsPerMetre. Cap that at the room's headroom less a
-        // margin. Nothing else is touched: ducking, leaning and every rotation
-        // pass through untouched, and below the cap this is a no-op.
-        float headroom = 0.0f;
-        if (Cfg().ceilingClearance && CameraHeadroom(headroom)) {
-            const float scale = LiveWorldUnitsPerMetre();
-            if (scale > 0.0f) {
-                float maxRise = (headroom - Cfg().ceilingMarginUnits) / scale;
-                if (maxRise < 0.0f) maxRise = 0.0f;   // already at the ceiling
-                if (pose.m[1][3] > maxRise) {
-                    pose.m[1][3] = maxRise;
-                    if (!m_loggedClamp) {
-                        m_loggedClamp = true;
-                        LogF("vr: ceiling clamp active -- headroom %.0f units, "
-                             "head capped at %.2f m above the seated zero",
-                             headroom, maxRise);
-                    }
-                }
-            }
-        }
+        // The head's DISPLACEMENT, integrated in world space rather than carried
+        // in the game camera's frame. This is what makes the stick behave like
+        // PositionalTracking=0 while the headset behaves like 1.
+        WorldLockOffset(pose);
 
         // mDeviceToAbsoluteTracking is head->tracking; we want tracking->head.
         m_headFromTracking = InvertRigid(FromHmd(pose));

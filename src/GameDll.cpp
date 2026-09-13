@@ -253,6 +253,25 @@ bool CameraHeadroom(float& units) {
     return true;
 }
 
+bool CameraViewFrame(float rot[3][3], float pos[3]) {
+    if (!g_dll) return false;
+
+    const int32_t* m = reinterpret_cast<const int32_t*>(g_base + g_dll->w2vMatrix);
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            rot[i][j] = static_cast<float>(m[i * 4 + j]) * (1.0f / 16384.0f);
+        }
+        pos[i] = static_cast<float>(m[i * 4 + 3]);
+    }
+
+    // Before the first camera update the matrix is zeroed, and a zero rotation
+    // would send every offset to the camera. One row of unit length tells "ready"
+    // from "not yet"; the tolerance only has to cover 1/16384 quantisation.
+    const float len2 = rot[0][0] * rot[0][0] + rot[0][1] * rot[0][1]
+                     + rot[0][2] * rot[0][2];
+    return len2 > 0.9f && len2 < 1.1f;
+}
+
 void GameDllShutdown() {
     g_dll  = nullptr;
     g_base = 0;

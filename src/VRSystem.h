@@ -122,6 +122,11 @@ public:
     // bites rather than every frame it holds.
     bool m_loggedClamp = false;
 
+    // Re-anchor the world-locked head offset to the game camera on the next
+    // frame. Bound to RecentreKey, for when the integrated offset has drifted
+    // away from where you are actually sitting. See WorldLockOffset.
+    void RecentreOffset() { m_recentreRequested = true; }
+
 private:
     vr::IVRSystem*     m_system     = nullptr;
     vr::IVRCompositor* m_compositor = nullptr;
@@ -133,6 +138,16 @@ private:
     bool   m_poseValid        = false;
     bool   m_headAtCamera     = false;
     unsigned m_poseLogTick    = 0;
+
+    // The world-locked head offset and the state the integration needs. See
+    // WorldLockOffset in the .cpp -- offsetWorld is in TR world units and is the
+    // only one of these the rest of the mod ever sees the effect of.
+    void  WorldLockOffset(vr::HmdMatrix34_t& pose);
+    float m_offsetWorld[3]   = {};
+    float m_lastView[3]      = {};
+    float m_lastCamPos[3]    = {};
+    bool  m_offsetValid      = false;
+    bool  m_recentreRequested = false;
 
     uint32_t m_eyeW = 0, m_eyeH = 0;
 };

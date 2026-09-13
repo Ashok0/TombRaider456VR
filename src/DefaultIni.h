@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 38699 bytes, 762 lines.
+// Source: TombRaiderVR.ini, 41190 bytes, 810 lines.
 #pragma once
 
 namespace tr {
@@ -45,12 +45,55 @@ Mode=stereo
 ; Rotation-only head tracking. The safe first test: the camera can pivot but
 ; never be displaced, so a wrong WorldUnitsPerMetre cannot put you inside a wall.
 ; Set to 1 once looking around behaves correctly.
+;
+; At 1 the ANALOG STICK still behaves as though this were 0 -- rotating the view
+; does not displace your eye at all. Only the headset does. See HeadOffsetFrame.
 PositionalTracking=1
 
 ; Seated tracking origin rather than standing. Standing space is absolute room
 ; coordinates -- your head at ~1.6 m becomes ~680 TR units of camera offset
 ; before you have moved at all. Leave this at 1.
 SeatedOrigin=1
+
+; HeadOffsetFrame = world | camera
+;
+; Where your head's DISPLACEMENT from the game camera lives. world is the default
+; and is what makes PositionalTracking=1 behave like 1 for the HEADSET and like 0
+; for the ANALOG STICK.
+;
+; camera is the old behaviour: the offset is carried in the game camera's frame,
+; so the camera ROTATES it. Sit perfectly still, turn with the look stick, and
+; your viewpoint travels on an arc of radius |offset| -- 0.4 m of lean is 338
+; units of sideways travel over a 180-degree turn, straight into walls the game's
+; own camera collision thinks are clear. Camera pitch does it vertically, turning
+; a forward lean into rise and fall.
+;
+; world keeps the offset in world units and moves it only by what the HEADSET did:
+;
+;   offsetWorld += R_camera^T * (thisFrame - lastFrame)
+;
+; Turn with the stick and nothing moves, because your head did not move. Move your
+; head and you get the full 6DOF displacement, applied in the direction you are
+; facing at the moment you move -- so leaning forward always goes into the screen.
+; Camera translation still carries you along, exactly as it does with positional
+; tracking off.
+;
+; THE COST, and it is real: the offset becomes accumulated state, so it can drift
+; away from your physical centre. Lean 0.5 m out, turn 90 degrees with the stick,
+; lean back to centre, and your eye sits 0.71 m from the camera -- the two legs
+; cancelled in different world directions. RecentreKey below clears it, and a
+; camera JUMP re-anchors automatically, which covers level loads, cutscene cuts
+; and flybys.
+HeadOffsetFrame=world
+
+; Re-anchor the head offset to the game camera. Numpad 5 -- the middle of the
+; tuning cluster, and the only key in it that was free. 0 disables it.
+;
+; Press it when the world-locked offset has drifted and you want your physical
+; centre to mean the camera again. It never jumps the view by more than the drift
+; it is removing, and it logs:
+;   vr: head offset re-anchored to the game camera
+RecentreKey=0x65
 
 ; Stop the tracked head rising through the ceiling in low tunnels and
 ; crawlspaces. 1 = on and the default; 0 = the stock uncapped head.
@@ -71,8 +114,13 @@ SeatedOrigin=1
 ; does not engage. Wrong in the safe direction: it can fail to clamp, but it can
 ; never clamp somewhere roomy.
 ;
+; With HeadOffsetFrame=world this clamps the OFFSET THAT IS USED rather than your
+; tracking-space height -- which was only the same quantity while the camera had
+; no pitch. It is applied on the way out and leaves the accumulated offset alone,
+; so walking into a taller room gives your real height straight back.
+;
 ; Logs once the first time it bites:
-;   vr: ceiling clamp active -- headroom 892 units, head capped at 0.24 m ...
+;   vr: ceiling clamp active -- headroom 892 units, eye held 764 units above ...
 CeilingClearance=1
 
 ; How close the eye may get to the ceiling, in world units. 128 is about 0.30 m
@@ -140,7 +188,8 @@ FlipSubmitV=0
 ;       parallax, no depth, everything at infinity (reads oversized), and dead
 ;       IpdScale / WorldUnitsPerMetre keys.
 ;   1 = uModelMatrix translation column. ALSO BROKEN: skinned geometry goes
-;       through uJoints[72*3], not uModelMatrix, so characters do not move with
+)INI"
+           R"INI(;       through uJoints[72*3], not uModelMatrix, so characters do not move with
 ;       the world and float outside the map.
 ;   2 = uProjMatrix + translate(d). Depth and scale work, but the world swims
 ;       when you rotate your head: d = (R_e - I)*t_g + t_e, and t_g is ~82000
@@ -190,8 +239,7 @@ FlatHud=1
 ; and menus further away.
 ;
 ; 0 = leave the layer exactly as the engine drew it, which double-visions: the
-)INI"
-           R"INI(; 2D layer uses the engine's ortho projection, identical in both eyes, but the
+; 2D layer uses the engine's ortho projection, identical in both eyes, but the
 ; headset optics apply a fixed ~15-degree per-eye correction assuming an
 ; asymmetric render, so an unshifted image gets pulled apart.
 HudDepthMetres=4.0
@@ -292,7 +340,8 @@ Ortho3DLockToHead=1
 
 ; Horizontal angular width of the world-locked panel, in degrees. Ignored when
 ; Ortho3DLockToHead=1.
-Ortho3DSizeDegrees=55.0
+)INI"
+           R"INI(Ortho3DSizeDegrees=55.0
 
 ; Thickness of the world-locked panel's depth slab, in metres: ortho depth maps
 ; onto Ortho3DDepthMetres plus or minus half of this. Too thin and the item
@@ -341,8 +390,7 @@ VideoFlipV=0
 ; test alone would capture the whole game and turn it into a floating panel.
 ; Hooking fmvShow gives an exact "a video is on screen this frame" signal, so
 ; TR6's cutscenes get the real-geometry panel (no keystone, no tilt on head
-)INI"
-           R"INI(; roll) while its gameplay and menus are left alone.
+; roll) while its gameplay and menus are left alone.
 VideoSkipGame6=1
 
 ; Alternate-eye rendering for TR6 (Angel of Darkness). Leave at 1.
@@ -443,7 +491,8 @@ DecoupledPitch=1
 ; binds Walk to and RIGHT_SHOULDER is what keeps the LB+RB Photo Mode chord
 ; reachable. So this chord is right grip + right trigger, which in play reads as
 ; "walk and shoot" -- a combination people genuinely use, on a ledge especially,
-; and it WILL engage the chord. Set this to 0 if you would rather walk-and-shoot
+)INI"
+           R"INI(; and it WILL engage the chord. Set this to 0 if you would rather walk-and-shoot
 ; leave pitch alone.
 ;
 ; The chord only ever ADDS the suppression. Shoot and Walk still do their jobs
@@ -490,8 +539,7 @@ DecoupledPitchZoomOff=1
 ; are two points on ONE LINE through the camera, which is exactly why they agree
 ; perfectly on a flat screen: your eye is on that line. In VR it is not, so the
 ; dot (on the panel at HudDepthMetres) and the impact (on the wall) pull apart --
-)INI"
-           R"INI(; about h*(D/Z - 1), or 0.45 m for 0.3 m of head offset, a 10 m target and a 4 m
+; about h*(D/Z - 1), or 0.45 m for 0.3 m of head offset, a 10 m target and a 4 m
 ; panel. It reads as purely vertical because seated your sideways offset is
 ; nearly nothing while your height offset is not.
 ;
@@ -599,7 +647,8 @@ GamepadMenuUsesBack=1
 
 ; --- reverse engineering ----------------------------------------------------
 
-; Log the DLL-side return address of each distinct call into vid_setPass and
+)INI"
+           R"INI(; Log the DLL-side return address of each distinct call into vid_setPass and
 ; ogl_drawVB, as "module+RVA".
 ;
 ; The game DLLs ship without PDBs, so this is how we find their render code
@@ -643,8 +692,7 @@ LogCallsites=0
 ;
 ; Watch it work in TombRaiderVR.log:
 ;   gamedll: bound to tomb4.dll (Tomb Raider IV, build 0x696B4999, game=0) ...
-)INI"
-           R"INI(;   cull: hooked tomb4.dll (Tomb Raider IV)
+;   cull: hooked tomb4.dll (Tomb Raider IV)
 ;   cull: head-frustum portal traversal live on Tomb Raider IV -- ...
 ;   cull: 31.2 rooms/frame from the engine + 8.4 added by the head frustum, ...
 PortalCulling=1
@@ -758,7 +806,8 @@ CullWatchRooms=
 ; near-plane test inside SetRoomBounds before any rectangle is looked at.
 ;
 ; PROXIMITY IS THE WRONG CRITERION. Appending rooms by distance from the camera
-; happily adds a stacked room that shares world space with the one you are
+)INI"
+           R"INI(; happily adds a stacked room that shares world space with the one you are
 ; standing in and that no portal reaches, which draws foreign geometry over your
 ; own. This is why the fix is a traversal and not a radius.
 ;

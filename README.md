@@ -47,6 +47,7 @@ branch.
 | **Phase 12** | **Sky fix** — the HD sky dome drawn at optical infinity instead of its mesh radius | Working. TR4 / TR5 |
 | **Phase 13** | **Laser sight fix** — the dot and the bullet made to agree, by putting the head centre back on the aim line | Working. On by default |
 | **Phase 14** | **Hide vignettes** — the binocular, scope and infra-red overlays stubbed out, keeping the aiming dot | Working. On by default |
+| **Phase 15** | **The stick stops displacing you** — the head's offset integrated in world space, so only the headset moves your eye | Working. On by default |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -2167,6 +2168,12 @@ inside the rock.
 
 Phase 11 caps how high the tracked head may rise.
 
+> **Superseded in part by Phase 15.** Everything below about *what* the clamp does
+> and why it only ever subtracts still holds, but the quantity it clamps moved.
+> Capping tracking-space **height** is only the same thing as capping the eye's
+> world height while the game camera has no pitch; it now clamps the world offset
+> that is actually used, on the way out. The settings are unchanged.
+
 ### It clamps; it does not move you
 
 The obvious fix is to drop the camera toward torso height when headroom is
@@ -2711,6 +2718,149 @@ All in `[VR]`, documented in `TombRaiderVR.ini`.
 | `HideOpticsTint` | `1` | The red pane behind the dot. `0` brings it back, and the VCI infra-red tint with it |
 
 All three `0` is stock behaviour and patches nothing at all.
+
+---
+
+## Phase 15: the stick stops displacing you
+
+**Symptom.** Sit perfectly still and swing the look stick: your viewpoint travels
+sideways, into walls the game's own camera collision thinks are clear. Pitch the
+camera and a forward lean turns into rise and fall, through ceilings. Turning
+`PositionalTracking=0` fixes it and costs you all of 6DOF.
+
+**What was wanted**, and it is worth quoting because three attempts missed it:
+*when `PositionalTracking=1`, the camera should behave like `PositionalTracking=1`
+for HMD movement and like `PositionalTracking=0` for analog stick movement.*
+
+### Cause
+
+Composing `finalView = EyeView * gameView` puts the eye at
+
+```
+p_eye = camPos − R_g^T · R_e^T · t_e
+```
+
+`R_g` is the **game camera's** rotation. The head's offset is therefore carried in
+a frame the game rotates, so rotating the camera **sweeps the eye on an arc of
+radius |offset|** with the player motionless. 0.4 m of lean is 338 world units of
+sideways travel over a 180° turn. `PositionalTracking=0` only appears to fix it by
+making `t_e` zero — there is no arc when there is no radius.
+
+### Fix: integrate the offset in world space
+
+Keep the offset in world units and move it only by what the headset did:
+
+```
+offsetWorld += R_camera^T · (thisFrame − lastFrame)
+p_eye        = camPos + offsetWorld
+```
+
+Rotate the camera and `thisFrame == lastFrame`, so the offset does not change, so
+the eye does not move — `PositionalTracking=0`'s behaviour for anything the camera
+does. Move your head and the delta is applied in the frame you are facing **at
+that moment**, so full 6DOF is intact and leaning forward still goes into the
+screen — `PositionalTracking=1`'s behaviour for the headset. Camera *translation*
+still carries you along, because the offset is measured from `camPos`.
+
+**Integrating the delta is the whole trick**, and it is what separates this from
+the two designs that came before it. Freezing a reference frame gives the same
+no-sweep property, but it leaves "forward" pointing wherever it pointed when the
+anchor was set — and TR's camera is not yours. It is a third-person orbit camera
+the engine re-aims constantly: following Lara through a turn, swinging in a
+corridor, cutscenes, flybys. A frozen frame decays into "leaning does something
+arbitrary" within a minute of play. Re-deriving the frame on every delta has
+nothing to decay.
+
+### Where it is done, and why there
+
+In `VRSystem::WorldLockOffset`, on the **pose**, before it is inverted. That is
+the only place the head is still a plain POSITION; after `InvertRigid` it is a
+view transform whose translation column is `-R^T·p`, and editing that moves the
+eye along two axes at once.
+
+The conversion is cheaper than it looks, because **the pose's own rotation cancels
+out**. Following the real code path for a pose `(R_p, P)`:
+
+```
+headFromTracking = (R_p^T, −R_p^T P)
+ToEngineSpace conjugates by F = diag(1,−1,1) and scales the translation,
+  so H = (F R_p^T F,  −s F R_p^T P)
+the head's position in H's own space is  −R_h^T t_h  =  s F P
+```
+
+The rotation drops out, as it must — where the head *is* does not depend on where
+it is *looking*. So the head's offset in engine view space is just its tracked
+position, scaled, with the Y flip applied, plus one sign on Z to go from the mod's
+−Z-forward eye space to phd view's +Z-forward. That identity and the forward/back
+round trip were checked numerically against a transcription of
+`FromHmd → InvertRigid → ToEngineSpace` over 500 random poses: errors of 9e-13 and
+5.8e-15, i.e. float noise. The second number is the one that matters, because it
+means the conversion is a bit-exact no-op when nothing needs changing, and it runs
+every frame.
+
+### What it measures out at
+
+| test | result |
+|---|---|
+| stick yaws 180°, head still | eye travels **0.0 units** (camera-framed: 338) |
+| lean 0.4 m forward, camera fixed | eye moves **169.2 units** = 0.4 × 423, 100% along camera forward |
+| camera walks (700, 0, −300), head still | eye moves by exactly (700, 0, −300) |
+
+### The cost, which is real
+
+The offset is accumulated state, so it can drift from your physical centre. Lean
+0.5 m out, stick-turn 90°, lean back to centre and the eye sits **0.71 m** from
+the camera: the two legs cancelled in different world directions. That is inherent
+to delta integration, not a tuning problem.
+
+Two things bound it. `RecentreKey` (Numpad 5) re-anchors on demand, starting from
+what the camera-framed behaviour would have given right then, so it never jumps
+the view by more than the drift it removes. And a **camera jump over two sectors
+re-anchors automatically** — level loads, cutscene cuts, flybys and teleports,
+where a carried-over offset would be meaningless. Two sectors is far enough that
+no walk or camera swing reaches it in one frame.
+
+If a long session drifts far enough to matter, the next step is a cap on the
+offset's magnitude, clamped on output so walking back recovers it. Deliberately
+not built yet.
+
+### The ceiling clamp, brought along
+
+Phase 11 capped `pose.m[1][3]` — tracking-space **height** — which is only the
+same quantity as the eye's world height while `R_g` has no pitch. It now clamps
+the offset that is actually used, and does it **on the way out**, leaving the
+integrated state alone, so walking into a taller room gives your real height
+straight back. `CeilingClearance` and `CeilingMarginUnits` keep their names and
+their meaning.
+
+#### Where the code is
+
+| file | what it holds |
+|---|---|
+| `src\VRSystem.cpp` | `WorldLockOffset` — the integration, the re-anchors, the ceiling clamp on output |
+| `src\VRSystem.h` | the offset state and `RecentreOffset()` |
+| `src\GameDll.cpp` | `CameraViewFrame` — `w2v_matrix`'s rotation and the camera's world position |
+| `src\Hooks.cpp` | `RecentreKey` in the tuning-key poll |
+
+#### What to watch
+
+```
+vr: head offset re-anchored to the game camera
+vr: ceiling clamp active -- headroom 892 units, eye held 764 units above the camera
+```
+
+Neither is per-frame: the first is one line per press or per camera jump, the
+second fires once the first time the clamp bites.
+
+#### Phase 15 settings
+
+All in `[VR]`, documented in `TombRaiderVR.ini`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `HeadOffsetFrame` | `world` | Where the head's displacement lives. `camera` is the old behaviour, for A/B in the same session |
+| `RecentreKey` | `0x65` | Numpad 5. Re-anchor the offset to the game camera. `0` disables |
+| `PositionalTracking` | `1` | Unchanged, and no longer the lever for this: at `1` the stick already behaves as though it were `0` |
 
 ---
 

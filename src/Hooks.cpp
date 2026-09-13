@@ -326,14 +326,15 @@ void DumpDrawState() {
 }
 
 // --- live tuning hotkeys ----------------------------------------------------
-bool g_tuneWasDown[5] = { false, false, false, false, false };
+bool g_tuneWasDown[6] = { false, false, false, false, false, false };
 
 void PollTuningKeys() {
     const auto& c = Cfg();
-    const int keys[5] = { c.scaleUpKey, c.scaleDownKey,
-                          c.ipdUpKey,   c.ipdDownKey, c.resetTuningKey };
+    const int keys[6] = { c.scaleUpKey, c.scaleDownKey,
+                          c.ipdUpKey,   c.ipdDownKey, c.resetTuningKey,
+                          c.recentreKey };
     const float step = c.scaleStep;
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 6; ++i) {
         if (keys[i] == 0) continue;
         const bool down = (GetAsyncKeyState(keys[i]) & 0x8000) != 0;
         if (down && !g_tuneWasDown[i]) {
@@ -343,6 +344,7 @@ void PollTuningKeys() {
             case 2: AdjustIpdScale(step);          break;
             case 3: AdjustIpdScale(1.0f / step);   break;
             case 4: ResetTuning();                 break;
+            case 5: VR().RecentreOffset();         break;
             }
         }
         g_tuneWasDown[i] = down;
