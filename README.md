@@ -21,21 +21,22 @@ result after in-headset validation.
 * Sky fix — the HD sky dome sits at optical infinity instead of a few metres away
 
 ## Installation
-[WIP]
+## Tomb Raider IV-VI Remastered VR — Installation
+
+**1. Install the VR mod**
+Download `TombRaider456VR.zip` and extract its contents into your game folder:
+```
+C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered
+```
+
+**2. Install New Effects TR4-5 *(optional, highly recommended)***
+This significantly improves visuals in VR. Download it from NexusMods and extract into the same game folder:
+🔗 [New Effects TR4-5 — NexusMods](https://www.nexusmods.com/tombraidertrilogy2remastered/mods/141?tab=description)
+
+**3. Launch the game**
+Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Controls
-|---|---|
-| **Phase 1** | **Mono head tracking** — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
-
-## Development Notes
-
-**A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a,
-2026-01-17 build), driving an OpenVR runtime.
-
-The mod loads into the game, reads the head pose from an OpenVR runtime, and
-composes it onto the game camera. Its development phases share one binary and
-one set of hooks; settings select optional paths at runtime.
-
 | Action | Control |
 |---|---|
 | Move | Left Stick (LS) |
@@ -59,6 +60,34 @@ one set of hooks; settings select optional paths at runtime.
 | Toggle Classic Graphics | Y + LT |
 | Adjust Camera Pitch | RT + RB + RS |
 | Menu | X |
+
+## Development Notes
+
+**A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a,
+2026-01-17 build), driving an OpenVR runtime.
+
+The mod loads into the game, reads the head pose from an OpenVR runtime, and
+composes it onto the game camera. Its development phases share one binary and
+one set of hooks; settings select optional paths at runtime.
+
+| | | State |
+|---|---|---|
+| **Phase 1** | **Mono head tracking** — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
+| **Phase 2** | **Native stereo with 6DOF** — per-eye matrices, double-wide target, positional tracking, compositor submit | Working. `Mode=stereo` |
+| **Phase 3** | **UI fixes** — the flat 2D layer placed on a world-locked panel, and video cutscenes made fusable | Working. On by default in stereo |
+| **Phase 4** | **FMV fixes** — cutscenes captured offscreen and replayed as real world geometry | Working. On by default in stereo |
+| **Phase 5** | **VR controller support** — Touch controllers presented to the game as an Xbox pad | Working. On by default |
+| **Phase 6** | **TR6 support** — alternate-eye fallback for Angel of Darkness's offscreen renderer | Working. Used when native stereo is disabled or unavailable |
+| **Phase 7** | **Culling fix** — the missing geometry behind Lara, fixed inside the game DLLs | Working. TR4 / TR5 |
+| **Phase 8** | **D-pad input** — hold R3 and the left stick becomes a D-pad | Working. On by default |
+| **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
+| **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only | Working. On by default |
+| **Phase 11** | **Ceiling clamp** — caps the tracked head so it cannot rise through low ceilings | Working. On by default |
+| **Phase 12** | **Sky fix** — the HD sky dome drawn at optical infinity instead of its mesh radius | Working. TR4 / TR5 |
+| **Phase 13** | **Laser sight fix** — the dot and the bullet made to agree, by putting the head centre back on the aim line | Working. On by default |
+| **Phase 14** | **Hide vignettes** — the binocular, scope and infra-red overlays stubbed out, keeping the aiming dot | Working. On by default |
+| **Phase 15** | **The stick stops displacing you** — the head's offset integrated in world space, so only the headset moves your eye | Working. On by default |
+| **Phase 16** | **TR6 Native Stereo Support** — the complete Angel of Darkness scene and postprocess chain rendered once per eye | Working. Confirmed in-headset |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
