@@ -60,6 +60,7 @@ hook::InlineHook g_hTr6Calculate;
 hook::InlineHook g_hTr6MapCalcVisibleRooms;
 hook::InlineHook g_hTr6DrawRoomList;
 hook::InlineHook g_hTr6ClippedObb;
+hook::InlineHook g_hTr6DrawProjectedShadows;
 
 typedef void(__cdecl* Fn_vid_setPass)(int shader, float* params, int cull, int blend);
 typedef void(__cdecl* Fn_validate_draw)();
@@ -69,6 +70,7 @@ typedef void(__cdecl* Fn_ogl_drawVB)(int fvf, void* vb, void* ib, int stride,
 typedef void(__cdecl* Fn_ogl_present)();
 typedef void(__cdecl* Fn_tr6_render_scene)();
 typedef void(__cdecl* Fn_tr6_void)();
+typedef void(__fastcall* Fn_tr6_draw_projected_shadows)(void* drawBuffer);
 typedef bool(__fastcall* Fn_tr6_clipped_obb)(
     const mat4* cameraProject, const void* viewport,
     const void* boundsMin, const void* boundsMax);
@@ -173,12 +175,19 @@ const uint8_t kTr6DrawRoomListPrologue[] = { 0x48, 0x89, 0x5C, 0x24, 0x10 };
 const uint8_t kTr6ClippedObbPrologue[] =
     { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 };
 
+// App_DrawChar_DrawProjectedShadows: MOV R11,RSP ; MOV [R11+0x10],RDX.
+// This is the light-camera depth pass used to construct projected character
+// shadows. It must not receive a headset-eye view transform.
+const uint8_t kTr6DrawProjectedShadowsPrologue[] =
+    { 0x4C, 0x8B, 0xDC, 0x49, 0x89, 0x53, 0x10 };
+
 constexpr uint32_t kTr6DllTimestamp     = 0x696B49A4;
 constexpr uint32_t kTr6RenderSceneRva   = 0x001B1CA0;
 constexpr uint32_t kTr6CalculateRva     = 0x001A6DB0;
 constexpr uint32_t kTr6MapCalcRva       = 0x001A8290;
 constexpr uint32_t kTr6DrawRoomListRva  = 0x0014E370;
 constexpr uint32_t kTr6ClippedObbRva    = 0x001A4380;
+constexpr uint32_t kTr6DrawProjectedShadowsRva = 0x001B8270;
 
 // Render-list globals identified by the tomb6 PDB. gmapRoomClip is exactly
 // MAP_ROOMCLIP[192]; the current GMX stores its active room count at +0x7A0.
@@ -324,7 +333,9 @@ bool g_loggedTr6RoomRuns         = false;
 bool g_loggedTr6AllRooms         = false;
 bool g_loggedTr6ObjectCull       = false;
 bool g_loggedTr6FarPlane         = false;
+bool g_loggedTr6ShadowIsolation  = false;
 bool g_tr6VrCalculateActive      = false;
+bool g_inTr6ShadowDepthPass      = false;
 int32_t g_tr6HeadRoomList        = -1;
 int32_t g_tr6HeadRoomCount       = 0;
 Tr6MapRoomClip g_tr6HeadRoomClips[kTr6MaxRooms] = {};
@@ -341,7 +352,8 @@ uint32_t ModuleTimestamp(HMODULE module) {
 }
 
 bool NativeTr6HookReady() {
-    return g_hTr6RenderScene.installed();
+    return g_hTr6RenderScene.installed()
+        && g_hTr6DrawProjectedShadows.installed();
 }
 
 bool NativeTr6Capable() {
@@ -818,6 +830,7 @@ void __cdecl Detour_validate_draw() {
                      && VR().poseValid()
                      && worldPass
                      && !ortho3D
+                     && !g_inTr6ShadowDepthPass
                      && (Cfg().monoTracking || TargetIsBackbuffer()
                          || AlternateEyeActive()
                          || (NativeTr6Active() && g_inNativeTr6Scene));
@@ -1540,6 +1553,29 @@ void __cdecl Detour_ogl_drawVB(int fvf, void* vb, void* ib, int stride,
 // ---------------------------------------------------------------------------
 // TR6 App_Render_Scene -- full offscreen scene replay per eye
 // ---------------------------------------------------------------------------
+void __fastcall Detour_Tr6DrawProjectedShadows(void* drawBuffer) {
+    const auto original = g_hTr6DrawProjectedShadows
+        .Original<Fn_tr6_draw_projected_shadows>();
+    if (!NativeTr6Active() || !g_inNativeTr6Scene) {
+        original(drawBuffer);
+        return;
+    }
+
+    // The function switches the renderer to each character shadow's LIGHT
+    // camera and draws character depth into the shadow atlas. These matrices
+    // must be identical for both scene eyes. The later room projection pass is
+    // outside this scope and still receives the correct per-eye scene camera.
+    g_inTr6ShadowDepthPass = true;
+    original(drawBuffer);
+    g_inTr6ShadowDepthPass = false;
+
+    if (!g_loggedTr6ShadowIsolation) {
+        g_loggedTr6ShadowIsolation = true;
+        Log("tr6 shadow: projected-character light-camera depth pass isolated "
+            "from headset view injection");
+    }
+}
+
 void __cdecl Detour_Tr6RenderScene() {
     const auto original = g_hTr6RenderScene.Original<Fn_tr6_render_scene>();
 
@@ -2082,7 +2118,7 @@ void TryInstallTr6Hooks() {
     }
 
     const bool wantScene = Cfg().nativeStereoGame6
-        && !g_hTr6RenderScene.installed() && !g_tr6SceneAttempted;
+        && !NativeTr6HookReady() && !g_tr6SceneAttempted;
     const bool wantCull = Cfg().portalCulling
         && !g_hTr6Calculate.installed() && !g_tr6CullAttempted;
     if (!wantScene && !wantCull) return;
@@ -2161,17 +2197,35 @@ void TryInstallTr6Hooks() {
 
     if (wantScene) {
         g_tr6SceneAttempted = true;
-        auto* target = reinterpret_cast<uint8_t*>(module) + kTr6RenderSceneRva;
-        if (!g_hTr6RenderScene.Install(target,
+        auto* shadowTarget = reinterpret_cast<uint8_t*>(module)
+                           + kTr6DrawProjectedShadowsRva;
+        auto* sceneTarget = reinterpret_cast<uint8_t*>(module)
+                          + kTr6RenderSceneRva;
+        bool ok = g_hTr6DrawProjectedShadows.Install(shadowTarget,
+                reinterpret_cast<void*>(&Detour_Tr6DrawProjectedShadows),
+                sizeof(kTr6DrawProjectedShadowsPrologue),
+                kTr6DrawProjectedShadowsPrologue,
+                sizeof(kTr6DrawProjectedShadowsPrologue),
+                "TR6 App_DrawChar_DrawProjectedShadows");
+        if (ok) {
+            ok = g_hTr6RenderScene.Install(sceneTarget,
                 reinterpret_cast<void*>(&Detour_Tr6RenderScene),
                 sizeof(kTr6RenderScenePrologue),
                 kTr6RenderScenePrologue, sizeof(kTr6RenderScenePrologue),
-                "TR6 App_Render_Scene")) {
-            Log("tr6: native scene hook failed its byte/safety checks; "
+                "TR6 App_Render_Scene");
+        }
+        if (!ok) {
+            // Native stereo must never run without identifying the light-view
+            // shadow pass: the generic offscreen injection would distort it.
+            g_hTr6RenderScene.Remove();
+            g_hTr6DrawProjectedShadows.Remove();
+            Log("tr6: native scene/shadow hook pair failed its byte/safety "
+                "checks; "
                 "using AER fallback");
         } else {
-            LogF("tr6: native scene hook installed (tomb6.dll+0x%X)",
-                 kTr6RenderSceneRva);
+            LogF("tr6: native scene/shadow hooks installed (scene +0x%X, "
+                 "projected shadows +0x%X)", kTr6RenderSceneRva,
+                 kTr6DrawProjectedShadowsRva);
         }
     }
 }
@@ -2627,6 +2681,7 @@ void RemoveHooks() {
 
     // The game-DLL hooks were installed dynamically after the shared hooks.
     g_hTr6RenderScene.Remove();
+    g_hTr6DrawProjectedShadows.Remove();
     g_hTr6ClippedObb.Remove();
     g_hTr6DrawRoomList.Remove();
     g_hTr6MapCalcVisibleRooms.Remove();
@@ -2645,6 +2700,7 @@ void RemoveHooks() {
     }
     g_ready = false;
     g_inNativeTr6Scene = false;
+    g_inTr6ShadowDepthPass = false;
     g_tr6SceneAttempted = false;
     g_tr6CullAttempted = false;
     g_tr6ModuleBase = 0;

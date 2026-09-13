@@ -88,7 +88,8 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 14** | **Hide vignettes** — the binocular, scope and infra-red overlays stubbed out, keeping the aiming dot | Working. On by default |
 | **Phase 15** | **The stick stops displacing you** — the head's offset integrated in world space, so only the headset moves your eye | Working. On by default |
 | **Phase 16** | **TR6 Native Stereo Support** — the complete Angel of Darkness scene and postprocess chain rendered once per eye | Working. Confirmed in-headset |
-| **Phase 17** | **TR6 Culling** — active rooms and their render runs retained independently of the third-person camera | Working substantially better in-headset. TR6 only |
+| **Phase 17** | **TR6 Culling** — rooms, props and distant geometry retained independently of the third-person camera | Working. Confirmed in-headset. TR6 only |
+| **Phase 18** | **TR6 projected-shadow fix** — character shadow maps kept on their light camera instead of inheriting headset-eye transforms | Working. Confirmed in-headset. TR6 only |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -161,6 +162,12 @@ still discarding rooms and individual room runs according to its third-person
 right-stick camera, even though the headset rendered in another direction. The
 final path submits every active room and keeps its render runs available to the
 VR view. See [Phase 17: TR6 Culling](#phase-17-tr6-culling).
+
+**Phase 18** fixes TR6's projected character shadows. Their depth atlas uses a
+light camera, so allowing the generic offscreen stereo injector to treat it as
+a player-camera pass distorted Lara's shadow differently for each eye. The
+light-camera pass is now isolated while final shadow projection remains stereo.
+See [Phase 18: TR6 Projected-Shadow Fix](#phase-18-tr6-projected-shadow-fix).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -3299,6 +3306,127 @@ submission path.
 All Phase 17 implementation is in `src\Hooks.cpp`. `PortalCulling` and
 `CullFovMarginDegrees` retain their existing configuration entries; no new INI
 setting was required.
+
+---
+
+## Phase 18: TR6 Projected-Shadow Fix
+
+After native stereo and the Phase 17 culling path were working, Lara's shadow
+still appeared twice in the headset. Its proportions were wrong, and it moved
+with the view camera instead of remaining fixed to Lara and the world. Final
+in-headset testing confirms that Phase 18 fixes all three symptoms while
+keeping Lara's shadow enabled.
+
+### Cause
+
+TR6 uses a dedicated projected-character shadow pipeline rather than drawing
+Lara's shadow as ordinary scene geometry:
+
+```text
+App_DrawChar_CalcProjectedShadows
+  calculate light cameras and projection records for visible characters
+
+App_DrawChar_DrawProjectedShadows
+  switch to each character's light camera
+  render character depth into the projected-shadow atlas
+
+App_Render_Scene_Main
+  project the completed atlas shadows onto room geometry
+```
+
+Phase 16 intentionally allowed stereo matrix injection on every offscreen world
+draw inside `App_Render_Scene`, because TR6 renders its scene through several
+intermediate targets. That broad rule also reached
+`App_DrawChar_DrawProjectedShadows`. Those draws are not player-camera scene
+draws: they render Lara from a **light camera** to construct the shadow map.
+Applying the left- and right-eye headset transforms there produced two
+differently positioned and distorted depth maps. The later room projection
+then exposed that error as double vision, incorrect proportions and a shadow
+that appeared to move with the camera.
+
+The supplied PDB identifies the relevant functions and data directly:
+
+| Symbol | RVA | PDB size | Role |
+|---|---:|---:|---|
+| `App_DrawChar_CalcProjectedShadows` | `0x001BCE30` | 3,393 bytes | Builds up to 32 `DRAW_CHAR_SHADOW_DATA` records and their light matrices |
+| `App_DrawChar_DrawProjectedShadows` | `0x001B8270` | 1,266 bytes | Renders character depth from those light cameras into the shadow atlas |
+| `App_DrawRoom_DrawProjectedDepthShadow` | `0x001B06E0` | 989 bytes | Projects the completed character shadows onto rooms |
+| `draw_char_shadow_data` | `0x003A3980` | 10,752 bytes | Array of 32 336-byte projected-shadow records |
+
+`DRAW_CHAR_SHADOW_DATA` contains a validity flag, score, shadow camera,
+projection, combined camera-projection, depth projection, position/falloff
+vectors, near/far values, FOV and shadow-tile ID. This confirmed that the
+character-depth renderer owns a separate camera and must not inherit a headset
+eye transform.
+
+### Fix
+
+Phase 18 installs an exact hook at
+`App_DrawChar_DrawProjectedShadows` (`tomb6.dll+0x001B8270`). During that
+function only, a render-thread scope flag tells `validate_draw` not to replace
+the engine's projection or view matrix:
+
+```text
+left-eye App_Render_Scene
+  projected-shadow depth pass -> original light camera, no eye injection
+  main scene/shadow projection -> left-eye headset camera
+
+right-eye App_Render_Scene
+  projected-shadow depth pass -> same original light camera, no eye injection
+  main scene/shadow projection -> right-eye headset camera
+```
+
+The light-camera shadow atlas is therefore stable and geometrically identical
+for both scene passes. The scope ends as soon as character-depth rendering
+returns, so `App_DrawRoom_DrawProjectedDepthShadow` and the rest of the main
+scene continue receiving the correct per-eye view. Lara's shadow remains
+enabled; no character or environmental shadow is deliberately removed.
+
+The hook uses a seven-byte, instruction-aligned, position-independent prologue:
+
+```text
+4C 8B DC             mov r11,rsp
+49 89 53 10          mov [r11+0x10],rdx
+```
+
+It is still guarded by the supported `tomb6.dll` timestamp `0x696B49A4` and
+the runtime byte comparison used by the other TR6 hooks.
+
+### Safety, isolation and fallback
+
+The projected-shadow hook and `App_Render_Scene` hook are an atomic native-
+stereo pair. `NativeTr6HookReady()` returns true only when both are installed.
+If either entry point fails its build or byte checks, both hooks are removed
+and TR6 uses the existing AER fallback. This prevents native stereo from ever
+running with the known distorted-shadow path.
+
+The suppression flag is active only while all of these conditions are true:
+
+- the current game is TR6;
+- native TR6 stereo is active;
+- execution is inside the duplicated `App_Render_Scene` boundary; and
+- execution is inside `App_DrawChar_DrawProjectedShadows`.
+
+TR4/TR5, ordinary TR6 scene geometry, room shadows, shadow projection and all
+gameplay state are unchanged.
+
+A successful run includes:
+
+```text
+hook[TR6 App_DrawChar_DrawProjectedShadows]: ... (stole 7, tramp ...)
+tr6: native scene/shadow hooks installed (scene +0x1B1CA0, projected shadows +0x1B8270)
+tr6 shadow: projected-character light-camera depth pass isolated from headset view injection
+```
+
+The release build completed with zero warnings and errors, and all 219 existing
+symbol/address/layout checks passed. The deployed DLL matched the build
+artifact at SHA-256
+`84C84BE5850F9F3FEDA951130E790291C8E5D96725BE975C8C63763CAF909987`.
+Headset validation confirmed that Lara's shadow now has correct stereo fusion,
+proportions and world-locked motion.
+
+All Phase 18 implementation is in `src\Hooks.cpp`; no new configuration entry
+was required.
 
 ---
 
