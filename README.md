@@ -37,8 +37,8 @@ composes it onto the game camera. Its development phases share one binary and
 one set of hooks; settings select optional paths at runtime.
 
 | | |
-| Move | Left Stick (LS) |
-| Walk | RB + LS |
+| `Move` | `Left Stick (LS)` |
+| `Walk` | `RB + LS` |
 | Dash | L3 |
 | Look | Right Stick (RS) |
 | Zoom | R3 |
