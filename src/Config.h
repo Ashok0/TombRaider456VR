@@ -501,6 +501,45 @@ struct Config {
     // misalignment.
     bool  opticsHeadAtCamera = true;
 
+    // Switch off the engine's optic overlays. Both on by default.
+    //
+    //   hideBinocularOverlay  DrawNormalBinocs, DrawVCIHeadset,
+    //                         DrawLabyrinthFishEye -- the binocular vignette,
+    //                         TR5's VCI visor, the Labyrinth fisheye
+    //   hideScopeOverlay      DrawNormalLaserSight -- the scope frame, which
+    //                         also carries its reticle lines
+    //
+    // These are flat full-screen artwork: DrawBinoculars scales the mesh to the
+    // screen rect and writes it into raw_vbuf with z = 0, so each is a 2D quad
+    // that the mod's 2D path lands on the world-locked panel at hudDepthMetres.
+    // A vignette imitates the edge of your vision, and as a rectangle floating
+    // at 4 m inside a 94-degree field of view it cannot: your real peripheral
+    // vision is wide open around it. No placement fixes that, because the thing
+    // being imitated is the headset's own field stop.
+    //
+    // THE AIMING DOT SURVIVES BOTH. It is not part of any of those meshes --
+    // DrawBinoculars draws it separately after DrawGameInfo as a DefaultSprites
+    // sprite at the centre of the screen rect, gated on LaserSightActive and
+    // coloured through LaserSightCol, so it still turns green on a target and
+    // still pulses. That is the whole reason these are four targeted stubs
+    // rather than one suppression of DrawBinoculars.
+    //
+    //   hideOpticsTint        DoInfraRedQuad -- one untextured quad over the
+    //                         whole screen rect, vertex colour 0xFF5050FF. That
+    //                         is the transparent red pane behind the laser dot,
+    //                         and DrawBinoculars draws it whenever LaserSight is
+    //                         set, not only in infra-red mode. Stubbing it takes
+    //                         the VCI headset's infra-red tint with it, because
+    //                         the engine draws both through this one function.
+    //
+    // Split in two because "the binoculars look wrong" and "the scope looks
+    // wrong" are separate complaints, and the scope's reticle lines are
+    // something a player might want to keep after the binocular circles are
+    // gone. Both 0 is stock behaviour and patches nothing.
+    bool  hideBinocularOverlay = true;
+    bool  hideScopeOverlay     = true;
+    bool  hideOpticsTint       = true;
+
     // Which XInput button the left hand's lower face button sends.
     //
     // true  = BACK  -- the System menu. This is the default.

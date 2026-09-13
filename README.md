@@ -46,6 +46,7 @@ branch.
 | **Phase 11** | **Ceiling clamp** — caps the tracked head so it cannot rise through low ceilings | Working. On by default |
 | **Phase 12** | **Sky fix** — the HD sky dome drawn at optical infinity instead of its mesh radius | Working. TR4 / TR5 |
 | **Phase 13** | **Laser sight fix** — the dot and the bullet made to agree, by putting the head centre back on the aim line | Working. On by default |
+| **Phase 14** | **Hide vignettes** — the binocular, scope and infra-red overlays stubbed out, keeping the aiming dot | Working. On by default |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -2582,6 +2583,134 @@ All in `[VR]`, documented in `TombRaiderVR.ini`.
 |---|---|---|
 | `OpticsHeadAtCamera` | `1` | The whole feature. `0` is the stock displaced head, for A/B |
 | `HudDepthMetres` | `4.0` | Phase 3's panel depth. Not part of the fix, but it is the `Z` in the error formula — the knob that proves the diagnosis |
+
+---
+
+## Phase 14: hide vignettes
+
+**Symptom.** Raise the binoculars or a scope and the overlay reads as a picture of
+an overlay: a rectangle hanging in space a few metres away, with your real
+peripheral vision wide open all around it. The laser sight also has a transparent
+red pane sitting behind its dot.
+
+**Cause.** Every one of them is flat, full-screen artwork. `DrawBinoculars`
+scales the mesh to `phd_scr_left..right` / `top..bottom` and writes it into
+`raw_vbuf` with `z = 0`, so each is a 2D quad — which Phase 3 then lands on the
+world-locked panel at `HudDepthMetres` along with the rest of the 2D layer.
+
+That is not a placement bug with a better answer available. A vignette imitates
+**the edge of your vision**, and the headset already has one of those: its own
+field stop. Any rectangle drawn inside it is a second, smaller, wrong one. There
+is nowhere to put it that helps, so the only useful fix is to not draw it.
+
+### What is in there
+
+`DrawBinoculars` emits six separate things, and `tools\xrefs.py` confirms the
+five functions are called from nowhere else in either DLL:
+
+| piece | what it is | stubbed |
+|---|---|---|
+| `DrawNormalBinocs` | the binocular vignette | `HideBinocularOverlay` |
+| `DrawVCIHeadset` | TR5's VCI visor overlay | `HideBinocularOverlay` |
+| `DrawLabyrinthFishEye` | the Labyrinth fisheye | `HideBinocularOverlay` |
+| `DrawNormalLaserSight` | the scope frame, and its reticle lines | `HideScopeOverlay` |
+| `DoInfraRedQuad` | one untextured quad over the screen rect, vertex colour `0xFF5050FF` | `HideOpticsTint` |
+| **the aiming dot** | a `DefaultSprites` sprite at the centre of the screen rect | **kept** |
+
+**The dot is not part of any of them**, and that is the whole reason this is five
+targeted stubs rather than one suppression of `DrawBinoculars`. It is drawn inline
+at `DrawBinoculars+0x3A5`, after `DrawGameInfo`, gated on `LaserSightActive` and
+coloured through `LaserSightCol` — so it survives all five, still turns green on a
+target, and still pulses. Phase 13 spent its whole length getting that dot to
+agree with the bullet; throwing it away here would have been absurd.
+
+`DoInfraRedQuad` deserves its own note, because its name is a trap. It was left
+alone on the first pass on the assumption that it only fired in infra-red mode.
+The call site says otherwise:
+
+```
+0x000C58BA  cmp  LaserSight, 0
+0x000C58C1  jne  0x000C58CE       -> call DoInfraRedQuad
+```
+
+It fires **whenever the laser sight is up**, and it is drawn before the dot. That
+is the red pane. Stubbing it takes the VCI headset's infra-red tint with it, since
+the engine draws both through that one function — the setting says so, and the
+quad is a colour wash rather than a brightness boost, so nothing in a dark level
+becomes harder to see.
+
+### Fix: one byte, not a hook
+
+All five are `void`, all five are called only from `DrawBinoculars`, and no caller
+reads a return value. So each is switched off by writing **`0xC3` — `ret` — at its
+entry**. No trampoline, no stolen instruction window, no detour to get right, and
+undoing it is one byte back. The rest of that first instruction is left as dead
+bytes that nothing branches into.
+
+It holds itself to `InlineHook`'s standard anyway: the prologue is compared before
+the write, so a wrong address **declines to patch and logs it** rather than
+corrupting an instruction stream. Five bytes for four of them, seven for
+`DoInfraRedQuad` — `sub rsp,0x28` is only four bytes, and a five-byte window would
+end mid-instruction, which would mean the bytes had been read from somewhere other
+than the function the PDB names.
+
+```
+  DrawNormalBinocs        48 89 5C 24 08         mov [rsp+8],    rbx
+  DrawVCIHeadset          48 89 5C 24 10         mov [rsp+0x10], rbx
+  DrawLabyrinthFishEye    48 89 5C 24 10         mov [rsp+0x10], rbx
+  DrawNormalLaserSight    48 89 5C 24 10         mov [rsp+0x10], rbx
+  DoInfraRedQuad          48 83 EC 28 45 33 C0   sub rsp,0x28 / xor r8d,r8d
+```
+
+Byte-identical between the two DLLs, which is the cross-check that says they are
+one source:
+
+| | `tomb4.dll` | `tomb5.dll` | size |
+|---|---|---|---|
+| `DrawNormalBinocs` | `0x000D1B00` | `0x000C4DD0` | 831 |
+| `DrawVCIHeadset` | `0x000D17B0` | `0x000C4A80` | 845 |
+| `DrawLabyrinthFishEye` | `0x000D1440` | `0x000C4710` | 878 |
+| `DrawNormalLaserSight` | `0x000D1E40` | `0x000C5110` | 869 |
+| `DoInfraRedQuad` | `0x000D21B0` | `0x000C5480` | 189 |
+
+Patching is **per stub**, so one moved address costs its own overlay and not the
+other four, and the bytes come back out on rebind — the player can switch between
+TR4 and TR5 from the title screen, and a byte written into the old module has to
+be restored before anything is written into the new one. `tools\verify_addresses.py`
+re-derives all ten RVAs and both prologue windows from the PDBs: 219 checks, up
+from 209.
+
+#### Where the code is
+
+| file | what it holds |
+|---|---|
+| `src\Overlay.cpp` | the stub table, the verified one-byte patch, and its removal |
+| `src\Overlay.h` | which draw is which, and why the dot is not among them |
+| `src\GameDll.cpp` | the five RVAs per DLL |
+| `src\Hooks.cpp` | `OverlayUpdate()` per frame, `OverlayShutdown()` on unload |
+| `tools\verify_addresses.py` | re-derives all of it from the PDBs |
+
+#### What to watch
+
+```
+overlay: 5 optic overlay draw(s) stubbed in tomb5.dll (Tomb Raider V) -- binocular=1 scope=1 tint=1. The laser dot is a separate sprite and is untouched.
+```
+
+Once, when a supported build is bound. A `prologue mismatch` line instead names
+the one overlay that was left alone rather than patched blind, and the other four
+still go.
+
+#### Phase 14 settings
+
+All in `[VR]`, documented in `TombRaiderVR.ini`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `HideBinocularOverlay` | `1` | The binocular vignette, the VCI visor, the Labyrinth fisheye |
+| `HideScopeOverlay` | `1` | The scope frame. `0` brings its crosshair lines back while the binocular circles stay gone |
+| `HideOpticsTint` | `1` | The red pane behind the dot. `0` brings it back, and the VCI infra-red tint with it |
+
+All three `0` is stock behaviour and patches nothing at all.
 
 ---
 

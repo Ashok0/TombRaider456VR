@@ -76,6 +76,18 @@ struct GameDllLayout {
     uint32_t sGetObjectBounds;  // int  S_GetObjectBounds(int16* bounds)
     uint32_t drawSkyHD;         // void DrawSkyHD(void) -- HD sky/horizon dome
 
+    // --- the optic overlays, stubbed rather than hooked (see Overlay.h) -------
+    //
+    // All five are void, all five are called only from DrawBinoculars, and no
+    // caller reads a return value, so each is switched off with one 0xC3 at its
+    // entry. The aiming dot is NOT among them -- DrawBinoculars draws it inline
+    // as a sprite after DrawGameInfo, so it survives all five being stubbed.
+    uint32_t drawNormalBinocs;      // the binocular vignette
+    uint32_t drawVCIHeadset;        // TR5's VCI visor overlay
+    uint32_t drawLabyrinthFishEye;  // the Labyrinth fisheye overlay
+    uint32_t drawNormalLaserSight;  // the scope frame and its reticle lines
+    uint32_t doInfraRedQuad;        // the full-screen red wash behind both
+
     // PrintRoomsList's prologue differs between TR4 and TR5, so it travels with
     // the row. S_GetObjectBounds' is identical in both and lives in
     // PortalCull.cpp beside the hook that uses it.

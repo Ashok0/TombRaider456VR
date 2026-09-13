@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 36641 bytes, 723 lines.
+// Source: TombRaiderVR.ini, 38699 bytes, 762 lines.
 #pragma once
 
 namespace tr {
@@ -510,6 +510,45 @@ DecoupledPitchZoomOff=1
 ; 0 gives the stock behaviour back, misalignment included.
 OpticsHeadAtCamera=1
 
+; Switch off the engine's optic overlays. Both default to 1.
+;
+;   HideBinocularOverlay   the binocular vignette, TR5's VCI visor, and the
+;                          Labyrinth fisheye
+;   HideScopeOverlay       the scope frame, which also carries its reticle lines
+;   HideOpticsTint         the transparent red pane behind the laser dot
+;
+; These are flat full-screen artwork -- the engine scales the mesh to the screen
+; rect and writes it with z = 0, so each one is a 2D quad that lands on the same
+; world-locked panel as the rest of the 2D layer, at HudDepthMetres. A vignette
+; is meant to be the edge of your vision, and as a rectangle floating at 4 m
+; inside a 94-degree field of view it cannot be: your real peripheral vision is
+; wide open around it. No placement fixes that, because the thing it imitates is
+; the headset's own field stop.
+;
+; HideOpticsTint is the one that is easy to miss. The engine lays a single
+; untextured quad over the whole screen rect, coloured 0xFF5050FF, whenever the
+; laser sight is up -- not only in infra-red mode. That is the transparent red
+; rectangle sitting behind the dot, and in VR it is a red pane hanging at
+; HudDepthMetres. Stubbing it takes the VCI headset's infra-red tint with it,
+; because the engine draws both through that one function.
+;
+; THE AIMING DOT IS KEPT by all three. It is not part of any of those meshes --
+; the engine draws it separately, as a sprite at the centre of the screen rect --
+; so it still turns green on a target and still pulses.
+;
+; Set HideScopeOverlay=0 if you want the scope's crosshair LINES back and only
+; the binocular circles gone; HideOpticsTint=0 if you want the red wash back.
+; All three 0 is stock behaviour and patches nothing.
+;
+; Logged once when it takes effect:
+;   overlay: 5 optic overlay draw(s) stubbed in tomb5.dll (Tomb Raider V) ...
+;
+; A "prologue mismatch" line instead means the game was patched and that overlay
+; was left alone rather than risk writing into the wrong function.
+HideBinocularOverlay=1
+HideScopeOverlay=1
+HideOpticsTint=1
+
 ; Hold R3 (right stick click) to turn the LEFT stick into a D-pad.
 ;
 ; R3 is the modifier rather than L3 because L3 is Sprint, and sprint here is
@@ -604,7 +643,8 @@ LogCallsites=0
 ;
 ; Watch it work in TombRaiderVR.log:
 ;   gamedll: bound to tomb4.dll (Tomb Raider IV, build 0x696B4999, game=0) ...
-;   cull: hooked tomb4.dll (Tomb Raider IV)
+)INI"
+           R"INI(;   cull: hooked tomb4.dll (Tomb Raider IV)
 ;   cull: head-frustum portal traversal live on Tomb Raider IV -- ...
 ;   cull: 31.2 rooms/frame from the engine + 8.4 added by the head frustum, ...
 PortalCulling=1
@@ -650,8 +690,7 @@ CullWidenBounds=1
 
 ; Extend the same fix to items: furniture, enemies, pickups, statics.
 ;
-)INI"
-           R"INI(; The engine rejects an item whose bounding box misses the game camera's screen
+; The engine rejects an item whose bounding box misses the game camera's screen
 ; rect or sits behind its near plane -- which is every item in every room this
 ; feature adds. Hop expansion never touched this, so the rooms it forced in drew
 ; EMPTY. With CullObjects=0 you get that behaviour back.

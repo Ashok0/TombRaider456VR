@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -131,6 +131,7 @@
     <ClCompile Include="src\Callsite.cpp" />
     <ClCompile Include="src\GameDll.cpp" />
     <ClCompile Include="src\PortalCull.cpp" />
+    <ClCompile Include="src\Overlay.cpp" />
     <ClCompile Include="src\Sky.cpp" />
     <ClCompile Include="src\Gamepad.cpp" />
     <ClCompile Include="src\VideoPanel.cpp" />
@@ -151,6 +152,7 @@
     <ClInclude Include="src\GameDll.h" />
     <ClInclude Include="src\PortalCull.h" />
     <ClInclude Include="src\PortalGeom.h" />
+    <ClInclude Include="src\Overlay.h" />
     <ClInclude Include="src\Sky.h" />
     <ClInclude Include="src\Gamepad.h" />
     <ClInclude Include="src\VideoPanel.h" />

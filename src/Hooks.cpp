@@ -41,6 +41,7 @@
 #include "GameDll.h"
 #include "PortalCull.h"
 #include "Sky.h"
+#include "Overlay.h"
 #include "VRSystem.h"
 
 #include <cstring>
@@ -1451,6 +1452,7 @@ void __cdecl Detour_ogl_present() {
     // know which one is live and which build it is.
     PortalCullUpdate();
     SkyUpdate();
+    OverlayUpdate();
 
     // Latch "an optic is up" ONCE, here, rather than letting anything poll it
     // per draw. Everything that reads the eye transform during a frame -- world
@@ -1749,6 +1751,7 @@ bool InstallHooks() {
 
 void RemoveHooks() {
     GamepadShutdown();
+    OverlayShutdown();
     SkyShutdown();
     PortalCullShutdown();
     GameDllShutdown();

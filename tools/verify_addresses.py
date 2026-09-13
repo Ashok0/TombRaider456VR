@@ -132,7 +132,9 @@ LAYOUT = ['lara', 'camera', 'room', 'number_rooms',
           'outside', 'outside_left', 'outside_right', 'outside_top',
           'outside_bottom',
           'BinocularOn', 'BinocularRange',
-          'PrintRoomsList', 'S_GetObjectBounds', 'DrawSkyHD']
+          'PrintRoomsList', 'S_GetObjectBounds', 'DrawSkyHD',
+          'DrawNormalBinocs', 'DrawVCIHeadset', 'DrawLabyrinthFishEye',
+          'DrawNormalLaserSight', 'DoInfraRedQuad']
 
 rows = []
 for m in re.finditer(
@@ -256,7 +258,8 @@ try:
         check('%s window is free of RIP-relative operands' % label,
               riprel if riprel else 'none', 'none')
 
-    a = arrays_in('Hooks.cpp', 'GameDll.cpp', 'PortalCull.cpp', 'Sky.cpp')
+    a = arrays_in('Hooks.cpp', 'GameDll.cpp', 'PortalCull.cpp', 'Sky.cpp',
+                  'Overlay.cpp')
 
     # tomb456.exe -- the stereo hooks, from Hooks.cpp's Target table.
     hooks = open(os.path.join(ROOT, 'src', 'Hooks.cpp'), encoding='utf-8',
@@ -282,6 +285,18 @@ try:
         if 'kDrawSkyHDPrologue' in a:
             window(dll, 'DrawSkyHD', a['kDrawSkyHDPrologue'],
                    '%s!DrawSkyHD' % dll)
+        # The optic-overlay stubs (Overlay.cpp). Only the first byte is
+        # overwritten there, but all five are compared before the write, so all
+        # five are verified here -- and the instruction-boundary check still has
+        # to pass, because a window that does not end on one would mean the bytes
+        # came from somewhere other than the function the PDB names.
+        for fn, arr in (('DrawNormalBinocs',     'kSaveRbx08'),
+                        ('DrawVCIHeadset',       'kSaveRbx10'),
+                        ('DrawLabyrinthFishEye', 'kSaveRbx10'),
+                        ('DrawNormalLaserSight', 'kSaveRbx10'),
+                        ('DoInfraRedQuad',       'kSubRsp28')):
+            if arr in a:
+                window(dll, fn, a[arr], '%s!%s' % (dll, fn))
 
 except ImportError:
     print('  SKIPPED -- pip install pefile capstone to run this section')

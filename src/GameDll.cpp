@@ -74,6 +74,11 @@ constexpr GameDllLayout kDlls[] = {
       /* PrintRoomsList  */ 0x000C5160,
       /* S_GetObjectB..  */ 0x000B8210,
       /* DrawSkyHD       */ 0x000C4CA0,
+      /* DrawNormalBin.. */ 0x000D1B00,
+      /* DrawVCIHeadset  */ 0x000D17B0,
+      /* DrawLabyrinth.. */ 0x000D1440,
+      /* DrawNormalLas.. */ 0x000D1E40,
+      /* DoInfraRedQuad  */ 0x000D21B0,
       kPrintRoomsListTR4, sizeof(kPrintRoomsListTR4) },
 
     { 1, 0x696B499C, L"tomb5.dll", "Tomb Raider V",
@@ -97,6 +102,11 @@ constexpr GameDllLayout kDlls[] = {
       /* PrintRoomsList  */ 0x000B9CA0,
       /* S_GetObjectB..  */ 0x000ABB20,
       /* DrawSkyHD       */ 0x000B97F0,
+      /* DrawNormalBin.. */ 0x000C4DD0,
+      /* DrawVCIHeadset  */ 0x000C4A80,
+      /* DrawLabyrinth.. */ 0x000C4710,
+      /* DrawNormalLas.. */ 0x000C5110,
+      /* DoInfraRedQuad  */ 0x000C5480,
       kPrintRoomsListTR5, sizeof(kPrintRoomsListTR5) },
 };
 
