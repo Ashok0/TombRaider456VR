@@ -41,6 +41,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 |---|---|
 | Move | Left Stick (LS) |
 | Walk | RB + LS |
+| Sneak | RB + Y |
 | Dash | L3 |
 | Look | Right Stick (RS) |
 | Zoom | R3 |
@@ -1232,7 +1233,8 @@ therefore promotes its axis to 1.0 when the analogue value reads low.
 | Shoot | Right trigger | `RT` |
 | Equip weapon | Left trigger | `LT` |
 | Duck | Left grip | `LB` |
-| Walk | **Right grip** | `X` + `RB` |
+| Walk | **Right grip** | `X` |
+| Sneak | Right grip + left upper face button | `RB` (the chord consumes `X` and `Y`) |
 | Sprint | Left stick click | `L3` |
 | System menu | Left lower face button | `BACK` (or `START`) |
 | Photo mode | Left grip + right grip | `LB` + `RB` |
@@ -1243,8 +1245,9 @@ suit hands better than thumbs:
 
 - **Walk is the right grip**, not a face button, so it can be held while the
   left thumb keeps moving. The game binds Walk to XInput `X`, so the grip emits
-  `X` — and `RIGHT_SHOULDER` as well, so that the Photo Mode chord `LB` + `RB`
-  still works. `X` and `RB` never collide in practice.
+  only `X`. TR6 binds Sneak to `RIGHT_SHOULDER`, so holding Y with the right
+  grip consumes the ordinary Walk and Action signals and emits Sneak instead.
+  Both grips still synthesize `LB` + `RB`, preserving the Photo Mode chord.
 - **System is the left hand's lower face button.** Touch has no Start or Back of
   its own, and putting either on a chord made it awkward to reach mid-play.
   `GamepadMenuUsesBack=0` sends `START` (pause/inventory) instead —
@@ -1269,8 +1272,8 @@ what the controls were on that run:
 ```
 pad: Touch controllers presented as an Xbox pad (_XInputGetState ...)
 pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) action=Y(L upper)
-     system=BACK(L lower) walk=LS+RB(R grip) duck=LB(L grip) equip=LT shoot=RT
-     sprint=L3 photo=LB+RB
+     system=BACK(L lower) walk=LS+RB(R grip) sneak=RB+Y duck=LB(L grip)
+     equip=LT shoot=RT sprint=L3 photo=LB+RB
 ```
 
 ### Phase 5 settings

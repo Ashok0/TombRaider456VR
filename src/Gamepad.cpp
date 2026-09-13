@@ -77,16 +77,18 @@ uint8_t Trig(float v) {
 //   Move        left stick        Jump    A      Roll   B
 //   Look        right stick       Action  Y      Shoot  RT
 //   Duck        LB                Equip   LT     Sprint L3
-//   Walk        LS + RB           System  X      Photo  LB + RB
+//   Walk        LS + RB           Sneak   RB+Y   Photo  LB + RB
+//   System      X                 D-pad   R3 + left stick
 //   D-pad       R3 + left stick   Menu    Y + LT held 3s
 //
 // Two of these are deliberately not the flat-screen defaults, because they suit
 // VR hands better:
 //
 //   Walk is the RIGHT GRIP rather than a face button, so it can be held while
-//   the left thumb keeps moving. The game binds Walk to XInput X, so the grip
-//   emits X. It emits RIGHT_SHOULDER as well, because Photo Mode is LB + RB and
-//   that chord has to keep working; X and RB never collide in practice.
+//   the left thumb keeps moving. The game binds Walk to XInput X. TR6 binds
+//   Sneak to RIGHT_SHOULDER, so emitting both on every grip press made Walk and
+//   Sneak fire together. RIGHT_SHOULDER is now emitted only for the RB+Y Sneak
+//   chord or the LB+RB Photo Mode chord.
 //
 //   System is the left hand's lower face button, sending BACK. Touch has no
 //   Start or Back of its own, and putting either on a chord made it awkward to
@@ -193,11 +195,23 @@ void BuildState(XState& out) {
     }
 
     // Duck, and the left half of the Photo Mode chord.
-    if (L.grip > 0.5f) b |= XB_LEFT_SHOULDER;
+    const bool leftGrip = L.grip > 0.5f;
+    if (leftGrip) b |= XB_LEFT_SHOULDER;
 
-    // Walk modifier. X is what the game binds Walk to; RIGHT_SHOULDER is also
-    // set so that LB + RB still reaches Photo Mode.
-    if (R.grip > 0.5f) b |= static_cast<uint16_t>(XB_X | XB_RIGHT_SHOULDER);
+    // Right grip is the physical VR "RB" and normally emits only XInput X,
+    // which is Walk. TR6 binds Sneak to XInput RIGHT_SHOULDER. Holding Y with
+    // the grip consumes both ordinary actions and emits only Sneak, so Lara
+    // cannot walk/use and sneak from the same chord. RIGHT_SHOULDER is also
+    // synthesized for both grips together to preserve Photo Mode's LB+RB.
+    const bool rightGrip = R.grip > 0.5f;
+    const bool sneakChord = rightGrip && L.btnUpper;
+    const bool photoChord = rightGrip && leftGrip;
+    if (rightGrip) b |= XB_X;
+    if (sneakChord) {
+        b &= static_cast<uint16_t>(~(XB_X | XB_Y));
+        b |= XB_RIGHT_SHOULDER;
+    }
+    if (photoChord) b |= XB_RIGHT_SHOULDER;
 
     out.Gamepad.wButtons      = b;
     out.Gamepad.bLeftTrigger  = suppressLeftTrigger ? 0
@@ -264,15 +278,17 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
         }
     }
 
-    // Hold RT + RB to decouple pitch for as long as both are held. Read off the
-    // MERGED state for the same reason the suppression below is applied here: a
-    // physical pad's RT and RB have to reach it too.
+    // Hold RT + RB to decouple pitch for as long as both are held. Touch's
+    // physical RB now reports Walk as X rather than always leaking the Sneak
+    // shoulder bit, so either X (Walk) or RIGHT_SHOULDER (a physical Xbox RB)
+    // satisfies the chord after controller states have been merged.
     //
     // 30 is XInput's own XINPUT_GAMEPAD_TRIGGER_THRESHOLD -- what the platform
     // calls a pressed trigger -- rather than a number invented here.
     const bool chord = Cfg().decoupledPitchChord &&
                        mine.Gamepad.bRightTrigger > 30 &&
-                       (mine.Gamepad.wButtons & XB_RIGHT_SHOULDER) != 0;
+                       (mine.Gamepad.wButtons
+                        & (XB_X | XB_RIGHT_SHOULDER)) != 0;
 
     // Applied AFTER the merge, deliberately. Zeroing it back in BuildState
     // would only cover the Touch controllers -- the merge above takes whichever
@@ -365,7 +381,8 @@ void GamepadUpdate() {
         g_loggedOnce = true;
         LogF("pad: move=Lstick look=Rstick%s jump=A(R lower) roll=B(R upper) "
              "action=Y(L upper) system=%s(L lower) walk=LS+RB(R grip) "
-             "duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=LB+RB%s",
+             "sneak=RB+Y duck=LB(L grip) equip=LT shoot=RT sprint=L3 "
+             "photo=LB+RB%s",
              Cfg().decoupledPitch
                  ? (Cfg().decoupledPitchChord
                         ? "(yaw only; hold RT+RB for pitch)"

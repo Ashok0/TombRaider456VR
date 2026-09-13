@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 41289 bytes, 814 lines.
+// Source: TombRaiderVR.ini, 41224 bytes, 814 lines.
 #pragma once
 
 namespace tr {
@@ -442,12 +442,14 @@ AlternateEyeMinOffscreen=50
 ;   Look    right stick             Roll    B  (right hand, UPPER)
 ;   Action  Y  (left hand, UPPER)   System  X  (left hand, LOWER)
 ;   Walk    left stick + RIGHT GRIP Duck    LEFT GRIP
+;   Sneak  RIGHT GRIP + Y
 ;   Equip   left trigger (hold)     Shoot   right trigger
 ;   Sprint  left stick click        Photo   both grips
 ;
 ; Walk is the right grip rather than a face button so it can be held while the
-; left thumb keeps moving. The game binds Walk to XInput X, so the grip emits X
-; -- and RIGHT_SHOULDER as well, so the Photo Mode chord (LB+RB) still works.
+; left thumb keeps moving. The game binds Walk to XInput X, so the grip emits
+; only X. TR6 binds Sneak to RIGHT_SHOULDER: hold Y with the right grip to emit
+; Sneak instead of Walk/Action. Both grips still synthesize LB+RB for Photo Mode.
 GamepadEnabled=1
 
 ; Log the raw OpenVR legacy button masks whenever they change. Touch's button
@@ -489,15 +491,13 @@ DecoupledPitch=1
 ; depending on a value you cannot see while playing.
 ;
 ; KNOW WHAT RB IS HERE. Touch has no physical shoulder buttons: the RIGHT GRIP
-; synthesises XB_X and XB_RIGHT_SHOULDER together, because X is what the game
-; binds Walk to and RIGHT_SHOULDER is what keeps the LB+RB Photo Mode chord
-; reachable. So this chord is right grip + right trigger, which in play reads as
-; "walk and shoot" -- a combination people genuinely use, on a ledge especially,
-)INI"
-           R"INI(; and it WILL engage the chord. Set this to 0 if you would rather walk-and-shoot
-; leave pitch alone.
+; synthesises XB_X for Walk. This pitch chord recognizes that Walk bit as the
+; physical RB signal, so it is still right grip + right trigger and reads as
+; "walk and shoot". Set this to 0 if you would rather walk-and-shoot leave pitch
+; alone.
 ;
-; The chord only ever ADDS the suppression. Shoot and Walk still do their jobs
+)INI"
+           R"INI(; The chord only ever ADDS the suppression. Shoot and Walk still do their jobs
 ; while it is held; nothing is taken away to pay for it.
 DecoupledPitchChord=1
 
@@ -649,11 +649,11 @@ GamepadMenuUsesBack=1
 
 ; --- reverse engineering ----------------------------------------------------
 
-)INI"
-           R"INI(; Log the DLL-side return address of each distinct call into vid_setPass and
+; Log the DLL-side return address of each distinct call into vid_setPass and
 ; ogl_drawVB, as "module+RVA".
 ;
-; The game DLLs ship without PDBs, so this is how we find their render code
+)INI"
+           R"INI(; The game DLLs ship without PDBs, so this is how we find their render code
 ; without searching ~1800 unnamed functions: the DLL must call across into the
 ; engine to draw, and the return address at our hook is a code address inside
 ; the DLL. One gameplay frame gives exact RVAs to open in Ghidra.
@@ -809,9 +809,9 @@ CullWatchRooms=
 ; projection matrix, and a portal beside or behind the camera fails the
 ; near-plane test inside SetRoomBounds before any rectangle is looked at.
 ;
+; PROXIMITY IS THE WRONG CRITERION. Appending rooms by distance from the camera
 )INI"
-           R"INI(; PROXIMITY IS THE WRONG CRITERION. Appending rooms by distance from the camera
-; happily adds a stacked room that shares world space with the one you are
+           R"INI(; happily adds a stacked room that shares world space with the one you are
 ; standing in and that no portal reaches, which draws foreign geometry over your
 ; own. This is why the fix is a traversal and not a radius.
 ;

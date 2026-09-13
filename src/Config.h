@@ -463,10 +463,10 @@ struct Config {
     // with decoupledPitch=1 all the time and want the stick for one shot.
     //
     // Note what RB is on Touch. There is no physical shoulder button -- the
-    // RIGHT grip synthesises XB_X | XB_RIGHT_SHOULDER for Walk -- so this chord
-    // is right grip + right trigger, which reads as "walk and shoot". That is a
-    // combination people genuinely use, and it will engage the chord. Set this
-    // to 0 if you would rather walk-and-shoot left pitch alone.
+    // RIGHT grip synthesises XB_X for Walk. The pitch chord accepts that Walk
+    // bit as the physical RB signal, so it is still right grip + right trigger
+    // and reads as "walk and shoot". Set this to 0 if you would rather that
+    // combination leave pitch alone.
     bool  decoupledPitchChord = true;
 
     // Hand stick pitch back automatically while Lara is in water.
