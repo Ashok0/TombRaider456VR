@@ -36,9 +36,10 @@ The mod loads into the game, reads the head pose from an OpenVR runtime, and
 composes it onto the game camera. Its development phases share one binary and
 one set of hooks; settings select optional paths at runtime.
 
-| | |
-| `Move` | `Left Stick (LS)` |
-| `Walk` | `RB + LS` |
+| Action | Control |
+|---|---|
+| Move | Left Stick (LS) |
+| Walk | RB + LS |
 | Dash | L3 |
 | Look | Right Stick (RS) |
 | Zoom | R3 |
@@ -52,9 +53,9 @@ one set of hooks; settings select optional paths at runtime.
 | Photo Mode Select | R3 (Dpad) + LS |
 | Ledge Grab | RT |
 | Ledge Drop | B |
-| Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) | 
-| 180 Frontflip/Blackflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
-| Swan Dive | Jump (A) + Move (LS) + Roll (B) | 
+| Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
+| 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
+| Swan Dive | Jump (A) + Move (LS) + Roll (B) |
 | Toggle Classic Graphics | Y + LT |
 | Adjust Camera Pitch | RT + RB + RS |
 | Menu | X |
