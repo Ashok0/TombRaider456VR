@@ -1,5 +1,5 @@
 ## Tomb Raider IV-VI Remastered VR Mod
-VR mod for Tomb Raider IV-VI Remastered. Tomb Raider IV: The Last Revelation, Tomb Raider V: Chronicles, and Tomb Raider VI: Angel of Darkness work in native stereo with 6DOF. TR6 uses a separate full-scene replay path for its offscreen renderer; AER remains the automatic fallback. TR6 also has its own correctness-first geometry and effects visibility paths, documented in [Phase 17](#phase-17-tr6-culling) and [Phase 19](#phase-19-tr6-effects-visibility).
+VR mod for Tomb Raider IV-VI Remastered. Tomb Raider IV: The Last Revelation, Tomb Raider V: Chronicles, and Tomb Raider VI: Angel of Darkness work in native stereo with 6DOF. TR6 uses a separate full-scene replay path for its offscreen renderer; AER remains the automatic fallback. TR6 also has its own correctness-first geometry, effects and small-object visibility paths, documented in [Phase 17](#phase-17-tr6-culling), [Phase 19](#phase-19-tr6-effects-visibility) and [Phase 20](#phase-20-tr6-pickup-and-scene-object-retention).
 
 ## AI Usage
 Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions.   
@@ -94,6 +94,7 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 17** | **TR6 Culling** — rooms, props and distant geometry retained independently of the third-person camera | Working. Confirmed in-headset. TR6 only |
 | **Phase 18** | **TR6 projected-shadow fix** — character shadow maps kept on their light camera instead of inheriting headset-eye transforms | Working. Confirmed in-headset. TR6 only |
 | **Phase 19** | **TR6 effects visibility** — dust particles and street-lamp lighting retained independently of the orbiting right-stick camera | Working. Confirmed in-headset. TR6 only |
+| **Phase 20** | **TR6 pickup and scene-object retention** — candy bars, pickups, barrels and props survive preparation and the final paired bounds tests | Built. Awaiting in-headset revalidation. TR6 only |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -179,6 +180,15 @@ test and local-light bounds test after Phase 17's room geometry was already
 accepted. Native stereo now keeps those effect decisions independent of the
 orbiting right-stick camera. See
 [Phase 19: TR6 Effects Visibility](#phase-19-tr6-effects-visibility).
+
+**Phase 20** fixes small TR6 objects that could still vanish after their room
+was retained. The first Parisian Backstreets candy bar exposed two causes:
+over-broad Phase 17 room preparation disturbed the engine's object state, and
+the final renderer could reject a prepared object at an AABB test before its
+later OBB test. The clean fix leaves object preparation stock, forces only the
+final room descriptors, and bypasses both bounds stages at five exact
+render-only paths. See
+[Phase 20: TR6 Pickup and Scene-Object Retention](#phase-20-tr6-pickup-and-scene-object-retention).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -3111,6 +3121,13 @@ gaps remain separate work because TR6 still has no corresponding row in
 
 ## Phase 17: TR6 Culling
 
+> **Superseded in part by [Phase 20](#phase-20-tr6-pickup-and-scene-object-retention).**
+> The all-room output descriptors, far-plane extension and exact render-only
+> bounds policy remain. The private second map pass, replacement room seeds,
+> expanded room AABBs and tracked camera on the main `Calculate` call were
+> removed because they disturbed TR6's object preparation and hid small
+> stock-visible pickups.
+
 TR6 native stereo exposed a second camera problem. Turning the headset away
 from Angel of Darkness's third-person camera revealed blue holes where walls,
 floors and other room geometry had vanished. Lara facing the missing geometry
@@ -3268,7 +3285,8 @@ culling gates and cannot change TR4 or TR5 projections.
 
 ### Scope, safety and TR4/TR5 isolation
 
-Phase 17 is TR6-only. Installation requires all of the following:
+The original Phase 17 implementation was TR6-only. Installation required all
+of the following:
 
 - `CurrentGame() == 2`;
 - `PortalCulling=1` and an active tracked VR view;
@@ -3276,9 +3294,10 @@ Phase 17 is TR6-only. Installation requires all of the following:
 - the exact verified prologue bytes at `SYS_DRAW_CRP::Calculate`,
   `mapCalcVisibleRooms`, `mapDrawRoomList` and `ClippedOBB_CPP`.
 
-The four culling hooks are one atomic mechanism. If any installation fails,
-all four are removed and stock visibility remains active. The TR6 scene-replay
-hook has its own independent guard and AER fallback.
+That revision installed four culling hooks atomically. Phase 20 replaces the
+group with the three render-only hooks documented there and stops patching both
+map functions. The TR6 scene-replay hook retains its own independent guard and
+AER fallback.
 
 No Phase 17 address exists in `tomb4.dll` or `tomb5.dll`, and none of these
 detours can run while `CurrentGame()` is TR4 or TR5. Their established
@@ -3286,7 +3305,7 @@ detours can run while `CurrentGame()` is TR4 or TR5. Their established
 
 ### Logs, validation and cost
 
-A successful run reports the layers independently:
+The original Phase 17 run reported the layers independently:
 
 ```text
 tr6 cull: upstream visibility hooks installed (Calculate +0x1A6DB0, mapCalc +0x1A8290, drawRooms +0x14E370, room OBB +0x1A4380)
@@ -3607,6 +3626,122 @@ All Phase 19 implementation is in `src\Hooks.cpp`.
 
 ---
 
+## Phase 20: TR6 Pickup and Scene-Object Retention
+
+Phase 17 stopped the third-person camera from opening blue holes in TR6 rooms,
+but small independently rendered objects could still disappear. The chocolate
+bar at the beginning of Parisian Backstreets was the repeatable test case;
+Croft Manor barrels and similar compact props used the same path. Their room and
+its larger geometry could remain visible while the individual object vanished.
+
+The stock-visibility A/B was decisive. The candy bar existed and rendered with
+TR6's normal visibility path, then disappeared when the broad Phase 17 room
+override ran. Native stereo replay, textures and gameplay pickup state were
+therefore not the cause. The object was being lost during CPU render
+preparation or one of the final renderer's bounds tests.
+
+### What the original room override disturbed
+
+TR6 makes several independent decisions before a small object reaches a draw:
+
+```text
+mapCalcVisibleRooms
+  prepares map and per-room object state
+SYS_DRAW_CRP::Calculate
+  builds fixed object pools
+App_Render_Scene_Main
+  final-object AABB test
+    final-object OBB test
+      draw the object or submesh
+```
+
+The old private second `mapCalcVisibleRooms` pass restored `gmapRoomList` and
+the 192 `gmapRoomClip` records, but that function is not only a list builder.
+Its nested calculation also changes object state outside those restored
+globals. The main override then replaced and reordered room seeds, enlarged
+every seed AABB to contain the tracked camera, and calculated object pools from
+that fabricated spatial state. That could change which overlapping room owned
+a pickup and hide an object that stock preparation retained.
+
+There was also an ownership error in the first camera substitution.
+`SYS_DRAW_CAMERA_VIEW` is a 400-byte object containing its `SYS_DRAW_CRP` at
+`+0xE0`. Passing the original CRP as argument one while passing a stack copy of
+its owner as the camera-view argument split one logical object across two
+addresses. Input matrices came from the copy while output pool headers belonged
+to the original.
+
+Phase 20 removes that entire map-side experiment. `mapCalcVisibleRooms` and
+`mapDrawRoomList` are no longer hooked. The main render `Calculate` call keeps
+the stock camera, stock room pointers, stock seed order and stock room bounds.
+Only after the engine has built its object pools does the mod replace the final
+room descriptors with full-screen descriptors for the active seed count. Room
+shells remain available for head look without lying to the object builder about
+where the camera is.
+
+The reflection `Calculate` path still needs a tracked camera. It now patches
+only the three matrices in the real `SYS_DRAW_CAMERA_VIEW` owner and restores
+them immediately after the call, preserving the CRP/owner pointer identity.
+
+### The paired final-render tests
+
+An object surviving pool construction is clipped twice more. The final renderer
+calls the cheaper AABB helper at `tomb6.dll+0x001A4610` first and reaches
+`ClippedOBB_CPP` only if that succeeds. An OBB-only bypass cannot help a candy
+bar rejected by the earlier AABB test.
+
+Five final-render paths use this AABB-then-OBB sequence:
+
+| Path | AABB return RVA | OBB return RVA |
+|---:|---:|---:|
+| 1 | `0x001B0066` | `0x001B0081` |
+| 2 | `0x001B0155` | `0x001B016B` |
+| 3 | `0x001B0858` | `0x001B0877` |
+| 4 | `0x001B09B8` | `0x001B0A03` |
+| 5 | `0x001B1BFC` | `0x001B1C1D` |
+
+At only those ten return addresses, and only while TR6 VR culling is active,
+the two detours return "not clipped." Nearby calls belonging to other scene
+views, gameplay, effects and shadows continue through the original shared
+functions. Compile-time assertions keep both allowlists exact.
+
+This creates a clean responsibility boundary: **stock logic decides which
+objects exist; the VR hooks decide which prepared objects may be drawn.** The
+main CRP builders retain their existing exact render-only OBB exceptions for
+characters, animated objects and water, and the final paired exceptions keep
+small pickups and props from being rejected a second time.
+
+### Hook safety and validation
+
+The production culling group now contains only three hooks:
+
+- `SYS_DRAW_CRP::Calculate` at `0x001A6DB0`;
+- `ClippedOBB_CPP` at `0x001A4380`;
+- the final-object AABB helper at `0x001A4610`.
+
+All three require the supported `tomb6.dll` timestamp and exact prologue bytes.
+They install atomically; if any target fails validation, all three are removed
+and stock visibility remains active. The removed map functions are not patched
+at all, and TR4/TR5 cannot enter the TR6 detours.
+
+A successful run reports the narrowed policy independently:
+
+```text
+tr6 cull: render-only visibility hooks installed (Calculate +0x1A6DB0, OBB +0x1A4380, object AABB +0x1A4610)
+tr6 cull: stock map camera, room seeds and object preparation preserved; final room visibility expands after Calculate
+tr6 cull: final scene-object AABB rejection disabled; small ground pickups now reach the oriented-bounds and draw stages
+tr6 cull: final scene-object OBB rejection disabled; ground pickups and props remain visible to the tracked view
+```
+
+The clean implementation builds with zero warnings and errors, all 219 PDB and
+address checks pass, and the native self-test reports zero failures. It requires
+an in-headset pass at the opening Parisian Backstreets candy bar before the
+clean reimplementation is considered revalidated. No new INI setting is
+required; Phase 20 follows the existing TR6 `PortalCulling` gate.
+
+All Phase 20 implementation is in `src\Hooks.cpp`.
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
@@ -3668,8 +3803,8 @@ stream. The shared engine hooks are installed all-or-nothing.
 The TR6 scene and culling hooks are installed later, after `tomb6.dll` is
 resident. The six-hook native scene/shadow/effects set has its own
 build/prologue guard and selects AER if any member cannot be installed. Phase
-17's four culling hooks install atomically as a separate group: a failure
-removes that complete group and leaves stock TR6 visibility active.
+20's three render-only culling hooks install atomically as a separate group: a
+failure removes that complete group and leaves stock TR6 visibility active.
 
 Stolen prologue bytes must be position-independent once copied to the
 trampoline, and where they are not, the displacement is relocated rather than

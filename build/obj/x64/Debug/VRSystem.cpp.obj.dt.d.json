@@ -210,7 +210,8 @@
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\tuple",
             "c:\\program files\\microsoft visual studio\\18\\community\\vc\\tools\\msvc\\14.51.36231\\include\\cctype",
             "c:\\dev\\tombraider456vr\\src\\config.h",
-            "c:\\dev\\tombraider456vr\\src\\log.h"
+            "c:\\dev\\tombraider456vr\\src\\log.h",
+            "c:\\dev\\tombraider456vr\\src\\gamedll.h"
         ],
         "ImportedModules": [],
         "ImportedHeaderUnits": []
