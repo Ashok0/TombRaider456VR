@@ -2958,13 +2958,57 @@ integrated state alone, so walking into a taller room gives your real height
 straight back. `CeilingClearance` and `CeilingMarginUnits` keep their names and
 their meaning.
 
+### TR6 follow-up: restoring the camera below ceilings and inside walls
+
+TR6 later exposed two gaps in that work. The visible symptom was intermittent
+but severe: the headset camera could sit above a room's ceiling or behind its
+walls, with Lara no longer visible, even though the third-person chase camera
+itself was in a valid position.
+
+The first cause was not collision at all. Stereo obtains poses through
+`IVRCompositor::WaitGetPoses`, and that call uses the compositor's tracking
+space. `SeatedOrigin=1` had only been passed explicitly to the mono
+`GetDeviceToAbsoluteTrackingPose` path. In the failing TR6 session the
+compositor returned standing-space height, and the log showed about `+500`
+world units — roughly 1.18 m at the configured scale — being added above the
+chase camera before any physical head movement. TR6 stereo now selects the
+configured seated or standing compositor space before `WaitGetPoses`. This is
+gated to TR6 so the established TR4/TR5 pose path is unchanged.
+
+The second cause was a mixed reference frame in the first TR6 ceiling attempt.
+The world-offset conversion used TR6's rendered camera matrix while the GMX
+room lookup used the separate legacy `gcamCamera` position. During TR6's
+offscreen scene chain those values need not describe the same point, so the
+clamp could choose the wrong overlapping room box; the diagnostic symptom was
+the impossible-looking `headroom 0 units` result.
+
+The clean path uses one camera for the complete calculation:
+
+- `CameraViewFrame` reads TR6's column-major, `-Z`-forward rendered camera
+  matrix, recovers its world position with `-R^T * t`, and converts the rotation
+  to Phase 15's `+Z`-forward contract.
+- `CameraHeadroom` tests that exact recovered position against the active GMX
+  room boxes in all three dimensions. If boxes overlap, it takes the largest
+  valid headroom, avoiding a false ceiling at a shared boundary.
+- `WorldLockOffset` then clamps the actual world-Y eye displacement against
+  that room ceiling. Camera pitch can no longer rotate a forward or sideways
+  tracking offset into unbounded vertical displacement.
+
+This restores the stable TR6 camera placement while preserving full headset
+6DOF and stick-independent world locking. The pickup/candy-bar culling hooks and
+the swimming pitch exception were not changed. The release build completed
+with zero warnings or errors, all 219 address checks agreed with the PDBs, and
+the self-test completed with zero failures. The deployed DLL for this fix had
+SHA-256
+`D84D6BF9A9E7C535FB0151395D6165E4D533AD4F1FC637404C56B624B99B62D1`.
+
 #### Where the code is
 
 | file | what it holds |
 |---|---|
-| `src\VRSystem.cpp` | `WorldLockOffset` — the integration, the re-anchors, the ceiling clamp on output |
+| `src\VRSystem.cpp` | `WorldLockOffset` — the integration, the re-anchors, the ceiling clamp on output, and TR6's configured compositor tracking space |
 | `src\VRSystem.h` | the offset state and `RecentreOffset()` |
-| `src\GameDll.cpp` | `CameraViewFrame` — `w2v_matrix`'s rotation and the camera's world position |
+| `src\GameDll.cpp` | `CameraViewFrame` — TR4/TR5's `w2v_matrix` or TR6's rendered matrix; TR6 GMX room headroom uses the same recovered position |
 | `src\Hooks.cpp` | `RecentreKey` in the tuning-key poll |
 
 #### What to watch
@@ -2972,10 +3016,13 @@ their meaning.
 ```
 vr: head offset re-anchored to the game camera
 vr: ceiling clamp active -- headroom 892 units, eye held 764 units above the camera
+tr6 camera: stereo tracking space set to seated as configured
+tr6 camera: world frame bound at tomb6.dll+0x29DCC0; world-space head offset and ceiling clamp active
 ```
 
-Neither is per-frame: the first is one line per press or per camera jump, the
-second fires once the first time the clamp bites.
+These are not per-frame diagnostics: re-anchoring logs once per press or camera
+jump, the clamp logs the first time it bites, and the two TR6 camera lines each
+appear once when that game establishes its configured frame.
 
 #### Phase 15 settings
 

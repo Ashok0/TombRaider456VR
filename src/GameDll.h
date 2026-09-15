@@ -143,19 +143,23 @@ bool IsOpticsZoomed();
 // MUST treat false as "unknown" and never as "no headroom": clamping the head to
 // the floor because a menu was open would be worse than not clamping at all.
 //
-// Derived from the room's bounding box (ROOM_INFO::maxceiling, +56) rather than
-// from the floor data under the camera, so it is exact in a uniformly low room
-// -- tunnels, crawlspaces, the places the clamp exists for -- and over-generous
-// in a room with one tall section. Over-generous is the safe direction.
+// TR4/TR5 derive this from the camera room's bounding box
+// (ROOM_INFO::maxceiling, +56) rather than from floor data. TR6 uses the same
+// conservative policy through its separate GMX room headers and rendered
+// camera matrix, selecting the safe (largest) headroom when room boxes overlap.
+// It is exact in a uniformly low room -- tunnels, crawlspaces, the places the
+// clamp exists for -- and over-generous in a room with one tall section.
+// Over-generous is the safe direction.
 //
 // NOTE: this used to be republished as a side effect of the culling hook, so it
 // went stale the moment culling was off. It is now computed on demand from the
 // camera's own room, like everything else here.
 bool CameraHeadroom(float& units);
 
-// The game camera's world-to-view frame: `rot` is w2v_matrix's rotation with its
-// rows unscaled to unit length (phd view space -- X right, Y down, +Z FORWARD),
-// and `pos` is the camera's world position.
+// The game camera's world-to-view frame: `rot` is the current rotation in phd
+// view space (X right, Y down, +Z FORWARD), and `pos` is the camera's world
+// position. TR4/TR5 read w2v_matrix; TR6 converts its column-major -Z-forward
+// camera matrix to the same contract.
 //
 // The translation columns are the camera's WORLD POSITION, unscaled -- not the
 // -R*p a textbook view matrix carries. That is the same reading PortalCull.cpp

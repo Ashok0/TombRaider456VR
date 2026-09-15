@@ -137,6 +137,7 @@ private:
     float  m_rawProj[2][4]    = {};                  // l, r, t, b per eye
     bool   m_poseValid        = false;
     bool   m_headAtCamera     = false;
+    bool   m_loggedTr6Origin  = false;
     unsigned m_poseLogTick    = 0;
 
     // The world-locked head offset and the state the integration needs. See

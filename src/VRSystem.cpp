@@ -189,6 +189,7 @@ void VRSystem::Shutdown() {
     if (m_system && g_shutdownInternal) g_shutdownInternal();
     m_system     = nullptr;
     m_compositor = nullptr;
+    m_loggedTr6Origin = false;
     if (m_dll) { FreeLibrary(m_dll); m_dll = nullptr; }
 }
 
@@ -272,7 +273,7 @@ void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
     if (!CameraViewFrame(rot, camPos)) {
         // No level, or the camera has not been set up yet. Pass the pose through
         // and re-anchor on the first frame that has a real camera, so nothing is
-        // integrated against a frame that does not exist.
+        // integrated or clamped against a frame that does not exist.
         m_offsetValid = false;
         return;
     }
@@ -372,6 +373,26 @@ void VRSystem::BeginFrame() {
             origin, 0.0f, poses, vr::k_unMaxTrackedDeviceCount);
     } else {
         if (!m_compositor) return;
+
+        // WaitGetPoses uses the compositor's tracking space, not the origin
+        // passed to IVRSystem in the mono path. OpenVR defaults that compositor
+        // state independently, so SeatedOrigin could silently become standing
+        // space in stereo and add the headset's entire floor height (about 500
+        // TR units in the reported session) above TR6's chase camera. Limit the
+        // behaviour change to TR6; the established TR4/TR5 path is untouched.
+        if (CurrentGame() == 2) {
+            const vr::ETrackingUniverseOrigin origin = Cfg().seatedOrigin
+                ? vr::TrackingUniverseSeated
+                : vr::TrackingUniverseStanding;
+            if (m_compositor->GetTrackingSpace() != origin) {
+                m_compositor->SetTrackingSpace(origin);
+            }
+            if (!m_loggedTr6Origin) {
+                m_loggedTr6Origin = true;
+                LogF("tr6 camera: stereo tracking space set to %s as configured",
+                     Cfg().seatedOrigin ? "seated" : "standing");
+            }
+        }
         m_compositor->WaitGetPoses(poses, vr::k_unMaxTrackedDeviceCount, nullptr, 0);
     }
 

@@ -3,6 +3,7 @@
 #include "Log.h"
 
 #include <windows.h>
+#include <cmath>
 #include <cstdint>
 
 namespace tr {
@@ -123,6 +124,20 @@ constexpr uint32_t kTr6PlayerPositionOff  = 0x00000040;
 constexpr uint32_t kTr6CurrentGmxRva      = 0x04CC7238;
 constexpr uint32_t kTr6IsPointInWaterRva  = 0x0014E180;
 
+// TR6's ceiling reader uses the rendered chase-camera matrix and the GMX room
+// headers because TR6 has no TR4/5 w2v_matrix or ROOM_INFO layout. Using the
+// matrix position for both the world offset and the room query is important:
+// gcamCamera is a separate legacy camera that can temporarily describe another
+// point during TR6's offscreen render chain. These offsets are for the same
+// timestamp-gated build above.
+constexpr uint32_t kTr6CameraMatrixRva    = 0x0029DCC0;
+constexpr uint32_t kTr6GmxRoomsOff        = 0x000001A0;
+constexpr uint32_t kTr6GmxRoomCountOff    = 0x000007A0;
+constexpr uint32_t kTr6RoomBoundsMinOff   = 0x000000A0;
+constexpr uint32_t kTr6RoomBoundsMaxOff   = 0x000000B0;
+constexpr uint32_t kTr6RoomIsFlipOff      = 0x00000218;
+constexpr int32_t  kTr6MaxRooms           = 192;
+
 using FnTr6IsPointInWater = int(__fastcall*)(const float* position,
                                              float* waterHeight);
 
@@ -132,6 +147,7 @@ bool                 g_loggedNoRooms = false;
 uint32_t             g_warnedStamp[2] = { 0, 0 };
 bool                 g_loggedTr6WaterBinding = false;
 bool                 g_warnedTr6WaterBuild = false;
+bool                 g_loggedTr6CameraFrame = false;
 
 template <typename T>
 T Read(uint32_t rva) {
@@ -194,6 +210,114 @@ int Tr6LaraWaterStatus() {
     // predicate instead, so normalise it to the only distinction the input
     // policy needs: 0 = dry, 1 = in water.
     return isPointInWater(position, &waterHeight) ? 1 : 0;
+}
+
+bool Tr6CameraViewFrame(float rot[3][3], float pos[3]);
+
+bool Tr6CameraHeadroom(float& units) {
+    HMODULE module = GetModuleHandleW(L"tomb6.dll");
+    if (!module) return false;
+
+    const uint64_t base = reinterpret_cast<uint64_t>(module);
+    if (ModuleStamp(base) != kTr6DllTimestamp) return false;
+
+    auto** currentGmx = reinterpret_cast<uint8_t**>(
+        base + kTr6CurrentGmxRva);
+    if (!currentGmx || !*currentGmx) return false;
+
+    const int32_t roomCount = *reinterpret_cast<int32_t*>(
+        *currentGmx + kTr6GmxRoomCountOff);
+    if (roomCount <= 0 || roomCount > kTr6MaxRooms) return false;
+
+    auto** rooms = reinterpret_cast<uint8_t**>(
+        *currentGmx + kTr6GmxRoomsOff);
+
+    // WorldLockOffset has just read this same frame. Read it again instead of
+    // mixing its position with gcamCamera: even a small disagreement makes the
+    // headroom refer to a different room than the eye displacement.
+    float cameraRot[3][3]{};
+    float camera[3]{};
+    if (!Tr6CameraViewFrame(cameraRot, camera)) return false;
+
+    float availableHeadroom = 0.0f;
+    for (int32_t room = 0; room < roomCount; ++room) {
+        const uint8_t* header = rooms[room];
+        if (!header || *reinterpret_cast<const int32_t*>(
+                           header + kTr6RoomIsFlipOff) != 0) {
+            continue;
+        }
+
+        const float* boundsMin = reinterpret_cast<const float*>(
+            header + kTr6RoomBoundsMinOff);
+        const float* boundsMax = reinterpret_cast<const float*>(
+            header + kTr6RoomBoundsMaxOff);
+        if (camera[0] < boundsMin[0] || camera[0] > boundsMax[0]
+            || camera[1] < boundsMin[1] || camera[1] > boundsMax[1]
+            || camera[2] < boundsMin[2] || camera[2] > boundsMax[2]) {
+            continue;
+        }
+
+        // TR coordinates are Y-down, so BoundsMin.y is the room ceiling.
+        const float headroom = camera[1] - boundsMin[1];
+        if (headroom > availableHeadroom && headroom <= 32768.0f) {
+            availableHeadroom = headroom;
+        }
+    }
+
+    if (!(availableHeadroom > 0.0f)) return false;
+    units = availableHeadroom;
+    return true;
+}
+
+bool Tr6CameraViewFrame(float rot[3][3], float pos[3]) {
+    HMODULE module = GetModuleHandleW(L"tomb6.dll");
+    if (!module) return false;
+
+    const uint64_t base = reinterpret_cast<uint64_t>(module);
+    if (ModuleStamp(base) != kTr6DllTimestamp) return false;
+
+    // TR6's camera is a conventional column-major world-to-view matrix. The
+    // game renders down -Z, while WorldLockOffset and the TR4/TR5 reader use
+    // phd's +Z-forward camera frame. Negating row 2 converts only that frame
+    // convention; the camera position is recovered from the original rigid
+    // view as -R^T*t before the conversion.
+    const float* view = reinterpret_cast<const float*>(
+        base + kTr6CameraMatrixRva);
+    const float tx = view[12];
+    const float ty = view[13];
+    const float tz = view[14];
+    pos[0] = -(view[0] * tx + view[1] * ty + view[2]  * tz);
+    pos[1] = -(view[4] * tx + view[5] * ty + view[6]  * tz);
+    pos[2] = -(view[8] * tx + view[9] * ty + view[10] * tz);
+
+    for (int row = 0; row < 3; ++row) {
+        const float sign = (row == 2) ? -1.0f : 1.0f;
+        for (int col = 0; col < 3; ++col) {
+            rot[row][col] = sign * view[col * 4 + row];
+        }
+    }
+
+    // The global is zero before the first gameplay camera update. Check all
+    // three rows because a partially written or non-rigid matrix would turn
+    // head translation into an arbitrary world displacement.
+    for (int row = 0; row < 3; ++row) {
+        const float len2 = rot[row][0] * rot[row][0]
+                         + rot[row][1] * rot[row][1]
+                         + rot[row][2] * rot[row][2];
+        if (!(len2 > 0.9f && len2 < 1.1f)) return false;
+    }
+    if (!std::isfinite(pos[0]) || !std::isfinite(pos[1])
+        || !std::isfinite(pos[2])) {
+        return false;
+    }
+
+    if (!g_loggedTr6CameraFrame) {
+        g_loggedTr6CameraFrame = true;
+        LogF("tr6 camera: world frame bound at tomb6.dll+0x%X; "
+             "world-space head offset and ceiling clamp active",
+             kTr6CameraMatrixRva);
+    }
+    return true;
 }
 
 } // namespace
@@ -283,6 +407,7 @@ bool IsOpticsZoomed() {
 
 bool CameraHeadroom(float& units) {
     units = 0.0f;
+    if (CurrentGame() == 2) return Tr6CameraHeadroom(units);
     if (!g_dll) return false;
 
     // `room` is a POINTER to the rooms array, null until a level is loaded.
@@ -323,6 +448,7 @@ bool CameraHeadroom(float& units) {
 }
 
 bool CameraViewFrame(float rot[3][3], float pos[3]) {
+    if (CurrentGame() == 2) return Tr6CameraViewFrame(rot, pos);
     if (!g_dll) return false;
 
     const int32_t* m = reinterpret_cast<const int32_t*>(g_base + g_dll->w2vMatrix);
@@ -346,6 +472,7 @@ void GameDllShutdown() {
     g_base = 0;
     g_loggedTr6WaterBinding = false;
     g_warnedTr6WaterBuild = false;
+    g_loggedTr6CameraFrame = false;
 }
 
 } // namespace tr
