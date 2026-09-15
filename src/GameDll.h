@@ -111,10 +111,12 @@ uint64_t GameDllBase();
 //
 //   0 ABOVE_WATER   1 UNDERWATER   2 SURFACE   3 FLYCHEAT   4 WADE
 //
-// Read straight from the DLL's `lara` global, so it is Lara's state rather than
-// the camera's -- which is the whole point. The camera trails behind and above
-// her and sits in the air room during a surface swim, so anything derived from
-// the camera's room reports dry exactly when it matters most.
+// TR4/TR5 return the enum above, read straight from the DLL's `lara` global.
+// TR6 returns a normalised 0/1 by asking its own IsPointInWater routine about
+// the live player's position. Both paths follow Lara rather than the camera --
+// which is the whole point. The camera trails behind and above her and sits in
+// air during a surface swim, so camera-derived water tests fail exactly when
+// stick pitch is needed most.
 int LaraWaterStatus();
 
 // True while Lara is looking through an optic -- binoculars, or a weapon

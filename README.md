@@ -84,7 +84,7 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 7** | **Culling fix** — the missing geometry behind Lara, fixed inside the game DLLs | Working. TR4 / TR5 |
 | **Phase 8** | **D-pad input** — hold R3 and the left stick becomes a D-pad | Working. On by default |
 | **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
-| **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only | Working. On by default |
+| **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only, except when Lara needs vertical swim control | Working. On by default. TR6 swimming confirmed in-headset |
 | **Phase 11** | **Ceiling clamp** — caps the tracked head so it cannot rise through low ceilings | Working. On by default |
 | **Phase 12** | **Sky fix** — the HD sky dome drawn at optical infinity instead of its mesh radius | Working. TR4 / TR5 |
 | **Phase 13** | **Laser sight fix** — the dot and the bullet made to agree, by putting the head centre back on the aim line | Working. On by default |
@@ -2048,10 +2048,12 @@ Underwater, TR steers the swim with the **look** axis. Suppressing pitch does no
 merely make aiming awkward — it removes the ability to dive or surface at all,
 and the head cannot substitute, because **the head turns the view while the stick
 turns Lara**. So the suppression is lifted automatically whenever Lara is in
-water (`DecoupledPitchWaterOff`, on by default).
+water (`DecoupledPitchWaterOff`, on by default). TR4/TR5 read Lara's classic
+`water_status`; TR6 reaches the same input policy through its own player
+position and water-volume query, described below.
 
-Finding out *when she is in water* took four attempts, and the three failures are
-each instructive.
+Finding out *when she is in water* in the TR4/TR5 engine took four attempts, and
+the three failures are each instructive.
 
 #### Attempt 1: the camera room's water flag — structurally wrong
 
@@ -2173,6 +2175,59 @@ pad: water_status=0 (above water) -- stick pitch decoupled
 
 `WADE` counts as water too, since wading also steers with the look axis.
 
+### TR6 uses its own player position and water volumes
+
+Angel of Darkness does not share TR4/TR5's engine or
+`lara_info::water_status`, so the original reader returned "unknown" in TR6 and
+the swimming exception never activated. The input policy was already correct;
+TR6 needed a trustworthy native answer to "is Lara in water?"
+
+The shipped `tomb6.dll` has no matching private PDB, but its embedded AMX native
+registration table preserves useful names. It maps `IsPointInWater` to the
+wrapper at `+0x32350`; that wrapper calls the native predicate at
+`+0x14E180`. Disassembly shows the predicate reading `gmapGMXCur`, walking the
+level's water-volume lists, and testing the supplied XYZ point against each
+volume's inclusive bounds. It returns one for a hit and zero for dry space.
+
+The same table maps `mapGetPlayerPosition` to `+0x14E880`. That function loads
+the live player pointer from `tomb6.dll+0xCB42D8` and copies the position at
+player offset `+0x40`. The TR6 reader joins those two independently named paths:
+
+```text
+tomb6.dll+0xCB42D8  -> live player
+player+0x40         -> Lara XYZ
+IsPointInWater(XYZ) -> dry / in water
+```
+
+This follows Lara instead of the third-person camera. That distinction remains
+load-bearing at the surface: the camera can sit in air above a pool while Lara
+is swimming, which is exactly why the first TR4/TR5 camera-room attempt failed.
+
+`LaraWaterStatus()` selects this path when `CurrentGame()==2`, copies Lara's XYZ
+to a local vector, and normalises the predicate to `0` for dry or `1` for in
+water. The existing Gamepad policy then suppresses stick pitch on land, restores
+it for the complete time Lara occupies a water volume, and suppresses it again
+after she exits. No hook or game memory is patched for this feature.
+
+All RVAs are gated to `tomb6.dll` timestamp `0x696B49A4`. The reader checks both
+`gmapGMXCur` and the live player pointer before calling game code, so title
+screens and level transitions return "unknown" safely. An absent module or an
+unknown build also stands down instead of guessing.
+
+A supported run reports the binding and dynamic transitions:
+
+```text
+tr6 water: bound Lara position and IsPointInWater (build 0x696B49A4, player +0xCB42D8, query +0x14E180)
+pad: water_status=1 (IN WATER) -- stick pitch RESTORED for swimming
+pad: water_status=0 (above water) -- stick pitch decoupled
+```
+
+No new INI option was added; this follows the existing
+`DecoupledPitchWaterOff=1` default. Release compilation completed with zero
+warnings and errors, all 219 address/layout checks passed, and the native
+self-test passed with zero failures. In-headset testing confirmed that TR6
+swimming now restores vertical stick control.
+
 ### Zoom is the same exception, for the same reason
 
 Binoculars, and any weapon combined with a laser sight, hand the camera to a
@@ -2224,7 +2279,7 @@ landed.
 |---|---|---|
 | `DecoupledPitch` | `1` | Drop the right stick's vertical axis so only the headset pitches the view. `0` restores the stock two-axis stick |
 | `DecoupledPitchChord` | `1` | Hold RT + RB to get stick pitch back while held. Never takes pitch away; does nothing when `DecoupledPitch=0` |
-| `DecoupledPitchWaterOff` | `1` | Restore stick pitch automatically while Lara is in water, read from her own `water_status`. `WADE` counts |
+| `DecoupledPitchWaterOff` | `1` | Restore stick pitch automatically while Lara is in water. TR4/TR5 read her own `water_status` (`WADE` counts); TR6 asks its native water-volume query about her position |
 | `DecoupledPitchZoomOff` | `1` | Restore stick pitch automatically while zoomed through binoculars or a laser-sighted weapon, read from the same `BinocularOn`/`BinocularRange` fields the game itself checks |
 
 ---

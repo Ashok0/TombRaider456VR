@@ -326,8 +326,11 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
         g_lastWater = water;
         static const char* kNames[5] = { "above water", "UNDERWATER",
                                          "SURFACE", "flycheat", "WADE" };
+        const char* waterName = (CurrentGame() == 2 && water >= 0)
+            ? (water ? "IN WATER" : "above water")
+            : ((water >= 0 && water <= 4) ? kNames[water] : "unknown");
         LogF("pad: water_status=%d (%s) -- stick pitch %s", water,
-             (water >= 0 && water <= 4) ? kNames[water] : "unknown",
+             waterName,
              swimming ? "RESTORED for swimming" : "decoupled");
     }
 

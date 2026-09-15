@@ -110,10 +110,28 @@ constexpr GameDllLayout kDlls[] = {
       kPrintRoomsListTR5, sizeof(kPrintRoomsListTR5) },
 };
 
+// TR6 is a different engine, so it cannot share GameDllLayout. Its embedded
+// AMX native table names the function at +0x14E180 `IsPointInWater`, and
+// mapGetPlayerPosition at +0x14E880 independently shows that the live player
+// pointer is stored at +0xCB42D8 and that its position begins at +0x40. The
+// water query itself reads gmapGMXCur from +0x4CC7238. Keep these together and
+// build-gated: unlike the TR4/TR5 fields above, no matching private PDB is
+// available for tomb6.dll.
+constexpr uint32_t kTr6DllTimestamp       = 0x696B49A4;
+constexpr uint32_t kTr6PlayerPointerRva   = 0x00CB42D8;
+constexpr uint32_t kTr6PlayerPositionOff  = 0x00000040;
+constexpr uint32_t kTr6CurrentGmxRva      = 0x04CC7238;
+constexpr uint32_t kTr6IsPointInWaterRva  = 0x0014E180;
+
+using FnTr6IsPointInWater = int(__fastcall*)(const float* position,
+                                             float* waterHeight);
+
 const GameDllLayout* g_dll  = nullptr;
 uint64_t             g_base = 0;
 bool                 g_loggedNoRooms = false;
 uint32_t             g_warnedStamp[2] = { 0, 0 };
+bool                 g_loggedTr6WaterBinding = false;
+bool                 g_warnedTr6WaterBuild = false;
 
 template <typename T>
 T Read(uint32_t rva) {
@@ -126,6 +144,56 @@ uint32_t ModuleStamp(uint64_t base) {
     auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
     if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
     return nt->FileHeader.TimeDateStamp;
+}
+
+int Tr6LaraWaterStatus() {
+    HMODULE module = GetModuleHandleW(L"tomb6.dll");
+    if (!module) return -1;
+
+    const uint64_t base = reinterpret_cast<uint64_t>(module);
+    const uint32_t stamp = ModuleStamp(base);
+    if (stamp != kTr6DllTimestamp) {
+        if (!g_warnedTr6WaterBuild) {
+            g_warnedTr6WaterBuild = true;
+            LogF("tr6 water: tomb6.dll build 0x%08X is unsupported (expected "
+                 "0x%08X); automatic stick-pitch restore stands down",
+                 stamp, kTr6DllTimestamp);
+        }
+        return -1;
+    }
+
+    // IsPointInWater assumes a level exists and immediately dereferences
+    // gmapGMXCur. Its AMX wrapper normally guarantees that precondition; the
+    // XInput hook can run at the title screen too, so enforce it here. A null
+    // player is equally normal while a level is loading.
+    const auto* gmx = *reinterpret_cast<const void* const*>(
+        base + kTr6CurrentGmxRva);
+    const auto* player = *reinterpret_cast<const uint8_t* const*>(
+        base + kTr6PlayerPointerRva);
+    if (!gmx || !player) return -1;
+
+    // Copy the position before entering game code. The query only reads XYZ;
+    // the fourth float in the player's position vector is not part of its API.
+    const float* livePosition = reinterpret_cast<const float*>(
+        player + kTr6PlayerPositionOff);
+    const float position[3] = {
+        livePosition[0], livePosition[1], livePosition[2]
+    };
+    float waterHeight = 0.0f;
+    const auto isPointInWater = reinterpret_cast<FnTr6IsPointInWater>(
+        base + kTr6IsPointInWaterRva);
+
+    if (!g_loggedTr6WaterBinding) {
+        g_loggedTr6WaterBinding = true;
+        LogF("tr6 water: bound Lara position and IsPointInWater "
+             "(build 0x%08X, player +0x%X, query +0x%X)",
+             stamp, kTr6PlayerPointerRva, kTr6IsPointInWaterRva);
+    }
+
+    // TR4/TR5 expose a five-value water_status enum. TR6 exposes a geometric
+    // predicate instead, so normalise it to the only distinction the input
+    // policy needs: 0 = dry, 1 = in water.
+    return isPointInWater(position, &waterHeight) ? 1 : 0;
 }
 
 } // namespace
@@ -195,6 +263,7 @@ const GameDllLayout* GameDllBound() { return g_dll; }
 uint64_t             GameDllBase()  { return g_base; }
 
 int LaraWaterStatus() {
+    if (CurrentGame() == 2) return Tr6LaraWaterStatus();
     if (!g_dll) return -1;
     return Read<int16_t>(g_dll->lara + off::lara_water_status);
 }
@@ -275,6 +344,8 @@ bool CameraViewFrame(float rot[3][3], float pos[3]) {
 void GameDllShutdown() {
     g_dll  = nullptr;
     g_base = 0;
+    g_loggedTr6WaterBinding = false;
+    g_warnedTr6WaterBuild = false;
 }
 
 } // namespace tr
