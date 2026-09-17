@@ -269,6 +269,14 @@ void LoadConfig(const wchar_t* ini) {
     if (g_cfg.dynamicBonesDriveSmoothing <= 0.0f || g_cfg.dynamicBonesDriveSmoothing > 1.0f)
         g_cfg.dynamicBonesDriveSmoothing = 0.25f;
     g_cfg.dynamicBonesApply      = GetBool (L"DynamicBonesApply",      g_cfg.dynamicBonesApply,      ini);
+    g_cfg.dynamicBonesShader     = GetInt  (L"DynamicBonesShader",     g_cfg.dynamicBonesShader,     ini);
+    g_cfg.dynamicBonesForwardSign = GetInt (L"DynamicBonesForwardSign", g_cfg.dynamicBonesForwardSign, ini);
+    g_cfg.dynamicBonesChestStrength = GetFloat(L"DynamicBonesChestStrength", g_cfg.dynamicBonesChestStrength, ini);
+    g_cfg.dynamicBonesChestTop    = GetFloat(L"DynamicBonesChestTop",    g_cfg.dynamicBonesChestTop,    ini);
+    g_cfg.dynamicBonesChestBottom = GetFloat(L"DynamicBonesChestBottom", g_cfg.dynamicBonesChestBottom, ini);
+    g_cfg.dynamicBonesChestDepth  = GetFloat(L"DynamicBonesChestDepth",  g_cfg.dynamicBonesChestDepth,  ini);
+    g_cfg.dynamicBonesChestWidth  = GetFloat(L"DynamicBonesChestWidth",  g_cfg.dynamicBonesChestWidth,  ini);
+    g_cfg.dynamicBonesRegionDebug = GetFloat(L"DynamicBonesRegionDebug", g_cfg.dynamicBonesRegionDebug, ini);
     g_cfg.dynamicBonesDebugScale = GetFloat(L"DynamicBonesDebugScale", g_cfg.dynamicBonesDebugScale, ini);
     g_cfg.dynamicBonesMaxDisplace = GetFloat(L"DynamicBonesMaxDisplace", g_cfg.dynamicBonesMaxDisplace, ini);
     g_cfg.dynamicBonesTeleport   = GetFloat(L"DynamicBonesTeleport",   g_cfg.dynamicBonesTeleport,   ini);

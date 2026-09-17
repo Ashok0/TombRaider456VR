@@ -92,7 +92,32 @@ void DynamicBonesUpdate();
 // level with a bigger NPC in it.
 void DynamicBonesObserveDraw();
 
-/// Put the solved displacement into the joint palette the draw is about to
+//// --- for BoneSkin.cpp, the per-vertex path --------------------------------
+//
+// True while the draw validate_draw is about to issue is one of Lara's body
+// draws. Unlike the solver's latch this is NOT limited to the locked shader:
+// the latch exists for the solver's continuity, but every body draw needs the
+// deformation or chunks of the chest drawn by another material would stay put.
+bool DynamicBonesRenderBody();
+
+// The chest displacement for this frame in WORLD space, measured FROM REST and
+// scaled by DynamicBonesDebugScale.
+//
+// From rest matters once the offset is applied to the chest alone. The solver
+// settles at gravity / stiffness below its anchor; with the whole torso moving
+// together that sag was invisible, but applied to just the chest it would leave
+// her permanently drooping below the authored mesh. Subtracting it means zero
+// standing still, a rise while airborne, and ringing about zero on landing.
+bool DynamicBonesWorldOffset(float out[3]);
+
+// The latched torso joint matrix, 12 floats row-major 3x4. False before the
+// first body draw of the session.
+bool DynamicBonesTorsoFrame(float out[12]);
+
+// Lara's facing as a world-space unit vector, from lara_item->pos.y_rot.
+bool DynamicBonesLaraForward(float out[3]);
+
+// Put the solved displacement into the joint palette the draw is about to
 // upload, and take it out again once that upload has happened.
 //
 // THIS IS THE ONE THING HERE THAT CHANGES WHAT YOU SEE, and it is a debug

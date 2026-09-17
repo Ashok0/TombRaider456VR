@@ -12,6 +12,7 @@ C:\dev\TombRaider456VR\src\PortalCull.cpp;C:\dev\TombRaider456VR\build\obj\x64\R
 C:\dev\TombRaider456VR\src\Overlay.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\Overlay.obj
 C:\dev\TombRaider456VR\src\Sky.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\Sky.obj
 C:\dev\TombRaider456VR\src\DynamicBones.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\DynamicBones.obj
+C:\dev\TombRaider456VR\src\BoneSkin.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\BoneSkin.obj
 C:\dev\TombRaider456VR\src\Gamepad.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\Gamepad.obj
 C:\dev\TombRaider456VR\src\VideoPanel.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\VideoPanel.obj
 C:\dev\TombRaider456VR\src\VRSystem.cpp;C:\dev\TombRaider456VR\build\obj\x64\Release\VRSystem.obj

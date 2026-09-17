@@ -20,6 +20,7 @@ build and deploy the mod, and document the results after in-headset validation.
 * Dpad input support
 * Decoupled pitch
 * Sky fix — the HD sky dome sits at optical infinity instead of a few metres away
+* Chest physics for Lara in TR4/5, ported from TR6's dynamic bones
 
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
@@ -189,6 +190,12 @@ later OBB test. The clean fix leaves object preparation stock, forces only the
 final room descriptors, and bypasses both bounds stages at five exact
 render-only paths. See
 [Phase 20: TR6 Pickup and Scene-Object Retention](#phase-20-tr6-pickup-and-scene-object-retention).
+
+**Phase 21** adds chest physics to TR4 and TR5, reimplementing the dynamic
+bones TR6 uses. A damped spring driven by Lara's own airborne state bounces her
+chest on jumps and landings, and a patch to the HD skinning shader applies it
+per vertex, so the back, backpack and shoulders stay still. See
+[Phase 21: TR4/5 Physics Update](#phase-21-tr45-physics-update).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -3844,6 +3851,291 @@ All Phase 20 implementation is in `src\Hooks.cpp`.
 
 ---
 
+## Phase 21: TR4/5 Physics Update
+
+Angel of Darkness gives Lara secondary motion on her chest. Tomb Raider IV and V
+have nothing equivalent: their Lara is a rigid 15-joint skeleton, so her upper
+body moves as one piece no matter how she jumps or lands. Phase 21 brings TR6's
+behaviour to TR4 and TR5 on the HD models. The chest bounces when she leaves the
+ground and when she lands, and it stays still while she walks and turns. Only
+the front of the chest moves; the back, backpack, shoulders and arms stay where
+the animation puts them.
+
+It could not be ported as code. It was reimplemented, and most of this phase is
+about finding out, from the binaries, what TR4/TR5 actually give a physics
+system to work with.
+
+### What TR6 has, and why it cannot be copied
+
+`6\DATA\CHAR\LARA_HD.CHR` stores its bone names inline. Lara's skeleton ends:
+
+```text
+... SPINE_1 SPINE_2 THORAX NECK HEAD
+PONY1_DYNAMIC ... PONY10_DYNAMIC
+SHLDER_L BICEP_L ... LITTLE3_R
+JUG_L_DYNAMIC  JUG_R_DYNAMIC
+```
+
+The `_DYNAMIC` suffix hands a bone to TR6's generic spring solver:
+`CharSkeleton::setup_springs_system` at `tomb6.dll+0x15E430`, then
+`SpringSystem::update` (`+0x16E7E0`), `::collide` (`+0x171C10`), `::deflect`,
+`::interpolate` and `::teleport`. So the chest is not a bespoke system: it is
+two extra skeleton bones run through the same solver as the ponytail.
+
+That solver works on `CharSkeleton` bone arrays fed by AOD asset data (per-outfit
+spring setups and deflector groups), and TR4/TR5 have none of it. Their Lara is
+still the classic hierarchy, with no bone to drive:
+
+```text
+0 HIPS  1 THIGH_R  2 CALF_R  3 FOOT_R  4 THIGH_L  5 CALF_L  6 FOOT_L
+7 TORSO  8 UARM_R  9 LARM_R  10 HAND_R  11 UARM_L  12 LARM_L  13 HAND_L  14 HEAD
+```
+
+That order is confirmed from the engine rather than taken from community
+knowledge. `SkinUseMatrix` (`tomb5.dll+0x00127528`) is 14 byte-pairs, and the
+only four populated are `(1,2)`, `(4,5)`, `(8,9)` and `(11,12)`: the two knees
+and two elbows, the places the skin blends between rigid meshes. The HD outfit
+meshes (`4\ITEM\OUTFIT_*.TRM`) carry no bone names. The braid is no
+counterexample either: `HairControl`, `HairAdvance` and `CalcHairMatrices` are a
+separate CPU spring chain that draws its own meshes.
+
+### Measuring what TR4/TR5 give us
+
+The work started as a measurement harness. It changed nothing on screen and
+answered three questions before any rendering was touched.
+
+**Which draws are Lara.** `DrawLaraHD` is hooked for its scope, not its argument
+(`tomb4.dll+0x000C40F0`, `tomb5.dll+0x000B8C50`, 8 position-independent prologue
+bytes each, different in the two DLLs). Inside it the renderer skins through
+`uJoints[72*3]` (`mBoneMats` is 3456 bytes, 72 x 4x3). One scope issues several
+skinned draws: the body uploads 15 joints, and attachments upload 33-slot
+palettes, 13 slots of which hold one repeated filler matrix. The body is picked
+by structure, as the palette whose joint origins are genuinely separate (more
+than 12 units apart), on a world pass. The latch then stays locked to that
+draw's shader. Without the lock it flipped between shaders 12 and 20 from frame
+to frame, and differencing across a flip fabricated accelerations of up to 1.9
+million units/s² against a gravity of 5400.
+
+**What the matrices are.** They are skinning matrices, bone x inverse-bind, not
+bone-to-world transforms. In the body palette, forearm to hand measured 2.0 units
+apart and hips to torso 0.5, which is impossible for bone origins and exactly what
+skinning matrices give when a child shares its parent's orientation. The shader
+later confirmed it directly: one `aCoord` is multiplied by all three of a
+vertex's joints.
+
+**Whether the drive signal is clean.** `dup=0%` in every session: not one
+rendered frame repeated the previous torso matrix. The remaster interpolates poses
+per render frame (`CalcLaraMatricesHDAnim`, `HDAnims`), so there is no 30 Hz
+stair-step for a spring to buzz on.
+
+### The solver, and how it got there
+
+The final solver drives a damped spring from Lara's own engine state. Every
+earlier version was measured and replaced for a specific reason:
+
+| Version | What it did | What the log showed | Replaced by |
+|---|---|---|---|
+| World-space position spring | a point mass chasing an anchor carried by TORSO | `disp_peak` pinned at the 18-unit clamp in every report; it lags by c·V/k, 160 units at running speed | acceleration drive |
+| Acceleration drive, parent frame | `x'' = -k·x - c·x' - a_parent + g` | settled at 2.82 units against a predicted gravity/stiffness of 2.84, but turning threw the torso sideways | vertical constraint |
+| Constrained to world vertical | acceleration, velocity and position projected onto world Y each step | turning fixed; walking still bounced, and short landings were lost in filtering (below) | engine-state drive |
+| **Engine-state drive** | Lara's `gravity_status` and `fallspeed` | every jump paired with a landing (`jumps=14 lands=14`) | final |
+
+The acceleration drive differentiated the torso matrix twice, then smoothed,
+capped and deadzoned the result. Those filters compound on short events, and a
+landing is one. Simulated through the real pipeline, a 16000 units/s² landing
+spike reached the spring at **0** if it fell within one frame and at 5250 if it
+spread across three. So whether a jump registered depended on frame timing.
+
+The engine already knows when Lara is airborne, so the final drive reads it from
+her `ITEM_INFO` through `lara_item` (`tomb4.dll+0x004F3000`,
+`tomb5.dll+0x004EE900`), identical in both DLLs:
+
+| Field | Offset | Source |
+|---|---:|---|
+| `fallspeed` (int16, per game tick) | `+36` | `typedump.py` |
+| `gravity_status` (bit 3 of a uint32 bitfield) | `+6176` | dbghelp `TI_GET_BITPOSITION`, since three flags share that word |
+| `pos.y_rot` (int16) | `+110` | `PHD_3DPOS` layout |
+
+In the torso's frame the chest feels gravity minus the torso's own acceleration.
+Standing, that is full gravity, so it sags. Airborne, the torso is in freefall
+too, so the chest goes weightless and rises. Landing restores gravity and adds a
+kick of `fallspeed x 30 x DynamicBonesLandImpulse`. The kick uses the **deepest**
+fallspeed of the jump, because the engine zeroes `fallspeed` on the landing tick,
+and reading it there would give every landing a kick of nothing. Walking never
+sets `gravity_status`, so it cannot bounce.
+
+The spring was retuned for visibility after the logs showed every jump
+registering but nothing visible. At stiffness 1900 and damping 22 it was a 6.9 Hz
+flutter that died in 0.11 s, during Lara's own landing crouch. At 630 and 6 it is
+4 Hz and rings for about 0.8 s. The clamp rose from 18 to 40 with it. Simulated
+peaks, relative to rest:
+
+| Running jump | Takeoff | Landing | Rings for |
+|---|---:|---:|---:|
+| 1900 / 22 | -4.1 | +6.9 | 0.11 s |
+| 630 / 6 | -14.6 | +19.1 | 0.81 s |
+
+### Moving only the chest
+
+Displacing joint 7 made the solver visible, and in-headset testing confirmed the
+timing, gravity direction, lag direction and height. It also moved the back,
+backpack and shoulder seams, and no setting could stop that: a joint transform
+moves every vertex attached to it by the same amount and cannot tell front from
+back. Separating them needs per-vertex weights, which live in the vertex shader.
+
+**Getting into the shader.** The engine builds each of its 202 programs with one
+call from `init_ogl` to:
+
+```text
+void shader_init(Shader* shader, int fvf, const char* vs, const char* fs)   // tomb456.exe+0x00011820
+```
+
+The hook substitutes the `vs` argument and passes everything else through, so no
+engine state is swapped or has to be restored. Every patched source is first
+test-compiled in a throwaway shader object; if it fails, the engine gets the
+original and that pass simply does not deform.
+
+**Which shader.** Decoding all 202 `shader_init` calls to their sources shows two
+skinning families. Lara's HD body (shaders 12, 20 and 21) uses the three-joint
+index+weight family, shaders 9 to 23, built from 5 sources:
+
+```glsl
+vec4 coord = vec4(aCoord, 1.0);   // one bind-pose position, model space
+vec4 j = aLight;                  // j.xyz = joint indices
+vec4 w = aColor;                  // w.xyz = joint weights
+p = sum over k of uJoints[j[k]] * coord * w[k]
+```
+
+The patch is inserted after the last joint's contribution to `p`, before `vFog`,
+`vPos`, `vWorldPos` and `gl_Position` read it. It moves the vertex by the solved
+offset, multiplied by its total weight on TORSO and by a chest-region weight
+computed from `coord`. A shoulder vertex shared with an upper arm therefore moves
+only partway. `validate_draw` binds `shaders[vid_state.shader].id` at `+0x49`, and
+`ogl_draw` binds the mesh's VAO before calling `validate_draw`. The uniforms are
+uploaded after `validate_draw` returns, before `glDrawElements`, when both the
+program and the vertex layout are live. NPCs share these programs, so the offset
+is cleared on any draw that is not Lara's body.
+
+**Where the chest is.** It is measured, not assumed. The first body draw reads
+its own vertex buffer back through the bound VAO and collects every vertex that
+mostly follows TORSO: 4185 of 27349 on the measured outfit. Front and back are
+told apart by comparing the torso's local +Z with Lara's facing from `y_rot`.
+The height band is fitted to the bust itself: the mesh is sliced by height, each
+slice records how far forward it reaches, and the bust is the bump in that
+profile. On the measured mesh the profile read, neck to waist:
+
+```text
+16  22  36  49 | 68  75  75  75  68 | 55  55  55
+                  ------ bust ------   belly
+```
+
+The band keeps every slice within half the bump's height of the peak. That gives
+0.40 to 0.78 of torso height, excluding the upper chest above and the belly
+below. A depth ramp from the torso's midline excludes the back and backpack, and
+a lateral fade stops short of the armpits. The offset is measured from rest, so
+the chest keeps its authored shape while she stands still.
+
+### What was tried, and what each result proved
+
+- **`shader_init` hooked as `void(void)`.** The detour's own calls clobbered the
+  argument registers before it called the original, which wrote through a junk
+  `Shader*` and crashed to desktop at startup. The signature is now read from
+  the function body, and the hook no longer swaps the engine's `glShaderSource`
+  pointer.
+- **The two-matrix skinning family patched.** 63 programs were patched and none
+  of them was Lara's body, so nothing moved. The old whole-torso view had also
+  stood down, because "shader path active" only asked whether anything was
+  patched. It now stands down only after a body draw has actually gone through a
+  patched program with a fitted region. A body drawn with an unpatched program is
+  logged.
+- **A fixed height band, 0.18 to 0.52 of the torso.** It moved the right area,
+  but weakly. The measured front profile showed the bust peak several rows below
+  the band, on its fade-out edge. The band is now fitted to the profile, and
+  those fractions are only the fallback for an outfit with no distinct bump.
+- **A GPU compile test that reported success while testing nothing.** Its C
+  string extractor ended each literal at the first `;`, which sits inside the
+  patch text, so it compiled the unmodified shaders. It was fixed and extended
+  into a transform-feedback test that checks where vertices actually end up.
+
+### Configuration
+
+The template ships the feature **off**. To enable it:
+
+```ini
+DynamicBones=1
+DynamicBonesApply=1
+```
+
+| Setting | Template | Meaning |
+|---|---:|---|
+| `DynamicBones` | `0` | master switch for the solver and measurement |
+| `DynamicBonesApply` | `0` | the only setting that changes what is drawn |
+| `DynamicBonesShader` | `1` | `1` chest only, per vertex; `0` whole TORSO joint |
+| `DynamicBonesChestStrength` | `1.5` | chest path amplitude multiplier |
+| `DynamicBonesDebugScale` | `1` | overall multiplier on **both** paths; stacks with `ChestStrength` |
+| `DynamicBonesDriveMode` | `1` | `1` engine state; `0` differentiated acceleration (kept for comparison) |
+| `DynamicBonesStiffness` / `Damping` | `630` / `6` | 4 Hz, damping ratio about 0.12 |
+| `DynamicBonesLandImpulse` | `0.2` | landing kick per unit of fallspeed |
+| `DynamicBonesMaxDisplace` | `40` | clamp, world units |
+| `DynamicBonesForwardSign` | `0` | `0` auto from facing; `1`/`-1` forces front |
+| `DynamicBonesChestWidth` / `ChestDepth` | `0.28` / `0.5` | lateral limit and depth start, fractions of the measured torso |
+| `DynamicBonesRegionDebug` | `0` | pushes the selected region out by this many units, to see it standing still |
+
+The full set, with the reasoning behind each value, is documented in
+`TombRaiderVR.ini`.
+
+### Logs
+
+A working run on the measured outfit:
+
+```text
+boneskin: 15 skin program(s) matched, 15 patched, 0 fell back to the original
+boneskin: measured buffer 4 -- 27349 vertices, 4185 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+boneskin: front of the torso is local +Z (30 samples, mean alignment 1.00 with Lara's facing)
+boneskin: live -- Lara's body (shader 21) now deforms per vertex, and the whole-torso view has stood down
+dynbones: locked to shader 20 (15 joints) -- the latch stays here so the drive stays continuous
+dynbones: engine drive -- jumps=7 lands=7  last landing fallspeed=100 (grounded now)
+```
+
+The fit also logs a side-view shape map of the torso, the front profile the band
+came from, and how many vertices the region selects at full weight, so a wrong
+fit shows in the log.
+
+### Safety, scope and validation
+
+- **TR4/TR5 only.** TR6 already has the real system and none of these hooks can
+  run for it.
+- **Stock build only** for the chest path. `shader_init` comes from the stock
+  build's PDB; the community HD-pack rows leave it at 0 and log that the path is
+  unavailable.
+- **Degrades rather than breaks.** A patch that fails to compile ships the
+  original shader. A shader path that never engages leaves the whole-torso view
+  running. `DynamicBonesShader=0` forces that view.
+- **Verified statically:** `tools\verify_addresses.py` checks all 236 addresses
+  and prologues against the PDBs, up from 219, including `DrawLaraHD`,
+  `lara_item` and `shader_init`. The patched shaders compile and link on an
+  RTX 3070 (NVIDIA 560.94) with both new uniforms active. In a transform-feedback
+  test, chest vertices move by exactly the offset, seam vertices by their TORSO
+  share, and back, arm and out-of-region vertices not at all.
+- **Validated in-headset:** jump detection and landing pairing, gravity and lag
+  direction, and the per-vertex path bouncing the right area. The back, backpack
+  and shoulders staying still is established by the transform-feedback test
+  above rather than by an explicit in-headset check. **Not yet validated
+  in-headset:** the profile-fitted height band and
+  `DynamicBonesChestStrength=1.5`, which were changed after the last session
+  reported the effect as correct in area but too subtle.
+
+Implementation is in `src\DynamicBones.*` (solver, `DrawLaraHD` hook, body-draw
+selection, engine-state drive) and `src\BoneSkin.*` (`shader_init` hook, shader
+patch, vertex readback, region fit, per-draw uniforms). Supporting changes are in
+`src\GameDll.*` (`lara_item`, `DrawLaraHD`), `src\Engine.h` (`shader_init`),
+`src\GL.*` (uniform and readback entry points), `src\Hooks.cpp` (wiring, plus the
+scope guard that restores the joint palette and uploads the uniforms on every
+return path out of `validate_draw`), `src\Config.*`, `TombRaiderVR.ini` and
+`tools\verify_addresses.py`.
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
@@ -3929,6 +4221,8 @@ src/GameDll.*     binding and address table for tomb4.dll / tomb5.dll
 src/PortalCull.*  head-driven room culling, hooked into the game DLL
 src/PortalGeom.h  the frustum maths behind it, tested by tests/
 src/Sky.*         DrawSkyHD hook: sky draws at optical infinity
+src/DynamicBones.* TR4/5 chest physics: DrawLaraHD hook, spring solver
+src/BoneSkin.*   shader_init hook: per-vertex chest deformation
 src/Callsite.*    return-address census, from before the DLLs had symbols
 src/DefaultIni.h  the compiled-in ini template, written out when none exists
 src/proxy/        the winmm shim that gets us loaded

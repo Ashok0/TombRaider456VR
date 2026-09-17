@@ -116,6 +116,14 @@ constexpr uint32_t ogl_setRenderTarget = 0x00013C30;
 constexpr uint32_t vidInit            = 0x0000D750;
 constexpr uint32_t init_ogl           = 0x00015BA0;
 
+// void shader_init(Shader* shader, int fvf, const char* vs, const char* fs)
+// 1175 bytes. Builds ONE program per call -- glCreateProgram into shader->id,
+// fvf into shader->fvf at +0x4C, then compiles vs and fs and links. Hooked by
+// BoneSkin.cpp, which substitutes the vertex source argument for the TR4/TR5
+// skinning shaders. The signature was read from the body, not assumed; see
+// BoneSkin.cpp for what assuming it cost.
+constexpr uint32_t shader_init        = 0x00011820;
+
 } // namespace rva
 
 // ---------------------------------------------------------------------------
@@ -155,6 +163,7 @@ constexpr uint32_t gTargetHeight   = 0x00698678;
 // both appGetWidth and ogl_setRenderTarget, so it is a real location, just an
 // odd one. Treat with suspicion if you ever write to it.
 constexpr uint32_t gTargetWidth    = 0x03298680;
+
 
 } // namespace drva
 
@@ -214,6 +223,12 @@ struct Layout {
     uint32_t gHeight;
     uint32_t gTargetWidth;
     uint32_t gTargetHeight;
+
+    // Dynamic-bone shader patching (BoneSkin.cpp). LAST on purpose: the HD-pack
+    // rows below initialise positionally from a 21-address macro and stop short
+    // of it, so it comes out 0 -- which BoneSkin reads as "not available on this
+    // build". Only the stock build has a PDB to take it from.
+    uint32_t shader_init;
 };
 
 // The build every address above was read out of Ghidra for.
@@ -225,6 +240,7 @@ constexpr Layout kBuildStock = {
     drva::mProj,       drva::mView_packed,   drva::shaders,     drva::ogl_textures,
     drva::FBO_custom,  drva::FBO_default,    drva::ogl_rt,
     drva::gWidth,      drva::gHeight,        drva::gTargetWidth, drva::gTargetHeight,
+    rva::shader_init,
 };
 
 // The community HD-texture pack. Its two releases so far -- a 2025-07-01 base

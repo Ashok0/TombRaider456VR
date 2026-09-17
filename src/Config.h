@@ -848,6 +848,59 @@ struct Config {
     // leans.
     int   dynamicBonesAxis      = 1;
 
+    // How the solved motion reaches the screen.
+    //
+    //   1 = per vertex, in the skinning shader (default). Only the front of the
+    //       chest moves; back, backpack, shoulders and armpits stay exactly
+    //       where the animation put them. Stock build only.
+    //   0 = the whole TORSO joint. Moves the back and backpack with the chest
+    //       and stretches the shoulder seams. Kept as the fallback, and used
+    //       automatically if the shader path cannot start -- the log says why.
+    //
+    // A joint transform moves every vertex attached to it by the same amount,
+    // and has no idea which of them are the front; that is why 0 cannot be
+    // tuned into 1. See BoneSkin.h.
+    int   dynamicBonesShader    = 1;
+
+    // Which way is the front of the torso in its own coordinates. 0 = work it
+    // out from Lara's facing angle (default); 1 or -1 forces +Z or -Z. Only
+    // worth forcing if the log reports the back bouncing instead of the chest.
+    int   dynamicBonesForwardSign = 0;
+
+    // How strongly the chest moves on the per-vertex path, as a multiple of the
+    // solved motion. Shader path only.
+    //
+    // 1.0 moves the bust exactly as far as the whole-torso view moved the whole
+    // upper body. That reads as much less, because so much less of her is
+    // moving, so the default overstates it. At the default spring a running
+    // jump then lifts the bust about 22 units on takeoff and drops it about 29
+    // on landing. Raise for more bounce; lower if it looks rubbery.
+    float dynamicBonesChestStrength = 1.5f;
+
+    // The chest region, measured from the torso mesh. Shader path only.
+    //
+    // HEIGHT IS NORMALLY MEASURED, NOT SET: the band is fitted to the bump the
+    // bust makes in the mesh's front profile. Top and Bottom below are only the
+    // fallback, used when an outfit shows no distinct bump -- fractions of the
+    // torso height from the neck end downward. (They were the primary method
+    // first, and 0.18..0.52 proved a quarter of the torso too high for this
+    // mesh, which is why the bust barely moved.)
+    float dynamicBonesChestTop    = 0.18f;
+    float dynamicBonesChestBottom = 0.52f;
+    // Depth: where the weight starts, as a fraction of torso depth behind the
+    // front surface. 0.5 is the middle of the torso, so everything behind it --
+    // the back and the backpack -- is untouched. Lower keeps the effect closer
+    // to the surface.
+    float dynamicBonesChestDepth  = 0.5f;
+    // Width: half-width, as a fraction of torso width, before the weight fades
+    // toward the armpits. Lower keeps the shoulders stiller.
+    float dynamicBonesChestWidth  = 0.28f;
+
+    // Push the selected region straight out of her front by this many units,
+    // permanently. 0 = off. A calibration aid: set 30 or so, stand still, and
+    // what bulges is exactly what will bounce.
+    float dynamicBonesRegionDebug = 0.0f;
+
     // Put the solved displacement into the joint palette, so it can be seen.
     //
     // THE ONLY SETTING HERE THAT CHANGES WHAT IS DRAWN, and it is a debug view
@@ -857,11 +910,16 @@ struct Config {
     // position, direction of motion and magnitude can all be judged by eye.
     bool  dynamicBonesApply     = false;
 
-    // Exaggeration for that debug view. The real displacement rests near 3
-    // units and peaks in the low tens, which is easy to miss on a moving
-    // character, so the default overstates it to make direction and timing
-    // obvious. Drop to 1.0 to see the true amplitude.
-    float dynamicBonesDebugScale = 4.0f;
+    // Overall multiplier on the solved motion, applied to BOTH paths -- the
+    // whole-torso view and the per-vertex chest, where it stacks with
+    // DynamicBonesChestStrength. 1.0 is the true amplitude and the value tuned
+    // in-headset.
+    //
+    // This defaulted to 4 when the whole-torso view was only a debug aid and
+    // needed exaggerating to be seen at all. Left at 4 it would have multiplied
+    // the chest path too, handing a fresh install 4 x 1.5 = 6 times the tuned
+    // strength.
+    float dynamicBonesDebugScale = 1.0f;
 
     // How far apart two joint origins must be, in world units, to count as
     // separate joints when scoring which draw carries the body.

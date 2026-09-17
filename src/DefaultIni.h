@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 49999 bytes, 997 lines.
+// Source: TombRaiderVR.ini, 52264 bytes, 1044 lines.
 #pragma once
 
 namespace tr {
@@ -930,19 +930,67 @@ DynamicBonesDriveMax=20000
 ; it stays true while Lara leans.
 DynamicBonesAxis=1
 
+; How the solved motion reaches the screen.
+;
+;   1 = per vertex, in the skinning shader (default). Only the front of the
+;       chest moves; back, backpack, shoulders and armpits stay where the
+;       animation put them. Stock build only.
+;   0 = the whole TORSO joint. Moves the back and backpack with the chest and
+;       stretches the shoulder seams. The fallback, used automatically if the
+;       shader path cannot start -- the log says why.
+;
+; A joint transform moves every vertex attached to it equally and cannot tell
+; front from back, which is why 0 cannot be tuned into 1.
+DynamicBonesShader=1
+
+; Which way is the front of the torso. 0 = work it out from Lara's facing
+; (default); 1 or -1 forces it. Only force it if the back bounces instead.
+DynamicBonesForwardSign=0
+
+; How strongly the chest moves on the per-vertex path, as a multiple of the
+; solved motion. Shader path only.
+;
+; 1.0 moves the bust as far as the whole-torso view moved the whole upper body,
+; which reads as much less because so much less of her moves. At the default
+; 1.5 and the default spring, a running jump lifts the bust about 22 units on
+; takeoff and drops it about 29 on landing. Raise for more; lower if rubbery.
+DynamicBonesChestStrength=1.5
+
+; The chest region, measured from the torso mesh. Shader path only.
+;
+; Height is normally MEASURED: the band is fitted to the bump the bust makes in
+; the mesh's front profile. Top/Bottom are only the fallback for an outfit with
+; no distinct bump, as fractions of torso height from the neck end down.
+DynamicBonesChestTop=0.18
+DynamicBonesChestBottom=0.52
+; Depth: where the weight starts, as a fraction of torso depth behind the front
+; surface. 0.5 = mid-torso, so the back and backpack are untouched.
+DynamicBonesChestDepth=0.5
+; Width: half-width fraction before the weight fades toward the armpits. Lower
+; keeps the shoulders stiller.
+DynamicBonesChestWidth=0.28
+
+; Permanently push the selected region out of her front by this many units.
+; 0 = off. Calibration aid: set 30, stand still, and what bulges is exactly
+; what will bounce.
+DynamicBonesRegionDebug=0
+
 ; Put the solved displacement into the joint palette, so it can be seen.
 ;
-; THE ONLY SETTING HERE THAT CHANGES WHAT IS DRAWN. It is a debug view, not
+)INI"
+           R"INI(; THE ONLY SETTING HERE THAT CHANGES WHAT IS DRAWN. It is a debug view, not
 ; the feature: joint 7 is TORSO, so everything weighted to it moves and the
 ; whole upper body wobbles rather than just the chest. The point is to make
 ; the solver visible without shader work -- anchor position, direction of
 ; motion and magnitude can all be judged by eye.
 DynamicBonesApply=0
 
-; Exaggeration for that debug view. The real displacement rests near 3 units
-; and peaks in the low tens, easy to miss on a moving character, so the
-; default overstates it. Drop to 1.0 for true amplitude.
-DynamicBonesDebugScale=4
+; Overall multiplier on the solved motion, applied to BOTH paths -- the
+; whole-torso view and the per-vertex chest, where it stacks with
+; DynamicBonesChestStrength. 1 is the true amplitude and the value tuned
+; in-headset. (It used to default to 4, a debug-view exaggeration that would
+; have given the chest path 4 x 1.5 = 6 times the tuned strength.)
+DynamicBonesDebugScale=1
 
 ; How far apart two joint origins must be, in world units, to count as
 ; separate joints when scoring which draw carries the body. Bones on a body
@@ -978,8 +1026,7 @@ DynamicBonesLogJoints=0
 ; This is the targeted form of the dump key. A room that only misbehaves for a
 ; moment is hard to catch with a hotkey, and "does the traversal ever reach 215,
 ; and how" should not need good reflexes to answer. Silence means it never got
-)INI"
-           R"INI(; added, which is itself the answer.
+; added, which is itself the answer.
 CullWatchRooms=
 
 ; --- measured, and no longer behind a key ------------------------------------

@@ -1,4 +1,5 @@
 #include "DynamicBones.h"
+#include "BoneSkin.h"
 #include "GameDll.h"
 #include "Engine.h"
 #include "Config.h"
@@ -21,6 +22,7 @@ namespace {
 // from declaration order -- status, gravity_status and hit_status all share
 // offset 6176, so reading the wrong bit would silently gate on the wrong flag.
 constexpr uint32_t kItemFallspeed    = 36;     // int16, +Y down, per game tick
+constexpr uint32_t kItemYRot         = 96 + 14; // pos.y_rot, int16, 65536 = 360 deg
 constexpr uint32_t kItemFlags        = 6176;   // uint32 bitfield
 constexpr uint32_t kGravityStatusBit = 3;      // gravity_status:1 -- airborne
 
@@ -153,8 +155,11 @@ bool g_settled = false;
 float* g_patchedAt = nullptr;      // &joints[torso * 12], or null
 float  g_patchedSaved[12] = {};
 
-/// True when the draw currently being observed looked like the body.
+//// True when the draw currently being observed looked like the body.
 bool g_drawIsBody = false;
+
+// The same test WITHOUT the solver lock -- what the shader path deforms.
+bool g_drawRenderBody = false;
 
 // THE LATCH HAS TO STAY ON ONE DRAW.
 //
@@ -746,6 +751,7 @@ void Report() {
 
 void DynamicBonesObserveDraw() {
     g_drawIsBody = false;
+    g_drawRenderBody = false;
     if (!g_inLara) return;
 
     const RenderState& vs = VidState();
@@ -780,6 +786,9 @@ void DynamicBonesObserveDraw() {
     // A shadow or 2D pass can present a body-shaped palette in a completely
     // different space. Only the world pass is the real Lara.
     if (!IsWorldPass()) g_drawIsBody = false;
+
+    // Captured before the lock narrows it: rendering wants every body draw.
+    g_drawRenderBody = g_drawIsBody;
 
     // Once locked, only that shader may drive the solver. Others still score
     // into the candidate list so the log keeps showing the whole field.
@@ -952,8 +961,57 @@ bool DynamicBonesDisplacement(float out[2][3]) {
     return true;
 }
 
+bool DynamicBonesRenderBody() {
+    return g_drawRenderBody && g_boundDll != nullptr;
+}
+
+bool DynamicBonesWorldOffset(float out[3]) {
+    if (!g_settled || !g_boundDll) return false;
+    const Config& c = Cfg();
+
+    float avg[3];
+    for (int a = 0; a < 3; ++a)
+        avg[a] = 0.5f * (g_bone[0].x[a] + g_bone[1].x[a]);
+    RotateVector(g_torsoThis, avg, out);
+
+    // Grounded equilibrium in world space is simply gravity / stiffness straight
+    // down: gravity is world Y and the spring is isotropic, so no rotation is
+    // involved. Removing it makes rest mean "as authored".
+    if (c.dynamicBonesStiffness > 1e-3f)
+        out[1] -= c.dynamicBonesGravity / c.dynamicBonesStiffness;
+
+    const float s = c.dynamicBonesDebugScale;
+    out[0] *= s; out[1] *= s; out[2] *= s;
+    return true;
+}
+
+bool DynamicBonesTorsoFrame(float out[12]) {
+    if (!g_settled || !g_boundDll) return false;
+    std::memcpy(out, g_torsoThis.m, sizeof(float) * 12);
+    return true;
+}
+
+bool DynamicBonesLaraForward(float out[3]) {
+    const GameDllLayout* d = GameDllBound();
+    const uint64_t base = GameDllBase();
+    if (!d || !base || d->laraItem == 0) return false;
+    const uint64_t item = *reinterpret_cast<uint64_t*>(base + d->laraItem);
+    if (!item) return false;
+    const int16_t yrot = *reinterpret_cast<int16_t*>(item + kItemYRot);
+    // TR moves forward by x += sin(y_rot), z += cos(y_rot).
+    const float t = static_cast<float>(yrot) * (6.28318530718f / 65536.0f);
+    out[0] = std::sin(t);
+    out[1] = 0.0f;
+    out[2] = std::cos(t);
+    return true;
+}
+
 void DynamicBonesApplyToDraw() {
     g_patchedAt = nullptr;
+
+    // The per-vertex shader path supersedes the rigid joint edit. Doing both
+    // would move the chest twice and drag the back along with it again.
+    if (BoneSkinActive()) return;
 
     const Config& c = Cfg();
     if (!c.dynamicBonesApply || !g_inLara || !g_drawIsBody || !g_settled) return;

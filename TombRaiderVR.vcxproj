@@ -134,6 +134,7 @@
     <ClCompile Include="src\Overlay.cpp" />
     <ClCompile Include="src\Sky.cpp" />
     <ClCompile Include="src\DynamicBones.cpp" />
+    <ClCompile Include="src\BoneSkin.cpp" />
     <ClCompile Include="src\Gamepad.cpp" />
     <ClCompile Include="src\VideoPanel.cpp" />
     <ClCompile Include="src\VRSystem.cpp" />
@@ -156,6 +157,7 @@
     <ClInclude Include="src\Overlay.h" />
     <ClInclude Include="src\Sky.h" />
     <ClInclude Include="src\DynamicBones.h" />
+    <ClInclude Include="src\BoneSkin.h" />
     <ClInclude Include="src\Gamepad.h" />
     <ClInclude Include="src\VideoPanel.h" />
     <ClInclude Include="src\VRSystem.h" />

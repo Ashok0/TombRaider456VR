@@ -39,6 +39,7 @@
 #include "PortalCull.h"
 #include "Sky.h"
 #include "DynamicBones.h"
+#include "BoneSkin.h"
 #include "Overlay.h"
 #include "VRSystem.h"
 
@@ -869,8 +870,16 @@ void __cdecl Detour_validate_draw() {
     // the next object a corrupted TORSO matrix. validate_draw has five
     // returns; a scope guard covers all of them, including the early ones,
     // without each having to remember.
+    //
+    // The same guard uploads the per-vertex chest offset. By the time it runs
+    // the original has bound this draw's program and ogl_draw has bound its VAO,
+    // and glDrawElements has not happened yet -- the one window where both the
+    // uniform and the vertex layout are live.
     struct JointPatchGuard {
-        ~JointPatchGuard() { DynamicBonesRestoreDraw(); }
+        ~JointPatchGuard() {
+            DynamicBonesRestoreDraw();
+            BoneSkinAfterValidate();
+        }
     } jointPatchGuard;
 
     const bool worldPass = IsWorldPass();
@@ -2706,6 +2715,11 @@ bool InstallHooks() {
     }
 
     Log("hooks: all six installed");
+
+    // Optional, and deliberately outside the all-or-nothing table above: a
+    // failure here costs the per-vertex chest path, never stereo. It has to go
+    // in now, before the game creates its context and runs shader_init.
+    BoneSkinInstall();
     return true;
 }
 
@@ -2714,6 +2728,7 @@ void RemoveHooks() {
     OverlayShutdown();
     SkyShutdown();
     DynamicBonesShutdown();
+    BoneSkinShutdown();
     PortalCullShutdown();
     GameDllShutdown();
 

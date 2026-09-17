@@ -259,7 +259,7 @@ try:
               riprel if riprel else 'none', 'none')
 
     a = arrays_in('Hooks.cpp', 'GameDll.cpp', 'PortalCull.cpp', 'Sky.cpp',
-                  'Overlay.cpp', 'DynamicBones.cpp')
+                  'Overlay.cpp', 'DynamicBones.cpp', 'BoneSkin.cpp')
 
     # tomb456.exe -- the stereo hooks, from Hooks.cpp's Target table.
     hooks = open(os.path.join(ROOT, 'src', 'Hooks.cpp'), encoding='utf-8',
@@ -267,7 +267,8 @@ try:
     EXE = {'kSetPassPrologue': 'vid_setPass', 'kValidatePrologue': 'validate_draw',
            'kDrawPrologue': 'ogl_draw', 'kDrawVBPrologue': 'ogl_drawVB',
            'kPresentPrologue': 'ogl_present', 'kFmvShowPrologue': 'fmvShow',
-           'kSetRtPrologue': 'ogl_setRenderTarget'}
+           'kSetRtPrologue': 'ogl_setRenderTarget',
+           'kShaderInitPrologue': 'shader_init'}   # BoneSkin.cpp
     for arr, fn in EXE.items():
         if arr in a:
             window('tomb456.exe', fn, a[arr], 'tomb456.exe!%s' % fn)
