@@ -687,6 +687,215 @@ struct Config {
     // finite-dome stereo, for A/B.
     bool  skyAtInfinity         = true;
 
+    // --- TR6 dynamic bones, measured against TR4/TR5 (see DynamicBones.h) ---
+    //
+    // MEASUREMENT ONLY. Nothing here changes a pixel. It runs TR6's spring
+    // model off TR4/TR5's torso joint and reports what comes out, because the
+    // question that decides whether the feature is buildable at all -- whether
+    // 30 Hz source animation gives a spring anything smooth to chase at
+    // headset frame rates -- is cheaper to answer with a log line than with a
+    // shader.
+    //
+    // Off by default, and it stays off by default until something reads
+    // DynamicBonesDisplacement().
+    bool  dynamicBones          = false;
+
+    // Which joint carries the chest. CONFIRMED, not inherited lore: tomb5.dll
+    // SkinUseMatrix (RVA 0x00127528) is 14 byte-pairs and only four are
+    // populated -- (1,2), (4,5), (8,9), (11,12) -- which are the two knees and
+    // two elbows, the four places the skin blends between rigid meshes. That
+    // pins the canonical order:
+    //
+    //   0 HIPS  1 THIGH_R  2 CALF_R  3 FOOT_R  4 THIGH_L  5 CALF_L  6 FOOT_L
+    //   7 TORSO  8 UARM_R  9 LARM_R  10 HAND_R  11 UARM_L  12 LARM_L
+    //   13 HAND_L  14 HEAD
+    int   dynamicBonesTorsoJoint = 7;
+
+    // Where the chest sits ON THE BIND-POSE MODEL, in world units. NOT an
+    // offset from the joint origin -- that was the v1 reading and it was
+    // wrong.
+    //
+    // The palette holds SKINNING matrices, bone * inverse-bind, so a
+    // translation column is not a bone position. The measured body draw
+    // proves it: forearm to hand came out 2.0 units apart and hips to torso
+    // 0.5, which is impossible for bone origins. It is the signature of a
+    // skinning matrix, because a child bone sharing its parent's orientation
+    // produces an identical translation.
+    //
+    // What such a matrix DOES map correctly is a point in bind-pose model
+    // space to its skinned world position, which is exactly what the anchor
+    // needs to be. Lara's model origin is at the hips with +Y DOWN, so the
+    // chest is around 170 units of NEGATIVE Y, a little forward in Z, and
+    // mirrored roughly 34 units either side of centre. Still an estimate --
+    // but an estimate in the right space and at the right magnitude, where
+    // the v1 values (24, -40, 16) sat barely off the hip origin.
+    float dynamicBonesAnchorX   = 34.0f;
+    float dynamicBonesAnchorY   = -170.0f;
+    float dynamicBonesAnchorZ   = 45.0f;
+
+    // Spring constant and damping. k is omega^2, so 630 is a natural
+    // frequency of 4 Hz, and damping 6 is a ratio near 0.12.
+    //
+    // THE FREQUENCY IS WHAT MAKES IT VISIBLE, NOT THE STRENGTH. The previous
+    // 1900 / 22 was a 6.9 Hz flutter at ratio 0.25 that died away in 0.11
+    // seconds -- over before the eye registers it, and landing exactly during
+    // Lara's own landing-crouch animation, which hid the rest. Logs confirmed
+    // every jump was detected and displaced ~14 units; it simply could not be
+    // seen. At 4 Hz / 0.12 a running jump rings for about 0.8 s, long enough
+    // to read as a bounce.
+    //
+    // Resting sag is gravity / stiffness, so this raises it from 2.8 to 8.6
+    // units. The log's resting L/R Y reads ~8.6 as a result; that is correct.
+    //
+    // The v1 values (180 / 12) belonged to a world-space position spring and
+    // do not carry over. That formulation lagged by c*V/k under constant
+    // velocity, which at Lara's running speed was 160 units against an
+    // 18-unit clamp -- the reason both measured sessions reported disp_peak
+    // pinned at exactly 18.00 and never settling.
+    float dynamicBonesStiffness = 630.0f;
+    float dynamicBonesDamping   = 6.0f;
+
+    // Along world Y, which is DOWN in TR4/TR5, so positive pulls downward.
+    // 5400 is the engine's own gravity expressed per second squared: TR4/TR5
+    // accelerate by 6 units per frame at 30 fps, and 6 * 30^2 = 5400. Against
+    // the stiffness above that is a resting droop of about 8.6 units.
+    float dynamicBonesGravity   = 5400.0f;
+
+    // How much of the parent joint's acceleration the bone feels. 1.0 is the
+    // physical answer; lower tames the finite-difference noise that comes
+    // from differentiating a joint matrix twice.
+    float dynamicBonesDriveScale = 1.0f;
+
+    // Ignore drive accelerations below this, in world units per second
+    // squared. Gravity is 5400 for scale.
+    //
+    // Walking bobs the torso every step and an unfiltered solver answers all
+    // of it, so she jiggled while strolling. A jump or a landing accelerates
+    // the torso by roughly an order of magnitude more than a footfall, so a
+    // threshold separates them. This is the knob to turn if walking still
+    // registers (raise it) or jumps stop registering (lower it).
+    //
+    // Applied to the drive term only. Gravity and the spring are never
+    // thresholded: they are what bring the bone back to rest, and gating them
+    // would strand it wherever the last jump left it.
+    float dynamicBonesDriveDeadzone = 4000.0f;
+
+    // What drives the bone.
+    //
+    //   1 = engine state (default). Reads Lara's own gravity_status and
+    //       fallspeed from the game DLL. Airborne makes the bone weightless,
+    //       grounded restores gravity, and a landing adds a kick sized by how
+    //       far she fell. Every jump responds, and walking cannot.
+    //   0 = acceleration. Differentiates the torso joint twice, then smooths,
+    //       ceilings and deadzones the result. Kept for comparison: its
+    //       filters compound on short events, so landings registered only
+    //       when an impact happened to straddle frame boundaries favourably.
+    //
+    // DynamicBonesDriveSmoothing, DriveMax and DriveDeadzone below only apply
+    // in mode 0.
+    int   dynamicBonesDriveMode = 1;
+
+    // Fraction of gravity the bone feels while Lara is airborne, engine mode.
+    // 0 is physically right: in freefall the torso falls with the bone, so the
+    // bone is weightless and rises off its sag. That rise on takeoff is half
+    // of what makes a jump read.
+    float dynamicBonesAirGravity = 0.0f;
+
+    // Landing kick, engine mode: the bone gets fallspeed * 30 * this, in units
+    // per second, downward. fallspeed is per game tick and the game ticks at
+    // 30 Hz. The deepest fallspeed of the jump is used, not the one on the
+    // landing tick, because the engine zeroes it as she lands.
+    //
+    // Simulated through this solver at the default 4 Hz tuning, the bone's
+    // absolute position reaches about +18 units for a small hop, +23 standing,
+    // +28 running and +34 for a long fall (fallspeed 140), all inside the
+    // 40-unit MaxDisplace clamp; only extreme falls touch it. Takeoff lifts it
+    // to about -6 on every jump. Raise this for more bounce on landing.
+    float dynamicBonesLandImpulse = 0.2f;
+
+    // Low-pass on the acceleration estimate, 0..1. Lower is smoother.
+    //
+    // Position differentiated twice is amplified by 1/dt^2, about 2900 at
+    // these frame rates, so 128 units of anchor movement in one frame -- an
+    // ordinary measured value -- arrives as roughly 370,000 units per second
+    // squared. Raw, that is all spike and no signal. A jump lasts tens of
+    // frames and survives this filter easily; single-frame noise does not.
+    float dynamicBonesDriveSmoothing = 0.25f;
+
+    // Hard ceiling on the drive acceleration, world units per second squared.
+    //
+    // 20000 is not arbitrary. One frame at the ceiling gives the bone
+    // dv = a*dt, and a spring of this stiffness answers that with a peak of
+    // dv/sqrt(k) -- so 54000 produced 22.9 units against an 18-unit clamp and
+    // guaranteed saturation on its own, which is exactly what the logs showed.
+    // 20000 peaks near 8.5 units and leaves the clamp as a genuine backstop
+    // rather than the normal operating point.
+    float dynamicBonesDriveMax  = 20000.0f;
+
+    // Which directions the bone may move in.
+    //
+    //   0 = free. All three axes, the physically complete answer.
+    //   1 = world vertical only, and the default.
+    //
+    // Free looks right for jumping and wrong for turning: the anchor sits off
+    // centre and forward of the joint origin, so rotating the torso swings it
+    // through an arc, and an arc is acceleration. In testing that threw the
+    // whole upper body sideways whenever the stick turned her.
+    //
+    // Vertical-only keeps the jump response, which is what reads as the
+    // effect, and discards the rotational sloshing that does not. World
+    // vertical rather than the joint's own up, so it stays true while Lara
+    // leans.
+    int   dynamicBonesAxis      = 1;
+
+    // Put the solved displacement into the joint palette, so it can be seen.
+    //
+    // THE ONLY SETTING HERE THAT CHANGES WHAT IS DRAWN, and it is a debug view
+    // rather than the feature: joint 7 is TORSO, so everything weighted to it
+    // moves and the whole upper body wobbles instead of just the chest. It
+    // exists to make the solver visible without shader work -- anchor
+    // position, direction of motion and magnitude can all be judged by eye.
+    bool  dynamicBonesApply     = false;
+
+    // Exaggeration for that debug view. The real displacement rests near 3
+    // units and peaks in the low tens, which is easy to miss on a moving
+    // character, so the default overstates it to make direction and timing
+    // obvious. Drop to 1.0 to see the true amplitude.
+    float dynamicBonesDebugScale = 4.0f;
+
+    // How far apart two joint origins must be, in world units, to count as
+    // separate joints when scoring which draw carries the body.
+    //
+    // This started at 0.05 and that was far too tight: padding slots differing
+    // by a fraction of a unit each scored as their own joint, so a 33-slot
+    // palette holding 13 identical fillers rated "21 distinct" and outranked a
+    // real 15-of-15 skeleton. Bones on a body are tens of units apart.
+    float dynamicBonesSeparation = 12.0f;
+
+    // Displacement clamp, world units. TR6 bounds its bones with authored
+    // deflector volumes and SpringSystem::collide; a radius is the honest
+    // stand-in for a game whose assets carry none of that.
+    //
+    // Sized to the stiffness. At the 4 Hz tuning a running jump reaches +28
+    // and a long fall +34, so the old 18 would have clipped even a small hop
+    // (which peaks at exactly 18). 40 covers everything short of an extreme
+    // fall, which is where a backstop belongs.
+    float dynamicBonesMaxDisplace = 40.0f;
+
+    // Anchor movement in a single frame beyond which the solver snaps instead
+    // of integrating -- the job SpringSystem::teleport does in TR6. A level
+    // load, a cutscene cut or a camera warp is not an acceleration, and a
+    // spring that treats it as one flings the bone and spends a second
+    // reeling it back.
+    float dynamicBonesTeleport  = 900.0f;
+
+    // How many measured frames between report lines.
+    int   dynamicBonesReportFrames = 900;
+
+    // Dump every joint's translation once per report interval. This is how
+    // the torso index gets confirmed rather than assumed. Verbose.
+    bool  dynamicBonesLogJoints = false;
+
     // Log the DLL-side return address of each distinct call into vid_setPass and
     // ogl_drawVB, as "module+RVA".
     //

@@ -38,6 +38,7 @@
 #include "GameDll.h"
 #include "PortalCull.h"
 #include "Sky.h"
+#include "DynamicBones.h"
 #include "Overlay.h"
 #include "VRSystem.h"
 
@@ -855,6 +856,22 @@ void __cdecl Detour_validate_draw() {
     // the moment of the draw is the actual truth about which matrix is about to
     // be uploaded, so use that.
     DumpDrawState();
+
+    // vid_state.joints is live here and nowhere else -- this is the only point
+    // in the frame where the joint array the draw is about to upload can be
+    // read or changed. Self-gated: both do nothing unless DrawLaraHD is on the
+    // stack, and Apply additionally needs DynamicBonesApply=1.
+    DynamicBonesObserveDraw();
+    DynamicBonesApplyToDraw();
+
+    // Apply edits the engine's own joint array, so the edit has to come back
+    // out once validate_draw has uploaded it -- leaving it in place would hand
+    // the next object a corrupted TORSO matrix. validate_draw has five
+    // returns; a scope guard covers all of them, including the early ones,
+    // without each having to remember.
+    struct JointPatchGuard {
+        ~JointPatchGuard() { DynamicBonesRestoreDraw(); }
+    } jointPatchGuard;
 
     const bool worldPass = IsWorldPass();
     if (worldPass != g_worldPass) ++g_classifyMismatch;
@@ -2384,6 +2401,10 @@ void __cdecl Detour_ogl_present() {
     SkyUpdate();
     OverlayUpdate();
 
+    // Measurement only -- see DynamicBones.h. Must follow GameDllUpdate for
+    // the same reason PortalCullUpdate does: it hooks inside the game DLL.
+    DynamicBonesUpdate();
+
     // Latch "an optic is up" ONCE, here, rather than letting anything poll it
     // per draw. Everything that reads the eye transform during a frame -- world
     // draws, the 2D panel, the video panel, the culling frustum -- has to agree
@@ -2692,6 +2713,7 @@ void RemoveHooks() {
     GamepadShutdown();
     OverlayShutdown();
     SkyShutdown();
+    DynamicBonesShutdown();
     PortalCullShutdown();
     GameDllShutdown();
 

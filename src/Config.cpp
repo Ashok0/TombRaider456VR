@@ -248,6 +248,35 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.cullObjects         = GetBool (L"CullObjects",        g_cfg.cullObjects,        ini);
     g_cfg.cullDumpKey         = GetIntAuto(L"CullDumpKey",      g_cfg.cullDumpKey,        ini);
     g_cfg.skyAtInfinity       = GetBool (L"SkyAtInfinity",      g_cfg.skyAtInfinity,      ini);
+
+    g_cfg.dynamicBones           = GetBool (L"DynamicBones",           g_cfg.dynamicBones,           ini);
+    g_cfg.dynamicBonesTorsoJoint = GetInt  (L"DynamicBonesTorsoJoint", g_cfg.dynamicBonesTorsoJoint, ini);
+    g_cfg.dynamicBonesAnchorX    = GetFloat(L"DynamicBonesAnchorX",    g_cfg.dynamicBonesAnchorX,    ini);
+    g_cfg.dynamicBonesAnchorY    = GetFloat(L"DynamicBonesAnchorY",    g_cfg.dynamicBonesAnchorY,    ini);
+    g_cfg.dynamicBonesAnchorZ    = GetFloat(L"DynamicBonesAnchorZ",    g_cfg.dynamicBonesAnchorZ,    ini);
+    g_cfg.dynamicBonesStiffness  = GetFloat(L"DynamicBonesStiffness",  g_cfg.dynamicBonesStiffness,  ini);
+    g_cfg.dynamicBonesDamping    = GetFloat(L"DynamicBonesDamping",    g_cfg.dynamicBonesDamping,    ini);
+    g_cfg.dynamicBonesGravity    = GetFloat(L"DynamicBonesGravity",    g_cfg.dynamicBonesGravity,    ini);
+    g_cfg.dynamicBonesDriveScale = GetFloat(L"DynamicBonesDriveScale", g_cfg.dynamicBonesDriveScale, ini);
+    g_cfg.dynamicBonesSeparation = GetFloat(L"DynamicBonesSeparation", g_cfg.dynamicBonesSeparation, ini);
+    g_cfg.dynamicBonesAxis       = GetInt  (L"DynamicBonesAxis",       g_cfg.dynamicBonesAxis,       ini);
+    g_cfg.dynamicBonesDriveDeadzone = GetFloat(L"DynamicBonesDriveDeadzone", g_cfg.dynamicBonesDriveDeadzone, ini);
+    g_cfg.dynamicBonesDriveMax   = GetFloat(L"DynamicBonesDriveMax",   g_cfg.dynamicBonesDriveMax,   ini);
+    g_cfg.dynamicBonesDriveMode  = GetInt  (L"DynamicBonesDriveMode",  g_cfg.dynamicBonesDriveMode,  ini);
+    g_cfg.dynamicBonesAirGravity = GetFloat(L"DynamicBonesAirGravity", g_cfg.dynamicBonesAirGravity, ini);
+    g_cfg.dynamicBonesLandImpulse = GetFloat(L"DynamicBonesLandImpulse", g_cfg.dynamicBonesLandImpulse, ini);
+    g_cfg.dynamicBonesDriveSmoothing = GetFloat(L"DynamicBonesDriveSmoothing", g_cfg.dynamicBonesDriveSmoothing, ini);
+    if (g_cfg.dynamicBonesDriveSmoothing <= 0.0f || g_cfg.dynamicBonesDriveSmoothing > 1.0f)
+        g_cfg.dynamicBonesDriveSmoothing = 0.25f;
+    g_cfg.dynamicBonesApply      = GetBool (L"DynamicBonesApply",      g_cfg.dynamicBonesApply,      ini);
+    g_cfg.dynamicBonesDebugScale = GetFloat(L"DynamicBonesDebugScale", g_cfg.dynamicBonesDebugScale, ini);
+    g_cfg.dynamicBonesMaxDisplace = GetFloat(L"DynamicBonesMaxDisplace", g_cfg.dynamicBonesMaxDisplace, ini);
+    g_cfg.dynamicBonesTeleport   = GetFloat(L"DynamicBonesTeleport",   g_cfg.dynamicBonesTeleport,   ini);
+    g_cfg.dynamicBonesReportFrames = GetInt(L"DynamicBonesReportFrames", g_cfg.dynamicBonesReportFrames, ini);
+    g_cfg.dynamicBonesLogJoints  = GetBool (L"DynamicBonesLogJoints",  g_cfg.dynamicBonesLogJoints,  ini);
+
+    // A zero or negative interval would divide by zero in the report path.
+    if (g_cfg.dynamicBonesReportFrames < 1) g_cfg.dynamicBonesReportFrames = 900;
     {
         const int nWatch = GetIntList(L"CullWatchRooms", g_cfg.cullWatchRooms, 16, ini);
         if (nWatch >= 0) g_cfg.cullWatchCount = nWatch;
@@ -325,6 +354,17 @@ void LoadConfig(const wchar_t* ini) {
     if (g_cfg.traceFrames > 0) {
         LogF("config: frame-graph trace armed -- %d frame(s), hotkey vk=0x%02X",
              g_cfg.traceFrames, g_cfg.traceKey);
+    }
+    if (g_cfg.dynamicBones) {
+        LogF("config: dynamic-bone measurement ON (torso joint %d, report every "
+             "%d frames) -- TR4/TR5 only", g_cfg.dynamicBonesTorsoJoint,
+             g_cfg.dynamicBonesReportFrames);
+        if (g_cfg.dynamicBonesApply) {
+            LogF("config: dynamic-bone DEBUG DISPLACEMENT ON at %.1fx -- joint "
+                 "%d is TORSO, so the whole upper body moves, not just the "
+                 "chest. This is a debug view, not the feature.",
+                 g_cfg.dynamicBonesDebugScale, g_cfg.dynamicBonesTorsoJoint);
+        }
     }
 }
 

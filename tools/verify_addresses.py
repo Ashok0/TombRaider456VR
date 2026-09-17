@@ -126,13 +126,13 @@ gd = open(os.path.join(ROOT, 'src', 'GameDll.cpp'), encoding='utf-8',
 # Parsed positionally with comments stripped, so adding a column to the struct
 # shows up here as a length mismatch rather than silently checking the wrong
 # field against the wrong symbol.
-LAYOUT = ['lara', 'camera', 'room', 'number_rooms',
+LAYOUT = ['lara', 'lara_item', 'camera', 'room', 'number_rooms',
           'draw_rooms', 'number_draw_rooms', 'w2v_matrix', 'phd_mxptr',
           'phd_winxmax', 'phd_winymax',
           'outside', 'outside_left', 'outside_right', 'outside_top',
           'outside_bottom',
           'BinocularOn', 'BinocularRange',
-          'PrintRoomsList', 'S_GetObjectBounds', 'DrawSkyHD',
+          'PrintRoomsList', 'S_GetObjectBounds', 'DrawSkyHD', 'DrawLaraHD',
           'DrawNormalBinocs', 'DrawVCIHeadset', 'DrawLabyrinthFishEye',
           'DrawNormalLaserSight', 'DoInfraRedQuad']
 
@@ -259,7 +259,7 @@ try:
               riprel if riprel else 'none', 'none')
 
     a = arrays_in('Hooks.cpp', 'GameDll.cpp', 'PortalCull.cpp', 'Sky.cpp',
-                  'Overlay.cpp')
+                  'Overlay.cpp', 'DynamicBones.cpp')
 
     # tomb456.exe -- the stereo hooks, from Hooks.cpp's Target table.
     hooks = open(os.path.join(ROOT, 'src', 'Hooks.cpp'), encoding='utf-8',
@@ -285,6 +285,12 @@ try:
         if 'kDrawSkyHDPrologue' in a:
             window(dll, 'DrawSkyHD', a['kDrawSkyHDPrologue'],
                    '%s!DrawSkyHD' % dll)
+        # DrawLaraHD (DynamicBones.cpp). Unlike the two above, the 8-byte
+        # window differs between the DLLs, so each is checked against its own
+        # array rather than both against a shared one.
+        arr = 'kDrawLaraHDTR4' if dll == 'tomb4.dll' else 'kDrawLaraHDTR5'
+        if arr in a:
+            window(dll, 'DrawLaraHD', a[arr], '%s!DrawLaraHD' % dll)
         # The optic-overlay stubs (Overlay.cpp). Only the first byte is
         # overwritten there, but all five are compared before the write, so all
         # five are verified here -- and the instruction-boundary check still has

@@ -48,6 +48,7 @@ struct GameDllLayout {
 
     // --- state read by LaraWaterStatus / CameraHeadroom ---------------------
     uint32_t lara;              // lara_info
+    uint32_t laraItem;          // ITEM_INFO* -- Lara's item, for gravity_status/fallspeed
     uint32_t camera;            // camera_info
     uint32_t room;              // ROOM_INFO*  (null until a level is loaded)
     uint32_t numberRooms;       // int16
@@ -75,6 +76,14 @@ struct GameDllLayout {
     uint32_t printRoomsList;    // void PrintRoomsList(void)
     uint32_t sGetObjectBounds;  // int  S_GetObjectBounds(int16* bounds)
     uint32_t drawSkyHD;         // void DrawSkyHD(void) -- HD sky/horizon dome
+
+    // void DrawLaraHD(ITEM_INFO*) -- the HD Lara draw, hooked for its SCOPE
+    // rather than its argument: it is how DynamicBones tells Lara's skinned
+    // draws apart from every other character sharing those shaders in the same
+    // frame. Both DLLs give 8 position-independent prologue bytes, but not the
+    // SAME 8, so the expected bytes live in DynamicBones.cpp keyed on `game`
+    // rather than travelling here the way PrintRoomsList's do.
+    uint32_t drawLaraHD;
 
     // --- the optic overlays, stubbed rather than hooked (see Overlay.h) -------
     //

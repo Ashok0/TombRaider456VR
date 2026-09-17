@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 41224 bytes, 814 lines.
+// Source: TombRaiderVR.ini, 49999 bytes, 997 lines.
 #pragma once
 
 namespace tr {
@@ -784,6 +784,190 @@ CullDumpKey=0x77
 ; stereo, for A/B.
 SkyAtInfinity=1
 
+; --- TR6 dynamic bones, measured against TR4/TR5 ---------------------------
+;
+; MEASUREMENT ONLY. Nothing below changes a pixel.
+;
+; TR6 drives Lara's chest with two ordinary skeleton bones -- JUG_L_DYNAMIC
+; and JUG_R_DYNAMIC, named in 6\DATA\CHAR\LARA_HD.CHR -- fed to the same
+; spring solver as PONY1..10_DYNAMIC. TR4/TR5 have no such bones: Lara there
+; is the classic 15-node rigid hierarchy, and the chest is polygons inside
+; the TORSO mesh. So the solver can be reimplemented but not ported, and
+; whether it is worth reimplementing depends on whether 30 Hz source
+; animation gives a spring anything smooth to chase at headset frame rates.
+;
+; Turning this on runs that experiment and writes the answer to the log:
+;
+;   dynbones: joints=N shader=S frames=F dup=D% snaps=K drive_peak=.. disp_peak=..
+;
+; dup= is the one that matters. It is the percentage of rendered frames whose
+; torso matrix was bit-identical to the frame before. High means the
+; animation is stepping slower than the headset and a spring driven straight
+; off it will buzz rather than swing.
+DynamicBones=0
+
+; Which joint carries the chest. CONFIRMED from the engine, not lore:
+; tomb5.dll SkinUseMatrix is 14 byte-pairs of which only four are filled --
+; (1,2) (4,5) (8,9) (11,12), the two knees and two elbows, where the skin
+)INI"
+           R"INI(; blends between rigid meshes. That pins the canonical order:
+;
+;   0 HIPS  1 THIGH_R  2 CALF_R  3 FOOT_R  4 THIGH_L  5 CALF_L  6 FOOT_L
+;   7 TORSO  8 UARM_R  9 LARM_R  10 HAND_R  11 UARM_L  12 LARM_L
+;   13 HAND_L  14 HEAD
+DynamicBonesTorsoJoint=7
+
+; Where the chest sits ON THE BIND-POSE MODEL, in world units -- NOT an
+; offset from the joint origin.
+;
+; The palette holds skinning matrices (bone * inverse-bind), so a translation
+; column is not a bone position: the measured body draw put forearm and hand
+; 2.0 units apart and hips and torso 0.5, impossible for real origins. Such a
+; matrix does correctly map a bind-pose point to its skinned world position,
+; which is what the anchor is. Lara's model origin is at the hips with +Y
+; DOWN, so the chest is ~170 units of negative Y, slightly forward in Z, and
+; mirrored either side of centre in X.
+DynamicBonesAnchorX=34
+DynamicBonesAnchorY=-170
+DynamicBonesAnchorZ=45
+
+; Spring constant and damping. k is omega^2, so 630 is 4 Hz, and damping 6
+; is a ratio near 0.12.
+;
+; Frequency is what makes it visible, not strength. The previous 1900/22 was
+; a 6.9 Hz flutter that died in 0.11 s -- over before the eye registers it,
+; and landing during Lara's own landing crouch, which hid the rest. Logs
+; showed every jump detected and displaced ~14 units; it just could not be
+; seen. At 4 Hz / 0.12 a running jump rings for about 0.8 s. Resting sag is
+; gravity / stiffness, so the log's resting Y now reads ~8.6, which is right.
+;
+; The first measured build used 180/12 with a world-space position spring.
+; That formulation lags by c*V/k under constant velocity, which at Lara's
+; running speed is 160 units against an 18-unit clamp -- why both sessions
+; reported disp_peak pinned at exactly 18.00 and never settling. The solver
+; is now driven by the parent joint's acceleration instead, so constant
+; velocity produces no displacement at all, and these constants replace the
+; old ones rather than merely retuning them.
+DynamicBonesStiffness=630
+DynamicBonesDamping=6
+
+; Along world Y, which is DOWN in TR4/TR5, so positive pulls downward. 5400
+; is the engine's own gravity per second squared: 6 units per frame at 30
+; fps, and 6 * 30^2 = 5400.
+DynamicBonesGravity=5400
+
+; How much of the parent joint's acceleration the bone feels. 1.0 is the
+; physical answer; lower tames the noise that comes from differentiating a
+; joint matrix twice.
+DynamicBonesDriveScale=1.0
+
+; Ignore drive accelerations below this, in world units per second squared.
+; Gravity is 5400 for scale.
+;
+; Walking bobs the torso every step and an unfiltered solver answers all of
+; it, so she jiggled while strolling. A jump or landing accelerates the torso
+; by roughly an order of magnitude more than a footfall. Raise this if
+; walking still registers; lower it if jumps stop registering.
+;
+; Drive term only -- gravity and the spring are never thresholded, since they
+; are what bring the bone back to rest.
+DynamicBonesDriveDeadzone=4000
+
+; What drives the bone.
+;
+;   1 = engine state (default). Reads Lara's own gravity_status and fallspeed
+;       from the game DLL. Airborne makes the bone weightless, grounded
+;       restores gravity, and landing adds a kick sized by how far she fell.
+;       Every jump responds, and walking cannot.
+;   0 = acceleration. Differentiates the torso joint twice, then smooths,
+;       ceilings and deadzones it. Kept for comparison: those filters compound
+;       on short events, so landings only registered when an impact happened
+;       to straddle frame boundaries favourably.
+;
+; DriveSmoothing, DriveMax and DriveDeadzone below only apply in mode 0.
+DynamicBonesDriveMode=1
+
+; Fraction of gravity felt while airborne, engine mode. 0 is physically right:
+; in freefall the torso falls with the bone, so it goes weightless and rises
+; off its sag -- half of what makes a jump read.
+DynamicBonesAirGravity=0
+
+; Landing kick, engine mode: fallspeed * 30 * this, units/s, downward. Uses the
+; deepest fallspeed of the jump, since the engine zeroes it on the landing
+; tick. Simulated at the default 4 Hz tuning, the bone reaches about +18 for a
+; small hop, +23 standing, +28 running and +34 for a long fall -- all inside the
+; 40-unit clamp. Takeoff lifts it to about -6 every jump. Raise for more bounce.
+DynamicBonesLandImpulse=0.2
+
+; Low-pass on the acceleration estimate, 0..1. Lower is smoother.
+;
+; Position differentiated twice is amplified by 1/dt^2, about 2900 at these
+; frame rates, so 128 units of anchor movement in one frame -- an ordinary
+; measured value -- arrives as roughly 370,000 units per second squared. Raw,
+; that is all spike and no signal. A jump lasts tens of frames and survives
+; this filter easily; single-frame noise does not.
+DynamicBonesDriveSmoothing=0.25
+
+; Hard ceiling on drive acceleration, world units per second squared.
+;
+; 20000 is not arbitrary. One frame at the ceiling gives dv = a*dt, and a
+; spring of this stiffness answers with a peak of dv/sqrt(k) -- so the
+; previous 54000 produced 22.9 units against an 18-unit clamp and guaranteed
+; saturation by itself, which is what the logs showed. 20000 peaks near 8.5
+; and leaves the clamp as a backstop rather than the normal state.
+DynamicBonesDriveMax=20000
+
+; Which directions the bone may move in.
+;
+;   0 = free, all three axes
+;   1 = world vertical only (default)
+;
+; Free looks right for jumping and wrong for turning: the anchor sits off
+; centre and forward of the joint origin, so rotating the torso swings it
+; through an arc, and an arc is acceleration -- which threw the whole upper
+; body sideways on stick turns. Vertical-only keeps the jump response and
+; discards the rotational sloshing. World vertical, not the joint own up, so
+; it stays true while Lara leans.
+DynamicBonesAxis=1
+
+; Put the solved displacement into the joint palette, so it can be seen.
+;
+; THE ONLY SETTING HERE THAT CHANGES WHAT IS DRAWN. It is a debug view, not
+; the feature: joint 7 is TORSO, so everything weighted to it moves and the
+; whole upper body wobbles rather than just the chest. The point is to make
+; the solver visible without shader work -- anchor position, direction of
+; motion and magnitude can all be judged by eye.
+DynamicBonesApply=0
+
+; Exaggeration for that debug view. The real displacement rests near 3 units
+; and peaks in the low tens, easy to miss on a moving character, so the
+; default overstates it. Drop to 1.0 for true amplitude.
+DynamicBonesDebugScale=4
+
+; How far apart two joint origins must be, in world units, to count as
+; separate joints when scoring which draw carries the body. Bones on a body
+; are tens of units apart; padding slots differ by a fraction of one.
+DynamicBonesSeparation=12
+
+; Displacement clamp, world units. TR6 bounds its bones with authored
+; deflector volumes; a radius is the stand-in for assets that carry none.
+; Sized to the stiffness: at 4 Hz a running jump reaches +28 and a long fall
+; +34, so the old 18 would clip even a small hop. 40 leaves only extreme falls
+; touching it.
+DynamicBonesMaxDisplace=40
+
+; Anchor movement in one frame beyond which the solver snaps instead of
+; integrating -- what SpringSystem::teleport does in TR6. A level load or a
+; cutscene cut is not an acceleration.
+DynamicBonesTeleport=900
+
+; Frames between report lines.
+DynamicBonesReportFrames=900
+
+; Dump every joint's translation once per report interval, to confirm the
+; torso index rather than assume it. Verbose.
+DynamicBonesLogJoints=0
+
 ; Room indices to watch, comma or space separated. Empty = off.
 ;
 ; Any listed room the traversal appends is reported once per distinct route:
@@ -794,7 +978,8 @@ SkyAtInfinity=1
 ; This is the targeted form of the dump key. A room that only misbehaves for a
 ; moment is hard to catch with a hotkey, and "does the traversal ever reach 215,
 ; and how" should not need good reflexes to answer. Silence means it never got
-; added, which is itself the answer.
+)INI"
+           R"INI(; added, which is itself the answer.
 CullWatchRooms=
 
 ; --- measured, and no longer behind a key ------------------------------------
@@ -810,8 +995,7 @@ CullWatchRooms=
 ; near-plane test inside SetRoomBounds before any rectangle is looked at.
 ;
 ; PROXIMITY IS THE WRONG CRITERION. Appending rooms by distance from the camera
-)INI"
-           R"INI(; happily adds a stacked room that shares world space with the one you are
+; happily adds a stacked room that shares world space with the one you are
 ; standing in and that no portal reaches, which draws foreign geometry over your
 ; own. This is why the fix is a traversal and not a radius.
 ;

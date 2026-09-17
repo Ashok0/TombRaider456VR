@@ -56,6 +56,7 @@ const uint8_t kPrintRoomsListTR5[] = { 0x48, 0x89, 0x5C, 0x24, 0x10 };
 constexpr GameDllLayout kDlls[] = {
     { 0, 0x696B4999, L"tomb4.dll", "Tomb Raider IV",
       /* lara            */ 0x004F2E40,
+      /* lara_item       */ 0x004F3000,
       /* camera          */ 0x00663E40,
       /* room            */ 0x00663FC8,
       /* number_rooms    */ 0x00660810,
@@ -75,6 +76,7 @@ constexpr GameDllLayout kDlls[] = {
       /* PrintRoomsList  */ 0x000C5160,
       /* S_GetObjectB..  */ 0x000B8210,
       /* DrawSkyHD       */ 0x000C4CA0,
+      /* DrawLaraHD      */ 0x000C40F0,
       /* DrawNormalBin.. */ 0x000D1B00,
       /* DrawVCIHeadset  */ 0x000D17B0,
       /* DrawLabyrinth.. */ 0x000D1440,
@@ -84,6 +86,7 @@ constexpr GameDllLayout kDlls[] = {
 
     { 1, 0x696B499C, L"tomb5.dll", "Tomb Raider V",
       /* lara            */ 0x004EE740,
+      /* lara_item       */ 0x004EE900,
       /* camera          */ 0x0066D0E0,
       /* room            */ 0x0065EC28,
       /* number_rooms    */ 0x0065B2F0,
@@ -103,6 +106,7 @@ constexpr GameDllLayout kDlls[] = {
       /* PrintRoomsList  */ 0x000B9CA0,
       /* S_GetObjectB..  */ 0x000ABB20,
       /* DrawSkyHD       */ 0x000B97F0,
+      /* DrawLaraHD      */ 0x000B8C50,
       /* DrawNormalBin.. */ 0x000C4DD0,
       /* DrawVCIHeadset  */ 0x000C4A80,
       /* DrawLabyrinth.. */ 0x000C4710,
