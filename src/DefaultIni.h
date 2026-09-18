@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 53384 bytes, 1062 lines.
+// Source: TombRaiderVR.ini, 53616 bytes, 1067 lines.
 #pragma once
 
 namespace tr {
@@ -962,17 +962,22 @@ DynamicBonesForwardSign=0
 ; solved motion. Shader path only.
 ;
 ; 1.0 moves the bust as far as the whole-torso view moved the whole upper body,
-; which reads as much less because so much less of her moves. At the default
-; 1.5 and the default spring, a running jump lifts the bust about 22 units on
-; takeoff and drops it about 29 on landing. Raise for more; lower if rubbery.
-DynamicBonesChestStrength=1.5
+; which reads as much less because so much less of her moves. Simulated first
+; bounce at this value and the default spring: about 16 units for a small hop,
+; 28 standing, 40 running, 57 for a long fall, with the second bounce under a
+; third of the first. Raise for more; lower if rubbery.
+;
+; DynamicBonesMaxDisplace clamps the solver BEFORE this multiplies, so raising
+; this never moves where that clamp bites -- only falls past about fallspeed
+; 220 reach it.
+DynamicBonesChestStrength=2.5
 
-; The chest region, measured from the torso mesh. Shader path only.
+)INI"
+           R"INI(; The chest region, measured from the torso mesh. Shader path only.
 ;
 ; Height is normally MEASURED: the band is fitted to the bump the bust makes in
 ; the mesh's front profile. Top/Bottom are only the fallback for an outfit with
-)INI"
-           R"INI(; no distinct bump, as fractions of torso height from the neck end down.
+; no distinct bump, as fractions of torso height from the neck end down.
 DynamicBonesChestTop=0.18
 DynamicBonesChestBottom=0.52
 ; Depth: where the weight starts, as a fraction of torso depth behind the front

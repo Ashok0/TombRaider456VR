@@ -875,10 +875,16 @@ struct Config {
     //
     // 1.0 moves the bust exactly as far as the whole-torso view moved the whole
     // upper body. That reads as much less, because so much less of her is
-    // moving, so the default overstates it. At the default spring a running
-    // jump then lifts the bust about 22 units on takeoff and drops it about 29
-    // on landing. Raise for more bounce; lower if it looks rubbery.
-    float dynamicBonesChestStrength = 1.5f;
+    // moving, so the default overstates it. Simulated first-bounce sizes at the
+    // default spring and this value: about 16 units for a small hop, 28 for a
+    // standing jump, 40 for a running one and 57 for a long fall, with the
+    // second bounce under a third of the first. Raise for more; lower if it
+    // looks rubbery.
+    //
+    // DynamicBonesMaxDisplace clamps the solver BEFORE this multiplies, so
+    // raising this never changes where that clamp bites -- only falls past
+    // about fallspeed 220 reach it, and they scale with everything else.
+    float dynamicBonesChestStrength = 2.5f;
 
     // The chest region, measured from the torso mesh. Shader path only.
     //

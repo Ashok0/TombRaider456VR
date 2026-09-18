@@ -4050,11 +4050,52 @@ profile. On the measured mesh the profile read, neck to waist:
                   ------ bust ------   belly
 ```
 
-The band keeps every slice within half the bump's height of the peak. That gives
-0.40 to 0.78 of torso height, excluding the upper chest above and the belly
-below. A depth ramp from the torso's midline excludes the back and backpack, and
-a lateral fade stops short of the armpits. The offset is measured from rest, so
-the chest keeps its authored shape while she stands still.
+The band keeps every slice within `DynamicBonesChestBand` of the peak, then
+reaches a little past the bump at both ends. On the measured mesh that is 0.37
+to 0.86 of torso height: the collarbone above is excluded outright, and the
+belly below only catches the tail of the fade. A depth ramp excludes the back
+and backpack -- the weight starts 51 units behind the front surface and is full
+25 units further forward -- and a lateral fade stops short of the armpits. The
+offset is measured from rest, so the chest keeps its authored shape while she
+stands still.
+
+### Final tuning
+
+Three things were wrong once the effect was working in-headset, and each came
+out of the solver rather than by turning knobs until it looked right.
+
+**A landing rang too many times.** Damping sets how much of each bounce carries
+into the next: at 0.12 of critical that ratio is 46%, which is three or four
+visible swings. The default is now 0.19, where the second bounce is 28% of the
+first and the third is 1.3 units -- one large bounce and one clearly smaller.
+
+**The chest moved on the way up.** In freefall the torso falls with the chest,
+so the physical answer is weightless and the chest rises about 15 units as she
+jumps. `DynamicBonesAirGravity` now defaults to `1`, holding full gravity in the
+air: simulated motion for the whole ascent is 0.0, and the chest answers the
+landing only. `0` restores the physical behaviour.
+
+**Too little of the breast moved.** The depth start went from 0.5 to 0.6 of
+torso depth, so the sides and underside move rather than only the front surface;
+the lateral limit from 0.28 to 0.34 of torso width; and the height band gained
+`DynamicBonesChestBand` plus a small margin past the bump. Measured against a
+mesh rebuilt from the logged torso profile, that is 1.37x the vertices at full
+weight and 1.43x the total moving mass.
+
+Amplitude is then one multiplier, `DynamicBonesChestStrength`, tuned by eye to
+`2.5`. The solver's own numbers are unaffected by it -- these are its output,
+before the multiplier -- so the first bounce reaches:
+
+| Jump | Solver | On screen at 2.5x |
+|---|---:|---:|
+| Small hop | 6.5 | 16 |
+| Standing jump | 11.3 | 28 |
+| Running jump | 16.1 | 40 |
+| Long fall | 22.6 | 57 |
+
+`DynamicBonesMaxDisplace` clamps the solver **before** that multiplier, so
+raising the multiplier never moves where the clamp bites; only falls past about
+fallspeed 220 reach it.
 
 ### What was tried, and what each result proved
 
@@ -4080,19 +4121,16 @@ the chest keeps its authored shape while she stands still.
 
 ### Configuration
 
-The template ships the feature **off**. To enable it:
-
-```ini
-DynamicBones=1
-DynamicBonesApply=1
-```
+The feature ships **on**. `DynamicBones=0` switches the whole thing off, and
+`DynamicBonesApply=0` keeps the solver running and measuring while drawing
+nothing.
 
 | Setting | Template | Meaning |
 |---|---:|---|
-| `DynamicBones` | `0` | master switch for the solver and measurement |
-| `DynamicBonesApply` | `0` | the only setting that changes what is drawn |
+| `DynamicBones` | `1` | master switch for the solver and measurement |
+| `DynamicBonesApply` | `1` | the only setting that changes what is drawn |
 | `DynamicBonesShader` | `1` | `1` chest only, per vertex; `0` whole TORSO joint |
-| `DynamicBonesChestStrength` | `1.5` | chest path amplitude multiplier |
+| `DynamicBonesChestStrength` | `2.5` | chest path amplitude multiplier |
 | `DynamicBonesDebugScale` | `1` | overall multiplier on **both** paths; stacks with `ChestStrength` |
 | `DynamicBonesDriveMode` | `1` | `1` engine state; `0` differentiated acceleration (kept for comparison) |
 | `DynamicBonesStiffness` / `Damping` | `630` / `9.5` | 4 Hz, damping ratio 0.19: one large bounce, then a smaller one |
@@ -4144,12 +4182,13 @@ fit shows in the log.
   test, chest vertices move by exactly the offset, seam vertices by their TORSO
   share, and back, arm and out-of-region vertices not at all.
 - **Validated in-headset:** jump detection and landing pairing, gravity and lag
-  direction, and the per-vertex path bouncing the right area. The back, backpack
-  and shoulders staying still is established by the transform-feedback test
-  above rather than by an explicit in-headset check. **Not yet validated
-  in-headset:** the profile-fitted height band and
-  `DynamicBonesChestStrength=1.5`, which were changed after the last session
-  reported the effect as correct in area but too subtle.
+  direction, the per-vertex path bouncing the right area, the profile-fitted
+  band, and the final tuning below -- reported as "pretty much perfect" in play.
+  The back, backpack and shoulders staying still is established by the
+  transform-feedback test above rather than by an explicit in-headset check.
+  **Not yet validated in-headset:** the last amplitude step,
+  `DynamicBonesChestStrength` 2.0 to 2.5, which is a pure scalar on motion that
+  was already correct.
 
 Implementation is in `src\DynamicBones.*` (solver, `DrawLaraHD` hook, body-draw
 selection, engine-state drive) and `src\BoneSkin.*` (`shader_init` hook, shader
