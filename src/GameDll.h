@@ -29,7 +29,14 @@
 // TR4 and TR5 have IDENTICAL struct layouts -- 304-byte ROOM_INFO with
 // door/x/y/z/maxceiling/bound_active at +8/+40/+44/+48/+56/+75 and the clip rect
 // at +76..+82, 112-byte camera_info -- so there is one struct description and a
-// per-build address table. TR6 is a different engine and has no row.
+// per-build address table. TR6 is a different engine and has its own row type,
+// Tr6Layout, below.
+//
+// TWO BUILDS OF EACH DLL ARE SUPPORTED: the debug release that ships PDBs (what
+// all of this was reverse engineered against) and the retail Steam release.
+// The retail rows have no PDB to be read from; they were carried across with
+// tools\port_addresses.py, which matches the two builds function by function
+// and data reference by data reference, and every one was then re-checked.
 #pragma once
 
 #include <cstdint>
@@ -102,7 +109,78 @@ struct GameDllLayout {
     // PortalCull.cpp beside the hook that uses it.
     const uint8_t* printRoomsListPrologue;
     uint32_t       printRoomsListStolen;
+
+    // Prologues that differ between the debug/PDB build and the retail build
+    // of the SAME DLL. All three are one 5-byte `mov [rsp+N], rbx` whose home
+    // slot moved when the retail compiler laid the frame out differently, so
+    // they travel with the row for the same reason PrintRoomsList's does.
+    const uint8_t* drawSkyHDPrologue;
+    const uint8_t* drawVCIHeadsetPrologue;
+    const uint8_t* drawLabyrinthFishEyePrologue;
 };
+
+// TR6 is a different engine, so it has its own row type. One row per tomb6.dll
+// build, selected by PE timestamp; GameDll.cpp reads the state fields and
+// Hooks.cpp the hook targets and call-site allowlists.
+//
+// The debug build's row came out of Ghidra against that DLL. The retail row was
+// derived from it with tools\port_addresses.py and then checked by hand where a
+// function had changed shape -- see the comments on the table in GameDll.cpp.
+struct Tr6Layout {
+    uint32_t    timestamp;
+    const char* name;
+
+    // --- state (GameDll.cpp) ------------------------------------------------
+    uint32_t playerPointer;         // live player object pointer; position at +0x40
+    uint32_t currentGmx;            // gmapGMXCur
+    uint32_t isPointInWater;        // int IsPointInWater(const float* pos, float* height)
+    uint32_t cameraMatrix;          // rendered chase-camera world-to-view matrix
+
+    // --- hook targets (Hooks.cpp) -------------------------------------------
+    uint32_t renderScene;           // App_Render_Scene
+    uint32_t calculate;             // SYS_DRAW_CRP::Calculate
+    uint32_t clippedObb;            // ClippedOBB_CPP
+    uint32_t clippedAabb;           // the AABB pre-test before it
+    uint32_t drawProjectedShadows;  // App_DrawChar_DrawProjectedShadows
+    uint32_t effectsUpdate;         // App_DrawEffects_UpdateRenderData
+    uint32_t fxCamDist;
+    uint32_t fxBoundsClip;          // mathIsBoundsClipped
+    uint32_t fxNodeBoundsClip;      // mathIsBoundsClippedAlt
+    uint32_t gcamCamera;
+    uint32_t fxProcessBox;
+    uint32_t fxProcessBoxSize;
+
+    // --- return addresses: the instruction after one specific call ----------
+    uint32_t fxLightBoundsReturn;
+    uint32_t fxNodeBoundsReturn;
+    uint32_t mainCalculateReturn;
+    uint32_t reflectionCalculateReturn;
+    uint32_t mainRoomGroupObbReturn;
+    uint32_t clipRoomObbReturn;
+    uint32_t characterObbReturn;
+    uint32_t animatedDynamicObbReturn;
+    uint32_t animatedStaticObbReturn;
+    uint32_t waterObbReturn[3];
+
+    // The final scene-object renderer's paired AABB/OBB calls. The retail
+    // build inlines one callee into the character path and so has one pair
+    // more than the debug build; unused slots are 0.
+    static constexpr int kMaxSceneObjectSites = 8;
+    uint32_t sceneObjectAabbReturn[kMaxSceneObjectSites];
+    uint32_t sceneObjectObbReturn[kMaxSceneObjectSites];
+
+    // These three prologues contain a RIP-relative disp32 (relocated in the
+    // trampoline), so their expected bytes are necessarily per build.
+    uint8_t fxCamDistPrologue[12];
+    uint8_t fxBoundsClipPrologue[11];
+    uint8_t fxNodeBoundsClipPrologue[11];
+};
+
+// The row for a tomb6.dll PE timestamp, or null for an unknown build.
+const Tr6Layout* Tr6LayoutFor(uint32_t timestamp);
+
+// Log the known tomb6.dll builds, for an "unsupported build" message.
+void Tr6LogKnownBuilds(const char* prefix);
 
 // Resolve tomb4.dll / tomb5.dll for the game currently selected. Cheap and
 // idempotent; call once per frame. Returns true once a supported build is bound.

@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 52264 bytes, 1044 lines.
+// Source: TombRaiderVR.ini, 52960 bytes, 1054 lines.
 #pragma once
 
 namespace tr {
@@ -784,9 +784,12 @@ CullDumpKey=0x77
 ; stereo, for A/B.
 SkyAtInfinity=1
 
-; --- TR6 dynamic bones, measured against TR4/TR5 ---------------------------
+; --- Chest physics for TR4/TR5, ported from TR6's dynamic bones ------------
 ;
-; MEASUREMENT ONLY. Nothing below changes a pixel.
+; This started as a measurement and is now a feature: with DynamicBones=1 and
+; DynamicBonesShader=1 (both the defaults) the solver runs and the chest is
+; deformed per vertex in the skinning shader. Everything else in this section
+; tunes or instruments it; the settings that only measure say so.
 ;
 ; TR6 drives Lara's chest with two ordinary skeleton bones -- JUG_L_DYNAMIC
 ; and JUG_R_DYNAMIC, named in 6\DATA\CHAR\LARA_HD.CHR -- fed to the same
@@ -796,21 +799,25 @@ SkyAtInfinity=1
 ; whether it is worth reimplementing depends on whether 30 Hz source
 ; animation gives a spring anything smooth to chase at headset frame rates.
 ;
-; Turning this on runs that experiment and writes the answer to the log:
+; The answer turned out to be yes, so this is the master switch for the whole
+; section: it runs the solver, and it is what lets the skinning shader be
+; patched. Off means no chest motion at all, whatever the settings below say.
+;
+; It also writes the measurement to the log:
 ;
 ;   dynbones: joints=N shader=S frames=F dup=D% snaps=K drive_peak=.. disp_peak=..
 ;
 ; dup= is the one that matters. It is the percentage of rendered frames whose
-; torso matrix was bit-identical to the frame before. High means the
+)INI"
+           R"INI(; torso matrix was bit-identical to the frame before. High means the
 ; animation is stepping slower than the headset and a spring driven straight
 ; off it will buzz rather than swing.
-DynamicBones=0
+DynamicBones=1
 
 ; Which joint carries the chest. CONFIRMED from the engine, not lore:
 ; tomb5.dll SkinUseMatrix is 14 byte-pairs of which only four are filled --
 ; (1,2) (4,5) (8,9) (11,12), the two knees and two elbows, where the skin
-)INI"
-           R"INI(; blends between rigid meshes. That pins the canonical order:
+; blends between rigid meshes. That pins the canonical order:
 ;
 ;   0 HIPS  1 THIGH_R  2 CALF_R  3 FOOT_R  4 THIGH_L  5 CALF_L  6 FOOT_L
 ;   7 TORSO  8 UARM_R  9 LARM_R  10 HAND_R  11 UARM_L  12 LARM_L
@@ -934,7 +941,8 @@ DynamicBonesAxis=1
 ;
 ;   1 = per vertex, in the skinning shader (default). Only the front of the
 ;       chest moves; back, backpack, shoulders and armpits stay where the
-;       animation put them. Stock build only.
+;       animation put them. Needs a build whose shader_init address is known:
+;       the debug build, the retail exe and the HD Definitive Patch all are.
 ;   0 = the whole TORSO joint. Moves the back and backpack with the chest and
 ;       stretches the shoulder seams. The fallback, used automatically if the
 ;       shader path cannot start -- the log says why.
@@ -964,7 +972,8 @@ DynamicBonesChestStrength=1.5
 DynamicBonesChestTop=0.18
 DynamicBonesChestBottom=0.52
 ; Depth: where the weight starts, as a fraction of torso depth behind the front
-; surface. 0.5 = mid-torso, so the back and backpack are untouched.
+)INI"
+           R"INI(; surface. 0.5 = mid-torso, so the back and backpack are untouched.
 DynamicBonesChestDepth=0.5
 ; Width: half-width fraction before the weight fades toward the armpits. Lower
 ; keeps the shoulders stiller.
@@ -975,15 +984,16 @@ DynamicBonesChestWidth=0.28
 ; what will bounce.
 DynamicBonesRegionDebug=0
 
-; Put the solved displacement into the joint palette, so it can be seen.
+; Put the solved displacement into the joint palette.
 ;
-)INI"
-           R"INI(; THE ONLY SETTING HERE THAT CHANGES WHAT IS DRAWN. It is a debug view, not
-; the feature: joint 7 is TORSO, so everything weighted to it moves and the
-; whole upper body wobbles rather than just the chest. The point is to make
-; the solver visible without shader work -- anchor position, direction of
-; motion and magnitude can all be judged by eye.
-DynamicBonesApply=0
+; THIS IS THE FALLBACK, AND IT IS IGNORED WHENEVER THE PER-VERTEX PATH IS
+; LIVE -- doing both would move the chest twice. It only reaches the screen
+; when DynamicBonesShader=0, or when the shader path cannot start on this
+; build; the log says which. Joint 7 is TORSO, so everything weighted to it
+; moves and the whole upper body wobbles rather than just the chest: coarse,
+; but it also makes the solver visible by eye -- anchor position, direction
+; of motion and magnitude can all be judged from it.
+DynamicBonesApply=1
 
 ; Overall multiplier on the solved motion, applied to BOTH paths -- the
 ; whole-torso view and the per-vertex chest, where it stacks with

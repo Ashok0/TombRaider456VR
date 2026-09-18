@@ -687,18 +687,18 @@ struct Config {
     // finite-dome stereo, for A/B.
     bool  skyAtInfinity         = true;
 
-    // --- TR6 dynamic bones, measured against TR4/TR5 (see DynamicBones.h) ---
+    // --- Chest physics for TR4/TR5, from TR6's dynamic bones (DynamicBones.h)
     //
-    // MEASUREMENT ONLY. Nothing here changes a pixel. It runs TR6's spring
-    // model off TR4/TR5's torso joint and reports what comes out, because the
-    // question that decides whether the feature is buildable at all -- whether
-    // 30 Hz source animation gives a spring anything smooth to chase at
-    // headset frame rates -- is cheaper to answer with a log line than with a
-    // shader.
+    // This began as a measurement -- run TR6's spring model off TR4/TR5's torso
+    // joint and report what comes out, because whether 30 Hz source animation
+    // gives a spring anything smooth to chase at headset frame rates was
+    // cheaper to answer with a log line than with a shader. The answer was yes,
+    // so it is now a feature and ON by default, matching the shipped ini.
     //
-    // Off by default, and it stays off by default until something reads
-    // DynamicBonesDisplacement().
-    bool  dynamicBones          = false;
+    // This is the master switch: it runs the solver AND is what allows the
+    // skinning shader to be patched (BoneSkin.cpp). Off means no chest motion
+    // at all, whatever dynamicBonesShader and dynamicBonesApply say.
+    bool  dynamicBones          = true;
 
     // Which joint carries the chest. CONFIRMED, not inherited lore: tomb5.dll
     // SkinUseMatrix (RVA 0x00127528) is 14 byte-pairs and only four are
@@ -901,14 +901,15 @@ struct Config {
     // what bulges is exactly what will bounce.
     float dynamicBonesRegionDebug = 0.0f;
 
-    // Put the solved displacement into the joint palette, so it can be seen.
+    // Put the solved displacement into the joint palette.
     //
-    // THE ONLY SETTING HERE THAT CHANGES WHAT IS DRAWN, and it is a debug view
-    // rather than the feature: joint 7 is TORSO, so everything weighted to it
-    // moves and the whole upper body wobbles instead of just the chest. It
-    // exists to make the solver visible without shader work -- anchor
-    // position, direction of motion and magnitude can all be judged by eye.
-    bool  dynamicBonesApply     = false;
+    // THE FALLBACK, IGNORED WHENEVER THE PER-VERTEX PATH IS LIVE: DynamicBones
+    // .cpp returns early on BoneSkinActive(), because doing both would move the
+    // chest twice. It reaches the screen when dynamicBonesShader is 0, or when
+    // the shader path cannot start on this build. Joint 7 is TORSO, so
+    // everything weighted to it moves and the whole upper body wobbles instead
+    // of just the chest -- coarse, but it also makes the solver visible by eye.
+    bool  dynamicBonesApply     = true;
 
     // Overall multiplier on the solved motion, applied to BOTH paths -- the
     // whole-torso view and the per-vertex chest, where it stacks with

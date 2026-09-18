@@ -16,9 +16,12 @@ constexpr uint8_t kRet = 0xC3;
 // Prologues, verified out of both PDBs and byte-identical between them:
 //
 //   DrawNormalBinocs        48 89 5C 24 08   mov [rsp+8],    rbx
-//   DrawVCIHeadset          48 89 5C 24 10   mov [rsp+0x10], rbx
-//   DrawLabyrinthFishEye    48 89 5C 24 10   mov [rsp+0x10], rbx
+//   DrawVCIHeadset          48 89 5C 24 10   mov [rsp+0x10], rbx   (debug)
+//   DrawLabyrinthFishEye    48 89 5C 24 10   mov [rsp+0x10], rbx   (debug)
 //   DrawNormalLaserSight    48 89 5C 24 10   mov [rsp+0x10], rbx
+//
+// The retail DLLs save rbx at [rsp+8] in DrawVCIHeadset and DrawLabyrinthFishEye,
+// so those two take their expected bytes from the row rather than from here.
 //
 // Only the first byte is overwritten, so the rest of that instruction is left
 // as dead bytes that nothing branches into. They are checked anyway: five bytes
@@ -43,22 +46,23 @@ enum class Group { Binocular, Scope, Tint };
 
 struct Stub {
     uint32_t GameDllLayout::* rva;
-    const uint8_t*            prologue;
+    const uint8_t*            prologue;     // null: use rowPrologue
+    const uint8_t* GameDllLayout::* rowPrologue;
     size_t                    prologueLen;
     const char*               name;
     Group                     group;
 };
 
 const Stub kStubs[] = {
-    { &GameDllLayout::drawNormalBinocs,     kSaveRbx08, sizeof(kSaveRbx08),
+    { &GameDllLayout::drawNormalBinocs,     kSaveRbx08, nullptr, sizeof(kSaveRbx08),
       "DrawNormalBinocs",     Group::Binocular },
-    { &GameDllLayout::drawVCIHeadset,       kSaveRbx10, sizeof(kSaveRbx10),
-      "DrawVCIHeadset",       Group::Binocular },
-    { &GameDllLayout::drawLabyrinthFishEye, kSaveRbx10, sizeof(kSaveRbx10),
-      "DrawLabyrinthFishEye", Group::Binocular },
-    { &GameDllLayout::drawNormalLaserSight, kSaveRbx10, sizeof(kSaveRbx10),
+    { &GameDllLayout::drawVCIHeadset,       nullptr, &GameDllLayout::drawVCIHeadsetPrologue,
+      sizeof(kSaveRbx10),     "DrawVCIHeadset",       Group::Binocular },
+    { &GameDllLayout::drawLabyrinthFishEye, nullptr, &GameDllLayout::drawLabyrinthFishEyePrologue,
+      sizeof(kSaveRbx10),     "DrawLabyrinthFishEye", Group::Binocular },
+    { &GameDllLayout::drawNormalLaserSight, kSaveRbx10, nullptr, sizeof(kSaveRbx10),
       "DrawNormalLaserSight", Group::Scope },
-    { &GameDllLayout::doInfraRedQuad,       kSubRsp28,  sizeof(kSubRsp28),
+    { &GameDllLayout::doInfraRedQuad,       kSubRsp28,  nullptr, sizeof(kSubRsp28),
       "DoInfraRedQuad",       Group::Tint },
 };
 
@@ -90,7 +94,9 @@ bool WantGroup(Group g) {
 bool Patch(int i, uint64_t base) {
     const Stub& s = kStubs[i];
     const uint32_t rva = g_boundDll ? (*g_boundDll).*(s.rva) : 0;
-    if (rva == 0) return false;
+    const uint8_t* prologue = s.prologue ? s.prologue
+                            : g_boundDll ? (*g_boundDll).*(s.rowPrologue) : nullptr;
+    if (rva == 0 || !prologue) return false;
 
     uint8_t* at = reinterpret_cast<uint8_t*>(base + rva);
 
@@ -100,7 +106,7 @@ bool Patch(int i, uint64_t base) {
         return false;
     }
 
-    bool ok = std::memcmp(at, s.prologue, s.prologueLen) == 0;
+    bool ok = std::memcmp(at, prologue, s.prologueLen) == 0;
     if (ok) {
         g_applied[i].saved = at[0];
         g_applied[i].at    = at;

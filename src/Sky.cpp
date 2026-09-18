@@ -13,10 +13,9 @@ hook::InlineHook g_hDrawSkyHD;
 
 typedef void (__cdecl* Fn_DrawSkyHD)(void);
 
-// Identical in tomb4.dll and tomb5.dll, 5 bytes, PIC, instruction-aligned --
-// the same window S_GetObjectBounds uses in PortalCull.cpp.
-//   48 89 5C 24 08     mov [rsp+8], rbx
-const uint8_t kDrawSkyHDPrologue[] = { 0x48, 0x89, 0x5C, 0x24, 0x08 };
+// The expected prologue travels with the row: `mov [rsp+N], rbx`, 5 bytes, PIC,
+// instruction-aligned, but N is 8 in the debug DLLs and 0x18 in retail.
+constexpr size_t kDrawSkyHDPrologueLen = 5;
 
 const GameDllLayout* g_boundDll  = nullptr;
 uint64_t             g_boundBase = 0;
@@ -32,11 +31,11 @@ void __cdecl Detour_DrawSkyHD() {
 }
 
 bool Install(const GameDllLayout& d, uint64_t base) {
-    if (d.drawSkyHD == 0) return false;
+    if (d.drawSkyHD == 0 || !d.drawSkyHDPrologue) return false;
     return g_hDrawSkyHD.Install(
         reinterpret_cast<void*>(base + d.drawSkyHD),
         reinterpret_cast<void*>(&Detour_DrawSkyHD),
-        5, kDrawSkyHDPrologue, sizeof(kDrawSkyHDPrologue),
+        5, d.drawSkyHDPrologue, kDrawSkyHDPrologueLen,
         "DrawSkyHD");
 }
 

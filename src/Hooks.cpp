@@ -148,14 +148,19 @@ const uint8_t kPresentPrologue[]  = { 0x48, 0x83, 0xEC, 0x28, 0x33, 0xC9 };
 // MOV RAX,RSP ; MOV [RAX+8],RBX  -- 3 + 4 = 7 bytes, no RIP-relative operand.
 const uint8_t kFmvShowPrologue[]  = { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 };
 
-// tomb6.dll v1.0.2a (timestamp 0x696B49A4), App_Render_Scene, RVA 0x001B1CA0:
+// tomb6.dll prologues. Addresses, call-site allowlists and the three prologues
+// that embed a RIP-relative displacement are per build and live in Tr6Layout
+// (GameDll.h / GameDll.cpp). The bytes below are identical in the debug and the
+// retail tomb6.dll.
+//
+// App_Render_Scene:
 //   48 8B C4              mov rax, rsp
 //   48 89 58 08           mov [rax+8], rbx
 // Seven bytes, both complete and position-independent.
 const uint8_t kTr6RenderScenePrologue[] =
     { 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08 };
 
-// SYS_DRAW_CRP::Calculate, RVA 0x001A6DB0:
+// SYS_DRAW_CRP::Calculate:
 //   48 8B C4              mov rax, rsp
 //   55                    push rbp
 //   53                    push rbx
@@ -185,44 +190,15 @@ const uint8_t kTr6EffectsUpdatePrologue[] =
 // fxCamDist: SUB RSP,0x28 followed by a RIP-relative read of
 // gcamCamera.Position.x. The displacement starts at byte 8 and is relocated in
 // the trampoline.
-const uint8_t kTr6FxCamDistPrologue[] =
-    { 0x48, 0x83, 0xEC, 0x28, 0xF3, 0x0F, 0x10, 0x0D,
-      0xA4, 0x5C, 0x1F, 0x00 };
 const int kTr6FxCamDistRipOffsets[] = { 8 };
 
 // mathIsBoundsClipped: SUB RSP,0x48 followed by a RIP-relative security-cookie
 // read. Only the call made by fxProcessBox's local-light case is overridden.
-const uint8_t kTr6FxBoundsClipPrologue[] =
-    { 0x48, 0x83, 0xEC, 0x48, 0x48, 0x8B, 0x05,
-      0x55, 0xE7, 0x0E, 0x00 };
 const int kTr6FxBoundsClipRipOffsets[] = { 7 };
 
 // mathIsBoundsClippedAlt has the same stack/cookie prologue. mapDrawRoomList
 // uses its sign to set every FX node's primary 0x100 off-camera flag.
-const uint8_t kTr6FxNodeBoundsClipPrologue[] =
-    { 0x48, 0x83, 0xEC, 0x48, 0x48, 0x8B, 0x05,
-      0x05, 0xE6, 0x0E, 0x00 };
 const int kTr6FxNodeBoundsClipRipOffsets[] = { 7 };
-
-constexpr uint32_t kTr6DllTimestamp     = 0x696B49A4;
-constexpr uint32_t kTr6RenderSceneRva   = 0x001B1CA0;
-constexpr uint32_t kTr6CalculateRva     = 0x001A6DB0;
-constexpr uint32_t kTr6ClippedObbRva    = 0x001A4380;
-constexpr uint32_t kTr6ClippedAabbRva   = 0x001A4610;
-constexpr uint32_t kTr6DrawProjectedShadowsRva = 0x001B8270;
-constexpr uint32_t kTr6EffectsUpdateRva = 0x001A28D0;
-constexpr uint32_t kTr6FxCamDistRva      = 0x00107890;
-constexpr uint32_t kTr6FxBoundsClipRva   = 0x0019F8E0;
-constexpr uint32_t kTr6FxNodeBoundsClipRva = 0x0019FA30;
-
-constexpr uint32_t kTr6GcamCameraRva    = 0x002FD540;
-// The instruction immediately after fxProcessBox's call to
-// mathIsBoundsClipped. That call gates fxInsertFXLight, which supplies such
-// effects as the pools of light beneath street lamps.
-constexpr uint32_t kTr6FxLightBoundsReturnRva = 0x00115FDB;
-constexpr uint32_t kTr6FxNodeBoundsReturnRva  = 0x0014E545;
-constexpr uint32_t kTr6FxProcessBoxRva         = 0x00109020;
-constexpr uint32_t kTr6FxProcessBoxSize        = 55064;
 
 // TR6's stock 65536-unit far plane is visible in a headset because the wider
 // tracked view exposes long sightlines the third-person monitor camera rarely
@@ -230,79 +206,31 @@ constexpr uint32_t kTr6FxProcessBoxSize        = 55064;
 // render frustum without materially compromising a 24-bit depth buffer.
 constexpr float kTr6VrFarPlane = 262144.0f;
 
-// Return addresses immediately after the two render-side Calculate calls.
-// mapCalcVisibleRooms is intentionally not hooked: its result also owns object
-// state, not just a room list, and a second private pass hid stock pickups.
-constexpr uint32_t kTr6MainCalculateReturnRva       = 0x001B1E9D;
-constexpr uint32_t kTr6ReflectionCalculateReturnRva = 0x001B0F20;
-
-// App_Render_Scene_Main first rejects a transformed static mesh directly, then
-// ClipRoom_SYS_D3D_ROOM rejects individual 0x40-byte render runs. Both tests
-// are downstream of the room-list builder and both use the third-person game
-// camera. Returning "not clipped" at only these sites preserves all other OBB
-// tests while making every run of an accepted room available to the VR view.
-constexpr uint32_t kTr6MainRoomGroupObbReturnRva = 0x001B1814;
-constexpr uint32_t kTr6ClipRoomObbReturnRva      = 0x001AF8AD;
-
-// Object-list builders perform their own OBB reject after a room has survived
-// portal traversal. These are the instructions immediately after the calls to
-// ClippedOBB_CPP in the matching SYS_DRAW_CRP methods.
-constexpr uint32_t kTr6CharacterObbReturnRva       = 0x001A6058;
-constexpr uint32_t kTr6AnimatedDynamicObbReturnRva = 0x001A6368;
-constexpr uint32_t kTr6AnimatedStaticObbReturnRva  = 0x001A66DD;
-constexpr uint32_t kTr6WaterObbReturnRva0          = 0x001A6BB3;
-constexpr uint32_t kTr6WaterObbReturnRva1          = 0x001A6C37;
-constexpr uint32_t kTr6WaterObbReturnRva2          = 0x001A6CFB;
-
-// Completed object pools are clipped again while App_Render_Scene_Main consumes
-// them. Each path first calls the AABB helper and only then ClippedOBB_CPP, so
-// small pickups require an exact paired bypass at both stages.
-constexpr uint32_t kTr6SceneObjectObbReturnRva0 = 0x001B0081;
-constexpr uint32_t kTr6SceneObjectObbReturnRva1 = 0x001B016B;
-constexpr uint32_t kTr6SceneObjectObbReturnRva2 = 0x001B0877;
-constexpr uint32_t kTr6SceneObjectObbReturnRva3 = 0x001B0A03;
-constexpr uint32_t kTr6SceneObjectObbReturnRva4 = 0x001B1C1D;
-
-constexpr uint32_t kTr6SceneObjectAabbReturnRva0 = 0x001B0066;
-constexpr uint32_t kTr6SceneObjectAabbReturnRva1 = 0x001B0155;
-constexpr uint32_t kTr6SceneObjectAabbReturnRva2 = 0x001B0858;
-constexpr uint32_t kTr6SceneObjectAabbReturnRva3 = 0x001B09B8;
-constexpr uint32_t kTr6SceneObjectAabbReturnRva4 = 0x001B1BFC;
-
-constexpr bool IsTr6SceneObjectObbReturn(uintptr_t returnRva) {
-    return returnRva == kTr6SceneObjectObbReturnRva0
-        || returnRva == kTr6SceneObjectObbReturnRva1
-        || returnRva == kTr6SceneObjectObbReturnRva2
-        || returnRva == kTr6SceneObjectObbReturnRva3
-        || returnRva == kTr6SceneObjectObbReturnRva4;
+// Call-site policy, whose addresses are per build (see Tr6Layout):
+//
+//   * mainCalculateReturn / reflectionCalculateReturn -- the two render-side
+//     Calculate calls. mapCalcVisibleRooms is intentionally not hooked: its
+//     result also owns object state, not just a room list, and a second private
+//     pass hid stock pickups.
+//   * mainRoomGroupObbReturn / clipRoomObbReturn -- App_Render_Scene_Main first
+//     rejects a transformed static mesh directly, then ClipRoom_SYS_D3D_ROOM
+//     rejects individual 0x40-byte render runs. Both tests are downstream of the
+//     room-list builder and both use the third-person game camera. Returning
+//     "not clipped" at only these sites preserves all other OBB tests while
+//     making every run of an accepted room available to the VR view.
+//   * character/animated/water OBB returns -- object-list builders perform
+//     their own OBB reject after a room has survived portal traversal.
+//   * sceneObject AABB/OBB returns -- completed object pools are clipped again
+//     while App_Render_Scene_Main consumes them. Each path first calls the AABB
+//     helper and only then ClippedOBB_CPP, so small pickups require an exact
+//     paired bypass at both stages. Nearby calls belong to other scene views or
+//     map/gameplay work; the allowlists stay exact rather than disabling either
+//     shared bounds helper globally.
+bool Tr6ListHas(const uint32_t* list, uintptr_t returnRva) {
+    for (int i = 0; i < Tr6Layout::kMaxSceneObjectSites; ++i)
+        if (list[i] != 0 && list[i] == returnRva) return true;
+    return false;
 }
-
-constexpr bool IsTr6SceneObjectAabbReturn(uintptr_t returnRva) {
-    return returnRva == kTr6SceneObjectAabbReturnRva0
-        || returnRva == kTr6SceneObjectAabbReturnRva1
-        || returnRva == kTr6SceneObjectAabbReturnRva2
-        || returnRva == kTr6SceneObjectAabbReturnRva3
-        || returnRva == kTr6SceneObjectAabbReturnRva4;
-}
-
-// Nearby calls belong to other scene views or map/gameplay work. Keep the
-// allowlists exact rather than disabling either shared bounds helper globally.
-static_assert(IsTr6SceneObjectObbReturn(0x001B0081)
-           && IsTr6SceneObjectObbReturn(0x001B016B)
-           && IsTr6SceneObjectObbReturn(0x001B0877)
-           && IsTr6SceneObjectObbReturn(0x001B0A03)
-           && IsTr6SceneObjectObbReturn(0x001B1C1D)
-           && !IsTr6SceneObjectObbReturn(0x001B2732)
-           && !IsTr6SceneObjectObbReturn(0x0013F5A6),
-              "TR6 final-object OBB allowlist changed");
-static_assert(IsTr6SceneObjectAabbReturn(0x001B0066)
-           && IsTr6SceneObjectAabbReturn(0x001B0155)
-           && IsTr6SceneObjectAabbReturn(0x001B0858)
-           && IsTr6SceneObjectAabbReturn(0x001B09B8)
-           && IsTr6SceneObjectAabbReturn(0x001B1BFC)
-           && !IsTr6SceneObjectAabbReturn(0x001B2732)
-           && !IsTr6SceneObjectAabbReturn(0x0013F5A6),
-              "TR6 final-object AABB allowlist changed");
 
 // --- per-frame state --------------------------------------------------------
 
@@ -391,6 +319,9 @@ bool g_warnedTr6Build      = false;
 bool g_tr6SceneAttempted   = false;
 bool g_tr6CullAttempted    = false;
 uintptr_t g_tr6ModuleBase  = 0;
+// The tomb6.dll row g_tr6ModuleBase belongs to. Set together with it, before
+// any TR6 hook is installed, so every detour can rely on it when the base is.
+const Tr6Layout* g_tr6     = nullptr;
 bool g_loggedTr6RoomRuns         = false;
 bool g_loggedTr6AllRooms         = false;
 bool g_loggedTr6ObjectCull       = false;
@@ -1650,9 +1581,9 @@ float __fastcall Detour_Tr6FxCamDist(const float* position) {
     const uintptr_t returnAddress =
         reinterpret_cast<uintptr_t>(_ReturnAddress());
     const bool fromFxProcessBox = g_tr6ModuleBase
-        && returnAddress >= g_tr6ModuleBase + kTr6FxProcessBoxRva
-        && returnAddress < g_tr6ModuleBase + kTr6FxProcessBoxRva
-                                            + kTr6FxProcessBoxSize;
+        && returnAddress >= g_tr6ModuleBase + g_tr6->fxProcessBox
+        && returnAddress < g_tr6ModuleBase + g_tr6->fxProcessBox
+                                            + g_tr6->fxProcessBoxSize;
     if (!NativeTr6Active() || !fromFxProcessBox || !position) {
         return original(position);
     }
@@ -1663,7 +1594,7 @@ float __fastcall Detour_Tr6FxCamDist(const float* position) {
     // nor the emitter moved. LookAt is the stable gameplay focal point during
     // an orbit and keeps those decisions independent of camera-stick yaw.
     const float* gcam = reinterpret_cast<const float*>(
-        g_tr6ModuleBase + kTr6GcamCameraRva);
+        g_tr6ModuleBase + g_tr6->gcamCamera);
     const float dx = gcam[4] - position[0];
     const float dy = gcam[5] - position[1];
     const float dz = gcam[6] - position[2];
@@ -1687,7 +1618,7 @@ int32_t __fastcall Detour_Tr6FxBoundsClip(const float* bounds) {
     // inside the tracked VR view. Other users of mathIsBoundsClipped (including
     // actor simulation) retain the engine's original result.
     if (NativeTr6Active() && g_tr6ModuleBase
-        && returnAddress == g_tr6ModuleBase + kTr6FxLightBoundsReturnRva) {
+        && returnAddress == g_tr6ModuleBase + g_tr6->fxLightBoundsReturn) {
         if (!g_loggedTr6FxBounds) {
             g_loggedTr6FxBounds = true;
             Log("tr6 effects: fxProcessBox local-light frustum reject disabled "
@@ -1708,7 +1639,7 @@ int32_t __fastcall Detour_Tr6FxNodeBoundsClip(const float* bounds) {
     // FX node. Most fxProcessBox particle/light cases test that bit before any
     // of their type-specific logic and return immediately when it is set.
     if (NativeTr6Active() && g_tr6ModuleBase
-        && returnAddress == g_tr6ModuleBase + kTr6FxNodeBoundsReturnRva) {
+        && returnAddress == g_tr6ModuleBase + g_tr6->fxNodeBoundsReturn) {
         if (!g_loggedTr6FxNodeBounds) {
             g_loggedTr6FxNodeBounds = true;
             Log("tr6 effects: primary mapDrawRoomList FX-node off-camera flag "
@@ -1739,7 +1670,7 @@ void __fastcall Detour_Tr6EffectsUpdate(const Tr6CameraView* cameraView) {
     adjusted.cameraProject = Mul4(adjusted.project, adjusted.camera);
 
     auto* gcam = reinterpret_cast<float*>(
-        g_tr6ModuleBase + kTr6GcamCameraRva);
+        g_tr6ModuleBase + g_tr6->gcamCamera);
     float savedPositionLookAt[8];
     std::memcpy(savedPositionLookAt, gcam, sizeof(savedPositionLookAt));
 
@@ -1896,8 +1827,8 @@ void WidenTr6CullProjection(mat4& projection, float& outTanX, float& outTanY) {
 bool IsTr6RenderCalculateCall(const void* returnAddress) {
     if (!g_tr6ModuleBase) return false;
     const uintptr_t caller = reinterpret_cast<uintptr_t>(returnAddress);
-    return caller == g_tr6ModuleBase + kTr6MainCalculateReturnRva
-        || caller == g_tr6ModuleBase + kTr6ReflectionCalculateReturnRva;
+    return caller == g_tr6ModuleBase + g_tr6->mainCalculateReturn
+        || caller == g_tr6ModuleBase + g_tr6->reflectionCalculateReturn;
 }
 
 bool Tr6CullActive() {
@@ -1917,7 +1848,8 @@ __declspec(noinline) bool __fastcall Detour_Tr6ClippedAabb(
     const uintptr_t returnRva = g_tr6ModuleBase
         ? reinterpret_cast<uintptr_t>(_ReturnAddress()) - g_tr6ModuleBase
         : 0;
-    if (!IsTr6SceneObjectAabbReturn(returnRva) || !Tr6CullActive()) {
+    if (!g_tr6 || !Tr6ListHas(g_tr6->sceneObjectAabbReturn, returnRva)
+        || !Tr6CullActive()) {
         return original(clipBounds, boundsMin, boundsMax);
     }
 
@@ -1940,18 +1872,22 @@ __declspec(noinline) bool __fastcall Detour_Tr6ClippedObb(
     const uintptr_t returnRva = g_tr6ModuleBase
         ? reinterpret_cast<uintptr_t>(_ReturnAddress()) - g_tr6ModuleBase
         : 0;
+    if (!g_tr6) {
+        return original(cameraProject, viewport, boundsMin, boundsMax);
+    }
+    const Tr6Layout& t = *g_tr6;
     const bool roomRenderTest =
-        returnRva == kTr6MainRoomGroupObbReturnRva
-        || returnRva == kTr6ClipRoomObbReturnRva;
+        returnRva == t.mainRoomGroupObbReturn
+        || returnRva == t.clipRoomObbReturn;
     const bool objectListTest =
-        returnRva == kTr6CharacterObbReturnRva
-        || returnRva == kTr6AnimatedDynamicObbReturnRva
-        || returnRva == kTr6AnimatedStaticObbReturnRva
-        || returnRva == kTr6WaterObbReturnRva0
-        || returnRva == kTr6WaterObbReturnRva1
-        || returnRva == kTr6WaterObbReturnRva2;
+        returnRva == t.characterObbReturn
+        || returnRva == t.animatedDynamicObbReturn
+        || returnRva == t.animatedStaticObbReturn
+        || returnRva == t.waterObbReturn[0]
+        || returnRva == t.waterObbReturn[1]
+        || returnRva == t.waterObbReturn[2];
     const bool sceneObjectRenderTest =
-        IsTr6SceneObjectObbReturn(returnRva);
+        Tr6ListHas(t.sceneObjectObbReturn, returnRva);
     const bool bypass = roomRenderTest || sceneObjectRenderTest
         || (objectListTest && g_tr6VrCalculateActive);
     if (!bypass || !Tr6CullActive()) {
@@ -2031,7 +1967,7 @@ __declspec(noinline) void __fastcall Detour_Tr6Calculate(
     const void* returnAddress = _ReturnAddress();
     const bool renderCall = IsTr6RenderCalculateCall(returnAddress);
     const bool mainRenderCall = reinterpret_cast<uintptr_t>(returnAddress)
-        == g_tr6ModuleBase + kTr6MainCalculateReturnRva;
+        == g_tr6ModuleBase + (g_tr6 ? g_tr6->mainCalculateReturn : 0);
     const bool renderedViewTracksHead = Cfg().monoTracking
         || g_inNativeTr6Scene || AlternateEyeActive();
     const bool active = cameraView
@@ -2124,26 +2060,31 @@ void TryInstallTr6Hooks() {
     if (!module) return;
 
     const uint32_t stamp = ModuleTimestamp(module);
-    if (stamp != kTr6DllTimestamp) {
+    const Tr6Layout* layout = Tr6LayoutFor(stamp);
+    if (!layout) {
         if (wantScene) g_tr6SceneAttempted = true;
         if (wantCull)  g_tr6CullAttempted = true;
         if (!g_warnedTr6Build) {
             g_warnedTr6Build = true;
             LogF("tr6: build-specific scene/culling hooks unavailable -- "
-                 "tomb6.dll timestamp 0x%08X is not supported (expected "
-                 "0x%08X); native stereo uses AER and culling stays stock",
-                 stamp, kTr6DllTimestamp);
+                 "tomb6.dll timestamp 0x%08X is not supported; native stereo "
+                 "uses AER and culling stays stock. Known builds:", stamp);
+            Tr6LogKnownBuilds("tr6:");
         }
         return;
     }
 
+    if (g_tr6 != layout) {
+        LogF("tr6: bound to %s (build 0x%08X)", layout->name, stamp);
+    }
+    g_tr6 = layout;
     g_tr6ModuleBase = reinterpret_cast<uintptr_t>(module);
 
     if (wantCull) {
         g_tr6CullAttempted = true;
-        auto* calculate = reinterpret_cast<uint8_t*>(module) + kTr6CalculateRva;
-        auto* clippedObb = reinterpret_cast<uint8_t*>(module) + kTr6ClippedObbRva;
-        auto* clippedAabb = reinterpret_cast<uint8_t*>(module) + kTr6ClippedAabbRva;
+        auto* calculate = reinterpret_cast<uint8_t*>(module) + g_tr6->calculate;
+        auto* clippedObb = reinterpret_cast<uint8_t*>(module) + g_tr6->clippedObb;
+        auto* clippedAabb = reinterpret_cast<uint8_t*>(module) + g_tr6->clippedAabb;
 
         bool ok = g_hTr6Calculate.Install(calculate,
                 reinterpret_cast<void*>(&Detour_Tr6Calculate),
@@ -2176,38 +2117,38 @@ void TryInstallTr6Hooks() {
         } else {
             LogF("tr6 cull: render-only visibility hooks installed (Calculate "
                  "+0x%X, OBB +0x%X, object AABB +0x%X)",
-                 kTr6CalculateRva, kTr6ClippedObbRva,
-                 kTr6ClippedAabbRva);
+                 g_tr6->calculate, g_tr6->clippedObb,
+                 g_tr6->clippedAabb);
         }
     }
 
     if (wantScene) {
         g_tr6SceneAttempted = true;
         auto* fxCamDistTarget = reinterpret_cast<uint8_t*>(module)
-                              + kTr6FxCamDistRva;
+                              + g_tr6->fxCamDist;
         auto* fxBoundsTarget = reinterpret_cast<uint8_t*>(module)
-                             + kTr6FxBoundsClipRva;
+                             + g_tr6->fxBoundsClip;
         auto* fxNodeBoundsTarget = reinterpret_cast<uint8_t*>(module)
-                                 + kTr6FxNodeBoundsClipRva;
+                                 + g_tr6->fxNodeBoundsClip;
         auto* shadowTarget = reinterpret_cast<uint8_t*>(module)
-                           + kTr6DrawProjectedShadowsRva;
+                           + g_tr6->drawProjectedShadows;
         auto* effectsTarget = reinterpret_cast<uint8_t*>(module)
-                            + kTr6EffectsUpdateRva;
+                            + g_tr6->effectsUpdate;
         auto* sceneTarget = reinterpret_cast<uint8_t*>(module)
-                          + kTr6RenderSceneRva;
+                          + g_tr6->renderScene;
         bool ok = g_hTr6FxCamDist.Install(fxCamDistTarget,
                 reinterpret_cast<void*>(&Detour_Tr6FxCamDist),
-                sizeof(kTr6FxCamDistPrologue),
-                kTr6FxCamDistPrologue, sizeof(kTr6FxCamDistPrologue),
+                sizeof(g_tr6->fxCamDistPrologue),
+                g_tr6->fxCamDistPrologue, sizeof(g_tr6->fxCamDistPrologue),
                 "TR6 fxCamDist", kTr6FxCamDistRipOffsets,
                 sizeof(kTr6FxCamDistRipOffsets)
                     / sizeof(kTr6FxCamDistRipOffsets[0]));
         if (ok) {
             ok = g_hTr6FxBoundsClip.Install(fxBoundsTarget,
                 reinterpret_cast<void*>(&Detour_Tr6FxBoundsClip),
-                sizeof(kTr6FxBoundsClipPrologue),
-                kTr6FxBoundsClipPrologue,
-                sizeof(kTr6FxBoundsClipPrologue),
+                sizeof(g_tr6->fxBoundsClipPrologue),
+                g_tr6->fxBoundsClipPrologue,
+                sizeof(g_tr6->fxBoundsClipPrologue),
                 "TR6 mathIsBoundsClipped (FX light)",
                 kTr6FxBoundsClipRipOffsets,
                 sizeof(kTr6FxBoundsClipRipOffsets)
@@ -2216,9 +2157,9 @@ void TryInstallTr6Hooks() {
         if (ok) {
             ok = g_hTr6FxNodeBoundsClip.Install(fxNodeBoundsTarget,
                 reinterpret_cast<void*>(&Detour_Tr6FxNodeBoundsClip),
-                sizeof(kTr6FxNodeBoundsClipPrologue),
-                kTr6FxNodeBoundsClipPrologue,
-                sizeof(kTr6FxNodeBoundsClipPrologue),
+                sizeof(g_tr6->fxNodeBoundsClipPrologue),
+                g_tr6->fxNodeBoundsClipPrologue,
+                sizeof(g_tr6->fxNodeBoundsClipPrologue),
                 "TR6 mathIsBoundsClippedAlt (FX nodes)",
                 kTr6FxNodeBoundsClipRipOffsets,
                 sizeof(kTr6FxNodeBoundsClipRipOffsets)
@@ -2265,9 +2206,9 @@ void TryInstallTr6Hooks() {
             LogF("tr6: native scene/shadow/effects hooks installed (scene +0x%X, "
                  "projected shadows +0x%X, effects +0x%X, FX range +0x%X, "
                  "FX bounds +0x%X, FX-node bounds +0x%X)",
-                 kTr6RenderSceneRva, kTr6DrawProjectedShadowsRva,
-                 kTr6EffectsUpdateRva, kTr6FxCamDistRva,
-                 kTr6FxBoundsClipRva, kTr6FxNodeBoundsClipRva);
+                 g_tr6->renderScene, g_tr6->drawProjectedShadows,
+                 g_tr6->effectsUpdate, g_tr6->fxCamDist,
+                 g_tr6->fxBoundsClip, g_tr6->fxNodeBoundsClip);
         }
     }
 }
@@ -2760,6 +2701,7 @@ void RemoveHooks() {
     g_tr6SceneAttempted = false;
     g_tr6CullAttempted = false;
     g_tr6ModuleBase = 0;
+    g_tr6 = nullptr;
     g_aerLatched = false;
 }
 

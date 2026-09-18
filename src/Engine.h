@@ -224,10 +224,9 @@ struct Layout {
     uint32_t gTargetWidth;
     uint32_t gTargetHeight;
 
-    // Dynamic-bone shader patching (BoneSkin.cpp). LAST on purpose: the HD-pack
-    // rows below initialise positionally from a 21-address macro and stop short
-    // of it, so it comes out 0 -- which BoneSkin reads as "not available on this
-    // build". Only the stock build has a PDB to take it from.
+    // Dynamic-bone shader patching (BoneSkin.cpp). LAST on purpose: a row that
+    // initialises positionally and stops short of it comes out 0, which
+    // BoneSkin reads as "not available on this build".
     uint32_t shader_init;
 };
 
@@ -243,25 +242,35 @@ constexpr Layout kBuildStock = {
     rva::shader_init,
 };
 
-// The community HD-texture pack. Its two releases so far -- a 2025-07-01 base
-// and the 2025-09-10 one shipped with pack v1.0.2 -- have IDENTICAL layouts:
-// every one of these 21 addresses was derived independently against each and
-// came out the same. They are listed as two rows because the PE timestamp is
-// the discriminator and they carry different ones, not because they differ.
+// Every non-debug tomb456.exe in circulation. The two timestamps are the
+// 2025-07-01 build -- which is what the HD Definitive Patch ships -- and the
+// 2025-09-10 one, which is the RETAIL Steam exe and also came with HD pack
+// v1.0.2. They are separate rows because the PE timestamp is the discriminator,
+// not because their addresses differ: all 22 below were derived independently
+// against each binary (tools\port_addresses.py) and came out the same.
+//
+// The two builds are in fact the same code. Their .text, .data, .pdata and
+// .reloc sections are byte-identical; the only differences anywhere are the PE
+// debug-directory timestamps, the PDB age, and four bytes in an .rdata table
+// the renderer's texture init reads. Both embed the same 315 GLSL sources as
+// the stock build, so BoneSkin's shader patch applies unchanged to both.
 #define TR_HD_ADDRS                                                     \
     0x0000C770, 0x00011FF0, 0x00012EF0,                                 \
     0x00013010, 0x00012920, 0x00011680,                                 \
     0x0017B3AC, 0x006949F8, 0x0E51EAA0, 0x0E51EBA0,                     \
     0x0E51E8A0, 0x0E51ECD0, 0x0E9B01D0, 0x0E9B00C0,                     \
     0x0E9B00B8, 0x0E9B00BC, 0x0E9B0190,                                 \
-    0x0069A804, 0x0069A800, 0x0329A820, 0x0069A818
+    0x0069A804, 0x0069A800, 0x0329A820, 0x0069A818,                     \
+    0x00011B50
 
 constexpr Layout kBuildHD1 = {
-    "community HD pack, 2025-07-01 base", 0x68639C21, TR_HD_ADDRS,
+    "HD Definitive Patch / community HD pack (2025-07-01)", 0x68639C21,
+    TR_HD_ADDRS,
 };
 
 constexpr Layout kBuildHD2 = {
-    "community HD pack v1.0.2 (2025-09-10)", 0x68C12FEB, TR_HD_ADDRS,
+    "retail / community HD pack v1.0.2 (2025-09-10)", 0x68C12FEB,
+    TR_HD_ADDRS,
 };
 
 #undef TR_HD_ADDRS
