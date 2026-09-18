@@ -753,7 +753,7 @@ struct Config {
     // 18-unit clamp -- the reason both measured sessions reported disp_peak
     // pinned at exactly 18.00 and never settling.
     float dynamicBonesStiffness = 630.0f;
-    float dynamicBonesDamping   = 6.0f;
+    float dynamicBonesDamping   = 9.5f;
 
     // Along world Y, which is DOWN in TR4/TR5, so positive pulls downward.
     // 5400 is the engine's own gravity expressed per second squared: TR4/TR5
@@ -796,10 +796,13 @@ struct Config {
     int   dynamicBonesDriveMode = 1;
 
     // Fraction of gravity the bone feels while Lara is airborne, engine mode.
-    // 0 is physically right: in freefall the torso falls with the bone, so the
-    // bone is weightless and rises off its sag. That rise on takeoff is half
-    // of what makes a jump read.
-    float dynamicBonesAirGravity = 0.0f;
+    //
+    // 1 holds the chest still for the whole jump, so it only answers the
+    // landing. 0 is the physical answer -- in freefall the torso falls with the
+    // chest, so the chest goes weightless and rises off its sag by about 15
+    // units on the way up. That rise reads as the chest moving as she jumps,
+    // which is not wanted here, so the default trades the physics for the look.
+    float dynamicBonesAirGravity = 1.0f;
 
     // Landing kick, engine mode: the bone gets fallspeed * 30 * this, in units
     // per second, downward. fallspeed is per game tick and the game ticks at
@@ -891,10 +894,16 @@ struct Config {
     // front surface. 0.5 is the middle of the torso, so everything behind it --
     // the back and the backpack -- is untouched. Lower keeps the effect closer
     // to the surface.
-    float dynamicBonesChestDepth  = 0.5f;
+    float dynamicBonesChestDepth  = 0.6f;
     // Width: half-width, as a fraction of torso width, before the weight fades
     // toward the armpits. Lower keeps the shoulders stiller.
-    float dynamicBonesChestWidth  = 0.28f;
+    float dynamicBonesChestWidth  = 0.34f;
+
+    // How much of the bust the fitted height band keeps, as a fraction of the
+    // bump it makes in the mesh's front profile. The band is every height
+    // staying within this much of the peak, so larger reaches further toward
+    // the upper chest and the belly.
+    float dynamicBonesChestBand   = 0.65f;
 
     // Push the selected region straight out of her front by this many units,
     // permanently. 0 = off. A calibration aid: set 30 or so, stand still, and

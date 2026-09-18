@@ -549,12 +549,16 @@ void FitRegion() {
     const float bump = (peak >= 0 && bellyN) ? front[peak] - belly : 0.0f;
     if (peak >= 0 && bump >= 0.06f * H) {
         apex = front[peak];
-        const float thresh = apex - 0.5f * bump;
+        const float thresh = apex - c.dynamicBonesChestBand * bump;
         int top = peak, bot = peak;
         while (top > 0 && front[top - 1] >= thresh) --top;
         while (bot < kSlices - 1 && front[bot + 1] >= thresh) ++bot;
         yTop = ymin + H * static_cast<float>(top) / kSlices;
         yBot = ymin + H * static_cast<float>(bot + 1) / kSlices;
+        // A little past the bump either way, so the moving area covers the
+        // whole breast rather than stopping exactly where the profile does.
+        yTop -= 0.03f * H;
+        yBot += 0.03f * H;
         // Never a sliver, whatever the profile does.
         const float minH = 0.12f * H;
         if (yBot - yTop < minH) {
@@ -583,9 +587,9 @@ void FitRegion() {
     const float midF = apex - c.dynamicBonesChestDepth * core;
 
     Region& R = g_region;
-    R.v[0] = yTop;            R.v[1] = yBot;        R.v[2] = 0.06f * H;
+    R.v[0] = yTop;            R.v[1] = yBot;        R.v[2] = 0.08f * H;
     R.v[3] = static_cast<float>(c.dynamicBonesTorsoJoint);
-    R.v[4] = fwd;             R.v[5] = fwd * midF;  R.v[6] = 0.35f * core;  R.v[7] = 0.0f;
+    R.v[4] = fwd;             R.v[5] = fwd * midF;  R.v[6] = 0.30f * core;  R.v[7] = 0.0f;
     R.v[8] = xc;              R.v[9] = latIn;       R.v[10] = latIn + 0.14f * W;
     R.v[11] = 0.0f;
     g_regionReady = true;

@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 52960 bytes, 1054 lines.
+// Source: TombRaiderVR.ini, 53384 bytes, 1062 lines.
 #pragma once
 
 namespace tr {
@@ -856,7 +856,7 @@ DynamicBonesAnchorZ=45
 ; velocity produces no displacement at all, and these constants replace the
 ; old ones rather than merely retuning them.
 DynamicBonesStiffness=630
-DynamicBonesDamping=6
+DynamicBonesDamping=9.5
 
 ; Along world Y, which is DOWN in TR4/TR5, so positive pulls downward. 5400
 ; is the engine's own gravity per second squared: 6 units per frame at 30
@@ -894,10 +894,13 @@ DynamicBonesDriveDeadzone=4000
 ; DriveSmoothing, DriveMax and DriveDeadzone below only apply in mode 0.
 DynamicBonesDriveMode=1
 
-; Fraction of gravity felt while airborne, engine mode. 0 is physically right:
-; in freefall the torso falls with the bone, so it goes weightless and rises
-; off its sag -- half of what makes a jump read.
-DynamicBonesAirGravity=0
+; Fraction of gravity felt while airborne, engine mode.
+;
+; 1 holds the chest still for the whole jump, so it only answers the landing.
+; 0 is the physical answer -- in freefall the torso falls with the chest, so it
+; goes weightless and rises about 15 units on the way up. That reads as the
+; chest moving as she jumps, so the default trades the physics for the look.
+DynamicBonesAirGravity=1
 
 ; Landing kick, engine mode: fallspeed * 30 * this, units/s, downward. Uses the
 ; deepest fallspeed of the jump, since the engine zeroes it on the landing
@@ -968,16 +971,21 @@ DynamicBonesChestStrength=1.5
 ;
 ; Height is normally MEASURED: the band is fitted to the bump the bust makes in
 ; the mesh's front profile. Top/Bottom are only the fallback for an outfit with
-; no distinct bump, as fractions of torso height from the neck end down.
+)INI"
+           R"INI(; no distinct bump, as fractions of torso height from the neck end down.
 DynamicBonesChestTop=0.18
 DynamicBonesChestBottom=0.52
 ; Depth: where the weight starts, as a fraction of torso depth behind the front
-)INI"
-           R"INI(; surface. 0.5 = mid-torso, so the back and backpack are untouched.
-DynamicBonesChestDepth=0.5
+; surface. Higher moves more of the breast, including its underside and sides;
+; the back and backpack stay out either way.
+DynamicBonesChestDepth=0.6
 ; Width: half-width fraction before the weight fades toward the armpits. Lower
 ; keeps the shoulders stiller.
-DynamicBonesChestWidth=0.28
+DynamicBonesChestWidth=0.34
+; How much of the bust the fitted height band keeps, as a fraction of the bump
+; it makes in the front profile. Larger reaches further toward the upper chest
+; and the belly.
+DynamicBonesChestBand=0.65
 
 ; Permanently push the selected region out of her front by this many units.
 ; 0 = off. Calibration aid: set 30, stand still, and what bulges is exactly

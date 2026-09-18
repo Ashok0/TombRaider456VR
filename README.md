@@ -3917,8 +3917,9 @@ The work started as a measurement harness. It changed nothing on screen and
 answered three questions before any rendering was touched.
 
 **Which draws are Lara.** `DrawLaraHD` is hooked for its scope, not its argument
-(`tomb4.dll+0x000C40F0`, `tomb5.dll+0x000B8C50`, 8 position-independent prologue
-bytes each, different in the two DLLs). Inside it the renderer skins through
+(`tomb4.dll+0x000C40F0`, `tomb5.dll+0x000B8C50` on the stock DLLs, with the
+retail rows carrying their own; 8 position-independent prologue bytes each,
+different in the two DLLs). Inside it the renderer skins through
 `uJoints[72*3]` (`mBoneMats` is 3456 bytes, 72 x 4x3). One scope issues several
 skinned draws: the body uploads 15 joints, and attachments upload 33-slot
 palettes, 13 slots of which hold one repeated filler matrix. The body is picked
@@ -3969,8 +3970,12 @@ her `ITEM_INFO` through `lara_item` (`tomb4.dll+0x004F3000`,
 | `pos.y_rot` (int16) | `+110` | `PHD_3DPOS` layout |
 
 In the torso's frame the chest feels gravity minus the torso's own acceleration.
-Standing, that is full gravity, so it sags. Airborne, the torso is in freefall
-too, so the chest goes weightless and rises. Landing restores gravity and adds a
+Standing, that is full gravity, so it sags. In freefall the torso falls with the
+chest, so the physical answer is weightless: the chest rises about 15 units on
+the way up. That reads as the chest moving as she jumps, which is not wanted, so
+`DynamicBonesAirGravity` defaults to `1` and keeps full gravity in the air. The
+chest then holds still for the whole jump and answers the landing only; `0`
+restores the physical behaviour. Landing adds a
 kick of `fallspeed x 30 x DynamicBonesLandImpulse`. The kick uses the **deepest**
 fallspeed of the jump, because the engine zeroes `fallspeed` on the landing tick,
 and reading it there would give every landing a kick of nothing. Walking never
@@ -3978,14 +3983,18 @@ sets `gravity_status`, so it cannot bounce.
 
 The spring was retuned for visibility after the logs showed every jump
 registering but nothing visible. At stiffness 1900 and damping 22 it was a 6.9 Hz
-flutter that died in 0.11 s, during Lara's own landing crouch. At 630 and 6 it is
-4 Hz and rings for about 0.8 s. The clamp rose from 18 to 40 with it. Simulated
-peaks, relative to rest:
+flutter that died in 0.11 s, during Lara's own landing crouch. Dropping to 4 Hz
+made it readable, and the clamp rose from 18 to 40 with it. Damping then set how
+many bounces a landing gives: at 0.12 of critical each bounce kept 46% of the
+one before, which is three or four visible swings. The default is 0.19, one
+large bounce and one clearly smaller. Simulated landing peaks after a running
+jump, relative to rest:
 
-| Running jump | Takeoff | Landing | Rings for |
-|---|---:|---:|---:|
-| 1900 / 22 | -4.1 | +6.9 | 0.11 s |
-| 630 / 6 | -14.6 | +19.1 | 0.81 s |
+| Stiffness / damping | Bounces | Each of the last |
+|---|---|---:|
+| 1900 / 22 (6.9 Hz, gone in 0.11 s) | 6.9 | -- |
+| 630 / 6 (4 Hz, zeta 0.12) | 19.1, 8.8, 4.1 | 46% |
+| **630 / 9.5 (4 Hz, zeta 0.19)** | **16.1, 4.6, 1.3** | **28%** |
 
 ### Moving only the chest
 
@@ -4086,11 +4095,13 @@ DynamicBonesApply=1
 | `DynamicBonesChestStrength` | `1.5` | chest path amplitude multiplier |
 | `DynamicBonesDebugScale` | `1` | overall multiplier on **both** paths; stacks with `ChestStrength` |
 | `DynamicBonesDriveMode` | `1` | `1` engine state; `0` differentiated acceleration (kept for comparison) |
-| `DynamicBonesStiffness` / `Damping` | `630` / `6` | 4 Hz, damping ratio about 0.12 |
+| `DynamicBonesStiffness` / `Damping` | `630` / `9.5` | 4 Hz, damping ratio 0.19: one large bounce, then a smaller one |
+| `DynamicBonesAirGravity` | `1` | `1` still while airborne, landing only; `0` weightless, the physical answer |
 | `DynamicBonesLandImpulse` | `0.2` | landing kick per unit of fallspeed |
 | `DynamicBonesMaxDisplace` | `40` | clamp, world units |
 | `DynamicBonesForwardSign` | `0` | `0` auto from facing; `1`/`-1` forces front |
-| `DynamicBonesChestWidth` / `ChestDepth` | `0.28` / `0.5` | lateral limit and depth start, fractions of the measured torso |
+| `DynamicBonesChestWidth` / `ChestDepth` | `0.34` / `0.6` | lateral limit and depth start, fractions of the measured torso |
+| `DynamicBonesChestBand` | `0.65` | how much of the bust the fitted height band keeps |
 | `DynamicBonesRegionDebug` | `0` | pushes the selected region out by this many units, to see it standing still |
 
 The full set, with the reasoning behind each value, is documented in
@@ -4125,9 +4136,10 @@ fit shows in the log.
 - **Degrades rather than breaks.** A patch that fails to compile ships the
   original shader. A shader path that never engages leaves the whole-torso view
   running. `DynamicBonesShader=0` forces that view.
-- **Verified statically:** `tools\verify_addresses.py` checks all 236 addresses
-  and prologues against the PDBs, up from 219, including `DrawLaraHD`,
-  `lara_item` and `shader_init`. The patched shaders compile and link on an
+- **Verified statically:** `tools\verify_addresses.py` checks every address and
+  prologue this phase adds -- `DrawLaraHD` and `lara_item` in each DLL row,
+  `shader_init` in the exe -- along with the rest of the table, 486 checks in
+  all. The patched shaders compile and link on an
   RTX 3070 (NVIDIA 560.94) with both new uniforms active. In a transform-feedback
   test, chest vertices move by exactly the offset, seam vertices by their TORSO
   share, and back, arm and out-of-region vertices not at all.

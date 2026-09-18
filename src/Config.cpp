@@ -276,6 +276,7 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.dynamicBonesChestBottom = GetFloat(L"DynamicBonesChestBottom", g_cfg.dynamicBonesChestBottom, ini);
     g_cfg.dynamicBonesChestDepth  = GetFloat(L"DynamicBonesChestDepth",  g_cfg.dynamicBonesChestDepth,  ini);
     g_cfg.dynamicBonesChestWidth  = GetFloat(L"DynamicBonesChestWidth",  g_cfg.dynamicBonesChestWidth,  ini);
+    g_cfg.dynamicBonesChestBand   = GetFloat(L"DynamicBonesChestBand",   g_cfg.dynamicBonesChestBand,   ini);
     g_cfg.dynamicBonesRegionDebug = GetFloat(L"DynamicBonesRegionDebug", g_cfg.dynamicBonesRegionDebug, ini);
     g_cfg.dynamicBonesDebugScale = GetFloat(L"DynamicBonesDebugScale", g_cfg.dynamicBonesDebugScale, ini);
     g_cfg.dynamicBonesMaxDisplace = GetFloat(L"DynamicBonesMaxDisplace", g_cfg.dynamicBonesMaxDisplace, ini);
