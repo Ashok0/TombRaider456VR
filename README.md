@@ -67,8 +67,10 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
-**A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a,
-2026-01-17 build), driving an OpenVR runtime.
+**A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a),
+driving an OpenVR runtime. It supports the retail Steam release, the HD
+Definitive Patch and the 2026-01-17 build every address here was read out of;
+see [Phase 22](#phase-22-retail-and-definitive-edition-builds).
 
 The mod loads into the game, reads the head pose from an OpenVR runtime, and
 composes it onto the game camera. Its development phases share one binary and
@@ -96,6 +98,8 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 18** | **TR6 projected-shadow fix** — character shadow maps kept on their light camera instead of inheriting headset-eye transforms | Working. Confirmed in-headset. TR6 only |
 | **Phase 19** | **TR6 effects visibility** — dust particles and street-lamp lighting retained independently of the orbiting right-stick camera | Working. Confirmed in-headset. TR6 only |
 | **Phase 20** | **TR6 pickup and scene-object retention** — candy bars, pickups, barrels and props survive preparation and the final paired bounds tests | Built. Awaiting in-headset revalidation. TR6 only |
+| **Phase 21** | **TR4/5 chest physics** — TR6's dynamic bones reimplemented: a damped spring driven by Lara's own airborne state, applied per vertex in the HD skinning shader | Working. On by default. TR4 / TR5 |
+| **Phase 22** | **Retail and Definitive Edition builds** — every game-DLL address set made per build, so the retail Steam release and the HD Definitive Patch get the DLL-side fixes too | Working. Confirmed in-headset on both ported builds |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -196,6 +200,14 @@ bones TR6 uses. A damped spring driven by Lara's own airborne state bounces her
 chest on jumps and landings, and a patch to the HD skinning shader applies it
 per vertex, so the back, backpack and shoulders stay still. See
 [Phase 21: TR4/5 Physics Update](#phase-21-tr45-physics-update).
+
+**Phase 22** makes the mod work on the builds people actually have. Everything
+before it was reverse engineered against the one build that ships private PDBs,
+and on the retail Steam release or the HD Definitive Patch every hook that lives
+in a game DLL recognised no timestamp and switched itself off. The address
+tables are now per build, ported structurally from the symbolised binaries and
+checked against the shipped ones. See
+[Phase 22: Retail and Definitive Edition Builds](#phase-22-retail-and-definitive-edition-builds).
 
 **There is no ini file in the repo to copy.** The configuration lives in the
 DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
@@ -4105,9 +4117,11 @@ fit shows in the log.
 
 - **TR4/TR5 only.** TR6 already has the real system and none of these hooks can
   run for it.
-- **Stock build only** for the chest path. `shader_init` comes from the stock
-  build's PDB; the community HD-pack rows leave it at 0 and log that the path is
-  unavailable.
+- **A build whose `shader_init` address is known** for the chest path. That was
+  the stock build only, because the address came from its PDB;
+  [Phase 22](#phase-22-retail-and-definitive-edition-builds) adds it to the
+  retail and HD Definitive Patch rows. A row that lacks it leaves it at 0 and
+  logs that the path is unavailable.
 - **Degrades rather than breaks.** A patch that fails to compile ships the
   original shader. A shader path that never engages leaves the whole-torso view
   running. `DynamicBonesShader=0` forces that view.
@@ -4132,6 +4146,276 @@ patch, vertex readback, region fit, per-draw uniforms). Supporting changes are i
 `src\GL.*` (uniform and readback entry points), `src\Hooks.cpp` (wiring, plus the
 scope guard that restores the joint palette and uploads the uniforms on every
 return path out of `validate_draw`), `src\Config.*`, `TombRaiderVR.ini` and
+`tools\verify_addresses.py`.
+
+---
+
+## Phase 22: Retail and Definitive Edition Builds
+
+Everything from Phase 1 to Phase 21 was reverse engineered against one set of
+binaries: the v1.0.2a build dated 2026-01-17, which ships private PDBs. That is
+what `tools\pdbdump.py` reads, what `tools\verify_addresses.py` checks against,
+and what every address in `src\Engine.h` and `src\GameDll.cpp` came out of.
+
+It is not what most people have installed. The retail Steam release is the
+2025-09-10 build, and the HD Definitive Patch ships its own `tomb456.exe` dated
+2025-07-01 on top of the retail DLLs. On either of those, the mod used to start,
+hook the exe, and then stand down almost everywhere else:
+
+```text
+gamedll: tomb4.dll build 0x68C12FDA is unsupported; the culling fix is inactive for it.
+tr6: build-specific scene/culling hooks unavailable -- tomb6.dll timestamp 0x68C12FE6 is not supported
+```
+
+The exe-side hooks survived because `Engine.h` already carried extra rows for
+the community HD pack, and one of those rows turns out to *be* the retail exe.
+Everything that lives in a game DLL — the culling fix, the sky fix, the
+binocular and laser-sight stubs, the water query, and all of TR6 — was gated on
+a single `tomb4.dll` / `tomb5.dll` / `tomb6.dll` timestamp and silently switched
+itself off. Phase 22 makes every one of those address sets per build.
+
+### The four binaries, and which build is which
+
+| File | 2026-01-17 (PDBs) | 2025-09-10 (retail) | HD Definitive Patch |
+|---|---|---|---|
+| `tomb456.exe` | `0x696B49A7` | `0x68C12FEB` | `0x68639C21` (2025-07-01) |
+| `tomb4.dll` | `0x696B4999` | `0x68C12FDA` | same as retail |
+| `tomb5.dll` | `0x696B499C` | `0x68C12FE9` | same as retail |
+| `tomb6.dll` | `0x696B49A4` | `0x68C12FE6` | same as retail |
+
+The HD Definitive Patch replaces only the executable: its three DLLs are
+byte-identical to the retail ones, so they need no rows of their own. Its exe
+and the retail exe are the same code built twice — `.text`, `.data`, `.pdata`
+and `.reloc` are byte-identical, and the differences are the PE debug
+timestamps, the PDB age, and four bytes in an `.rdata` table the renderer's
+texture init reads. That is why the two exe rows share one address list
+(`TR_HD_ADDRS`) and differ only in the timestamp that selects them.
+
+### Porting addresses without a PDB
+
+The retail binaries have no symbols and no PDB, and their addresses do not
+differ from the 2026-01-17 build by a constant — the two are the same source
+compiled at different times, so functions moved by varying amounts and a few
+changed shape. `tools\port_addresses.py` recovers the map structurally instead
+of by hand:
+
+1. Every function is taken from `.pdata` — the x64 unwind table, so the bounds
+   are exact rather than guessed — and disassembled.
+2. Each instruction is normalised with RIP-relative displacements and
+   branch/call targets wildcarded, because those are the only bytes that move
+   when surrounding code moves. Struct offsets, immediates and stack layout are
+   kept, so a match also asserts that **the field offsets agree**.
+3. Functions whose normalised stream is unique in both builds are paired
+   outright. Pairs then propagate: the Nth call target of a paired function
+   pairs with the Nth of its partner, and every RIP-relative operand casts a
+   vote for a data-address pairing. Repeat until nothing new is learnt.
+4. What is left is paired by nearest neighbour between two already-paired
+   anchors, accepted only above a similarity threshold.
+
+A code address maps by instruction index when its function pair is exact and by
+aligned instruction (`difflib`) otherwise. A data address maps by vote, and the
+tool prints the vote count and any dissent, so a thin result is visible rather
+than merely plausible:
+
+```text
+python tools\port_addresses.py PDB\tomb4.dll retail\tomb4.dll 0x004F3000 0x000C40F0
+# ref PDB\tomb4.dll stamp 0x696B4999  funcs 3081
+# tgt retail\tomb4.dll stamp 0x68C12FDA  funcs 3087
+# paired 2644 (1964 exact)
+```
+
+| Pairing | Functions, reference / target | Paired | Exact |
+|---|---|---:|---:|
+| `tomb4.dll` | 3081 / 3087 | 2644 | 1964 |
+| `tomb5.dll` | 3148 / 3171 | 2712 | 1987 |
+| `tomb6.dll` | 5399 / 5449 | 4377 | 2885 |
+| `tomb456.exe` | 1359 / 1408 | 1154 | 887 |
+
+93 addresses were carried across this way — 27 for `tomb4.dll`, 27 for
+`tomb5.dll` and 39 for `tomb6.dll` — plus `shader_init` on the exe rows. Every
+one was then re-checked individually; the tool locates a candidate, it does not
+get the last word.
+
+### What actually differs, DLL by DLL
+
+**`tomb4.dll` and `tomb5.dll` are easy.** Every data address was agreed
+unanimously by all of its references in matched code — 4 to 600 votes each, no
+dissent — and the neighbour relationships survive intact: `phd_winxmax` and
+`phd_winymax` still 4 apart, `lara_item` still `0x1C0` above `lara`,
+`BinocularRange` still 8 above `BinocularOn`, the `outside_*` rect in the same
+order. The struct layouts the hooks depend on — the 304-byte `ROOM_INFO`,
+`lara+12`, `camera+4` and `+12`, `ITEM_INFO+6176` — appear unchanged in hundreds
+of matched instructions and were never once remapped.
+
+Three prologues did move, and all three for the same trivial reason: the retail
+compiler chose a different home slot for `rbx`.
+
+| Function | 2026-01-17 | Retail |
+|---|---|---|
+| `DrawSkyHD` | `48 89 5C 24 08` | `48 89 5C 24 18` |
+| `DrawVCIHeadset` | `48 89 5C 24 10` | `48 89 5C 24 08` |
+| `DrawLabyrinthFishEye` | `48 89 5C 24 10` | `48 89 5C 24 08` |
+
+All are still five complete, position-independent bytes, so the expected bytes
+simply travel with the row instead of being a shared constant: `GameDllLayout`
+grew `drawSkyHDPrologue`, `drawVCIHeadsetPrologue` and
+`drawLabyrinthFishEyePrologue`, exactly as `PrintRoomsList`'s already did. Those
+same three functions had also changed shape too much to pair by body, so each is
+placed by its unique call site instead — `PrintRoomsList`'s first call, and
+`DrawBinoculars`' two calls that bracket `DrawNormalBinocs`, whose surrounding
+call sequences agree one-for-one between the builds.
+
+**`tomb6.dll` moved the most,** which is also where the mod has the most to
+lose. Its row is a new `Tr6Layout` struct holding all 39 addresses, the
+call-site allowlists, and the three prologues that embed a RIP-relative
+displacement and so cannot be shared. Four findings are worth recording:
+
+- **The globals are unanimous.** `gcamCamera` (41 references), the player
+  pointer (281), `gmapGMXCur` (364) and the camera matrix (28) each agreed with
+  no dissent. `fxCamDist`'s RIP-relative read resolves to the new `gcamCamera`,
+  and both bounds helpers' cookie reads to the new `__security_cookie`.
+- **`IsPointInWater` has no unwind entry,** so it is not a `.pdata` function and
+  cannot be paired by body. It is identified the way it was originally: it is
+  the sole callee of the AMX wrapper registered under the name
+  `IsPointInWater`, and its body reads the new `gmapGMXCur` with the same
+  `+0x7A0` / `+0x1A0` room offsets.
+- **Return addresses were paired call site by call site** on the same callee, by
+  address order and surrounding-code similarity. The two animated-object sites
+  were then confirmed in the decompiler by their distinctive field offsets —
+  `+0x3C4` / `+0x3D0` dynamic, `+0x3DC` static.
+- **The final scene-object renderer was restructured.** Retail inlines the
+  mesh-part loop into the character path (a new function at `+0x1B06A0`), so it
+  has **six** paired AABB/OBB sites where the 2026-01-17 build has five:
+
+  | Path | 2026-01-17 AABB / OBB | Retail AABB / OBB |
+  |---|---|---|
+  | mesh parts, joints < 4 | `1B0066` / `1B0081` | `1B0595` / `1B05AB` |
+  | mesh parts, joints >= 4 | `1B0155` / `1B016B` | `1B0605` / `1B061B` |
+  | characters | `1B0858` / `1B0877` | `1B0808` / `1B082D` |
+  | mesh parts, inlined | *(reached by call)* | `1B08BD` / `1B08D9` |
+  | static objects | `1B09B8` / `1B0A03` | `1B1062` / `1B10B1` |
+  | main scene | `1B1BFC` / `1B1C1D` | `1B2289` / `1B22AA` |
+
+  The inlined copy is the same test the other build reaches through its call, so
+  it is allowlisted rather than treated as a new site.
+  [Phase 20](#phase-20-tr6-pickup-and-scene-object-retention)'s rule is
+  unchanged: the allowlists stay exact — `Tr6Layout::kMaxSceneObjectSites` is 8
+  and unused slots are 0 — rather than disabling either shared bounds helper
+  globally, and `static_assert`s still check that the nearby non-render call
+  sites (`1B2732` and `13F5A6` on one build, `1B2DBD` and `13FAA7` on the other)
+  stay out of both lists. Every TR6 struct offset the hooks use — `+0x40`,
+  `+0xA0`, `+0xB0`, `+0xE0`, `+0x1A0`, `+0x218`, `+0x7A0`, the 400-byte camera
+  view — is unchanged in every matched instruction that uses it.
+
+### One address the exe was missing
+
+`shader_init` (`tomb456.exe+0x00011B50` on both 2025 builds) is what
+[Phase 21](#phase-21-tr45-physics-update)'s per-vertex chest path patches. It was
+deliberately placed last in `Layout` so that a row initialising positionally and
+stopping short of it came out `0`, which `BoneSkin` reads as "not available on
+this build" — the mechanism that let the HD rows exist before the address was
+known for them. It is now known, the rows carry it, and both 2025 exes embed the
+same 315 GLSL sources as the 2026-01-17 build, so the shader patch applies to
+all three unchanged.
+
+With the chest path available everywhere, it is on by default: the template now
+ships `DynamicBones=1` and `DynamicBonesApply=1`, with `DynamicBonesShader=1`
+choosing the per-vertex path and the whole-torso view kept as the automatic
+fallback. `DynamicBonesApply` is ignored while the shader path is live, because
+doing both would move the chest twice.
+
+### Selecting a build at runtime
+
+Nothing is probed or pattern-matched at load. Each family looks up its row by PE
+timestamp and either binds it or stands down, exactly as before — there are
+simply more rows:
+
+- `Engine.cpp` picks a `Layout` for `tomb456.exe` from `kBuildStock`,
+  `kBuildHD1` and `kBuildHD2`.
+- `GameDll.cpp` picks a `GameDllLayout` for the current game from four rows, two
+  per DLL.
+- `Tr6LayoutFor()` picks a `Tr6Layout` for `tomb6.dll` from two.
+
+Every hook still verifies its exact prologue bytes before patching anything, so
+a row that is somehow wrong fails as a logged `prologue mismatch` and a rollback
+rather than a corrupted instruction stream. An unrecognised build now logs what
+it does know, instead of one expected timestamp:
+
+```text
+tr6: build-specific scene/culling hooks unavailable -- tomb6.dll timestamp 0x12345678 is not
+     supported; native stereo uses AER and culling stays stock. Known builds:
+tr6:   0x696B49A4  tomb6.dll v1.0.2a debug (2026-01-17)
+tr6:   0x68C12FE6  tomb6.dll retail (2025-09-10)
+```
+
+and a supported one names itself once, so a log says which binaries were bound:
+
+```text
+tr6: bound to tomb6.dll retail (2025-09-10) (build 0x68C12FE6)
+```
+
+The TR6 detours read their row through one `g_tr6` pointer, set together with
+`g_tr6ModuleBase` before any TR6 hook is installed, so a detour that can rely on
+the base can rely on the row. Both are cleared in `RemoveHooks`.
+
+### Verifying a build that has no PDB
+
+`tools\verify_addresses.py` could previously do one thing: re-derive the whole
+address map from the PDBs and diff it. For the ported rows there is no PDB and
+no name to compare against, so it checks the property that actually matters for
+safety — that **each address carries the bytes the source says it does**, and
+that the code around it has the shape the hook assumes:
+
+- Every hook and stub target on a PDB-less build is checked against the exact
+  prologue array the source will `memcmp` at install time, and the window is
+  required to end on an instruction boundary.
+- Every TR6 return address is checked to be preceded by a direct `E8` call **to
+  the specific function its detour hooks** — which is what makes a
+  return-address allowlist meaningful at all — and the AABB and OBB site counts
+  are checked to match.
+- `fxCamDist`'s RIP-relative read is resolved and checked to land on that row's
+  `gcamCamera`; `IsPointInWater`'s first instruction is checked to read that
+  row's `gmapGMXCur`; the FX light return is checked to fall inside
+  `fxProcessBox`'s range.
+
+The binaries are found by PE timestamp in `retail\` and `HD_Definitive_Patch\`.
+Neither directory is part of the repository, so a missing one is reported and
+skipped rather than failed:
+
+```text
+=== builds without a PDB (retail, HD_Definitive_Patch) ===
+  skipped tomb6.dll 0x696B49A4 -- no binary of that build found
+```
+
+With every binary in place there is nothing to skip, and the run ends:
+
+```text
+OK -- all 486 checks agree with the PDBs / binaries.
+```
+
+### Scope and validation
+
+- **Verified statically:** with the four retail binaries and the HD Definitive
+  Patch exe present, `tools\verify_addresses.py` passes all 486 checks, every
+  ported address and prologue included.
+- **Three exe builds, two builds of each DLL.** A build outside those tables is
+  not patched; it logs the builds it knows and falls back exactly as an
+  unsupported build always has — AER for TR6 native stereo, stock culling, stock
+  sky, no overlay stubs.
+- **The HD Definitive Patch needs no DLL rows,** because its DLLs are the retail
+  ones. If a future release of it changes them, they need their own rows, which
+  is what `port_addresses.py` is for.
+- **Validated in-headset:** both ported builds — the retail Steam release and
+  the HD Definitive Patch — passed testing, so the ported rows are confirmed in
+  play and not only against the binaries.
+
+Implementation is in `src\GameDll.h` and `src\GameDll.cpp` (the two retail
+`GameDllLayout` rows, the `Tr6Layout` table, `Tr6LayoutFor`,
+`Tr6LogKnownBuilds`), `src\Hooks.cpp` (every TR6 constant replaced by a row
+lookup through `g_tr6`), `src\Engine.h` (`shader_init` in the HD/retail rows),
+`src\Sky.cpp` and `src\Overlay.cpp` (per-row prologues), `src\Config.h`,
+`TombRaiderVR.ini` and `src\DefaultIni.h` (chest physics on by default), and
+`tools\port_addresses.py` with the PDB-less section of
 `tools\verify_addresses.py`.
 
 ---
