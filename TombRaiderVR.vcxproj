@@ -138,6 +138,7 @@
     <ClCompile Include="src\Gamepad.cpp" />
     <ClCompile Include="src\VideoPanel.cpp" />
     <ClCompile Include="src\VRSystem.cpp" />
+    <ClCompile Include="src\FirstPerson.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -161,6 +162,8 @@
     <ClInclude Include="src\Gamepad.h" />
     <ClInclude Include="src\VideoPanel.h" />
     <ClInclude Include="src\VRSystem.h" />
+    <ClInclude Include="src\FirstPerson.h" />
+    <ClInclude Include="src\LocomotionMath.h" />
   </ItemGroup>
 
   <ItemGroup>

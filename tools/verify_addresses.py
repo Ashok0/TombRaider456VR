@@ -107,6 +107,15 @@ size, f = udt('tomb456.exe', 'Shader')
 check('sizeof(Shader)', 80, size)
 size, _ = udt('tomb456.exe', 'mat4')
 check('sizeof(mat4)', 64, size)
+size, f = udt('tomb456.exe', 'APP')
+check('sizeof(APP)', 2968, size)
+check('APP::InventoryActive', 2148, f.get('InventoryActive'))
+check('APP::InFMV', 2152, f.get('InFMV'))
+check('APP::InTitle', 2156, f.get('InTitle'))
+check('APP::cfg', 2528, f.get('cfg'))
+size, f = udt('tomb456.exe', 'APP_CONFIG')
+check('sizeof(APP_CONFIG)', 432, size)
+check('APP_CONFIG::new_controls word', 4, f.get('new_controls'))
 
 # The view-matrix convention the culling depends on. mView_packed is built by
 # vid_setViewMatrix from the same int[12] the game's own culling uses, with the
@@ -133,6 +142,11 @@ LAYOUT = ['lara', 'lara_item', 'camera', 'room', 'number_rooms',
           'outside_bottom',
           'BinocularOn', 'BinocularRange',
           'PrintRoomsList', 'S_GetObjectBounds', 'DrawSkyHD', 'DrawLaraHD',
+          'phd_GenerateW2V', 'w2v_scene_return', 'frame_frac',
+          'DrawCreatureHD', 'DrawHair', 'gLaraHeads', 'objects',
+          'GetJointAbsPositionLerp', 'AimWeapon',
+          'LaraAboveWater', 'AnimateLara', 'analogInput', 'input',
+          'GetCollisionInfo', 'GetFloor', 'GetHeight', 'ItemNewRoom', 'GLOBAL_playing_cutseq',
           'DrawNormalBinocs', 'DrawVCIHeadset', 'DrawLabyrinthFishEye',
           'DrawNormalLaserSight', 'DoInfraRedQuad']
 
@@ -179,6 +193,8 @@ for game, stamp, dll, vals, prologue_names in rows:
         continue
 
     for name, got in zip(LAYOUT, rvas):
+        if name == 'w2v_scene_return':
+            continue
         if name in ds:
             check('%s %s' % (dll, name), got, ds[name][0])
         else:
@@ -198,6 +214,36 @@ for game, stamp, dll, vals, prologue_names in rows:
     size, f = udt(dll, 'lara_info')
     check('%s sizeof(lara_info)' % dll, 448, size)
     check('%s lara_info::water_status' % dll, 12, f.get('water_status'))
+    for fld, want in (('left_arm', 240), ('right_arm', 264),
+                      ('turn_rate', 220), ('move_angle', 222), ('item_number', 0), ('Vehicle', 38)):
+        check('%s lara_info::%s' % (dll, fld), want, f.get(fld))
+    size, f = udt(dll, 'lara_arm')
+    check('%s sizeof(lara_arm)' % dll, 24, size)
+    for fld, want in (('lock', 12), ('y_rot', 14), ('x_rot', 16), ('z_rot', 18)):
+        check('%s lara_arm::%s' % (dll, fld), want, f.get(fld))
+    size, f = udt(dll, 'ITEM_INFO')
+    check('%s sizeof(ITEM_INFO)' % dll, 9416, size)
+    for fld, want in (('mesh_bits', 12), ('object_number', 16),
+                      ('floor', 0), ('floor_prev', 4), ('room_number', 28),
+                      ('current_anim_state', 18), ('speed', 34), ('hit_points', 38),
+                      ('pos', 96), ('pos_prev', 6208)):
+        check('%s ITEM_INFO::%s' % (dll, fld), want, f.get(fld))
+    size, f = udt(dll, 'PHD_VECTOR')
+    check('%s sizeof(PHD_VECTOR)' % dll, 12, size)
+    size, f = udt(dll, 'COLL_INFO')
+    check('%s sizeof(COLL_INFO)' % dll, 144, size)
+    for fld, want in (('mid_floor', 0), ('mid_ceiling', 4), ('radius', 72),
+                      ('bad_pos', 76), ('bad_neg', 80), ('bad_ceiling', 84),
+                      ('shift', 88), ('old', 100), ('facing', 118),
+                      ('coll_type', 122), ('trigger', 128),
+                      ('slopes_are_walls', 140), ('lava_is_pit', 140)):
+        check('%s COLL_INFO::%s' % (dll, fld), want, f.get(fld))
+    check('%s sizeof(GLOBAL_playing_cutseq)' % dll, 4, ds['GLOBAL_playing_cutseq'][2])
+    size, f = udt(dll, 'ANALOG_INPUT_INFO')
+    check('%s sizeof(ANALOG_INPUT_INFO)' % dll, 56, size)
+    for fld, want in (('turn', 0), ('tilt', 2), ('camTurn', 4), ('oldCamTurn', 6)):
+        check('%s ANALOG_INPUT_INFO::%s' % (dll, fld), want, f.get(fld))
+    check('%s sizeof(input)' % dll, 8, ds['input'][2])
 
     size, f = udt(dll, 'camera_info')
     check('%s sizeof(camera_info)' % dll, 112, size)
@@ -230,6 +276,7 @@ for game, stamp, dll, vals, prologue_names in rows:
 print('=== hook prologues (src/Hooks.cpp, src/GameDll.cpp, src/PortalCull.cpp) ===')
 try:
     import pefile
+    import struct as _st
     from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 
     md = Cs(CS_ARCH_X86, CS_MODE_64)
@@ -250,7 +297,13 @@ try:
     def image(path):
         if path not in _images:
             pe = pefile.PE(path, fast_load=True)
-            _images[path] = (pe.get_memory_mapped_image(), pe.OPTIONAL_HEADER.ImageBase)
+            # Every byte read below is code (prologues, instructions, calls).
+            # The EXE's mostly uninitialized .data spans ~230 MiB; materializing
+            # it for each build needlessly exhausts memory during verification.
+            code_end = max(s.VirtualAddress + s.SizeOfRawData for s in pe.sections
+                           if s.Characteristics & 0x20000000)
+            _images[path] = (pe.get_memory_mapped_image(max_virtual_address=code_end),
+                             pe.OPTIONAL_HEADER.ImageBase)
         return _images[path]
 
     def window(image_name, fn, want, label):
@@ -282,7 +335,42 @@ try:
                   riprel if riprel else 'none', 'none')
 
     a = arrays_in('Hooks.cpp', 'GameDll.cpp', 'PortalCull.cpp', 'Sky.cpp',
-                  'Overlay.cpp', 'DynamicBones.cpp', 'BoneSkin.cpp')
+                  'Overlay.cpp', 'DynamicBones.cpp', 'BoneSkin.cpp',
+                  'FirstPerson.cpp')
+
+    def locomotion_calls(path, rv, label):
+        data, base = image(path)
+        above, animate = rv['LaraAboveWater'], rv['AnimateLara']
+        calls = [i.address for i in md.disasm(data[above:above + 1100], above)
+                 if i.mnemonic == 'call' and i.op_str == hex(animate)]
+        check('%s AboveWater calls AnimateLara once' % label, len(calls), 1)
+        native = list(md.disasm(data[above:above + 1100], above))
+        for name in ('GetFloor', 'GetHeight', 'ItemNewRoom'):
+            check('%s AboveWater calls %s' % (label, name),
+                  any(i.mnemonic == 'call' and i.op_str == hex(rv[name]) for i in native), True)
+        retail = 'retail' in label
+        game4 = 'tomb4' in label
+        # Layout parity does not imply behavioral parity: TR5's unused Vehicle
+        # slot remains zero. Only TR4's native ground routine reads that slot
+        # and treats -1 as 'not mounted'. Guard against repeating this mistake.
+        body = []
+        for ins in native:
+            body.append(ins)
+            if ins.mnemonic == 'ret':
+                break
+        reads_vehicle = any('rip' in ins.op_str and
+                            ins.address + ins.size + ins.disp == rv['lara'] + 38
+                            for ins in body)
+        check('%s native vehicle gate is TR4-only' % label, reads_vehicle, game4)
+        for name, arr in (('GetCollisionInfo', 'kCollisionRetail' if retail else 'kCollisionDebug'),
+                          ('GetFloor', 'kGetFloor'), ('ItemNewRoom', 'kItemNewRoom'),
+                          ('GetHeight', 'kGetHeightTR4' if game4 else 'kGetHeightTR5')):
+            window_at(path, rv[name], a[arr], '%s native %s' % (label, name))
+        # Independently identify analogInput from app->inputUpdate(&analogInput).
+        pattern = rb'\x48\x8b\x05....\x48\x8d\x0d....\xff\x50\x60'
+        targets = [m.start() + 14 + _st.unpack_from('<i', m[0], 10)[0]
+                   for m in re.finditer(pattern, data, re.S)]
+        check('%s inputUpdate analogInput target' % label, targets, [rv['analogInput']])
 
     # tomb456.exe -- the stereo hooks, from Hooks.cpp's Target table.
     hooks = open(os.path.join(ROOT, 'src', 'Hooks.cpp'), encoding='utf-8',
@@ -312,6 +400,26 @@ try:
         arr = 'kDrawLaraHDTR4' if dll == 'tomb4.dll' else 'kDrawLaraHDTR5'
         if arr in a:
             window(dll, 'DrawLaraHD', a[arr], '%s!DrawLaraHD' % dll)
+        for fn, arr in (('phd_GenerateW2V', 'kGenerateW2VPrologue'),
+                        ('DrawCreatureHD', 'kDrawCreatureDebug'),
+                        ('DrawHair', 'kDrawHairPrologue'),
+                        ('AimWeapon', 'kAimWeaponPrologue'),
+                        ('GetJointAbsPositionLerp', 'kAimWeaponPrologue')):
+            if arr in a:
+                window(dll, fn, a[arr], '%s!%s' % (dll, fn))
+        row = next(r for r in rows if r[2] == dll)
+        rv = dict(zip(LAYOUT, row[3][:len(LAYOUT)]))
+        for fn, arr in (('LaraAboveWater', 'kLaraAboveWaterTR4' if dll == 'tomb4.dll' else 'kLaraAboveWaterTR5'),
+                        ('AnimateLara', 'kAnimateLaraTR4' if dll == 'tomb4.dll' else 'kAnimateLaraTR5')):
+            window(dll, fn, a[arr], '%s!%s' % (dll, fn))
+        locomotion_calls(os.path.join(PDB, dll), rv, dll)
+        data, _ = image(os.path.join(PDB, dll))
+        ret = rv['w2v_scene_return']
+        target = rv['phd_GenerateW2V']
+        direct = (data[ret - 5] == 0xE8 and
+                  ret + _st.unpack_from('<i', data, ret - 4)[0] == target)
+        check('%s scene return follows phd_GenerateW2V call' % dll,
+              direct, True)
         # The optic-overlay stubs (Overlay.cpp). Only the first byte is
         # overwritten there, but all five are compared before the write, so all
         # five are verified here -- and the instruction-boundary check still has
@@ -338,12 +446,11 @@ try:
     # source expects and they end on an instruction boundary, and every TR6
     # return address follows a direct call to the function its hook detours.
     # Skipped when retail\ does not hold the matching binary.
-    import struct as _st
     # Directories that may hold a PDB-less build to check a row against: the
     # retail Steam files and the HD Definitive Patch's. Neither is part of the
     # repository, so a missing one is reported and skipped, not a failure.
     BINDIRS = [os.path.join(ROOT, 'retail'),
-               os.path.join(ROOT, 'HD_Definitive_Patch')]
+               os.path.join(ROOT, 'HD_Definitive_Patch')] + sys.argv[1:]
     print('=== builds without a PDB (%s) ==='
           % ', '.join(os.path.basename(d) for d in BINDIRS))
 
@@ -365,14 +472,29 @@ try:
         fixed = [('PrintRoomsList', names[0]),
                  ('S_GetObjectBounds', 'kObjectBoundsPrologue'),
                  ('DrawLaraHD', 'kDrawLaraHDTR4' if game == 0 else 'kDrawLaraHDTR5'),
+                 ('phd_GenerateW2V', 'kGenerateW2VPrologue'),
+                 ('DrawCreatureHD', 'kDrawCreatureRetail'),
+                 ('DrawHair', 'kDrawHairPrologue'),
+                 ('AimWeapon', 'kAimWeaponPrologue'),
+                 ('GetJointAbsPositionLerp', 'kAimWeaponPrologue'),
+                 ('LaraAboveWater', 'kLaraAboveWaterTR4' if game == 0 else 'kLaraAboveWaterTR5'),
+                 ('AnimateLara', 'kAnimateLaraTR4' if game == 0 else 'kAnimateLaraTR5'),
                  ('DrawNormalBinocs', 'kSaveRbx08'),
                  ('DrawNormalLaserSight', 'kSaveRbx10'),
                  ('DoInfraRedQuad', 'kSubRsp28')]
         fixed += [(f, n) for f, n in zip(ROW_PROLOGUES, names)
                   if f and f != 'PrintRoomsList']
+        locomotion_calls(path, rv, 'retail ' + dll)
         for fn, arr in fixed:
             if arr in a:
                 window_at(path, rv[fn], a[arr], 'retail %s!%s' % (dll, fn))
+        data, _ = image(path)
+        ret = rv['w2v_scene_return']
+        target = rv['phd_GenerateW2V']
+        direct = (data[ret - 5] == 0xE8 and
+                  ret + _st.unpack_from('<i', data, ret - 4)[0] == target)
+        check('retail %s scene return follows phd_GenerateW2V call' % dll,
+              direct, True)
 
     # tomb456.exe: the HD/retail row uses the stock hook prologues.
     eng = open(os.path.join(ROOT, 'src', 'Engine.h'), encoding='utf-8').read()
@@ -393,8 +515,8 @@ try:
             if arr in a:
                 window_at(path, hdv[i], a[arr], '%s %s' % (label, arr))
         # TR_HD_ADDRS ends with shader_init when the rows carry one.
-        if len(hdv) > 21:
-            window_at(path, hdv[21], a['kShaderInitPrologue'],
+        if len(hdv) > 22:
+            window_at(path, hdv[22], a['kShaderInitPrologue'],
                       '%s!shader_init' % label)
 
     # tomb6.dll: the Tr6Layout table. The debug tomb6.dll has no PDB and does

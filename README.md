@@ -10,6 +10,11 @@ implement its guarded per-eye replay, trace TR6's separate room-culling pipeline
 isolate projected-shadow cameras and trace its room-attached effects pipeline,
 build and deploy the mod, and document the results after in-headset validation.
 
+Codex also worked on the TR1–3 first-person port to TR4/5 and its subsequent
+regression fixes and diagnostics. That work is documented in
+[Phase 23](#phase-23-tr45-first-person); its automated tests are not a substitute
+for in-headset validation, and the remaining motion issues are listed there.
+
 ## VR Mod Features
 * Native stereo with 6DOF (TR4/5/6)
 * Culling fixes for VR
@@ -21,6 +26,9 @@ build and deploy the mod, and document the results after in-headset validation.
 * Decoupled pitch
 * Sky fix — the HD sky dome sits at optical infinity instead of a few metres away
 * Chest physics for Lara in TR4/5, ported from TR6's dynamic bones
+* First person for TR4/5, ported from TR1–3: directional movement, head aiming,
+  body-follow rotation and collision-checked room-scale movement. Motion polish
+  remains under investigation; TR6 first person is not implemented.
 
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
@@ -39,6 +47,7 @@ This significantly improves visuals in VR. Download it from NexusMods and extrac
 Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Controls
+
 | Action | Control |
 |---|---|
 | Move | Left Stick (LS) |
@@ -60,10 +69,26 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
 | 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
 | Swan Dive | Jump (A) + Move (LS) + Roll (B) |
-| Toggle Classic Graphics | Y + LT |
+| Toggle First Person (TR4/5, `FirstPerson=1`) | Y + LT |
+| Toggle Classic Graphics (TR4/5, `FirstPerson=1`) | Y + RT |
+| Recenter First-Person Position | End; Numpad 5 also works by default |
 | Adjust Camera Pitch | RT + RB + RS |
 | Menu | X |
 | Sneak (TR6 only) | RB + Y |
+
+With `FirstPerson=1` (the new default), Y + LT selects first/third person in
+gameplay, inventory and title menus; it never doubles as the graphics toggle.
+Release and press the chord again to switch back. Selecting first person in a
+menu takes effect when normal gameplay resumes. Startup is still third person:
+the INI setting enables the feature, not an automatic first-person startup.
+TR6, or `FirstPerson=0`, retains the legacy Y + LT hold chord for graphics.
+
+In first person, LS up moves forward, LS left/right sidesteps, and LS down
+backpedals instead of turning Lara to run toward the camera. The dominant stick
+axis selects the directional gait. RS turns your view; physical head rotation
+also changes your view, and Lara follows during supported ground movement.
+R3's D-pad shift remains available. See [Phase 23](#phase-23-tr45-first-person)
+for settings, gameplay exceptions and the current motion limitations.
 
 ## Development Notes
 
@@ -100,6 +125,7 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 20** | **TR6 pickup and scene-object retention** — candy bars, pickups, barrels and props survive preparation and the final paired bounds tests | Built. Awaiting in-headset revalidation. TR6 only |
 | **Phase 21** | **TR4/5 chest physics** — TR6's dynamic bones reimplemented: a damped spring driven by Lara's own airborne state, applied per vertex in the HD skinning shader | Working. On by default. TR4 / TR5 |
 | **Phase 22** | **Retail and Definitive Edition builds** — every game-DLL address set made per build, so the retail Steam release and the HD Definitive Patch get the DLL-side fixes too | Working. Confirmed in-headset on both ported builds |
+| **Phase 23** | **TR4/5 first person** — head anchor, directional locomotion, head aiming, room-scale movement and camera handoff, ported from TR1–3 | Implemented and regression-tested. Sideways forward-motion wobble and subtle stick-turn judder remain under investigation. No TR6 first person |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -209,12 +235,19 @@ tables are now per build, ported structurally from the symbolised binaries and
 checked against the shipped ones. See
 [Phase 22: Retail and Definitive Edition Builds](#phase-22-retail-and-definitive-edition-builds).
 
-**There is no ini file in the repo to copy.** The configuration lives in the
-DLL as a compiled-in template (`src/DefaultIni.h`), and the mod writes
+**Phase 23** ports first person from TR1–3 to TR4/5, including its movement,
+head/body alignment, aiming and room-scale behavior. It also records the TR5
+vehicle-field regression, the first-to-third-person translation fix, and what
+has not yet been validated. See [Phase 23: TR4/5 First Person](#phase-23-tr45-first-person).
+
+**The repository's `TombRaiderVR.ini` is the configuration template.** The DLL
+embeds it through `src/DefaultIni.h`, and the mod writes
 `TombRaiderVR.ini` beside itself on first launch — ready to play, with
 `Mode=stereo`, `EyeOffsetMode=3`, and every option from every phase documented
 in place. The write is `CREATE_NEW`, so an existing file is never overwritten
-and tuned settings are safe. To reset to defaults, delete the ini and relaunch.
+and tuned settings are safe. To reset to defaults, back up or rename the installed
+INI and relaunch. Updating the DLL does not add keys to an existing INI; merge
+new settings into its `[VR]` section to retain your tuning.
 
 The renderer was reverse-engineered from the shipped binary and its PDB. Every
 address in `src/Engine.h` was read out of Ghidra and re-verified against the
@@ -4471,10 +4504,199 @@ lookup through `g_tr6`), `src\Engine.h` (`shader_init` in the HD/retail rows),
 
 ---
 
+## Phase 23: TR4/5 First Person
+
+Status as of 2026-09-24: implemented for supported TR4/5 builds, with subsequent
+regression fixes and diagnostic logging. The reference is the first-person
+implementation in `TombRaider123VR`. This is not a claim of identical in-headset
+smoothness: sideways wobble while moving forward and subtle stick-turn judder
+are still open. TR6 uses a different engine and has **no first-person port**;
+its existing stereo and third-person paths are unchanged by this feature.
+
+### Enabling and using it
+
+The shipped template has `FirstPerson=1` under `[VR]`. Each launch starts in
+third person; press **Y + LT** to select first person, or press it again to
+return to third person. **Y + RT** switches classic/remastered graphics while
+the feature is enabled in TR4/5. The first-person chord is edge-triggered and
+has the same ownership in gameplay and menus, so it does not toggle graphics
+in a menu. Its action/trigger inputs are consumed to avoid leaking into gameplay.
+
+The camera is anchored only during eligible gameplay. Inventory, title screens,
+FMVs, cutsequences and fixed/cinematic cameras retain their own presentation.
+Returning from a menu preserves the previous viewing heading when Lara is the
+same item and has not been relocated. A new item or large relocation establishes
+a fresh anchor instead of reusing stale positional state.
+
+For an older installed INI, back it up and merge the first-person settings from
+the repository template into its existing `[VR]` section. Do not replace unrelated
+tuning just to obtain the new keys. If the INI was deleted, the updated DLL
+generates a fresh one at launch. `FirstPerson=0` disables the port and restores
+the legacy controller-chord behavior.
+
+### Camera, movement and aiming
+
+- **Animated eye anchor:** the camera uses the game's interpolated head joint
+  (`GetJointAbsPositionLerp`, joint 14), with local eye offset `(0, -32, 144)`
+  in game units. It does not reuse the third-person camera's height. Headset
+  translation is relative to a captured neutral, not absolute standing height.
+- **Directional ground movement:** forward, sidestep and continuous backward
+  walking use native animation/action states. Backward uses `Back | Walk`, not
+  the native back-hop or modern-controls run toward the camera. Native input
+  heading, Lara's facing and movement angle are aligned before animation;
+  residual native turn rate is cleared. Side/back horizontal animation movement
+  uses the TR1–3 three-times scale once per animation tick; forward movement and
+  jump motion are not multiplied.
+- **Head/body alignment:** ordinary ground movement follows physical headset
+  yaw plus artificial stick yaw. Body following is time-scaled using a 60 Hz
+  reference. Native interactions, climbing, swimming, death and TR4 vehicles
+  retain their own movement rules. Jump preparation and forward-jump steering
+  have explicit handling rather than treating airborne movement as walking.
+- **Physical-turn centering:** the neck-to-head compensation removes the
+  duplicate horizontal eye arc that made physical rotation move the view off
+  Lara's center and return after 360 degrees. Artificial turns also pivot the
+  accumulated tracking offset. Actual leaning and ducking remain tracked.
+- **Room-scale movement:** physical horizontal steps can move Lara through
+  native wall, floor/ledge and room-transition checks. This moves her body
+  directly rather than synthesizing stick input. Only accepted body motion
+  actually visible at the current interpolation fraction is subtracted from
+  pending headset displacement, avoiding double-counting. D-pad shifting and
+  unsupported movement states do not perform this body drag; interaction
+  transitions clear stale horizontal displacement.
+- **Head aiming:** the native `AimWeapon` path applies headset yaw/pitch to
+  both arms before animation/firing, including the revolver's differing aim/fire
+  arm paths. The arm lock prevents long guns from adding torso rotation twice.
+  This is head aiming, not tracked-controller weapon aiming or independent hands.
+- **Visibility:** head, face attachments and braid are hidden while anchored
+  when enabled. Rolls temporarily hide the whole body even if head hiding is
+  disabled. Original mesh visibility is restored when leaving the mode.
+- **Recenter:** End captures a new first-person positional neutral and clears
+  room-scale counters without changing world viewing heading. The existing
+  `RecentreKey` (Numpad 5 by default) uses the same first-person reset.
+
+### Regression fixes after the initial port
+
+The TR5 movement regression came from treating its `lara.Vehicle` struct slot
+like TR4's. TR4 uses `-1` for no vehicle; TR5 leaves the unused slot zero and
+its native above-water routine does not read it. The shared guard consequently
+blocked TR5 ground locomotion, body turning and room-scale movement. The vehicle
+check is now TR4-only, and the tests use each game's actual initialization value.
+
+The first-to-third-person off-center camera came from carrying the absolute
+headset position and stale third-person translation into the chase camera.
+Third-person displacement no longer accumulates in the background while first
+person is active. On exit, a fresh third-person positional neutral is captured
+and translation is cleared for that same frame; subsequent physical leaning is
+relative to the new neutral. Viewing rotation and stereo eye separation are
+preserved. Tests cover explicit toggles, automatic camera/menu exits and tracking
+reacquisition. The code fix is deployed, but final comfort validation remains an
+in-headset task.
+
+### First-person settings
+
+All settings below belong in `[VR]`. These are repository/generated-template
+defaults, not a promise that an older installed INI has been updated.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `FirstPerson` | `1` | Enable the TR4/5 feature and new chords; startup remains third person |
+| `FirstPersonJoint` | `14` | Animated head joint used for the eye anchor |
+| `FirstPersonAnchorX` | `0` | Eye offset in joint-local game units |
+| `FirstPersonAnchorY` | `-32` | Local vertical offset; negative is up |
+| `FirstPersonAnchorZ` | `144` | Local forward eye offset |
+| `FirstPersonHeadTranslation` | `1` | Physical leaning/ducking relative to neutral; tracked rotation remains active |
+| `FirstPersonRoomscaleNeckMetres` | `0.15` | Neck-to-head compensation distance, clamped to 0–0.4 m; `0` disables it |
+| `FirstPersonRoomscaleMove` | `1` | Let collision-checked physical steps move Lara |
+| `FirstPersonRoomscaleDeadzoneMetres` | `0.02` | Lean allowance before the body follows |
+| `FirstPersonRecenterKey` | `0x23` | End; recapture positional neutral while preserving viewing heading |
+| `FirstPersonDriftLog` | `0` | Enable room-scale/heading and forward-motion diagnostics in `TombRaiderVR.log` |
+| `FirstPersonHideHead` | `1` | Hide head/face/braid; roll body hiding applies independently |
+| `FirstPersonMoveWithHead` | `1` | Convert modern-controls movement using the HMD viewing direction |
+| `FirstPersonBodyFollowsHead` | `1` | Enable body following during supported ground states |
+| `FirstPersonBodyDeadzoneDegrees` | `0` | Body-follow angular deadzone |
+| `FirstPersonBodyTurnDegreesPerFrame` | `4` | Body-follow turn limit at a 60 Hz reference, scaled by elapsed time |
+| `FirstPersonHeadAim` | `1` | Headset-directed gun-arm angles and firing direction |
+| `FirstPersonTurnDegreesPerSecond` | `120` | Maximum continuous right-stick yaw rate |
+| `FirstPersonTurnDeadzone` | `0.25` | Right-stick turning deadzone |
+
+### Remaining motion issues and diagnostics
+
+**Sideways wobble while moving forward is not yet resolved.** The latest
+diagnostic build does not change controls or camera behavior. With
+`FirstPersonDriftLog=1`, `fp-forward:` lines summarize roughly one-second windows
+of eligible forward movement, measuring animated head offset (`animSide`),
+per-sample lateral body/eye movement (`rootSideStep`, `eyeSideStep`), pending
+tracked displacement (`trackedSide`), heading error (`bodyYawError`) and render
+interpolation fraction (`frac`). Existing `locomotion:` lines report body-drag
+and heading data. These separate candidate sources; animated head sway is a
+hypothesis, not a confirmed diagnosis or a deployed stabilization fix.
+
+For a capture, restart with logging enabled, enter first person, hold forward
+in an open area for 10–15 seconds with the headset reasonably still and no
+right-stick input, then quit. Preserve `TombRaiderVR.log` before another launch
+overwrites it. Return `FirstPersonDriftLog` to `0` after collecting diagnostics;
+the local troubleshooting deployment temporarily enables it, but the shipped
+template does not.
+
+**Subtle stick-turn judder is also unresolved.** Artificial yaw currently
+advances at controller polls using elapsed time; it has not been moved to an
+independent render-frame integrator or given an added smoothing filter. Recent
+local logs reported approximately 59–60 rendered FPS. Poll/render cadence and
+headset refresh/reprojection behavior are candidate explanations for the
+difference from physical turning, not a measured root cause. No stick-judder
+fix has been deployed. Input/render timing must be measured before changing
+this path; a change also needs body-alignment, aiming, room-scale and camera
+handoff regression coverage.
+
+### Implementation and validation
+
+The port lives in `src/FirstPerson.cpp`, `src/FirstPerson.h` and
+`src/LocomotionMath.h`, with integration in `Gamepad`, `VRSystem`, `Hooks`,
+`Config` and the per-build `GameDll` address tables. Camera replacement is
+limited to the scene-camera call site. Required camera/aim/locomotion hooks
+verify their prologues; installation failure rolls them back and leaves the
+mode third person. Unsupported game builds are not guessed at.
+
+`tools/first_person_tests.cpp` exercises the actual first-person, VR tracking
+and controller implementations with mocked engine memory/native calls. Coverage
+includes chords, directional gaits and jump handling, head aiming, physical
+rotation and neck compensation, room-scale collision/interpolation accounting,
+per-game movement guards, recentering, visibility restoration, camera handoff
+and diagnostic sampling. From an **x64 Visual Studio developer command prompt**
+at the repository root (with the `build` directory present):
+
+```bat
+cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_party\openvr\headers /Isrc tools\first_person_tests.cpp /Febuild\first_person_tests.exe /Fobuild\first_person_tests.obj /link /OPT:REF user32.lib
+build\first_person_tests.exe
+```
+
+The latest run passed **8,751 checks**. These are synthetic checks, including
+parameter sweeps, not 8,751 in-game scenarios or proof of headset smoothness.
+The Release x64 build also succeeded. Native address/prologue/layout checks
+were extended in `tools/verify_addresses.py`; the latest recorded run against
+the available PDB/retail binaries passed **791 checks**. To include an installed
+game directory in binary discovery:
+
+```bat
+python tools\verify_addresses.py "C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered"
+```
+
+Live validation still needs both TR4 and TR5: forward/side/back movement,
+physical and stick turns, leaning/room-scale collision, guns, jumps/rolls,
+interactions, menus, graphics switching and first/third-person transitions.
+Do not label the port fully equivalent to TR1–3 based on compilation or these
+tests alone.
+
+---
+
 ## Known limits
 
 These are honest gaps, not oversights.
 
+- **TR4/5 first-person motion is still being refined.** Sideways forward-motion
+  wobble and subtle stick-turn judder remain under investigation, and automated
+  coverage does not replace headset validation. TR6 first person is not
+  implemented. See [Phase 23](#phase-23-tr45-first-person).
 - **`Config.h`'s fallbacks are not the generated ini's values.** `EyeOffsetMode`
   falls back to the superseded `2` and `Mode` to `mono`; the generated
   `TombRaiderVR.ini` overrides both. Running with no ini and no way to write one
@@ -4553,6 +4775,8 @@ respectively.
 ```
 src/              the mod: hooks, engine map, OpenVR glue, matrix maths
 src/GameDll.*     binding and address table for tomb4.dll / tomb5.dll
+src/FirstPerson.* TR4/5 first-person camera, locomotion, aiming and visibility
+src/LocomotionMath.h first-person directional movement and neck-pivot maths
 src/PortalCull.*  head-driven room culling, hooked into the game DLL
 src/PortalGeom.h  the frustum maths behind it, tested by tests/
 src/Sky.*         DrawSkyHD hook: sky draws at optical infinity
@@ -4563,6 +4787,7 @@ src/DefaultIni.h  the compiled-in ini template, written out when none exists
 src/proxy/        the winmm shim that gets us loaded
 PDB/              tomb456.exe + tomb4/tomb5.dll and their PDBs
 tools/            PDB extraction, disassembly, address verification, vrprobe
+tools/first_person_tests.cpp mocked-engine first-person regression harness
 tests/            selftest (hooks + maths + frustum), proxytest (loader)
 docs/             engine-map.html — the full renderer map
 TombRaiderVR.ini  the ini template; src/DefaultIni.h is generated from it

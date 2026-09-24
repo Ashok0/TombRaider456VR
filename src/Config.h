@@ -687,6 +687,28 @@ struct Config {
     // finite-dome stereo, for A/B.
     bool  skyAtInfinity         = true;
 
+    // --- first person (TR4/TR5) -------------------------------------------
+    // Startup remains third person; Y+LT toggles the runtime mode.
+    bool  firstPerson           = false; // legacy INI compatibility
+    int   firstPersonJoint      = 14;
+    int   firstPersonAnchorX    = 0;
+    int   firstPersonAnchorY    = -32;
+    int   firstPersonAnchorZ    = 144;
+    bool  firstPersonHeadTranslation = true;
+    float firstPersonRoomscaleNeckMetres = 0.15f;
+    bool  firstPersonRoomscaleMove = true;
+    float firstPersonRoomscaleDeadzoneMetres = 0.02f;
+    int   firstPersonRecenterKey = 0x23; // End; RecentreKey remains available too
+    bool  firstPersonDriftLog = false;
+    bool  firstPersonHideHead   = true;
+    bool  firstPersonMoveWithHead = true;
+    bool  firstPersonBodyFollowsHead = true;
+    float firstPersonBodyDeadzoneDegrees = 0.0f;
+    float firstPersonBodyTurnDegreesPerFrame = 4.0f;
+    bool  firstPersonHeadAim = true;
+    float firstPersonTurnDegreesPerSecond = 120.0f;
+    float firstPersonTurnDeadzone = 0.25f;
+
     // --- Chest physics for TR4/TR5, from TR6's dynamic bones (DynamicBones.h)
     //
     // This began as a measurement -- run TR6's spring model off TR4/TR5's torso

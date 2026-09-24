@@ -42,6 +42,7 @@
 #include "BoneSkin.h"
 #include "Overlay.h"
 #include "VRSystem.h"
+#include "FirstPerson.h"
 
 #include <cstring>
 #include <intrin.h>
@@ -2339,6 +2340,7 @@ void __cdecl Detour_ogl_present() {
     // The game DLLs load after we do, and the player can switch between TR4 and
     // TR5 without restarting, so both of these run every frame.
     GameDllUpdate();
+    FirstPersonUpdate();
 
     // TR6's render boundary and visibility builder live in tomb6.dll rather
     // than the shared engine. Install them only after that DLL is live and has
@@ -2666,6 +2668,7 @@ bool InstallHooks() {
 
 void RemoveHooks() {
     GamepadShutdown();
+    FirstPersonShutdown();
     OverlayShutdown();
     SkyShutdown();
     DynamicBonesShutdown();

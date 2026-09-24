@@ -93,6 +93,19 @@ public:
 
     bool poseValid() const { return m_poseValid; }
 
+    // Physical HMD yaw in tracking space. First person combines it with a
+    // stable tracking-to-world heading for rendering and movement.
+    float HeadYawRadians() const;
+    float HeadPitchRadians() const;
+    // Capture a position neutral immediately, without changing tracked rotation.
+    void RecenterFirstPersonHead();
+    // FP -> chase camera handoff: start third-person translation at the
+    // current physical position, including views already sampled this frame.
+    void RecenterThirdPersonHead();
+    void HeadFloorOffset(float& right, float& forward) const;
+    void ConsumeHeadFloorOffset(float right, float forward);
+    void PivotHeadFloorOffset(float yawDelta);
+
     // Hold the head CENTRE at the game camera, keeping the per-eye offsets.
     //
     // This is not a stereo switch and it is not mono: the eyes still straddle
@@ -125,7 +138,7 @@ public:
     // Re-anchor the world-locked head offset to the game camera on the next
     // frame. Bound to RecentreKey, for when the integrated offset has drifted
     // away from where you are actually sitting. See WorldLockOffset.
-    void RecentreOffset() { m_recentreRequested = true; }
+    void RecentreOffset();
 
 private:
     vr::IVRSystem*     m_system     = nullptr;
@@ -133,6 +146,14 @@ private:
     HMODULE            m_dll        = nullptr;
 
     Affine m_headFromTracking = Affine::Identity();  // inverse(hmdPose)
+    vr::HmdMatrix34_t m_rawHeadPose{};
+    float m_firstPersonNeutral[3] = {};
+    float m_firstPersonNeutralNeck[2] = {};
+    bool m_firstPersonNeutralValid = false;
+    float m_thirdPersonNeutral[3] = {};
+    bool m_thirdPersonNeutralValid = false;
+    bool m_thirdPersonRecenterPending = false;
+    Affine TrackedHeadView() const;
     Affine m_eyeFromHead[2]   = { Affine::Identity(), Affine::Identity() };
     float  m_rawProj[2][4]    = {};                  // l, r, t, b per eye
     bool   m_poseValid        = false;

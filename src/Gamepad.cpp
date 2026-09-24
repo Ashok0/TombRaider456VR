@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "VRSystem.h"
 #include "Log.h"
+#include "FirstPerson.h"
 
 #include <windows.h>
 #include <cmath>
@@ -57,6 +58,7 @@ uint64_t           g_lastRaw[2] = { 0, 0 };
 bool               g_loggedOnce = false;
 int                g_lastWater  = -2;
 int                g_lastZoom   = -1;   // 0/1, -1 = not yet logged
+bool               g_viewToggleHeld = false;
 
 int16_t Axis(float v) {
     if (v >  1.0f) v =  1.0f;
@@ -100,7 +102,32 @@ uint64_t g_menuChordSince = 0;   // when the chord was first seen held, 0 = not
 uint64_t g_menuPressUntil = 0;   // synthesised START is held until this tick
 bool     g_menuChordFired = false;
 
-void BuildState(XState& out) {
+void ApplyViewChords(XGamepad& pad) {
+    // Same ownership in gameplay, inventory and title. At the launcher (-1),
+    // remember the view selection for the next TR4/5 game. START is graphics.
+    const bool fpChords = Cfg().firstPerson && CurrentGame() != 2;
+    const bool yHeld = (pad.wButtons & XB_Y) != 0;
+    const bool viewToggle = fpChords && yHeld && pad.bLeftTrigger > 30;
+    const bool graphicsToggle = fpChords && !viewToggle && yHeld &&
+        pad.bRightTrigger > 30;
+    if (viewToggle && !g_viewToggleHeld) FirstPersonToggle();
+    g_viewToggleHeld = viewToggle;
+    if (viewToggle) {
+        pad.wButtons &= static_cast<uint16_t>(~XB_Y);
+        pad.bLeftTrigger = pad.bRightTrigger = 0;
+    } else if (graphicsToggle) {
+        pad.wButtons &= static_cast<uint16_t>(~XB_Y);
+        pad.wButtons |= XB_START;
+        pad.bRightTrigger = 0;
+    }
+    if (fpChords) {
+        g_menuChordSince = 0;
+        g_menuChordFired = false;
+        g_menuPressUntil = 0;
+    }
+}
+
+void BuildState(XState& out, bool& shifted) {
     VRSystem::HandState h[2];
     VR().ReadControllers(h);
 
@@ -168,7 +195,8 @@ void BuildState(XState& out) {
     // Y and LT are suppressed from the moment it fires until release. They were
     // already sent for the three seconds it took to arm, which cannot be undone,
     // but there is no reason to keep grabbing and drawing weapons afterwards.
-    if (Cfg().menuChordSeconds > 0.0f) {
+    const bool fpChords = Cfg().firstPerson && CurrentGame() != 2;
+    if (!fpChords && Cfg().menuChordSeconds > 0.0f) {
         const bool     chord = L.btnUpper && L.trigger > 0.5f;
         const uint64_t now   = GetTickCount64();
 
@@ -217,7 +245,7 @@ void BuildState(XState& out) {
     out.Gamepad.bLeftTrigger  = suppressLeftTrigger ? 0
                                                     : Trig(L.trigger);  // Equip
     out.Gamepad.bRightTrigger = Trig(R.trigger);   // Shoot
-    const bool shifted        = (Cfg().dpadShift && R.stickClick);
+    shifted                  = (Cfg().dpadShift && R.stickClick);
     out.Gamepad.sThumbLX      = shifted ? 0 : Axis(L.stickX);
     out.Gamepad.sThumbLY      = shifted ? 0 : Axis(L.stickY);
     out.Gamepad.sThumbRX      = Axis(R.stickX);
@@ -255,7 +283,8 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
     }
 
     XState mine{};
-    BuildState(mine);
+    bool shifted = false;
+    BuildState(mine, shifted);
 
     // Merge a physical pad if one is plugged in, so it keeps working.
     if (g_original) {
@@ -277,6 +306,17 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
                 mine.Gamepad.sThumbRY = real.Gamepad.sThumbRY;
         }
     }
+
+    ApplyViewChords(mine.Gamepad);
+
+    float fpLeftX = mine.Gamepad.sThumbLX / 32767.0f;
+    float fpLeftY = mine.Gamepad.sThumbLY / 32767.0f;
+    float fpRightX = mine.Gamepad.sThumbRX / 32767.0f;
+    const bool jumpPressed = (mine.Gamepad.wButtons & XB_A) != 0;
+    FirstPersonInput(fpLeftX, fpLeftY, fpRightX, shifted, jumpPressed);
+    mine.Gamepad.sThumbLX = Axis(fpLeftX);
+    mine.Gamepad.sThumbLY = Axis(fpLeftY);
+    mine.Gamepad.sThumbRX = Axis(fpRightX);
 
     // Hold RT + RB to decouple pitch for as long as both are held. Touch's
     // physical RB now reports Walk as X rather than always leaking the Sneak
@@ -404,6 +444,7 @@ void GamepadShutdown() {
     g_slot = nullptr;
     g_original = nullptr;
     g_installed = false;
+    g_viewToggleHeld = false;
 }
 
 } // namespace tr

@@ -164,6 +164,15 @@ constexpr uint32_t gTargetHeight   = 0x00698678;
 // odd one. Treat with suspicion if you ever write to it.
 constexpr uint32_t gTargetWidth    = 0x03298680;
 
+namespace app_off {
+constexpr uint32_t InventoryActive = 2148;
+constexpr uint32_t InFMV           = 2152;
+constexpr uint32_t InTitle         = 2156;
+// APP_CONFIG starts at 2528. Its first bitfield word is +4: bit 0 selects the
+// HD renderer and bit 1 selects camera-relative (modern) controls.
+constexpr uint32_t cfgFlags        = 2532;
+} // namespace app_off
+
 
 } // namespace drva
 
@@ -223,6 +232,7 @@ struct Layout {
     uint32_t gHeight;
     uint32_t gTargetWidth;
     uint32_t gTargetHeight;
+    uint32_t app;
 
     // Dynamic-bone shader patching (BoneSkin.cpp). LAST on purpose: a row that
     // initialises positionally and stops short of it comes out 0, which
@@ -239,14 +249,14 @@ constexpr Layout kBuildStock = {
     drva::mProj,       drva::mView_packed,   drva::shaders,     drva::ogl_textures,
     drva::FBO_custom,  drva::FBO_default,    drva::ogl_rt,
     drva::gWidth,      drva::gHeight,        drva::gTargetWidth, drva::gTargetHeight,
-    rva::shader_init,
+    drva::app, rva::shader_init,
 };
 
 // Every non-debug tomb456.exe in circulation. The two timestamps are the
 // 2025-07-01 build -- which is what the HD Definitive Patch ships -- and the
 // 2025-09-10 one, which is the RETAIL Steam exe and also came with HD pack
 // v1.0.2. They are separate rows because the PE timestamp is the discriminator,
-// not because their addresses differ: all 22 below were derived independently
+// not because their addresses differ: all 23 below were derived independently
 // against each binary (tools\port_addresses.py) and came out the same.
 //
 // The two builds are in fact the same code. Their .text, .data, .pdata and
@@ -261,7 +271,7 @@ constexpr Layout kBuildStock = {
     0x0E51E8A0, 0x0E51ECD0, 0x0E9B01D0, 0x0E9B00C0,                     \
     0x0E9B00B8, 0x0E9B00BC, 0x0E9B0190,                                 \
     0x0069A804, 0x0069A800, 0x0329A820, 0x0069A818,                     \
-    0x00011B50
+    0x00585580, 0x00011B50
 
 constexpr Layout kBuildHD1 = {
     "HD Definitive Patch / community HD pack (2025-07-01)", 0x68639C21,
@@ -398,6 +408,13 @@ void*            XInputGetStateSlot();
 
 // 0 = TR4, 1 = TR5, 2 = TR6. Returns -1 if the module is not bound.
 int              CurrentGame();
+inline int32_t AppState(uint32_t offset) {
+    return *reinterpret_cast<const int32_t*>(Base() + L().app + offset);
+}
+inline bool InInventory() { return AppState(drva::app_off::InventoryActive) != 0; }
+inline bool InFMV()       { return AppState(drva::app_off::InFMV) != 0; }
+inline bool InTitle()     { return AppState(drva::app_off::InTitle) != 0; }
+inline bool NewControls() { return (AppState(drva::app_off::cfgFlags) & 2) != 0; }
 mat4*            Proj();          // mat4[2]
 mat4&            ViewPacked();
 Shader*          Shaders();

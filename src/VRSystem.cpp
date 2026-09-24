@@ -3,9 +3,12 @@
 #include "Log.h"
 #include "GL.h"
 #include "GameDll.h"
+#include "FirstPerson.h"
+#include "LocomotionMath.h"
 
 #include <cstdio>
 #include <cmath>
+#include <algorithm>
 
 namespace tr {
 namespace {
@@ -190,6 +193,9 @@ void VRSystem::Shutdown() {
     m_system     = nullptr;
     m_compositor = nullptr;
     m_loggedTr6Origin = false;
+    m_poseValid = false;
+    m_firstPersonNeutralValid = false;
+    m_thirdPersonNeutralValid = m_thirdPersonRecenterPending = false;
     if (m_dll) { FreeLibrary(m_dll); m_dll = nullptr; }
 }
 
@@ -259,6 +265,16 @@ void VRSystem::GetEyeSize(uint32_t& w, uint32_t& h) const {
 // go from the mod's -Z-forward eye space to phd view's +Z-forward. Checked
 // numerically against that chain rather than trusted.
 void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
+    // Ordinary third-person startup keeps its established behavior. After an
+    // FP handoff, however, raw standing/seated room coordinates are NOT a
+    // camera offset. Track subsequent movement relative to that handoff.
+    if (CurrentGame() != 2) {
+        if (m_thirdPersonRecenterPending && m_poseValid) RecenterThirdPersonHead();
+        if (m_thirdPersonNeutralValid)
+            for (int i = 0; i < 3; ++i) pose.m[i][3] -= m_thirdPersonNeutral[i];
+    } else {
+        m_thirdPersonNeutralValid = m_thirdPersonRecenterPending = false;
+    }
     const auto& c = Cfg();
     const float s = LiveWorldUnitsPerMetre();
 
@@ -401,14 +417,20 @@ void VRSystem::BeginFrame() {
     m_poseValid = hmd.bPoseIsValid && hmd.bDeviceIsConnected;
     if (m_poseValid) {
         vr::HmdMatrix34_t pose = hmd.mDeviceToAbsoluteTracking;
+        m_rawHeadPose = pose;
 
         // The head's DISPLACEMENT, integrated in world space rather than carried
         // in the game camera's frame. This is what makes the stick behave like
         // PositionalTracking=0 while the headset behaves like 1.
-        WorldLockOffset(pose);
+        // FP owns a separate neck-corrected neutral. Do not accumulate its
+        // room-scale movement against the chase camera in the background.
+        if (!FirstPersonActive()) WorldLockOffset(pose);
 
         // mDeviceToAbsoluteTracking is head->tracking; we want tracking->head.
         m_headFromTracking = InvertRigid(FromHmd(pose));
+        // Recenter must capture this pose's yaw, not the last valid frame's.
+        if (FirstPersonActive() && (!wasValid || !m_firstPersonNeutralValid))
+            FirstPersonRecenter();
     }
 
     if (wasValid != m_poseValid) {
@@ -426,6 +448,100 @@ void VRSystem::BeginFrame() {
     }
 }
 
+float VRSystem::HeadYawRadians() const {
+    if (!m_system) return 0.0f;
+    if (!m_poseValid) return 0.0f;
+    return std::atan2(-m_headFromTracking.r[2][0],
+                       m_headFromTracking.r[2][2]);
+}
+
+float VRSystem::HeadPitchRadians() const {
+    if (!m_system || !m_poseValid) return 0.0f;
+    // phd_GetVectorAngles uses positive pitch for looking up (world Y-down).
+    return -std::asin(std::clamp(m_headFromTracking.r[2][1], -1.0f, 1.0f));
+}
+
+void VRSystem::RecenterFirstPersonHead() {
+    m_firstPersonNeutralValid = m_poseValid;
+    if (!m_poseValid) return;
+    for (int i = 0; i < 3; ++i)
+        m_firstPersonNeutral[i] = m_rawHeadPose.m[i][3];
+    const auto pivot = locomotion::NeckToHead(HeadYawRadians(),
+        std::clamp(Cfg().firstPersonRoomscaleNeckMetres, 0.0f, 0.4f));
+    m_firstPersonNeutralNeck[0] = pivot.x;
+    m_firstPersonNeutralNeck[1] = pivot.z;
+    LogF("firstperson: headset neutral=(%.3f,%.3f,%.3f)m",
+         m_firstPersonNeutral[0], m_firstPersonNeutral[1], m_firstPersonNeutral[2]);
+}
+
+void VRSystem::RecenterThirdPersonHead() {
+    m_thirdPersonNeutralValid = m_poseValid;
+    m_thirdPersonRecenterPending = !m_poseValid;
+    for (int i = 0; i < 3; ++i) {
+        if (m_poseValid) m_thirdPersonNeutral[i] = m_rawHeadPose.m[i][3];
+        m_offsetWorld[i] = 0;
+        m_headFromTracking.r[i][3] = 0;
+    }
+    m_offsetValid = false;
+    m_recentreRequested = false;
+    Log("vr: third-person position centred at FP handoff; tracked rotation preserved");
+}
+
+void VRSystem::HeadFloorOffset(float& right, float& forward) const {
+    right = forward = 0;
+    if (!m_poseValid || !m_firstPersonNeutralValid) return;
+    const auto pivot = locomotion::NeckToHead(HeadYawRadians(),
+        std::clamp(Cfg().firstPersonRoomscaleNeckMetres, 0.0f, 0.4f));
+    right = m_rawHeadPose.m[0][3] - m_firstPersonNeutral[0]
+        - (pivot.x - m_firstPersonNeutralNeck[0]);
+    forward = -(m_rawHeadPose.m[2][3] - m_firstPersonNeutral[2])
+        - (pivot.z - m_firstPersonNeutralNeck[1]);
+}
+
+void VRSystem::PivotHeadFloorOffset(float yawDelta) {
+    if (!m_poseValid || !m_firstPersonNeutralValid) return;
+    const locomotion::Vec before{m_rawHeadPose.m[0][3] - m_firstPersonNeutral[0],
+                                -(m_rawHeadPose.m[2][3] - m_firstPersonNeutral[2])};
+    const auto pivot = locomotion::NeckToHead(HeadYawRadians(),
+        std::clamp(Cfg().firstPersonRoomscaleNeckMetres, 0.0f, 0.4f));
+    const auto neckArc = pivot - locomotion::Vec{m_firstPersonNeutralNeck[0],
+                                               m_firstPersonNeutralNeck[1]};
+    const auto after = locomotion::PivotFloorOffset(before, neckArc, yawDelta);
+    ConsumeHeadFloorOffset(before.x - after.x, before.z - after.z);
+}
+
+void VRSystem::ConsumeHeadFloorOffset(float right, float forward) {
+    if (!m_poseValid || !m_firstPersonNeutralValid) return;
+    m_firstPersonNeutral[0] += right;
+    m_firstPersonNeutral[2] -= forward;
+    // TrackedHeadView derives translation on demand: culling and both eyes
+    // see this change in the same frame, without a stale cached eye origin.
+}
+
+void VRSystem::RecentreOffset() {
+    m_recentreRequested = true;
+    if (FirstPersonActive()) FirstPersonRecenter();
+    else if (m_thirdPersonNeutralValid && CurrentGame() != 2) RecenterThirdPersonHead();
+}
+
+Affine VRSystem::TrackedHeadView() const {
+    if (!FirstPersonActive()) return m_headFromTracking;
+    // The animated joint supplies eye height. Only physical displacement since
+    // entering first person belongs on top of it; never the standing origin's
+    // full floor-to-head height or the third-person world-offset accumulator.
+    auto pose = m_rawHeadPose;
+    for (int i = 0; i < 3; ++i)
+        pose.m[i][3] = m_firstPersonNeutralValid
+            ? pose.m[i][3] - m_firstPersonNeutral[i] : 0.0f;
+    // Do not count the neck-to-eye arc twice as Lara follows physical yaw.
+    // Keep real horizontal leaning and the unmodified vertical displacement.
+    float right, forward;
+    HeadFloorOffset(right, forward);
+    pose.m[0][3] = right;
+    pose.m[2][3] = -forward;
+    return InvertRigid(FromHmd(pose));
+}
+
 Affine VRSystem::HeadView() const {
     const auto& c = Cfg();
 
@@ -437,8 +553,11 @@ Affine VRSystem::HeadView() const {
     // sight's sake. See SetHeadAtCamera. Culling follows it on purpose: with the
     // head back at the camera the engine's own visible set is the right one
     // again, so the head frustum simply stops adding rooms.
-    Affine head = m_headFromTracking;
-    if (!c.positionalTracking || m_headAtCamera) {
+    Affine head = TrackedHeadView();
+    bool dropTranslation = !c.positionalTracking || m_headAtCamera;
+    if (FirstPersonActive() && !c.firstPersonHeadTranslation)
+        dropTranslation = true;
+    if (dropTranslation) {
         head.r[0][3] = head.r[1][3] = head.r[2][3] = 0.0f;
     }
     return ToEngineSpace(head, LiveWorldUnitsPerMetre(), c.flipViewY);
@@ -479,8 +598,11 @@ Affine VRSystem::EyeView(Eye eye) const {
     // The head CENTRE only. m_eyeFromHead below is deliberately left alone --
     // that is what keeps both eyes, and so the world's depth, while the 6DOF
     // displacement goes away. See SetHeadAtCamera.
-    Affine head = m_headFromTracking;
-    if (!c.positionalTracking || m_headAtCamera) {
+    Affine head = TrackedHeadView();
+    bool dropTranslation = !c.positionalTracking || m_headAtCamera;
+    if (FirstPersonActive() && !c.firstPersonHeadTranslation)
+        dropTranslation = true;
+    if (dropTranslation) {
         head.r[0][3] = head.r[1][3] = head.r[2][3] = 0.0f;
     }
 

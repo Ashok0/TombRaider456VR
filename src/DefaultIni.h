@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 53616 bytes, 1067 lines.
+// Source: TombRaiderVR.ini, 56193 bytes, 1125 lines.
 #pragma once
 
 namespace tr {
@@ -784,6 +784,65 @@ CullDumpKey=0x77
 ; stereo, for A/B.
 SkyAtInfinity=1
 
+; --- first person (TR4/TR5) -----------------------------------------------
+;
+; Set this to 1 to enable the mode. Y + LT then switches between the original
+; camera and first person, including when selected in a menu. Y + RT switches
+; classic/remastered graphics. At 0, the old Y + LT hold chord is unchanged.
+; Startup is always third person. Fixed/cinematic cameras
+; keep their authored framing. TR6 uses a different engine and is unsupported.
+FirstPerson=1
+
+; Animated head joint and eye offset in that joint's local coordinates.
+; Negative Y is up; positive Z moves the eye forward.
+FirstPersonJoint=14
+FirstPersonAnchorX=0
+FirstPersonAnchorY=-32
+FirstPersonAnchorZ=144
+
+; Tracked rotation is always active. This controls physical leaning/ducking.
+; Translation is measured from your headset position on entering first person,
+; so standing tracking space does not add your height above Lara's head.
+FirstPersonHeadTranslation=1
+
+; Neck-to-head distance used to remove duplicate eye motion during physical
+; turns, matching TR1-3. Real leaning/ducking remain tracked. Metres (0-0.4).
+; 0 disables neck-arc compensation; default is 15 cm.
+FirstPersonRoomscaleNeckMetres=0.15
+
+; Physical steps move Lara through native wall/ledge collision checks, without
+; synthesizing stick input. Only movement actually rendered consumes tracking.
+)INI"
+           R"INI(FirstPersonRoomscaleMove=1
+; Keep a small lean allowance before Lara follows (metres), matching TR1-3.
+FirstPersonRoomscaleDeadzoneMetres=0.02
+; End: recapture the neutral position without changing your viewing heading.
+; The existing RecentreKey (Numpad 5 by default) also works in first person.
+FirstPersonRecenterKey=0x23
+; Optional room-scale/heading diagnostics in TombRaiderVR.log.
+FirstPersonDriftLog=0
+
+; Hide the head, face attachments, and braid while the camera is anchored.
+; Rolls temporarily hide the full body regardless of this setting.
+FirstPersonHideHead=1
+
+; Under modern controls, rotate movement into the HMD viewing direction.
+FirstPersonMoveWithHead=1
+
+; Turn Lara toward your physical/stick heading during ordinary ground movement.
+; Scripted interactions, climbing and airborne animations retain their facing.
+; The rate uses the same 60 Hz reference as the TR1-3 first-person setting.
+FirstPersonBodyFollowsHead=1
+FirstPersonBodyDeadzoneDegrees=0
+FirstPersonBodyTurnDegreesPerFrame=4
+
+; Both gun arms and firing direction follow headset yaw/pitch in first person.
+FirstPersonHeadAim=1
+
+; Smooth right-stick turning while first person is active.
+FirstPersonTurnDegreesPerSecond=120
+FirstPersonTurnDeadzone=0.25
+
 ; --- Chest physics for TR4/TR5, ported from TR6's dynamic bones ------------
 ;
 ; This started as a measurement and is now a feature: with DynamicBones=1 and
@@ -808,8 +867,7 @@ SkyAtInfinity=1
 ;   dynbones: joints=N shader=S frames=F dup=D% snaps=K drive_peak=.. disp_peak=..
 ;
 ; dup= is the one that matters. It is the percentage of rendered frames whose
-)INI"
-           R"INI(; torso matrix was bit-identical to the frame before. High means the
+; torso matrix was bit-identical to the frame before. High means the
 ; animation is stepping slower than the headset and a spring driven straight
 ; off it will buzz rather than swing.
 DynamicBones=1
@@ -918,7 +976,8 @@ DynamicBonesLandImpulse=0.2
 ; this filter easily; single-frame noise does not.
 DynamicBonesDriveSmoothing=0.25
 
-; Hard ceiling on drive acceleration, world units per second squared.
+)INI"
+           R"INI(; Hard ceiling on drive acceleration, world units per second squared.
 ;
 ; 20000 is not arbitrary. One frame at the ceiling gives dv = a*dt, and a
 ; spring of this stiffness answers with a peak of dv/sqrt(k) -- so the
@@ -972,8 +1031,7 @@ DynamicBonesForwardSign=0
 ; 220 reach it.
 DynamicBonesChestStrength=2.5
 
-)INI"
-           R"INI(; The chest region, measured from the torso mesh. Shader path only.
+; The chest region, measured from the torso mesh. Shader path only.
 ;
 ; Height is normally MEASURED: the band is fitted to the bump the bust makes in
 ; the mesh's front profile. Top/Bottom are only the fallback for an outfit with
@@ -1082,7 +1140,8 @@ CullWatchRooms=
 ; were -R*p produces an error that scales with world coordinates, so it behaves
 ; on a small level and fails on a large one.
 
-; Per-draw state dump: which matrix carries the difference between one drawn
+)INI"
+           R"INI(; Per-draw state dump: which matrix carries the difference between one drawn
 ; element and the next -- projection, view, or model. Get the screen in
 ; question up, then press DumpKey. One line per draw, logged before any of our
 ; substitutions, so what appears is what the ENGINE set. 0 = disabled.

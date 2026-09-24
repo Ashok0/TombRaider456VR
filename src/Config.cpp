@@ -248,6 +248,40 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.cullObjects         = GetBool (L"CullObjects",        g_cfg.cullObjects,        ini);
     g_cfg.cullDumpKey         = GetIntAuto(L"CullDumpKey",      g_cfg.cullDumpKey,        ini);
     g_cfg.skyAtInfinity       = GetBool (L"SkyAtInfinity",      g_cfg.skyAtInfinity,      ini);
+    g_cfg.firstPerson         = GetBool (L"FirstPerson",        g_cfg.firstPerson,        ini);
+    g_cfg.firstPersonJoint    = GetInt  (L"FirstPersonJoint",   g_cfg.firstPersonJoint,   ini);
+    g_cfg.firstPersonAnchorX  = GetInt  (L"FirstPersonAnchorX", g_cfg.firstPersonAnchorX, ini);
+    g_cfg.firstPersonAnchorY  = GetInt  (L"FirstPersonAnchorY", g_cfg.firstPersonAnchorY, ini);
+    g_cfg.firstPersonAnchorZ  = GetInt  (L"FirstPersonAnchorZ", g_cfg.firstPersonAnchorZ, ini);
+    g_cfg.firstPersonHeadTranslation = GetBool(
+        L"FirstPersonHeadTranslation", g_cfg.firstPersonHeadTranslation, ini);
+    g_cfg.firstPersonRoomscaleNeckMetres = GetFloat(
+        L"FirstPersonRoomscaleNeckMetres", g_cfg.firstPersonRoomscaleNeckMetres, ini);
+    g_cfg.firstPersonRoomscaleMove = GetBool(
+        L"FirstPersonRoomscaleMove", g_cfg.firstPersonRoomscaleMove, ini);
+    g_cfg.firstPersonRoomscaleDeadzoneMetres = GetFloat(
+        L"FirstPersonRoomscaleDeadzoneMetres", g_cfg.firstPersonRoomscaleDeadzoneMetres, ini);
+    g_cfg.firstPersonRecenterKey = GetIntAuto(
+        L"FirstPersonRecenterKey", g_cfg.firstPersonRecenterKey, ini);
+    g_cfg.firstPersonDriftLog = GetBool(
+        L"FirstPersonDriftLog", g_cfg.firstPersonDriftLog, ini);
+    g_cfg.firstPersonHideHead = GetBool(
+        L"FirstPersonHideHead", g_cfg.firstPersonHideHead, ini);
+    g_cfg.firstPersonMoveWithHead = GetBool(
+        L"FirstPersonMoveWithHead", g_cfg.firstPersonMoveWithHead, ini);
+    g_cfg.firstPersonTurnDegreesPerSecond = GetFloat(
+        L"FirstPersonTurnDegreesPerSecond",
+        g_cfg.firstPersonTurnDegreesPerSecond, ini);
+    g_cfg.firstPersonTurnDeadzone = GetFloat(
+        L"FirstPersonTurnDeadzone", g_cfg.firstPersonTurnDeadzone, ini);
+    g_cfg.firstPersonBodyFollowsHead = GetBool(
+        L"FirstPersonBodyFollowsHead", g_cfg.firstPersonBodyFollowsHead, ini);
+    g_cfg.firstPersonBodyDeadzoneDegrees = GetFloat(
+        L"FirstPersonBodyDeadzoneDegrees", g_cfg.firstPersonBodyDeadzoneDegrees, ini);
+    g_cfg.firstPersonBodyTurnDegreesPerFrame = GetFloat(
+        L"FirstPersonBodyTurnDegreesPerFrame", g_cfg.firstPersonBodyTurnDegreesPerFrame, ini);
+    g_cfg.firstPersonHeadAim = GetBool(
+        L"FirstPersonHeadAim", g_cfg.firstPersonHeadAim, ini);
 
     g_cfg.dynamicBones           = GetBool (L"DynamicBones",           g_cfg.dynamicBones,           ini);
     g_cfg.dynamicBonesTorsoJoint = GetInt  (L"DynamicBonesTorsoJoint", g_cfg.dynamicBonesTorsoJoint, ini);
@@ -360,6 +394,18 @@ void LoadConfig(const wchar_t* ini) {
          g_cfg.cullFovMarginDegrees, g_cfg.cullMaxDepth, g_cfg.cullMaxPortals,
          g_cfg.cullFarUnits, g_cfg.cullWidenBounds, g_cfg.cullObjects,
          g_cfg.skyAtInfinity ? "infinity" : "ENGINE (finite dome)");
+    LogF("config: first person TR4/TR5 joint=%d anchor=(%d,%d,%d), "
+         "translation=%s head=%s move-with-head=%s turn=%.0fdeg/s",
+         g_cfg.firstPersonJoint, g_cfg.firstPersonAnchorX,
+         g_cfg.firstPersonAnchorY, g_cfg.firstPersonAnchorZ,
+         g_cfg.firstPersonHeadTranslation ? "on" : "OFF",
+         g_cfg.firstPersonHideHead ? "hidden" : "DRAWN",
+         g_cfg.firstPersonMoveWithHead ? "on" : "OFF",
+         g_cfg.firstPersonTurnDegreesPerSecond);
+    LogF("config: first person body-follow=%d deadzone=%.1f turn=%.1fdeg/60Hz "
+         "head-aim=%d; Y+LT=view, Y+RT=graphics (including menus)",
+         g_cfg.firstPersonBodyFollowsHead, g_cfg.firstPersonBodyDeadzoneDegrees,
+         g_cfg.firstPersonBodyTurnDegreesPerFrame, g_cfg.firstPersonHeadAim);
     if (g_cfg.traceFrames > 0) {
         LogF("config: frame-graph trace armed -- %d frame(s), hotkey vk=0x%02X",
              g_cfg.traceFrames, g_cfg.traceKey);

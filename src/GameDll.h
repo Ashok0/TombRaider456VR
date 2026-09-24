@@ -92,6 +92,28 @@ struct GameDllLayout {
     // rather than travelling here the way PrintRoomsList's do.
     uint32_t drawLaraHD;
 
+    // --- first person ------------------------------------------------------
+    // The scene-only return address distinguishes the camera view build from
+    // shadow, muzzle-flash and other users of phd_GenerateW2V.
+    uint32_t phdGenerateW2V;
+    uint32_t w2vSceneReturn;
+    uint32_t frameFrac;
+    uint32_t drawCreatureHD;
+    uint32_t drawHair;
+    uint32_t gLaraHeads;
+    uint32_t objects;
+    uint32_t getJointAbsPositionLerp;
+    uint32_t aimWeapon;
+    uint32_t laraAboveWater;
+    uint32_t animateLara;
+    uint32_t analogInput;        // ANALOG_INPUT_INFO; camTurn at +4
+    uint32_t input;              // uint64 action mask (TR1-3 uses uint32)
+    uint32_t getCollisionInfo;
+    uint32_t getFloor;
+    uint32_t getHeight;
+    uint32_t itemNewRoom;
+    uint32_t playingCutseq;
+
     // --- the optic overlays, stubbed rather than hooked (see Overlay.h) -------
     //
     // All five are void, all five are called only from DrawBinoculars, and no
