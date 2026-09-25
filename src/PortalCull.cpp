@@ -6,12 +6,14 @@
 #include "InlineHook.h"
 #include "StereoMath.h"
 #include "VRSystem.h"
+#include "FirstPerson.h"
 #include "Log.h"
 
 #include <windows.h>
 #include <cstdint>
 #include <cstdio>
 #include <cmath>
+#include <limits>
 
 namespace tr {
 namespace {
@@ -40,6 +42,7 @@ constexpr uint32_t room_right  = 78;
 constexpr uint32_t room_top    = 80;
 constexpr uint32_t room_bottom = 82;
 constexpr uint32_t room_flags  = 108;  // uint32  bit 3 (8) = outdoor room
+constexpr uint32_t item_room   = 28;   // ITEM_INFO::room_number
 } // namespace off
 
 // ROOM_INFO::y is ZERO on every room measured: TR4 and TR5 carry absolute Y in
@@ -382,6 +385,7 @@ hook::InlineHook g_hObjectBounds;
 
 typedef void (__cdecl* Fn_PrintRoomsList)(void);
 typedef int  (__cdecl* Fn_S_GetObjectBounds)(int16_t*);
+typedef void* (__cdecl* Fn_GetFloor)(int32_t, int32_t, int32_t, int16_t*);
 
 // S_GetObjectBounds' prologue is identical in tomb4.dll and tomb5.dll, so it
 // lives here. PrintRoomsList' is NOT -- TR4 opens `mov rax, rsp; push r12` and
@@ -504,6 +508,47 @@ void BuildTransform(WorldToEye& out, float& tanX, float& tanY) {
     out.c[2] = static_cast<float>(w2v[11]);
 
     CullTangents(tanX, tanY);
+}
+
+// The engine seeds draw_rooms from its camera room. In first person the rendered
+// eye is at Lara's head, which can be in another room (especially at a doorway
+// or in stacked rooms). The root of the head traversal must be the room the
+// eye actually occupies. A is orthogonal, so invert e=A*(p-c)+t at e=0 to
+// recover the effective eye position, including tracked translation.
+int FirstPersonSeed(const Ctx& cx, int cameraSeed) {
+    if (!FirstPersonActive() || !g_boundDll->getFloor ||
+        !g_boundDll->laraItem) return cameraSeed;
+    const auto* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
+    if (!item) return cameraSeed;
+    int16_t room = *reinterpret_cast<const int16_t*>(item + off::item_room);
+    if (room < 0 || room >= cx.numRooms) return cameraSeed;
+
+    double eye[3];
+    for (int j = 0; j < 3; ++j) {
+        eye[j] = cx.m.c[j] -
+            (double(cx.m.a[0][j]) * cx.m.t[0] +
+             double(cx.m.a[1][j]) * cx.m.t[1] +
+             double(cx.m.a[2][j]) * cx.m.t[2]);
+        if (!std::isfinite(eye[j]) ||
+            eye[j] < std::numeric_limits<int32_t>::min() ||
+            eye[j] > std::numeric_limits<int32_t>::max()) return cameraSeed;
+    }
+
+    const auto floor = reinterpret_cast<Fn_GetFloor>(
+        g_boundBase + g_boundDll->getFloor)(
+            static_cast<int32_t>(std::lround(eye[0])),
+            static_cast<int32_t>(std::lround(eye[1])),
+            static_cast<int32_t>(std::lround(eye[2])), &room);
+    if (!floor || room < 0 || room >= cx.numRooms) return cameraSeed;
+
+    static int lastCameraSeed = -1, lastEyeRoom = -1;
+    if (cameraSeed != lastCameraSeed || room != lastEyeRoom) {
+        LogF("cull: first-person eye in room %d; game camera seeded room %d",
+             room, cameraSeed);
+    }
+    lastCameraSeed = cameraSeed;
+    lastEyeRoom = room;
+    return room;
 }
 
 // Widen every listed room's clip rect to the whole target.
@@ -635,10 +680,9 @@ void __cdecl Detour_PrintRoomsList() {
         *reinterpret_cast<uint8_t*>(RoomAt(cx, idx) + off::room_bound) |= 1;
     }
 
-    // draw_rooms[0] is the room the engine seeded the traversal with -- the one
-    // the game camera is in. Taking it from the list rather than from
-    // camera.pos.room_number means the two can never disagree.
-    const int seed = cx.drawRooms[0];
+    // Preserve the engine's room in third person. First person can put the eye
+    // across a doorway from that camera, so resolve its room before traversal.
+    const int seed = FirstPersonSeed(cx, cx.drawRooms[0]);
 
     for (int i = 0; i < engineRooms && i < kMaxDrawRooms; ++i) {
         cx.from[i]  = -1;          // the engine put this one here, not us

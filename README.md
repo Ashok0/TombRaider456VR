@@ -26,9 +26,10 @@ for in-headset validation, and the remaining motion issues are listed there.
 * Decoupled pitch
 * Sky fix — the HD sky dome sits at optical infinity instead of a few metres away
 * Chest physics for Lara in TR4/5, ported from TR6's dynamic bones
-* First person for TR4/5, ported from TR1–3: directional movement, head aiming,
-  body-follow rotation and collision-checked room-scale movement. Motion polish
-  remains under investigation; TR6 first person is not implemented.
+* First person for TR4/5, ported from TR1–3: directional movement, headset-driven
+  arm aiming, body-follow rotation, collision-checked room-scale movement and
+  eye-room portal culling. Visible vertical gun tilt and motion polish remain
+  under investigation; TR6 first person is not implemented.
 
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
@@ -125,7 +126,7 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 20** | **TR6 pickup and scene-object retention** — candy bars, pickups, barrels and props survive preparation and the final paired bounds tests | Built. Awaiting in-headset revalidation. TR6 only |
 | **Phase 21** | **TR4/5 chest physics** — TR6's dynamic bones reimplemented: a damped spring driven by Lara's own airborne state, applied per vertex in the HD skinning shader | Working. On by default. TR4 / TR5 |
 | **Phase 22** | **Retail and Definitive Edition builds** — every game-DLL address set made per build, so the retail Steam release and the HD Definitive Patch get the DLL-side fixes too | Working. Confirmed in-headset on both ported builds |
-| **Phase 23** | **TR4/5 first person** — head anchor, directional locomotion, head aiming, room-scale movement and camera handoff, ported from TR1–3 | Implemented and regression-tested. Sideways forward-motion wobble and subtle stick-turn judder remain under investigation. No TR6 first person |
+| **Phase 23** | **TR4/5 first person** — head anchor, directional locomotion, head aiming, room-scale movement, camera handoff and eye-room culling, ported from TR1–3 | Implemented and regression-tested; the reported disappearing-room case is fixed in headset. Visible vertical gun tilt, sideways forward-motion wobble and subtle stick-turn judder remain open. No TR6 first person |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -237,8 +238,9 @@ checked against the shipped ones. See
 
 **Phase 23** ports first person from TR1–3 to TR4/5, including its movement,
 head/body alignment, aiming and room-scale behavior. It also records the TR5
-vehicle-field regression, the first-to-third-person translation fix, and what
-has not yet been validated. See [Phase 23: TR4/5 First Person](#phase-23-tr45-first-person).
+vehicle-field regression, the first-to-third-person translation fix, the
+headset-confirmed room-culling fix and remaining aiming and motion gaps. See
+[Phase 23: TR4/5 First Person](#phase-23-tr45-first-person).
 
 **The repository's `TombRaiderVR.ini` is the configuration template.** The DLL
 embeds it through `src/DefaultIni.h`, and the mod writes
@@ -4506,11 +4508,13 @@ lookup through `g_tr6`), `src\Engine.h` (`shader_init` in the HD/retail rows),
 
 ## Phase 23: TR4/5 First Person
 
-Status as of 2026-09-24: implemented for supported TR4/5 builds, with subsequent
-regression fixes and diagnostic logging. The reference is the first-person
-implementation in `TombRaider123VR`. This is not a claim of identical in-headset
-smoothness: sideways wobble while moving forward and subtle stick-turn judder
-are still open. TR6 uses a different engine and has **no first-person port**;
+Status as of 2026-09-25: implemented for supported TR4/5 builds, with subsequent
+regression fixes and diagnostic logging. The reported first-person
+disappearing-room culling case is now confirmed fixed in headset. The reference
+is the first-person implementation in `TombRaider123VR`; this is not a claim of
+identical in-headset smoothness. Sideways wobble while moving forward, subtle
+stick-turn judder and visible vertical gun aiming are still open. TR6 uses a
+different engine and has **no first-person port**;
 its existing stereo and third-person paths are unchanged by this feature.
 
 ### Enabling and using it
@@ -4563,10 +4567,13 @@ the legacy controller-chord behavior.
   pending headset displacement, avoiding double-counting. D-pad shifting and
   unsupported movement states do not perform this body drag; interaction
   transitions clear stale horizontal displacement.
-- **Head aiming:** the native `AimWeapon` path applies headset yaw/pitch to
-  both arms before animation/firing, including the revolver's differing aim/fire
-  arm paths. The arm lock prevents long guns from adding torso rotation twice.
-  This is head aiming, not tracked-controller weapon aiming or independent hands.
+- **Head aiming:** the native `AimWeapon` hook writes headset yaw/pitch into
+  both arm controls before animation/firing, including the revolver's differing
+  aim/fire arm paths. The arm lock prevents long guns from adding torso rotation
+  twice. Horizontal head aiming works in headset, but the visible guns remain
+  level when looking up or down: vertical visual aiming is a known defect. The
+  mocked test proves the arm fields are written, not that the rendered gun pose
+  or projectile path follows vertical gaze.
 - **Visibility:** head, face attachments and braid are hidden while anchored
   when enabled. Rolls temporarily hide the whole body even if head hiding is
   disabled. Original mesh visibility is restored when leaving the mode.
@@ -4589,8 +4596,21 @@ person is active. On exit, a fresh third-person positional neutral is captured
 and translation is cleared for that same frame; subsequent physical leaning is
 relative to the new neutral. Viewing rotation and stereo eye separation are
 preserved. Tests cover explicit toggles, automatic camera/menu exits and tracking
-reacquisition. The code fix is deployed, but final comfort validation remains an
-in-headset task.
+reacquisition. This camera-handoff fix is deployed; final comfort validation
+across both games remains an in-headset task.
+
+TR4/5 room culling previously began its headset portal traversal in the room
+seeded by the game's third-person camera. First person can put the eye across a
+doorway or in a vertically stacked room while that seed stays behind. The
+first-person traversal now asks the native floor/room lookup which room contains
+the effective eye, including headset translation, and starts there. If that
+lookup fails, it falls back to the engine's camera room. Third person still uses
+the engine's seed; object culling and TR6 are unchanged. The fix builds and
+passes the portal, first-person and address checks. The previously reported
+whole-wall/room disappearance is confirmed fixed in headset; other room layouts
+and both games still need broader live checks. A
+`cull: first-person eye in room ...` log line records both room numbers when
+they change.
 
 ### First-person settings
 
@@ -4615,14 +4635,14 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonBodyFollowsHead` | `1` | Enable body following during supported ground states |
 | `FirstPersonBodyDeadzoneDegrees` | `0` | Body-follow angular deadzone |
 | `FirstPersonBodyTurnDegreesPerFrame` | `4` | Body-follow turn limit at a 60 Hz reference, scaled by elapsed time |
-| `FirstPersonHeadAim` | `1` | Headset-directed gun-arm angles and firing direction |
+| `FirstPersonHeadAim` | `1` | Write headset yaw/pitch into gun-arm controls; visible vertical gun tilt is currently defective |
 | `FirstPersonTurnDegreesPerSecond` | `120` | Maximum continuous right-stick yaw rate |
 | `FirstPersonTurnDeadzone` | `0.25` | Right-stick turning deadzone |
 
 ### Remaining motion issues and diagnostics
 
-**Sideways wobble while moving forward is not yet resolved.** The latest
-diagnostic build does not change controls or camera behavior. With
+**Sideways wobble while moving forward is not yet resolved.** Enabling the
+forward-motion diagnostics does not change controls or camera behavior. With
 `FirstPersonDriftLog=1`, `fp-forward:` lines summarize roughly one-second windows
 of eligible forward movement, measuring animated head offset (`animSide`),
 per-sample lateral body/eye movement (`rootSideStep`, `eyeSideStep`), pending
@@ -4635,8 +4655,7 @@ For a capture, restart with logging enabled, enter first person, hold forward
 in an open area for 10–15 seconds with the headset reasonably still and no
 right-stick input, then quit. Preserve `TombRaiderVR.log` before another launch
 overwrites it. Return `FirstPersonDriftLog` to `0` after collecting diagnostics;
-the local troubleshooting deployment temporarily enables it, but the shipped
-template does not.
+the shipped template leaves it off.
 
 **Subtle stick-turn judder is also unresolved.** Artificial yaw currently
 advances at controller polls using elapsed time; it has not been moved to an
@@ -4684,6 +4703,9 @@ python tools\verify_addresses.py "C:\Program Files (x86)\Steam\steamapps\common\
 Live validation still needs both TR4 and TR5: forward/side/back movement,
 physical and stick turns, leaning/room-scale collision, guns, jumps/rolls,
 interactions, menus, graphics switching and first/third-person transitions.
+The reported whole-room culling failure is fixed in headset, but other doorway
+and stacked-room layouts need checks in both games. Vertical gun pose and shot
+trajectory also need direct headset/gameplay validation.
 Do not label the port fully equivalent to TR1–3 based on compilation or these
 tests alone.
 
@@ -4694,9 +4716,11 @@ tests alone.
 These are honest gaps, not oversights.
 
 - **TR4/5 first-person motion is still being refined.** Sideways forward-motion
-  wobble and subtle stick-turn judder remain under investigation, and automated
-  coverage does not replace headset validation. TR6 first person is not
-  implemented. See [Phase 23](#phase-23-tr45-first-person).
+  wobble and subtle stick-turn judder remain under investigation. Horizontal
+  head aiming works, but visible guns do not tilt vertically with gaze. The
+  reported disappearing-room culling case is fixed, though broader headset
+  validation remains. TR6 first person is not implemented. See
+  [Phase 23](#phase-23-tr45-first-person).
 - **`Config.h`'s fallbacks are not the generated ini's values.** `EyeOffsetMode`
   falls back to the superseded `2` and `Mode` to `mono`; the generated
   `TombRaiderVR.ini` overrides both. Running with no ini and no way to write one
