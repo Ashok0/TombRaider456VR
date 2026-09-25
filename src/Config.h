@@ -694,6 +694,7 @@ struct Config {
     int   firstPersonAnchorX    = 0;
     int   firstPersonAnchorY    = -32;
     int   firstPersonAnchorZ    = 144;
+    int   firstPersonInteractionAnchorZ = 16;
     bool  firstPersonHeadTranslation = true;
     float firstPersonRoomscaleNeckMetres = 0.15f;
     bool  firstPersonRoomscaleMove = true;

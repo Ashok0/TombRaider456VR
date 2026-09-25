@@ -32,6 +32,20 @@ inline Vec PivotFloorOffset(Vec rawEyeOffset, Vec neckArc, float yawDelta) {
     return Rotate(NeckFloorOffset(rawEyeOffset, neckArc), -yawDelta) + neckArc;
 }
 inline bool IsJumpSteeringState(int state) { return state == 15 || state == 3; }
+inline bool IsConstrainedInteractionState(int state) {
+    // Classic states retained by TR4/5: hang/pull-up, push/pull, climb.
+    // Do not carry over TR3-only hang-turn state numbers.
+    switch (state) {
+    case 10: case 19: case 30: case 31:
+    case 36: case 37: case 38:
+    case 56: case 57: case 58: case 59: case 60: case 61:
+        return true;
+    default: return false;
+    }
+}
+inline int FirstPersonAnchorZ(int state, int normal, int constrained) {
+    return IsConstrainedInteractionState(state) ? std::min(normal, constrained) : normal;
+}
 inline Vec SimulationStick(Vec world, float frameYaw, float magnitude) {
     const float n = Length(world);
     return n > 0.0001f ? Rotate(world, -frameYaw) * (magnitude / n) : Vec{};

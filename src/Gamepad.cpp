@@ -79,9 +79,9 @@ uint8_t Trig(float v) {
 //   Move        left stick        Jump    A      Roll   B
 //   Look        right stick       Action  Y      Shoot  RT
 //   Duck        LB                Equip   LT     Sprint L3
-//   Walk        LS + RB           Sneak   RB+Y   Photo  LB + RB
+//   Walk        LS + RB           Sneak   RB+Y   Photo  L3 + R3
 //   System      X                 D-pad   R3 + left stick
-//   D-pad       R3 + left stick   Menu    Y + LT held 3s
+//   Action      LB + RB (both grips)           Menu Y + LT held 3s
 //
 // Two of these are deliberately not the flat-screen defaults, because they suit
 // VR hands better:
@@ -89,8 +89,8 @@ uint8_t Trig(float v) {
 //   Walk is the RIGHT GRIP rather than a face button, so it can be held while
 //   the left thumb keeps moving. The game binds Walk to XInput X. TR6 binds
 //   Sneak to RIGHT_SHOULDER, so emitting both on every grip press made Walk and
-//   Sneak fire together. RIGHT_SHOULDER is now emitted only for the RB+Y Sneak
-//   chord or the LB+RB Photo Mode chord.
+//   Sneak fire together. RIGHT_SHOULDER is emitted only for the RB+Y Sneak
+//   chord. Photo Mode's native chord is L3+R3, not LB+RB.
 //
 //   System is the left hand's lower face button, sending BACK. Touch has no
 //   Start or Back of its own, and putting either on a chord made it awkward to
@@ -102,7 +102,7 @@ uint64_t g_menuChordSince = 0;   // when the chord was first seen held, 0 = not
 uint64_t g_menuPressUntil = 0;   // synthesised START is held until this tick
 bool     g_menuChordFired = false;
 
-void ApplyViewChords(XGamepad& pad) {
+bool ApplyViewChords(XGamepad& pad) {
     // Same ownership in gameplay, inventory and title. At the launcher (-1),
     // remember the view selection for the next TR4/5 game. START is graphics.
     const bool fpChords = Cfg().firstPerson && CurrentGame() != 2;
@@ -125,17 +125,17 @@ void ApplyViewChords(XGamepad& pad) {
         g_menuChordFired = false;
         g_menuPressUntil = 0;
     }
+    return viewToggle || graphicsToggle;
 }
 
-void BuildState(XState& out, bool& shifted) {
-    VRSystem::HandState h[2];
-    VR().ReadControllers(h);
-
+void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
+                         bool& shifted, bool gameplay, bool& touchGripAction) {
     std::memset(&out, 0, sizeof(out));
     out.dwPacketNumber = ++g_packet;
 
     const VRSystem::HandState& L = h[0];
     const VRSystem::HandState& R = h[1];
+    touchGripAction = gameplay && L.grip > 0.5f && R.grip > 0.5f;
 
     // Set once the Menu chord fires, and honoured where the triggers are
     // written further down. Declared here because that assignment happens after
@@ -162,8 +162,9 @@ void BuildState(XState& out, bool& shifted) {
     //
     // A plain R3 click -- held with the stick centred -- still emits
     // RIGHT_THUMB exactly as before, so whatever the game binds it to survives.
+    const bool photoChord = L.stickClick && R.stickClick;
     uint16_t dpad = 0;
-    if (Cfg().dpadShift && R.stickClick) {
+    if (Cfg().dpadShift && R.stickClick && !photoChord) {
         const float dz = Cfg().dpadShiftDeadzone;
         if (std::fabs(L.stickX) > std::fabs(L.stickY)) {
             if (L.stickX >  dz) dpad = XB_DPAD_RIGHT;
@@ -222,30 +223,28 @@ void BuildState(XState& out, bool& shifted) {
         }
     }
 
-    // Duck, and the left half of the Photo Mode chord.
+    // Both grips hold Action during gameplay. Their individual Duck/Walk bits
+    // must not interrupt a block push. In menus their normal bindings remain.
     const bool leftGrip = L.grip > 0.5f;
-    if (leftGrip) b |= XB_LEFT_SHOULDER;
+    if (leftGrip && !touchGripAction) b |= XB_LEFT_SHOULDER;
 
     // Right grip is the physical VR "RB" and normally emits only XInput X,
     // which is Walk. TR6 binds Sneak to XInput RIGHT_SHOULDER. Holding Y with
-    // the grip consumes both ordinary actions and emits only Sneak, so Lara
-    // cannot walk/use and sneak from the same chord. RIGHT_SHOULDER is also
-    // synthesized for both grips together to preserve Photo Mode's LB+RB.
+    // the right grip consumes both ordinary actions and emits only Sneak.
+    // Dual-grip Action takes priority over that chord in gameplay.
     const bool rightGrip = R.grip > 0.5f;
-    const bool sneakChord = rightGrip && L.btnUpper;
-    const bool photoChord = rightGrip && leftGrip;
-    if (rightGrip) b |= XB_X;
+    const bool sneakChord = rightGrip && L.btnUpper && !touchGripAction;
+    if (rightGrip && !touchGripAction) b |= XB_X;
     if (sneakChord) {
         b &= static_cast<uint16_t>(~(XB_X | XB_Y));
         b |= XB_RIGHT_SHOULDER;
     }
-    if (photoChord) b |= XB_RIGHT_SHOULDER;
 
     out.Gamepad.wButtons      = b;
     out.Gamepad.bLeftTrigger  = suppressLeftTrigger ? 0
                                                     : Trig(L.trigger);  // Equip
     out.Gamepad.bRightTrigger = Trig(R.trigger);   // Shoot
-    shifted                  = (Cfg().dpadShift && R.stickClick);
+    shifted                  = (Cfg().dpadShift && R.stickClick && !photoChord);
     out.Gamepad.sThumbLX      = shifted ? 0 : Axis(L.stickX);
     out.Gamepad.sThumbLY      = shifted ? 0 : Axis(L.stickY);
     out.Gamepad.sThumbRX      = Axis(R.stickX);
@@ -267,6 +266,42 @@ void BuildState(XState& out, bool& shifted) {
     }
 }
 
+void BuildState(XState& out, bool& shifted, bool gameplay, bool& touchGripAction) {
+    VRSystem::HandState h[2];
+    VR().ReadControllers(h);
+    BuildStateFromHands(h, out, shifted, gameplay, touchGripAction);
+}
+
+bool GameplayInputActive() {
+    const int game = CurrentGame();
+    return game >= 0 && game <= 2 &&
+        !InInventory() && !InTitle() && !InFMV();
+}
+
+void ApplyMergedChords(XGamepad& pad, bool gameplay,
+                       bool touchGripAction, bool& shifted) {
+    // Native Photo Mode is L3+R3 in TR4/5/6. Preserve that chord even when
+    // stick drift would otherwise turn R3 into a D-pad shift or move Lara.
+    constexpr uint16_t photoMask = XB_LEFT_THUMB | XB_RIGHT_THUMB;
+    if ((pad.wButtons & photoMask) == photoMask) {
+        pad.sThumbLX = pad.sThumbLY = 0;
+        pad.sThumbRX = pad.sThumbRY = 0;
+        shifted = false;
+    }
+
+    const bool actionConsumed = ApplyViewChords(pad);
+    // Add synthetic Action AFTER Y+trigger handling so holding grips with a
+    // trigger cannot switch the view or graphics. This also supports a physical
+    // Xbox pad's LB+RB chord when one is merged with Touch input.
+    constexpr uint16_t gripMask = XB_LEFT_SHOULDER | XB_RIGHT_SHOULDER;
+    const bool gripAction = gameplay && (touchGripAction ||
+        (pad.wButtons & gripMask) == gripMask);
+    if (gripAction) {
+        pad.wButtons &= static_cast<uint16_t>(~(gripMask | XB_X));
+        if (!actionConsumed) pad.wButtons |= XB_Y;
+    }
+}
+
 uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
     if (!state) return ERROR_BAD_ARGUMENTS;
 
@@ -284,7 +319,9 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
 
     XState mine{};
     bool shifted = false;
-    BuildState(mine, shifted);
+    const bool gameplay = GameplayInputActive();
+    bool touchGripAction = false;
+    BuildState(mine, shifted, gameplay, touchGripAction);
 
     // Merge a physical pad if one is plugged in, so it keeps working.
     if (g_original) {
@@ -307,7 +344,7 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
         }
     }
 
-    ApplyViewChords(mine.Gamepad);
+    ApplyMergedChords(mine.Gamepad, gameplay, touchGripAction, shifted);
 
     float fpLeftX = mine.Gamepad.sThumbLX / 32767.0f;
     float fpLeftY = mine.Gamepad.sThumbLY / 32767.0f;
@@ -423,9 +460,10 @@ void GamepadUpdate() {
     if (!g_loggedOnce) {
         g_loggedOnce = true;
         LogF("pad: move=Lstick look=Rstick%s jump=A(R lower) roll=B(R upper) "
-             "action=Y(L upper) system=%s(L lower) walk=LS+RB(R grip) "
+             "action=Y(L upper)/LB+RB(both grips) system=%s(L lower) "
+             "walk=LS+RB(R grip) "
              "sneak=RB+Y duck=LB(L grip) equip=LT shoot=RT sprint=L3 "
-             "photo=LB+RB%s",
+             "photo=L3+R3%s",
              Cfg().decoupledPitch
                  ? (Cfg().decoupledPitchChord
                         ? "(yaw only; hold RT+RB for pitch)"

@@ -163,6 +163,7 @@
     <ClInclude Include="src\VideoPanel.h" />
     <ClInclude Include="src\VRSystem.h" />
     <ClInclude Include="src\FirstPerson.h" />
+    <ClInclude Include="src\FirstPersonClearance.h" />
     <ClInclude Include="src\LocomotionMath.h" />
   </ItemGroup>
 

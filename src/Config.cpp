@@ -253,6 +253,8 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.firstPersonAnchorX  = GetInt  (L"FirstPersonAnchorX", g_cfg.firstPersonAnchorX, ini);
     g_cfg.firstPersonAnchorY  = GetInt  (L"FirstPersonAnchorY", g_cfg.firstPersonAnchorY, ini);
     g_cfg.firstPersonAnchorZ  = GetInt  (L"FirstPersonAnchorZ", g_cfg.firstPersonAnchorZ, ini);
+    g_cfg.firstPersonInteractionAnchorZ = GetInt(
+        L"FirstPersonInteractionAnchorZ", g_cfg.firstPersonInteractionAnchorZ, ini);
     g_cfg.firstPersonHeadTranslation = GetBool(
         L"FirstPersonHeadTranslation", g_cfg.firstPersonHeadTranslation, ini);
     g_cfg.firstPersonRoomscaleNeckMetres = GetFloat(

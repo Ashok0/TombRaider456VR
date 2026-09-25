@@ -36,6 +36,7 @@ uint64_t actionInput = 0, seenInput = 0;
 int16_t seenAnalog[4]{}, seenYaw = 0, seenMove = 0, seenTurn = 0;
 int animationTicks = 0, simulationTicks = 0;
 int collisionMode = 0, collisionCalls = 0, floorCalls = 0, roomChanges = 0;
+int cameraCollisionCalls = 0;
 int cutseq = 0, floorToken = 0, draws = 0, hairs = 0;
 bool nativeMoves = true, jointFollowsBody = false;
 bool worldCameraValid = false;
@@ -51,8 +52,12 @@ void Check(bool ok, const char* label) {
 bool Near(float a, float b) { return std::fabs(a - b) < 0.002f; }
 void __cdecl FakeJoint(uint8_t* item, tr::PHD_VECTOR* v, int joint, int frac) {
     Check(item == itemMemory && joint == 14 && frac == fraction, "native joint arguments");
-    Check(v->x == 0 && v->y == -32 && v->z == 144, "local eye offset passed to engine");
-    *v = { 0, -700, 144 };
+    const int state = *reinterpret_cast<const int16_t*>(item + tr::off::item_anim_state);
+    const int anchorZ = tr::locomotion::FirstPersonAnchorZ(
+        state, config.firstPersonAnchorZ, config.firstPersonInteractionAnchorZ);
+    Check(v->x == 0 && v->y == -32 && v->z == anchorZ,
+          "state-specific local eye offset passed to engine");
+    *v = { 0, -700, anchorZ };
     if (jointFollowsBody) {
         const auto& pos = *reinterpret_cast<tr::PHD_3DPOS*>(item + tr::off::item_pos);
         const auto& prev = *reinterpret_cast<tr::PHD_3DPOS*>(item + tr::off::item_pos_prev);
@@ -84,6 +89,23 @@ void __cdecl FakeAboveWater(uint8_t* item, void*) {
 }
 void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z,
                           int16_t room, int32_t height) {
+    if (c->radius == 64) {
+        ++cameraCollisionCalls;
+        const bool airborne = c->badPos == 4096 && c->badNeg == -4096;
+        Check((airborne || (c->badPos == 384 && c->badNeg == -384)) &&
+              c->badCeiling == 0 && c->flags == 5 && height == 762,
+              "camera uses native ground or airborne collision parameters");
+        Check(std::hypot(float(x - c->old[0]), float(z - c->old[2])) <= 17,
+              "rendered eye sweep advances at most 16 units per step");
+        Check(room == *reinterpret_cast<int16_t*>(itemMemory + tr::off::item_room),
+              "camera sweep starts in Lara's room");
+        c->floorSamples[0] = collisionMode == 12 ? 1000 : 0;
+        c->floorSamples[1] = -1024;
+        if (collisionMode == 11 && x >= 100) c->shift[0] = 99 - x;
+        if (collisionMode == 13) c->type = 8;
+        (void)y;
+        return;
+    }
     ++collisionCalls;
     Check(c->radius == 100 && c->badPos == 384 && c->badNeg == -384 &&
           c->badCeiling == 0 && c->flags == 5 && height == 762,
@@ -209,6 +231,78 @@ int main() {
     game = 2;
     XGamepad p{}; p.wButtons = XB_Y; p.bLeftTrigger = 255; ApplyViewChords(p);
     Check(p.wButtons == XB_Y && p.bLeftTrigger == 255, "TR6 retains native controls");
+    std::memset(appMemory, 0, sizeof(appMemory));
+    for (int which : {0, 1, 2}) {
+        game = which;
+        Check(GameplayInputActive(), "TR4/5/6 gameplay accepts dual-grip Action");
+        VRSystem::HandState hands[2]{};
+        hands[0].grip = hands[1].grip = 1.0f;
+        XState touch{}; bool shifted = false, gripAction = false;
+        BuildStateFromHands(hands, touch, shifted, true, gripAction);
+        Check(gripAction && !(touch.Gamepad.wButtons &
+              (XB_LEFT_SHOULDER | XB_RIGHT_SHOULDER | XB_X)),
+              "both Touch grips suppress Duck, Sneak and Walk");
+        ApplyMergedChords(touch.Gamepad, true, gripAction, shifted);
+        Check(touch.Gamepad.wButtons == XB_Y,
+              "both Touch grips hold native Action in TR4/5/6");
+        hands[0].btnUpper = true;
+        BuildStateFromHands(hands, touch, shifted, true, gripAction);
+        ApplyMergedChords(touch.Gamepad, true, gripAction, shifted);
+        Check(touch.Gamepad.wButtons == XB_Y,
+              "both grips take priority over right-grip plus Y Sneak");
+        hands[0].grip = 0;
+        BuildStateFromHands(hands, touch, shifted, true, gripAction);
+        Check(!gripAction && touch.Gamepad.wButtons == XB_RIGHT_SHOULDER,
+              "right-grip plus Y still emits Sneak alone");
+
+        XGamepad physical{}; physical.wButtons =
+            XB_LEFT_SHOULDER | XB_RIGHT_SHOULDER | XB_X;
+        ApplyMergedChords(physical, true, false, shifted);
+        Check(physical.wButtons == XB_Y,
+              "merged physical LB+RB also holds Action without Duck/Walk");
+        for (int trigger : {0, 1}) {
+            XGamepad withTrigger{};
+            if (trigger) withTrigger.bRightTrigger = 255;
+            else withTrigger.bLeftTrigger = 255;
+            ApplyMergedChords(withTrigger, true, true, shifted);
+            Check(withTrigger.wButtons == XB_Y &&
+                  (trigger ? withTrigger.bRightTrigger : withTrigger.bLeftTrigger) == 255,
+                  "grip Action with a trigger never invokes a view/graphics chord");
+        }
+
+        hands[0] = {}; hands[1] = {};
+        hands[0].stickClick = hands[1].stickClick = true;
+        hands[0].stickX = 0.8f; hands[1].stickY = 0.7f;
+        BuildStateFromHands(hands, touch, shifted, true, gripAction);
+        ApplyMergedChords(touch.Gamepad, true, gripAction, shifted);
+        Check(!shifted && touch.Gamepad.wButtons ==
+              (XB_LEFT_THUMB | XB_RIGHT_THUMB) &&
+              !touch.Gamepad.sThumbLX && !touch.Gamepad.sThumbRY,
+              "native L3+R3 Photo Mode survives D-pad shift and stick drift");
+        for (uint32_t ui : {drva::app_off::InventoryActive,
+                            drva::app_off::InTitle, drva::app_off::InFMV}) {
+            *reinterpret_cast<int32_t*>(appMemory + ui) = 1;
+            Check(!GameplayInputActive(), "UI scene disables dual-grip Action");
+            hands[0] = {}; hands[1] = {};
+            hands[0].grip = hands[1].grip = 1.0f;
+            BuildStateFromHands(hands, touch, shifted, false, gripAction);
+            ApplyMergedChords(touch.Gamepad, false, gripAction, shifted);
+            Check(!gripAction && !(touch.Gamepad.wButtons & XB_Y),
+                  "UI scene retains native grip controls without synthetic Action");
+            *reinterpret_cast<int32_t*>(appMemory + ui) = 0;
+        }
+    }
+    game = 0; g_viewToggleHeld = true;
+    XGamepad viewWithGrips{}; viewWithGrips.wButtons = XB_Y;
+    viewWithGrips.bLeftTrigger = 255; bool shifted = false;
+    ApplyMergedChords(viewWithGrips, true, true, shifted);
+    Check(!viewWithGrips.wButtons && !viewWithGrips.bLeftTrigger,
+          "real Y+LT view toggle cannot leak grip Action");
+    XGamepad graphicsWithGrips{}; graphicsWithGrips.wButtons = XB_Y;
+    graphicsWithGrips.bRightTrigger = 255;
+    ApplyMergedChords(graphicsWithGrips, true, true, shifted);
+    Check(graphicsWithGrips.wButtons == XB_START && !graphicsWithGrips.bRightTrigger,
+          "real Y+RT graphics toggle cannot leak grip Action");
     game = 0; std::memset(appMemory, 0, sizeof(appMemory));
     g_runtimeEnabled = true; g_haveHeading = false;
     PHD_3DPOS camera{}; camera.y_rot = Angle(1.0f);
@@ -487,10 +581,43 @@ int main() {
                 UpdateSceneCamera(camera);
                 const float remaining = 0.2f - expected / 1000.0f * f / 256.0f;
                 checkViews(remaining, 0, -0.1f);
-                Check(std::fabs(camera.x_pos + InvertRigid(VR().HeadView()).r[0][3] - 200) < 1.01f,
-                      "rendered camera does not double-count interpolated body drag");
+                if (collisionMode == 0 || collisionMode == 10)
+                    Check(std::fabs(camera.x_pos + InvertRigid(VR().HeadView()).r[0][3] - 200) < 1.01f,
+                          "clear rendered camera does not double-count interpolated body drag");
             }
         }
+        // The real scene path sweeps the final rendered eye (animated anchor
+        // plus physical lean), not Lara's body or the untracked camera pose.
+        resetRoomscale();
+        collisionMode = 0; cameraCollisionCalls = 0;
+        UpdateSceneCamera(camera);
+        auto eyeX = [&]() {
+            return camera.x_pos + InvertRigid(VR().HeadView()).r[0][3];
+        };
+        Check(std::fabs(eyeX() - 200) < 1.01f && cameraCollisionCalls > 0,
+              "clear first-person eye preserves physical lean");
+        collisionMode = 11; cameraCollisionCalls = 0;
+        UpdateSceneCamera(camera);
+        Check(eyeX() >= 80 && eyeX() < 100 && cameraCollisionCalls > 1,
+              "wall stops rendered eye with stereo clearance during ground movement");
+        collisionMode = 12; state = 2;
+        UpdateSceneCamera(camera);
+        Check(camera.z_pos < 100, "ground floor discontinuity blocks camera sweep");
+        state = 3; UpdateSceneCamera(camera);
+        Check(camera.z_pos == 144,
+              "airborne floor drop does not retract jump camera");
+        collisionMode = 13; UpdateSceneCamera(camera);
+        Check(camera.z_pos == 0, "wall still blocks airborne camera");
+        cameraCollisionCalls = 0; state = 19; collisionMode = 0;
+        UpdateSceneCamera(camera);
+        Check(camera.z_pos == 16 && cameraCollisionCalls == 0,
+              "ledge pull-up retracts forward anchor without ground sweep");
+        Check(locomotion::FirstPersonAnchorZ(10, -20, 16) == -20 &&
+              locomotion::FirstPersonAnchorZ(2, 144, 16) == 144,
+              "interaction setting cannot extend a custom anchor into a wall");
+        g_runtimeEnabled = false; cameraCollisionCalls = 0;
+        UpdateSceneCamera(camera);
+        Check(cameraCollisionCalls == 0, "third-person camera never runs wall sweep");
         collisionMode = 0; resetRoomscale();
         Detour_LaraAboveWater(itemMemory, nullptr);
         fraction = 128; UpdateLocomotion(camera);

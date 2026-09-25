@@ -28,8 +28,9 @@ for in-headset validation, and the remaining motion issues are listed there.
 * Chest physics for Lara in TR4/5, ported from TR6's dynamic bones
 * First person for TR4/5, ported from TR1–3: directional movement, headset-driven
   arm aiming, body-follow rotation, collision-checked room-scale movement and
-  eye-room portal culling. Visible vertical gun tilt and motion polish remain
-  under investigation; TR6 first person is not implemented.
+  eye-room portal culling. Rendered-eye wall clearance is deployed but still needs
+  headset testing. Visible vertical gun tilt and motion polish remain under
+  investigation; TR6 first person is not implemented.
 
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
@@ -58,7 +59,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Look | Right Stick (RS) |
 | Zoom | R3 |
 | Jump | A |
-| Action | Y |
+| Action | Y or both grips (LB+RB) during gameplay |
 | Equip Weapon | LT (Hold) |
 | Shoot | RT |
 | Roll | B |
@@ -1303,7 +1304,7 @@ therefore promotes its axis to 1.0 when the analogue value reads low.
 | Look | Right stick | `RX` / `RY` — yaw only, see [Phase 10](#phase-10-decoupled-pitch) |
 | Jump | Right lower face button | `A` |
 | Roll | Right upper face button | `B` |
-| Action | Left upper face button | `Y` |
+| Action | Left upper face button or both grips during gameplay | `Y` |
 | Shoot | Right trigger | `RT` |
 | Equip weapon | Left trigger | `LT` |
 | Duck | Left grip | `LB` |
@@ -1311,7 +1312,7 @@ therefore promotes its axis to 1.0 when the analogue value reads low.
 | Sneak | Right grip + left upper face button | `RB` (the chord consumes `X` and `Y`) |
 | Sprint | Left stick click | `L3` |
 | System menu | Left lower face button | `BACK` (or `START`) |
-| Photo mode | Left grip + right grip | `LB` + `RB` |
+| Photo mode | Both stick clicks | `L3` + `R3` |
 | D-pad | Right stick click + left stick | `DPAD_*` — see [Phase 8](#phase-8-d-pad-input-support) |
 
 Two of those deliberately differ from the flat-screen defaults, because they
@@ -1321,13 +1322,23 @@ suit hands better than thumbs:
   left thumb keeps moving. The game binds Walk to XInput `X`, so the grip emits
   only `X`. TR6 binds Sneak to `RIGHT_SHOULDER`, so holding Y with the right
   grip consumes the ordinary Walk and Action signals and emits Sneak instead.
-  Both grips still synthesize `LB` + `RB`, preserving the Photo Mode chord.
+  Both grips take priority in gameplay: they hold Action without also sending
+  Duck, Walk or Sneak. This works in TR4, TR5 and TR6, and after a physical pad
+  is merged. In menus and FMVs the grips retain their individual bindings.
+  Photo Mode keeps its [native L3+R3 chord](https://www.tombraider.com/news/video-games/photo-mode-returns-when-tomb-raider-iv-vi-remastered-launches-on-february).
 - **System is the left hand's lower face button.** Touch has no Start or Back of
   its own, and putting either on a chord made it awkward to reach mid-play.
   `GamepadMenuUsesBack=0` sends `START` (pause/inventory) instead —
   `inputUpdate()` decodes `BACK` to internal key `0x62` and `START` to `0x63`,
   and which one a given screen treats as "System" lives in the game DLLs, so it
   stays switchable rather than hard-coded.
+
+Dual-grip Action is added after the Y+LT first-person and Y+RT graphics chords,
+so gripping while using a trigger cannot switch either mode. The mapping passes
+mocked TR4/5/6 input tests but still needs an in-game block-push/pull check in
+each game. The 2026-09-25 Release/x64 DLL containing it is installed; the prior
+DLL is preserved as `TombRaiderVR.dll.pre-dual-grip-action-20260925-161204`.
+The installed INI was not overwritten.
 
 ### Diagnostics
 
@@ -1345,9 +1356,9 @@ what the controls were on that run:
 
 ```
 pad: Touch controllers presented as an Xbox pad (_XInputGetState ...)
-pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) action=Y(L upper)
+pad: move=Lstick look=Rstick jump=A(R lower) roll=B(R upper) action=Y(L upper)/LB+RB(both grips)
      system=BACK(L lower) walk=LS+RB(R grip) sneak=RB+Y duck=LB(L grip)
-     equip=LT shoot=RT sprint=L3 photo=LB+RB
+     equip=LT shoot=RT sprint=L3 photo=L3+R3
 ```
 
 ### Phase 5 settings
@@ -1863,7 +1874,7 @@ they feel stiff.
 The mapping line in the log records the shift when it is on:
 
 ```
-pad: move=Lstick look=Rstick jump=A(R lower) ... sprint=L3 photo=LB+RB dpad=R3+Lstick
+pad: move=Lstick look=Rstick jump=A(R lower) ... sprint=L3 photo=L3+R3 dpad=R3+Lstick
 ```
 
 ### Phase 8 settings
@@ -2081,9 +2092,9 @@ taken away to pay for it.
 ### Know what RB is on Touch
 
 Touch has no physical shoulder buttons. As [Phase 5](#phase-5-vr-controller-support)
-describes, the **right grip** synthesises `XB_X` and `XB_RIGHT_SHOULDER`
-together — `X` because that is what the game binds Walk to, `RIGHT_SHOULDER` so
-the `LB`+`RB` Photo Mode chord stays reachable.
+describes, the **right grip** synthesises `XB_X` for Walk. A physical Xbox
+`RB` also satisfies this pitch-release chord; Touch does not need to emit
+`XB_RIGHT_SHOULDER` for ordinary Walk. Photo Mode uses L3+R3.
 
 So this chord is, physically, **right grip + right trigger** — which in play
 reads as *walk and shoot*. That is a combination people genuinely use, on a
@@ -4612,6 +4623,26 @@ and both games still need broader live checks. A
 `cull: first-person eye in room ...` log line records both room numbers when
 they change.
 
+The separate TR1–3 **wall-clipping fix** now protects the camera itself. While
+Lara walks, jumps or falls, it sweeps from her interpolated collision origin
+toward the final rendered eye, including horizontal physical head translation.
+Native `GetCollisionInfo` checks at most 16 game units per step with a 64-unit
+radius; a blocked step leaves the eye at the last clear point. Airborne checks
+allow the floor to drop away without mistaking it for a wall. Hanging, ledge
+pull-up, climbing and push/pull instead retract the forward eye offset to 16
+units by default, without extending a custom anchor farther into an obstacle.
+These changes affect only the active first-person scene camera, not Lara's
+movement or the third-person chase camera. The new clearance passes mocked
+TR4/5 tests and builds, but **has not yet been verified in a headset**. This is
+distinct from the room-culling fix above: that fix keeps rooms drawn; this one
+keeps the viewpoint out of nearby walls.
+
+The 2026-09-25 Release/x64 DLL was installed for headset testing. The previous
+installed DLL is preserved beside it as
+`TombRaiderVR.dll.pre-fp-wall-clearance-20260925-160125`. The installed INI was
+not overwritten; older INIs can omit `FirstPersonInteractionAnchorZ` and use
+its built-in default of 16.
+
 ### First-person settings
 
 All settings below belong in `[VR]`. These are repository/generated-template
@@ -4624,6 +4655,7 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonAnchorX` | `0` | Eye offset in joint-local game units |
 | `FirstPersonAnchorY` | `-32` | Local vertical offset; negative is up |
 | `FirstPersonAnchorZ` | `144` | Local forward eye offset |
+| `FirstPersonInteractionAnchorZ` | `16` | Retract forward eye offset during constrained interactions; cannot extend a custom normal anchor |
 | `FirstPersonHeadTranslation` | `1` | Physical leaning/ducking relative to neutral; tracked rotation remains active |
 | `FirstPersonRoomscaleNeckMetres` | `0.15` | Neck-to-head compensation distance, clamped to 0–0.4 m; `0` disables it |
 | `FirstPersonRoomscaleMove` | `1` | Let collision-checked physical steps move Lara |
@@ -4669,8 +4701,8 @@ handoff regression coverage.
 
 ### Implementation and validation
 
-The port lives in `src/FirstPerson.cpp`, `src/FirstPerson.h` and
-`src/LocomotionMath.h`, with integration in `Gamepad`, `VRSystem`, `Hooks`,
+The port lives in `src/FirstPerson.cpp`, `src/FirstPerson.h`,
+`src/FirstPersonClearance.h` and `src/LocomotionMath.h`, with integration in `Gamepad`, `VRSystem`, `Hooks`,
 `Config` and the per-build `GameDll` address tables. Camera replacement is
 limited to the scene-camera call site. Required camera/aim/locomotion hooks
 verify their prologues; installation failure rolls them back and leaves the
@@ -4681,7 +4713,9 @@ and controller implementations with mocked engine memory/native calls. Coverage
 includes chords, directional gaits and jump handling, head aiming, physical
 rotation and neck compensation, room-scale collision/interpolation accounting,
 per-game movement guards, recentering, visibility restoration, camera handoff
-and diagnostic sampling. From an **x64 Visual Studio developer command prompt**
+and diagnostic sampling. Wall-clearance coverage includes walking, jump/fall
+floor drops, blocked airborne eyes, interaction retraction and the third-person
+guard. From an **x64 Visual Studio developer command prompt**
 at the repository root (with the `build` directory present):
 
 ```bat
@@ -4689,8 +4723,8 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest run passed **8,751 checks**. These are synthetic checks, including
-parameter sweeps, not 8,751 in-game scenarios or proof of headset smoothness.
+The latest run passed **14,736 checks**. These are synthetic checks, including
+parameter sweeps, not 14,736 in-game scenarios or proof of headset smoothness.
 The Release x64 build also succeeded. Native address/prologue/layout checks
 were extended in `tools/verify_addresses.py`; the latest recorded run against
 the available PDB/retail binaries passed **791 checks**. To include an installed
@@ -4705,7 +4739,9 @@ physical and stick turns, leaning/room-scale collision, guns, jumps/rolls,
 interactions, menus, graphics switching and first/third-person transitions.
 The reported whole-room culling failure is fixed in headset, but other doorway
 and stacked-room layouts need checks in both games. Vertical gun pose and shot
-trajectory also need direct headset/gameplay validation.
+trajectory also need direct headset/gameplay validation. The new wall-clearance
+path still needs in-headset walking, jump, fall, ledge and lean checks in both
+games before calling it fixed in live play.
 Do not label the port fully equivalent to TR1–3 based on compilation or these
 tests alone.
 

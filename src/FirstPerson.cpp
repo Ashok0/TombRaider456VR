@@ -6,6 +6,7 @@
 #include "Log.h"
 #include "VRSystem.h"
 #include "LocomotionMath.h"
+#include "FirstPersonClearance.h"
 
 #include <windows.h>
 #include <intrin.h>
@@ -514,6 +515,69 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
     g_lastHeadWorld = Wrap(g_headingBase + VR().HeadYawRadians());
 }
 
+void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
+    if (!g_boundDll->getCollisionInfo) return;
+    const bool ground = CanTurnBody(item);
+    const int state = *reinterpret_cast<const int16_t*>(item + off::item_anim_state);
+    // Match TR1-3's ground, jump, fall and wall-impact coverage. Interactions
+    // use the retracted anchor instead, and third person never reaches here.
+    const bool jump = LaraWaterStatus() == 0 &&
+        *reinterpret_cast<const int16_t*>(item + off::item_hit_points) > 0 &&
+        (state == 3 || state == 9 || state == 12 || state == 15 ||
+         (state >= 25 && state <= 29));
+    if (!ground && !jump) return;
+
+    const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
+    const auto& prev = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos_prev);
+    const int frac = std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac), 0, 256);
+    const auto lerp = [frac](int32_t a, int32_t b) {
+        return int32_t(int64_t(a) + (int64_t(b) - a) * frac / 256);
+    };
+    const int32_t body[3] = {lerp(prev.x_pos, pos.x_pos),
+                             lerp(prev.y_pos, pos.y_pos),
+                             lerp(prev.z_pos, pos.z_pos)};
+
+    locomotion::Vec tracked{};
+    if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation) {
+        VR().HeadFloorOffset(tracked.x, tracked.z);
+        tracked = locomotion::Rotate(tracked, g_headingBase) * LiveWorldUnitsPerMetre();
+    }
+    if (!std::isfinite(tracked.x) || !std::isfinite(tracked.z) ||
+        std::fabs(tracked.x) > 4096 || std::fabs(tracked.z) > 4096) return;
+    const int32_t offsetX = int32_t(std::lround(tracked.x));
+    const int32_t offsetZ = int32_t(std::lround(tracked.z));
+    const int64_t eyeX = int64_t(pose.x_pos) + offsetX;
+    const int64_t eyeZ = int64_t(pose.z_pos) + offsetZ;
+    if (eyeX < INT32_MIN || eyeX > INT32_MAX ||
+        eyeZ < INT32_MIN || eyeZ > INT32_MAX) return;
+    int32_t eye[3] = {int32_t(eyeX), pose.y_pos, int32_t(eyeZ)};
+
+    const int16_t room = *reinterpret_cast<const int16_t*>(item + off::item_room);
+    const bool airborne = !ground && state != 15;
+    firstperson::ClampEyeToWall(body, eye,
+        [&](int32_t x, int32_t z, int32_t clearX, int32_t clearZ) {
+            RoomCollision coll{};
+            coll.radius = 64;
+            coll.badPos = airborne ? 4096 : 384;
+            coll.badNeg = airborne ? -4096 : -384;
+            coll.badCeiling = 0;
+            coll.flags = 5;
+            coll.old[0] = clearX; coll.old[1] = body[1]; coll.old[2] = clearZ;
+            coll.facing = Angle(std::atan2(float(x - clearX), float(z - clearZ)));
+            reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase + g_boundDll->getCollisionInfo)(
+                &coll, x, body[1], z, room, 762);
+            return (!airborne && (coll.floorSamples[0] < -384 ||
+                                  coll.floorSamples[0] > 384 ||
+                                  coll.floorSamples[1] >= 0)) ||
+                coll.type == 8 || coll.type == 16 || coll.type == 32 ||
+                coll.shift[0] || coll.shift[2];
+        });
+    // Stereo adds the physical translation after the scene pose. Undo that
+    // amount here so both rendered eyes remain on the clear side of the wall.
+    pose.x_pos = eye[0] - offsetX;
+    pose.z_pos = eye[2] - offsetZ;
+}
+
 // Diagnostic only: distinguish animated lateral sway from actual root motion
 // and physical translation. Extrema over a full second avoid aliasing a gait
 // cycle with a slow periodic log sample. Never modify the camera or input here.
@@ -580,8 +644,10 @@ bool Anchor(PHD_3DPOS& pose) {
         old.y_pos + (pos.y_pos - old.y_pos) * t,
         old.z_pos + (pos.z_pos - old.z_pos) * t
     };
+    const int state = *reinterpret_cast<const int16_t*>(item + off::item_anim_state);
     PHD_VECTOR head{ Cfg().firstPersonAnchorX, Cfg().firstPersonAnchorY,
-                     Cfg().firstPersonAnchorZ };
+                     locomotion::FirstPersonAnchorZ(state, Cfg().firstPersonAnchorZ,
+                                                    Cfg().firstPersonInteractionAnchorZ) };
     // Use the same interpolated, absolute joint query as the native renderer.
     // This routine saves/restores its matrix stack and adds Lara's world origin.
     reinterpret_cast<Fn_GetJointAbsPositionLerp>(
@@ -602,6 +668,7 @@ bool Anchor(PHD_3DPOS& pose) {
     pose.z_pos = head.z;
     pose.x_rot = 0;
     UpdateLocomotion(pose);
+    ClampRenderedHeadToCollision(item, pose);
     TraceForwardCamera(item, body, head, frac, GetTickCount64());
     pose.z_rot = 0;
     if (!g_loggedFirst) {
