@@ -4669,6 +4669,13 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonBodyTurnDegreesPerFrame` | `4` | Body-follow turn limit at a 60 Hz reference, scaled by elapsed time |
 | `FirstPersonHeadAim` | `1` | Write headset yaw/pitch into gun-arm controls; visible vertical gun tilt is currently defective |
 | `FirstPersonMotionGuns` | `0` | Experimental Quest Touch dual-pistol/Uzi tracking in remastered/HD graphics; off by default |
+| `FirstPersonMotionGunGripForwardMetres` | `0.1778` | Mesh grip calibration; positive moves the gun back along its barrel axis, with the calibrated grip anchored to the controller |
+| `FirstPersonMotionGunRaiseMetres` | `0.0254` | Raise the mesh in controller-local up while preserving the calibrated grip anchor; metres |
+| `FirstPersonMotionGunRightMetres` | `0` | Controller-local lateral mesh offset; positive right |
+| `FirstPersonMotionGunPitchDegrees` | `0` | Barrel angle correction; positive up |
+| `FirstPersonMotionGunYawDegrees` | `0` | Barrel angle correction; positive right |
+| `FirstPersonMotionGunRollDegrees` | `0` | Grip roll correction; positive clockwise |
+| `FirstPersonMotionGunHotkeys` | `1` | Enable focused-game Ctrl+function-key live calibration |
 | `FirstPersonTurnDegreesPerSecond` | `120` | Maximum continuous right-stick yaw rate |
 | `FirstPersonTurnDeadzone` | `0.25` | Right-stick turning deadzone |
 
@@ -4699,10 +4706,60 @@ removed. `FirstPersonMotionGunGripBackMetres` and
 `FirstPersonMotionGunGripUpMetres` in existing INIs are ignored. No controller
 direction is latched when drawing the guns; those compensations could drift
 during physical turns and did not correct the underlying pivot.
+After Quest testing confirmed the corrected pivot and aiming were almost
+perfect but the hands remained about a foot forward, a separate local grip
+calibration was added: `FirstPersonMotionGunGripForwardMetres=0.3048`.
+This is an empirical 12-inch fit adjustment, not a measured mesh landmark.
+The recovered wrist frame is translated so this local grip point maps onto
+the tracked controller, and rotation takes place about that calibrated grip.
+There is no headset-yaw offset, draw-time latch, or change to the bind-pose
+recovery. The same adjusted frame drives the mesh, muzzle flash and shot
+origin; barrel direction is unchanged. Actual hand fit still needs headset
+confirmation. Adjust the value and restart; 0 restores the preceding build's
+placement without reverting its pivot or aiming fixes (with raise also zero).
+The latest requested fit is **1 inch up and 5 inches forward** relative to
+that 12-inch-back test: grip-forward is now `0.1778` (7 inches back) and
+raise is `0.0254` (1 inch up). These are controller-local mesh calibration
+values, not a headset-facing offset. For manual tuning, decrease grip-forward
+to move the guns forward and increase raise to move them up; one inch is
+`0.0254` metres. INI edits take effect on restart, or use the live keys below.
+Angle calibration rotates around the adjusted grip anchor and updates both
+the rendered barrel and shot direction; muzzle flash and shot origin remain
+on the same calibrated frame. With angles zero the previous fit is preserved.
+
+#### Live gun calibration keys
+
+Focus the game window, enter first person and draw pistols/Uzis in remastered
+graphics with both controllers tracked. These keys adjust **both hands**:
+
+| Keys | Position | With Shift also held |
+| --- | --- | --- |
+| Ctrl+F1 / Ctrl+F2 | Left / right | Yaw left / right |
+| Ctrl+F3 / Ctrl+F4 | Down / up | Pitch down / up |
+| Ctrl+F5 / Ctrl+F6 | Backward / forward | Roll left / right |
+| Ctrl+F7 | Save current fit to INI | Restore last loaded/saved fit |
+
+Tap once per step: **1/4 inch** for position, **1 degree** for angle. Key repeat
+is suppressed. Changes are live but temporary until saved; restoring does not
+overwrite the INI. Save preserves unrelated settings and makes
+`TombRaiderVR.ini.motion-gun-calibration.bak` (previous backup is replaced).
+Save/restore requests a system sound; errors and current values are written to
+`TombRaiderVR.log`. Position is limited to +/-0.5 m, pitch/yaw to +/-90 degrees,
+and roll to +/-180 degrees.
+
+The mod consumes calibration function-key messages before native game actions,
+and reserves Ctrl while calibration is available so Ctrl cannot also fire the
+guns. Set `FirstPersonMotionGunHotkeys=0` and restart to restore native Ctrl
+while using motion guns. Plain function keys, Alt chords, menus, third person
+and background applications are not calibration targets. Key dispatch,
+combined angle/position pivots, muzzle matching and INI save/reload/backup are
+covered by automated tests; headset operation still requires in-game checking.
 Regression tests now include nonzero bind offsets, both palette layouts,
 scaled/non-orthogonal animation frames, left/right hands, full wrist rotations,
 heading rotations, helper-bone blends, and matching rendered muzzle/shot positions.
 The test fixture explicitly detects the previous pivot formula's failure.
+It also checks the calibrated grip through full rotations, 1:1 controller
+translation, zero-calibration compatibility, and shared muzzle placement.
 Binary checks cover shot and flash hooks/call sites for all four supported DLLs.
 These are synthetic and static checks, not an in-headset verification: grip
 fit, physical 360-degree turns, flash placement and actual wall impacts still

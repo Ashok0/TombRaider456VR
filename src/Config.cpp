@@ -14,6 +14,8 @@ namespace {
 Config g_cfg;
 float  g_liveScale = 423.0f;
 float  g_liveIpd   = 1.0f;
+std::wstring g_iniPath;
+motiongun::Calibration g_liveGun, g_savedGun;
 
 int GetInt(const wchar_t* key, int def, const wchar_t* ini) {
     return static_cast<int>(GetPrivateProfileIntW(L"VR", key, def, ini));
@@ -74,6 +76,48 @@ float GetFloat(const wchar_t* key, float def, const wchar_t* ini) {
 } // namespace
 
 const Config& Cfg() { return g_cfg; }
+const motiongun::Calibration& LiveMotionGunCalibration() { return g_liveGun; }
+
+void LogGunCalibration(const char* why) {
+    const auto& c=g_liveGun;
+    LogF("gun calibration [%s]: right=%.5fm up=%.5fm back=%.5fm pitch=%.1f yaw=%.1f roll=%.1f",
+         why,c.rightMetres,c.raiseMetres,c.gripForwardMetres,
+         c.pitchDegrees,c.yawDegrees,c.rollDegrees);
+}
+void AdjustMotionGunCalibration(int command) {
+    motiongun::AdjustCalibration(g_liveGun,command);
+    LogGunCalibration("live");
+}
+void RestoreMotionGunCalibration() {
+    g_liveGun=g_savedGun;
+    LogGunCalibration("restored last loaded/saved");
+}
+bool SaveMotionGunCalibration() {
+    if (g_iniPath.empty()) return false;
+    const std::wstring backup=g_iniPath+L".motion-gun-calibration.bak";
+    if (!CopyFileW(g_iniPath.c_str(),backup.c_str(),FALSE)) {
+        LogF("gun calibration: INI backup failed (%lu); not saving",GetLastError());
+        return false;
+    }
+    const wchar_t* keys[]={L"FirstPersonMotionGunRightMetres",L"FirstPersonMotionGunRaiseMetres",
+        L"FirstPersonMotionGunGripForwardMetres",L"FirstPersonMotionGunPitchDegrees",
+        L"FirstPersonMotionGunYawDegrees",L"FirstPersonMotionGunRollDegrees"};
+    const auto& c=g_liveGun;
+    const float values[]={c.rightMetres,c.raiseMetres,c.gripForwardMetres,
+                          c.pitchDegrees,c.yawDegrees,c.rollDegrees};
+    for (int i=0;i<6;++i) {
+        wchar_t value[40]{};
+        swprintf_s(value,L"%.5f",values[i]);
+        if (!WritePrivateProfileStringW(L"VR",keys[i],value,g_iniPath.c_str())) {
+            LogF("gun calibration: save failed (%lu); original INI is in .motion-gun-calibration.bak",
+                 GetLastError());
+            return false;
+        }
+    }
+    g_savedGun=g_liveGun;
+    LogGunCalibration("saved to INI");
+    return true;
+}
 
 float LiveWorldUnitsPerMetre() { return g_liveScale; }
 float LiveIpdScale()           { return g_liveIpd; }
@@ -152,6 +196,7 @@ bool EnsureConfigFile(const wchar_t* path) {
 }
 
 void LoadConfig(const wchar_t* ini) {
+    g_iniPath=ini ? ini : L"";
     if (GetFileAttributesW(ini) == INVALID_FILE_ATTRIBUTES) {
         Log("config: no TombRaiderVR.ini found, using defaults");
         return;
@@ -286,6 +331,22 @@ void LoadConfig(const wchar_t* ini) {
         L"FirstPersonHeadAim", g_cfg.firstPersonHeadAim, ini);
     g_cfg.firstPersonMotionGuns = GetBool(
         L"FirstPersonMotionGuns", g_cfg.firstPersonMotionGuns, ini);
+    g_cfg.firstPersonMotionGunGripForwardMetres = GetFloat(
+        L"FirstPersonMotionGunGripForwardMetres",
+        g_cfg.firstPersonMotionGunGripForwardMetres, ini);
+    g_cfg.firstPersonMotionGunRaiseMetres = GetFloat(
+        L"FirstPersonMotionGunRaiseMetres",
+        g_cfg.firstPersonMotionGunRaiseMetres, ini);
+    g_cfg.firstPersonMotionGunRightMetres=GetFloat(L"FirstPersonMotionGunRightMetres",0,ini);
+    g_cfg.firstPersonMotionGunPitchDegrees=GetFloat(L"FirstPersonMotionGunPitchDegrees",0,ini);
+    g_cfg.firstPersonMotionGunYawDegrees=GetFloat(L"FirstPersonMotionGunYawDegrees",0,ini);
+    g_cfg.firstPersonMotionGunRollDegrees=GetFloat(L"FirstPersonMotionGunRollDegrees",0,ini);
+    g_cfg.firstPersonMotionGunHotkeys=GetBool(L"FirstPersonMotionGunHotkeys",true,ini);
+    g_liveGun={g_cfg.firstPersonMotionGunRightMetres,g_cfg.firstPersonMotionGunRaiseMetres,
+        g_cfg.firstPersonMotionGunGripForwardMetres,g_cfg.firstPersonMotionGunPitchDegrees,
+        g_cfg.firstPersonMotionGunYawDegrees,g_cfg.firstPersonMotionGunRollDegrees};
+    motiongun::AdjustCalibration(g_liveGun,-1); // clamp loaded values
+    g_savedGun=g_liveGun;
 
     g_cfg.dynamicBones           = GetBool (L"DynamicBones",           g_cfg.dynamicBones,           ini);
     g_cfg.dynamicBonesTorsoJoint = GetInt  (L"DynamicBonesTorsoJoint", g_cfg.dynamicBonesTorsoJoint, ini);

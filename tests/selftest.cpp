@@ -21,6 +21,7 @@
 #include "InlineHook.h"
 #include "Log.h"
 #include "MotionGunMath.h"
+#include "Config.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -494,6 +495,7 @@ static void TestMotionGunMath() {
     Check(Inverse(bindPose,inverseBind),"inverse bind with nonzero wrist origin");
     bool anchorOk=true, barrelOk=true, muzzleOk=true, roundTripOk=true;
     bool oldPivotFails=false, blendOk=true;
+    bool gripOk=true, calibratedMuzzleOk=true, translationOk=true;
     float worstError=0;
     auto closeVec=[](Vec a,Vec b) { const Vec d=Sub(a,b); return Dot(d,d)<0.0025f; };
     for (int hd=0;hd<2;++hd) {
@@ -526,6 +528,30 @@ static void TestMotionGunMath() {
                     anchorOk=false; continue;
                 }
                 const Frame moved=Multiply(correction,palette);
+                // Seven inches back, one inch up. The calibrated
+                // mesh grip must stay on the controller, not orbit it.
+                const float gripUnits=.1778f*500, raiseUnits=.0254f*500;
+                const Frame calibrated=GripFrame(desired.basis,handWorld,gripUnits,raiseUnits);
+                Frame gripCorrection{};
+                if (!PaletteCorrection(palette,ib,calibrated,gripCorrection)) {
+                    gripOk=false; continue;
+                }
+                const Frame gripPalette=Multiply(gripCorrection,palette);
+                const Vec modelGrip=Transform(bind,{0,gripUnits,-raiseUnits});
+                gripOk &= closeVec(Transform(gripPalette,modelGrip),handWorld);
+                const Frame zeroGrip=GripFrame(desired.basis,handWorld,0);
+                gripOk &= closeVec(zeroGrip.origin,desired.origin);
+                const Vec physicalStep{17,-23,31};
+                const Frame translated=GripFrame(desired.basis,
+                    Add(handWorld,physicalStep),gripUnits,raiseUnits);
+                translationOk &= closeVec(Sub(translated.origin,calibrated.origin),
+                                          physicalStep);
+                for (int weapon=1;weapon<=2;++weapon) {
+                    const Vec localMuzzle=MuzzleLocal(weapon,hand);
+                    const Vec rendered=Transform(gripPalette,Transform(bind,localMuzzle));
+                    const Vec shotAndFlash=Transform(calibrated,localMuzzle);
+                    calibratedMuzzleOk &= closeVec(rendered,shotAndFlash);
+                }
                 const Vec actual=Transform(moved,meshWrist);
                 const Vec error=Sub(actual,handWorld);
                 worstError=std::fmax(worstError,std::sqrt(Dot(error,error)));
@@ -566,6 +592,18 @@ static void TestMotionGunMath() {
     Check(blendOk,"HD blended helper bones follow the same arm placement");
     Check(roundTripOk,"shader row packing preserves corrected wrist");
     Check(oldPivotFails,"regression fixture detects the old skin-palette pivot bug");
+    Check(gripOk,"raised/depth-calibrated grip stays fixed through full wrist/heading rotations");
+    Check(translationOk,"grip calibration preserves 1:1 controller translation");
+    Check(calibratedMuzzleOk,"calibrated rendered muzzle, flash and shots stay aligned");
+    const Frame straightGrip=GripFrame(pistol,{0,0,0},.3048f*500);
+    CheckNear(straightGrip.origin.x,0,"grip adjustment does not add sideways offset");
+    CheckNear(straightGrip.origin.y,0,"level grip adjustment does not add vertical offset");
+    CheckNear(straightGrip.origin.z,-152.4f,"grip adjustment pulls gun back twelve inches");
+    const Frame adjustedGrip=GripFrame(pistol,{0,0,0},.1778f*500,.0254f*500);
+    const Vec adjustment=Sub(adjustedGrip.origin,straightGrip.origin);
+    CheckNear(adjustment.x,0,"latest calibration leaves horizontal alignment unchanged");
+    CheckNear(adjustment.y,-12.7f,"latest calibration raises guns exactly one inch");
+    CheckNear(adjustment.z,63.5f,"latest calibration advances guns exactly five inches");
     printf("  worst synthetic wrist error: %.6f game units\n",worstError);
     Frame singular{}, result{};
     Check(!Inverse(singular,result),"singular frame is rejected safely");
@@ -581,6 +619,128 @@ static void TestMotionGunMath() {
     CheckNear(hand.z,280,"heading rotates right offset into world -Z");
 }
 
+static void TestGunCalibration() {
+    printf("\nLive motion-gun calibration\n");
+    using namespace tr::motiongun;
+    CalibrationKeys keys{};
+    int command=-1;
+    Check(keys.ControlEvent(true,true,false),"Ctrl reserved so calibration does not fire guns");
+    Check(keys.ControlEvent(false,false,false),"reserved Ctrl release swallowed after deactivation");
+    Check(!keys.ControlEvent(true,false,false),"Ctrl remains native outside calibration");
+    Check(!keys.ControlEvent(false,false,false),"unowned Ctrl release remains native");
+    Check(!keys.Event(0,true,false,false,false,true,false,command),
+          "plain function keys remain native");
+    Check(!keys.Event(0,true,true,false,false,false,false,command),
+          "calibration inactive outside focused motion-gun gameplay");
+    Check(!keys.Event(3,true,true,false,true,true,false,command),
+          "Alt chords are not consumed");
+    bool mappings=true;
+    for (int shift=0;shift<2;++shift)
+    for (int key=0;key<7;++key) {
+        mappings &= keys.Event(key,true,true,shift!=0,false,true,false,command);
+        mappings &= command==key+shift*7;
+        mappings &= keys.Event(key,true,true,shift!=0,false,true,true,command);
+        mappings &= command==-1; // no keyboard-repeat runaway
+        mappings &= keys.Event(key,false,false,false,false,false,false,command);
+        mappings &= command==-1; // release consumed even after Ctrl/focus loss
+    }
+    Check(mappings,"all fourteen hotkey commands, repeat and keyup ownership");
+    Calibration c{};
+    const Calibration initial=c;
+    AdjustCalibration(c,1); AdjustCalibration(c,3); AdjustCalibration(c,5);
+    CheckNear(c.rightMetres,.00635f,"right step is quarter inch");
+    CheckNear(c.raiseMetres-initial.raiseMetres,.00635f,"up step is quarter inch");
+    CheckNear(c.gripForwardMetres-initial.gripForwardMetres,-.00635f,"forward reduces grip-back");
+    AdjustCalibration(c,8); AdjustCalibration(c,10); AdjustCalibration(c,12);
+    CheckNear(c.yawDegrees,1,"yaw step is one degree");
+    CheckNear(c.pitchDegrees,1,"pitch step is one degree");
+    CheckNear(c.rollDegrees,1,"roll step is one degree");
+    for (int i=0;i<1000;++i) { AdjustCalibration(c,1); AdjustCalibration(c,10); }
+    CheckNear(c.rightMetres,.5f,"position limited to half metre");
+    CheckNear(c.pitchDegrees,90,"pitch safely limited to ninety degrees");
+    const Basis identity{{{1,0,0},{0,1,0},{0,0,1}}};
+    c={}; c.yawDegrees=25; c.pitchDegrees=30; c.rollDegrees=40;
+    const Basis angled=CalibratedController(identity,c);
+    const Vec ray=Transform(angled,{0,0,1});
+    const Vec expected=ShotForward(25*.0174532925199433f,30*.0174532925199433f);
+    CheckNear(ray.x,expected.x,"calibrated barrel yaw equals shot yaw");
+    CheckNear(ray.y,expected.y,"calibrated barrel pitch equals shot pitch");
+    CheckNear(ray.z,expected.z,"roll does not steer the barrel");
+    bool pivot=true,muzzle=true;
+    auto closeVec=[](Vec a,Vec b) { const Vec d=Sub(a,b); return Dot(d,d)<.0025f; };
+    const Frame inverseBind{identity,{-123,487,-231}};
+    Frame bind{}; Inverse(inverseBind,bind);
+    const Frame native{identity,{400,500,600}};
+    const Frame palette=Multiply(native,inverseBind);
+    for (int step=0;step<=36;++step) {
+        const float angle=step*.1745329252f;
+        const float tracked[3][4]={{std::cos(angle),0,std::sin(angle),0},
+                                 {0,1,0,0},{-std::sin(angle),0,std::cos(angle),0}};
+        c.rightMetres=.03f; c.gripForwardMetres=.1778f; c.raiseMetres=.0254f;
+        const Basis controller=CalibratedController(ControllerBasis(tracked,.63f),c);
+        const Frame desired=GripFrame(GunBasis(controller),{17,23,31},
+            c.gripForwardMetres*500,c.raiseMetres*500,c.rightMetres*500);
+        Frame correction{}; PaletteCorrection(palette,inverseBind,desired,correction);
+        const Frame moved=Multiply(correction,palette);
+        pivot &= closeVec(Transform(moved,Transform(bind,
+            {-c.rightMetres*500,c.gripForwardMetres*500,-c.raiseMetres*500})),{17,23,31});
+        for (int hand=0;hand<2;++hand) for (int weapon=1;weapon<=2;++weapon)
+            muzzle &= closeVec(Transform(moved,Transform(bind,MuzzleLocal(weapon,hand))),
+                               Transform(desired,MuzzleLocal(weapon,hand)));
+    }
+    Check(pivot,"combined position/pitch/yaw/roll keeps calibrated grip pinned");
+    Check(muzzle,"combined calibration preserves rendered muzzle and shot origin");
+}
+
+static void TestGunCalibrationPersistence() {
+    printf("\nGun calibration save/reload\n");
+    wchar_t tempDir[MAX_PATH]{}, ini[MAX_PATH]{};
+    GetTempPathW(MAX_PATH,tempDir);
+    const bool created=GetTempFileNameW(tempDir,L"vrg",0,ini)!=0;
+    Check(created,"create isolated temporary INI");
+    if (!created) return;
+    WritePrivateProfileStringW(L"VR",L"FirstPersonMotionGuns",L"1",ini);
+    WritePrivateProfileStringW(L"VR",L"FirstPersonMotionGunGripForwardMetres",L"0.1778",ini);
+    WritePrivateProfileStringW(L"VR",L"UnrelatedUserSetting",L"123",ini);
+    tr::LoadConfig(ini);
+    const auto baseline=tr::LiveMotionGunCalibration();
+    tr::AdjustMotionGunCalibration(3);
+    tr::RestoreMotionGunCalibration();
+    CheckNear(tr::LiveMotionGunCalibration().raiseMetres,baseline.raiseMetres,
+              "restore discards unsaved changes");
+    tr::AdjustMotionGunCalibration(1);
+    tr::AdjustMotionGunCalibration(3);
+    tr::AdjustMotionGunCalibration(5);
+    tr::AdjustMotionGunCalibration(8);
+    tr::AdjustMotionGunCalibration(10);
+    tr::AdjustMotionGunCalibration(12);
+    const auto desired=tr::LiveMotionGunCalibration();
+    Check(tr::SaveMotionGunCalibration(),"save six live values to INI");
+    tr::AdjustMotionGunCalibration(3);
+    tr::RestoreMotionGunCalibration();
+    CheckNear(tr::LiveMotionGunCalibration().raiseMetres,desired.raiseMetres,
+              "restore uses latest successful save");
+    tr::LoadConfig(ini);
+    const auto actual=tr::LiveMotionGunCalibration();
+    CheckNear(actual.rightMetres,desired.rightMetres,"reload right offset");
+    CheckNear(actual.raiseMetres,desired.raiseMetres,"reload up offset");
+    CheckNear(actual.gripForwardMetres,desired.gripForwardMetres,"reload depth offset");
+    CheckNear(actual.pitchDegrees,desired.pitchDegrees,"reload pitch");
+    CheckNear(actual.yawDegrees,desired.yawDegrees,"reload yaw");
+    CheckNear(actual.rollDegrees,desired.rollDegrees,"reload roll");
+    Check(GetPrivateProfileIntW(L"VR",L"UnrelatedUserSetting",0,ini)==123,
+          "save preserves unrelated INI settings");
+    Check(GetPrivateProfileIntW(L"VR",L"FirstPersonMotionGuns",0,ini)==1,
+          "save preserves enabled motion guns");
+    wchar_t backup[MAX_PATH+40]{};
+    swprintf_s(backup,L"%s.motion-gun-calibration.bak",ini);
+    Check(GetFileAttributesW(backup)!=INVALID_FILE_ATTRIBUTES,"save creates recovery backup");
+    Check(GetPrivateProfileIntW(L"VR",L"UnrelatedUserSetting",0,backup)==123,
+          "backup preserves original INI");
+    DeleteFileW(backup);
+    DeleteFileW(ini);
+}
+
 int main() {
     printf("TombRaiderVR self-test\n======================\n");
 
@@ -594,6 +754,8 @@ int main() {
     TestPortalGeometry();
     TestInlineHook();
     TestMotionGunMath();
+    TestGunCalibration();
+    TestGunCalibrationPersistence();
 
     printf("\n%s (%d failure%s)\n",
            g_fail == 0 ? "ALL PASSED" : "FAILURES",

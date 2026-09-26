@@ -8,6 +8,61 @@ namespace tr::motiongun {
 struct Vec { float x, y, z; };
 struct Basis { float r[3][3]; };
 struct Frame { Basis basis; Vec origin; };
+struct Calibration {
+    float rightMetres=0, raiseMetres=.0254f, gripForwardMetres=.1778f;
+    float pitchDegrees=0, yawDegrees=0, rollDegrees=0;
+};
+
+// Ctrl+F1..F7 commands; adding Shift selects angles/restore.
+inline void AdjustCalibration(Calibration& c, int command) {
+    constexpr float inchStep=.00635f; // quarter inch per press
+    switch (command) {
+    case 0: c.rightMetres-=inchStep; break;
+    case 1: c.rightMetres+=inchStep; break;
+    case 2: c.raiseMetres-=inchStep; break;
+    case 3: c.raiseMetres+=inchStep; break;
+    case 4: c.gripForwardMetres+=inchStep; break; // mesh backward
+    case 5: c.gripForwardMetres-=inchStep; break; // mesh forward
+    case 7: c.yawDegrees-=1; break;
+    case 8: c.yawDegrees+=1; break;
+    case 9: c.pitchDegrees-=1; break;
+    case 10: c.pitchDegrees+=1; break;
+    case 11: c.rollDegrees-=1; break;
+    case 12: c.rollDegrees+=1; break;
+    }
+    c.rightMetres=std::fmax(-.5f,std::fmin(.5f,c.rightMetres));
+    c.raiseMetres=std::fmax(-.5f,std::fmin(.5f,c.raiseMetres));
+    c.gripForwardMetres=std::fmax(-.5f,std::fmin(.5f,c.gripForwardMetres));
+    c.pitchDegrees=std::fmax(-90.f,std::fmin(90.f,c.pitchDegrees));
+    c.yawDegrees=std::fmax(-90.f,std::fmin(90.f,c.yawDegrees));
+    c.rollDegrees=std::fmax(-180.f,std::fmin(180.f,c.rollDegrees));
+}
+
+struct CalibrationKeys {
+    bool captured[7]={};
+    bool controlCaptured=false;
+    bool ControlEvent(bool down, bool active, bool alt) {
+        if (!down) {
+            const bool used=controlCaptured; controlCaptured=false; return used;
+        }
+        if (controlCaptured || (active && !alt)) {
+            controlCaptured=true; return true;
+        }
+        return false;
+    }
+    // Caller supplies actual key transitions, not render-rate polling.
+    bool Event(int key, bool down, bool control, bool shift, bool alt,
+               bool active, bool repeat, int& command) {
+        command=-1;
+        if (key<0 || key>=7) return false;
+        if (!down) { const bool used=captured[key]; captured[key]=false; return used; }
+        if (repeat && captured[key]) return true;
+        if (!active || !control || alt || repeat) return false;
+        captured[key]=true;
+        command=key+(shift ? 7 : 0);
+        return true;
+    }
+};
 
 inline Vec Add(Vec a, Vec b) { return {a.x+b.x, a.y+b.y, a.z+b.z}; }
 inline Vec Sub(Vec a, Vec b) { return {a.x-b.x, a.y-b.y, a.z-b.z}; }
@@ -90,6 +145,25 @@ inline Frame HdInverseBind(Frame bind) {
 inline Basis GunBasis(const Basis& controller) {
     const Basis barrelToController{{{1,0,0},{0,0,-1},{0,1,0}}};
     return Multiply(controller,barrelToController);
+}
+inline Basis CalibratedController(const Basis& controller, const Calibration& c) {
+    constexpr float radians=.01745329251994329577f;
+    const float p=c.pitchDegrees*radians, y=c.yawDegrees*radians, r=c.rollDegrees*radians;
+    const float cp=std::cos(p),sp=std::sin(p),cy=std::cos(y),sy=std::sin(y);
+    const float cr=std::cos(r),sr=std::sin(r);
+    const Basis pitch{{{1,0,0},{0,cp,-sp},{0,sp,cp}}};
+    const Basis yaw{{{cy,0,sy},{0,1,0},{-sy,0,cy}}};
+    const Basis roll{{{cr,-sr,0},{sr,cr,0},{0,0,1}}};
+    return Multiply(controller,Multiply(yaw,Multiply(pitch,roll)));
+}
+// Calibrate the mesh's grip point, not a post-rotation world offset.
+// Native local +Y is barrel-forward. Mapping this local point to the tracked
+// controller keeps the visible grip stationary while the wrist rotates.
+inline Frame GripFrame(const Basis& gun, Vec controllerPosition,
+                       float gripForwardUnits, float raiseUnits=0, float rightUnits=0) {
+    // Native +Z maps to controller-up. Negate the local grip Z to raise the
+    // mesh while keeping the calibrated grip point on the controller.
+    return {gun, Sub(controllerPosition,Transform(gun,{-rightUnits,gripForwardUnits,-raiseUnits}))};
 }
 inline Vec MuzzleLocal(int weapon, int hand) {
     // HD SetGunFlash offsets, shared by TR4/5 (hand 0=left, 1=right).

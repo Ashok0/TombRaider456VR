@@ -338,6 +338,13 @@ struct GunPose {
     int16_t yaw = 0, pitch = 0;
 };
 
+HHOOK g_calibrationMessageHook=nullptr;
+HWND g_calibrationWindow=nullptr;
+bool g_calibrationActive=false;
+motiongun::CalibrationKeys g_calibrationKeys{};
+int g_calibrationCommands[64]{};
+unsigned g_calibrationCommandCount=0;
+
 bool MotionReady() {
     if (!Cfg().firstPersonMotionGuns || !g_motionHooksReady || !g_motionDll ||
         !g_scenePoseValid || !g_active || !g_haveHeading || !Gate() ||
@@ -356,6 +363,80 @@ bool MotionReady() {
     if (status != 4 || (gun != 1 && gun != 2)) return false;
     vr::HmdMatrix34_t pose{};
     return VR().ControllerPose(0, pose) && VR().ControllerPose(1, pose);
+}
+
+bool CalibrationFocused() {
+    return g_calibrationWindow && GetForegroundWindow()==g_calibrationWindow;
+}
+
+LRESULT CALLBACK CalibrationMessageHook(int code, WPARAM remove, LPARAM param) {
+    // Only consume messages actually removed from this game's render/window
+    // thread queue. Never hook other applications or use a global keyboard hook.
+    if (code>=0 && remove==PM_REMOVE) {
+        auto* msg=reinterpret_cast<MSG*>(param);
+        if (msg->hwnd==g_calibrationWindow &&
+            (msg->message==WM_KEYDOWN || msg->message==WM_KEYUP ||
+             msg->message==WM_SYSKEYDOWN || msg->message==WM_SYSKEYUP)) {
+            const int key=int(msg->wParam)-VK_F1;
+            const bool down=msg->message==WM_KEYDOWN || msg->message==WM_SYSKEYDOWN;
+            int command=-1;
+            // Never dereference a game-DLL address from the message hook:
+            // game switches can unload it before the next render update.
+            const bool active=g_calibrationActive && CalibrationFocused() &&
+                !InInventory() && !InTitle() && !InFMV();
+            const bool controlKey=msg->wParam==VK_CONTROL ||
+                msg->wParam==VK_LCONTROL || msg->wParam==VK_RCONTROL;
+            // Ctrl is native Action/Fire. Reserve the modifier too while
+            // calibration is available, so adjusting a gun cannot fire it.
+            const bool consumed=controlKey
+                ? g_calibrationKeys.ControlEvent(down,active,
+                    (GetKeyState(VK_MENU)&0x8000)!=0)
+                : g_calibrationKeys.Event(key,down,
+                    (GetKeyState(VK_CONTROL)&0x8000)!=0,
+                    (GetKeyState(VK_SHIFT)&0x8000)!=0,
+                    (GetKeyState(VK_MENU)&0x8000)!=0,active,
+                    down && (msg->lParam & (LPARAM(1)<<30)),command);
+            if (consumed) {
+                if (command>=0 && g_calibrationCommandCount<64)
+                    g_calibrationCommands[g_calibrationCommandCount++]=command;
+                // Block the matching keyup too, even if Ctrl was released first.
+                msg->message=WM_NULL; msg->wParam=0; msg->lParam=0;
+            }
+        }
+    }
+    return CallNextHookEx(g_calibrationMessageHook,code,remove,param);
+}
+
+void PollMotionGunCalibration() {
+    g_calibrationActive=Cfg().firstPersonMotionGunHotkeys &&
+        g_boundDll && GameDllBound()==g_boundDll && GameDllBase()==g_boundBase &&
+        MotionReady();
+    if (!g_calibrationMessageHook && Cfg().firstPersonMotionGuns &&
+        Cfg().firstPersonMotionGunHotkeys) {
+        HWND window=GetForegroundWindow();
+        DWORD process=0;
+        const DWORD thread=GetWindowThreadProcessId(window,&process);
+        if (window && process==GetCurrentProcessId() && thread==GetCurrentThreadId()) {
+            g_calibrationWindow=window;
+            g_calibrationMessageHook=SetWindowsHookExW(
+                WH_GETMESSAGE,CalibrationMessageHook,nullptr,thread);
+            if (g_calibrationMessageHook)
+                Log("gun calibration: Ctrl+F1..F6 position, Ctrl+Shift+F1..F6 angles; F7 save/restore");
+        }
+    }
+    if (g_calibrationActive && CalibrationFocused()) {
+        for (unsigned i=0;i<g_calibrationCommandCount;++i) {
+            const int command=g_calibrationCommands[i];
+            if (command==6) {
+                const bool saved=SaveMotionGunCalibration();
+                MessageBeep(saved ? MB_OK : MB_ICONERROR);
+            } else if (command==13) {
+                RestoreMotionGunCalibration();
+                MessageBeep(MB_OK);
+            } else AdjustMotionGunCalibration(command);
+        }
+    }
+    g_calibrationCommandCount=0;
 }
 
 void ReportMotionActivity() {
@@ -400,14 +481,20 @@ bool BuildGunPose(int hand, GunPose& out) {
         return false;
     const float scale = LiveWorldUnitsPerMetre();
     if (!std::isfinite(scale) || scale <= 1) return false;
-    const GunBasis controller = motiongun::ControllerBasis(tracked.m, g_headingBase);
+    const auto& calibration=LiveMotionGunCalibration();
+    const GunBasis controller = motiongun::CalibratedController(
+        motiongun::ControllerBasis(tracked.m, g_headingBase),calibration);
     out.trackedHand = motiongun::HandInWorld(
         {float(g_scenePose.x_pos), float(g_scenePose.y_pos), float(g_scenePose.z_pos)},
         right, down, forward, g_headingBase, scale);
-    // Old draw-time latched offsets compensated for a skin-palette pivot bug.
-    // Do not reuse them: the actual wrist now anchors directly to the controller.
+    // Keep the recovered bind-pose pivot path. Calibrate the mesh grip in
+    // local gun space so that point, rather than a displaced wrist origin,
+    // stays on the tracked controller through wrist and physical body turns.
     const int16_t gun = *Ptr<int16_t>(g_boundDll->lara + 4);
     out.desired = motiongun::GunBasis(controller);
+    out.trackedHand = motiongun::GripFrame(out.desired, out.trackedHand,
+        calibration.gripForwardMetres*scale,
+        calibration.raiseMetres*scale,calibration.rightMetres*scale).origin;
 
     uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
     const int joint = hand ? 10 : 13;
@@ -425,7 +512,7 @@ bool BuildGunPose(int hand, GunPose& out) {
                      controller.r[2][2]};
     out.direction = ray;
     const float flat = std::hypot(ray.x, ray.z);
-    if (flat < 0.01f) return false;
+    if (!std::isfinite(flat)) return false;
     out.yaw = Angle(std::atan2(ray.x, ray.z));
     out.pitch = Angle(std::atan2(-ray.y, flat));
     return true;
@@ -1246,6 +1333,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
 }
 
 void Remove() {
+    g_calibrationActive=false;
     g_cameraMotionTrace = {};
     if (g_active) VR().RecenterThirdPersonHead();
     RestoreHeadMesh();
@@ -1281,6 +1369,7 @@ void Remove() {
 } // namespace
 
 void FirstPersonUpdate() {
+    PollMotionGunCalibration();
     ReportMotionActivity();
     static bool recenterHeld = false;
     const bool recenterDown = Cfg().firstPersonRecenterKey &&
@@ -1327,6 +1416,7 @@ void FirstPersonRecenter() {
 }
 
 void FirstPersonToggle() {
+    g_calibrationActive=false;
     g_cameraMotionTrace = {};
     const bool wasActive = g_active;
     if (!g_runtimeInitialized) {
@@ -1351,6 +1441,12 @@ void FirstPersonToggle() {
 }
 
 void FirstPersonShutdown() {
+    g_calibrationActive=false;
+    if (g_calibrationMessageHook) UnhookWindowsHookEx(g_calibrationMessageHook);
+    g_calibrationMessageHook=nullptr;
+    g_calibrationWindow=nullptr;
+    g_calibrationKeys={};
+    g_calibrationCommandCount=0;
     if (g_boundDll) Remove();
     g_failedBase = 0;
     g_runtimeEnabled = false;
@@ -1361,6 +1457,13 @@ void FirstPersonShutdown() {
     g_skipped = 0;
     g_faceSkips = 0;
     g_hairSkips = 0;
+}
+
+bool FirstPersonCalibrationKeyReserved(int key) {
+    if (!g_calibrationMessageHook || key<VK_F1 || key>VK_F7) return false;
+    if (g_calibrationKeys.captured[key-VK_F1]) return true;
+    return g_calibrationActive && CalibrationFocused() &&
+        (GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
 }
 
 bool FirstPersonActive() {

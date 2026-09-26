@@ -867,7 +867,8 @@ void PortalCullPollKey() {
     const int key = Cfg().cullDumpKey;
     if (key == 0) { g_dumpKeyDown = false; return; }
     const bool down = (GetAsyncKeyState(key) & 0x8000) != 0;
-    if (down && !g_dumpKeyDown) g_dumpRequested = true;
+    if (down && !g_dumpKeyDown && !FirstPersonCalibrationKeyReserved(key))
+        g_dumpRequested = true;
     g_dumpKeyDown = down;
 }
 

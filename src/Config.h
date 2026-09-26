@@ -8,6 +8,7 @@
 // likely thing to be wrong on first run -- so it is a config toggle rather than
 // a recompile.
 #pragma once
+#include "MotionGunMath.h"
 
 namespace tr {
 
@@ -708,6 +709,13 @@ struct Config {
     float firstPersonBodyTurnDegreesPerFrame = 4.0f;
     bool  firstPersonHeadAim = true;
     bool  firstPersonMotionGuns = false; // opt-in dual pistols/Uzis prototype
+    float firstPersonMotionGunGripForwardMetres = 0.1778f; // seven inches back
+    float firstPersonMotionGunRaiseMetres = 0.0254f; // one inch controller-local up
+    float firstPersonMotionGunRightMetres = 0;
+    float firstPersonMotionGunPitchDegrees = 0;
+    float firstPersonMotionGunYawDegrees = 0;
+    float firstPersonMotionGunRollDegrees = 0;
+    bool firstPersonMotionGunHotkeys = true;
     float firstPersonTurnDegreesPerSecond = 120.0f;
     float firstPersonTurnDeadzone = 0.25f;
 
@@ -1139,6 +1147,10 @@ struct Config {
 
 const Config& Cfg();
 void LoadConfig(const wchar_t* iniPath);
+const motiongun::Calibration& LiveMotionGunCalibration();
+void AdjustMotionGunCalibration(int command);
+bool SaveMotionGunCalibration();
+void RestoreMotionGunCalibration();
 
 // --- live tuning ------------------------------------------------------------
 // Scale is a perceptual judgement, so it is adjustable in the headset rather

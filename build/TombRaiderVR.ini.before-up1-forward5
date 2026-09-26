@@ -419,17 +419,16 @@ AlternateEyeMinOffscreen=50
 ;
 ;   Move    left stick              Jump    A  (right hand, LOWER)
 ;   Look    right stick             Roll    B  (right hand, UPPER)
-;   Action  Y or BOTH GRIPS        System  X  (left hand, LOWER)
+;   Action  Y  (left hand, UPPER)   System  X  (left hand, LOWER)
 ;   Walk    left stick + RIGHT GRIP Duck    LEFT GRIP
 ;   Sneak  RIGHT GRIP + Y
 ;   Equip   left trigger (hold)     Shoot   right trigger
-;   Sprint  left stick click        Photo   both stick clicks (L3+R3)
+;   Sprint  left stick click        Photo   both grips
 ;
 ; Walk is the right grip rather than a face button so it can be held while the
 ; left thumb keeps moving. The game binds Walk to XInput X, so the grip emits
 ; only X. TR6 binds Sneak to RIGHT_SHOULDER: hold Y with the right grip to emit
-; Sneak instead of Walk/Action. Both grips hold Action during gameplay without
-; also sending Duck or Walk; Photo Mode keeps its native L3+R3 chord.
+; Sneak instead of Walk/Action. Both grips still synthesize LB+RB for Photo Mode.
 GamepadEnabled=1
 
 ; Log the raw OpenVR legacy button masks whenever they change. Touch's button
@@ -778,11 +777,6 @@ FirstPersonAnchorX=0
 FirstPersonAnchorY=-32
 FirstPersonAnchorZ=144
 
-; Hanging, ledge pull-up, climbing and push/pull hold Lara against geometry.
-; Retract only the forward eye offset in those states; never extend a custom
-; normal anchor farther into a wall.
-FirstPersonInteractionAnchorZ=16
-
 ; Tracked rotation is always active. This controls physical leaning/ducking.
 ; Translation is measured from your headset position on entering first person,
 ; so standing tracking space does not add your height above Lara's head.
@@ -802,7 +796,7 @@ FirstPersonRoomscaleDeadzoneMetres=0.02
 ; The existing RecentreKey (Numpad 5 by default) also works in first person.
 FirstPersonRecenterKey=0x23
 ; Optional room-scale/heading diagnostics in TombRaiderVR.log.
-FirstPersonDriftLog=0
+FirstPersonDriftLog=1
 
 ; Hide the head, face attachments, and braid while the camera is anchored.
 ; Rolls temporarily hide the full body regardless of this setting.
@@ -820,28 +814,12 @@ FirstPersonBodyTurnDegreesPerFrame=4
 
 ; Both gun arms and firing direction follow headset yaw/pitch in first person.
 FirstPersonHeadAim=1
-; Experimental dual pistols/Uzis controller tracking. Leave off for normal play.
-FirstPersonMotionGuns=0
-; Mesh grip calibration: positive pulls the gun back along its barrel axis.
-; This local grip point stays on the controller as the gun rotates.
-; 0.1778 = 7 inches back (5 inches forward from the previous 12-inch setting).
-; Raise is controller-local up; 0.0254 = 1 inch. Restart after editing.
-; Set both values to 0 for the uncalibrated bind-pose wrist placement.
-FirstPersonMotionGunGripForwardMetres=0.1778
-FirstPersonMotionGunRaiseMetres=0.0254
-FirstPersonMotionGunRightMetres=0
-FirstPersonMotionGunPitchDegrees=0
-FirstPersonMotionGunYawDegrees=0
-FirstPersonMotionGunRollDegrees=0
-; Focus the game, enter FP, draw pistols/Uzis (HD graphics, both hands tracked).
-; Ctrl+F1/F2 left/right; F3/F4 down/up; F5/F6 backward/forward (1/4 inch).
-; Ctrl+Shift+F1/F2 yaw left/right; F3/F4 pitch down/up; F5/F6 roll left/right (1 degree).
-; Ctrl+F7 saves to this INI with a .motion-gun-calibration.bak backup.
-; Ctrl+Shift+F7 restores the last loaded/saved fit. Tap keys (no auto-repeat).
-; Ctrl is reserved while calibration is available, preventing native Action/Fire.
-FirstPersonMotionGunHotkeys=1
-; Wrist pivot is recovered from the mesh bind pose. Old GripBack/GripUp
-; experimental compensation keys are ignored; no draw-time offset is latched.
+; Experimental Quest Touch dual pistols/Uzis. Set to 0 and restart to revert.
+FirstPersonMotionGuns=1
+; Local grip anchor: 0.3048 pulls the mesh back 12 inches along its barrel.
+; Rotation is about this calibrated grip; muzzle/flash/shot move together.
+; Set 0 to restore the preceding build's hand placement, then restart.
+FirstPersonMotionGunGripForwardMetres=0.3048
 
 ; Smooth right-stick turning while first person is active.
 FirstPersonTurnDegreesPerSecond=120

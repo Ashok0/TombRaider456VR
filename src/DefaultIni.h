@@ -847,6 +847,24 @@ FirstPersonHeadAim=1
 ; Experimental dual pistols/Uzis: controller-tracked arms and muzzle shots.
 ; Other weapons retain FirstPersonHeadAim. Requires both Touch controllers.
 FirstPersonMotionGuns=0
+; Mesh grip calibration: positive pulls the gun back along its barrel axis.
+; This local grip point stays on the controller as the gun rotates.
+; 0.1778 = 7 inches back (5 inches forward from the previous 12-inch setting).
+; Raise is controller-local up; 0.0254 = 1 inch. Restart after editing.
+; Set both values to 0 for the uncalibrated bind-pose wrist placement.
+FirstPersonMotionGunGripForwardMetres=0.1778
+FirstPersonMotionGunRaiseMetres=0.0254
+FirstPersonMotionGunRightMetres=0
+FirstPersonMotionGunPitchDegrees=0
+FirstPersonMotionGunYawDegrees=0
+FirstPersonMotionGunRollDegrees=0
+; Focus the game, enter FP, draw pistols/Uzis (HD graphics, both hands tracked).
+; Ctrl+F1/F2 left/right; F3/F4 down/up; F5/F6 backward/forward (1/4 inch).
+; Ctrl+Shift+F1/F2 yaw left/right; F3/F4 pitch down/up; F5/F6 roll left/right (1 degree).
+; Ctrl+F7 saves to this INI with a .motion-gun-calibration.bak backup.
+; Ctrl+Shift+F7 restores the last loaded/saved fit. Tap keys (no auto-repeat).
+; Ctrl is reserved while calibration is available, preventing native Action/Fire.
+FirstPersonMotionGunHotkeys=1
 ; Wrist pivot is recovered from the mesh bind pose. Old GripBack/GripUp
 ; experimental compensation keys are ignored; no draw-time offset is latched.
 

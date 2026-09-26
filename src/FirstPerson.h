@@ -7,6 +7,7 @@ void FirstPersonToggle();
 void FirstPersonRecenter();
 void FirstPersonShutdown();
 bool FirstPersonActive();
+bool FirstPersonCalibrationKeyReserved(int virtualKey);
 void FirstPersonInput(float& leftX, float& leftY, float& rightX, bool shifted,
                       bool jumpPressed = false);
 } // namespace tr
