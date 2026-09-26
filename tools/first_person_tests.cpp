@@ -51,6 +51,29 @@ void Check(bool ok, const char* label) {
     if (!ok) { std::printf("FAIL: %s\n", label); std::exit(1); }
 }
 bool Near(float a, float b) { return std::fabs(a - b) < 0.002f; }
+int nativeShotCalls=0, nativeShotHand=-1, handDrawCalls=0;
+uint32_t handDrawMask=0;
+void __cdecl FakeHandJoint(uint8_t* item,tr::PHD_VECTOR* p,int joint,int) {
+    Check(item==itemMemory && (joint==10 || joint==13),"tracked shot queries correct native wrist");
+    const auto& body=*reinterpret_cast<const tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    *p={body.x_pos,body.y_pos,body.z_pos};
+}
+int32_t __cdecl FakeFire(int32_t,void*,void*,const int16_t*) {
+    ++nativeShotCalls; nativeShotHand=tr::g_firingHand;
+    return -1; // A native miss is still a successfully fired shot.
+}
+void __cdecl FakeHandDraw(uint8_t* item,int32_t useBits,int32_t) {
+    ++handDrawCalls;
+    handDrawMask=*reinterpret_cast<uint32_t*>(item+tr::off::item_mesh_bits);
+    Check(useBits==1 && ((tr::g_renderArm==1 && handDrawMask==0x400) ||
+          (tr::g_renderArm==0 && handDrawMask==0x2000)),
+          "actual draw retains only the tracked hand and gun");
+}
+void __cdecl FakeUziHandler(int32_t) {
+    // Reproduce native left-Uzi behavior: it writes the right flash field.
+    tr::g_handFired[0]=true;
+    *reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_right_arm+20)=3;
+}
 bool shotVisible=true;
 int shotSightCalls=0, shotTargetCalls=0;
 tr::ShotVector shotTarget{100,100,1300,9,0};
@@ -445,6 +468,63 @@ int main() {
         config.positionalTracking=false; blocked("positional-tracking-disabled"); config.positionalTracking=true;
         config.firstPersonHeadTranslation=false; blocked("head-translation-disabled"); config.firstPersonHeadTranslation=true;
         g_motionHooksReady=false; blocked("motion-hooks-unavailable");
+        g_motionHooksReady=true;
+        status=0;
+        Check(MotionTriggerMode(),"holstered pistols/Uzis retain long-hold equip controls");
+        status=4;
+        gun=3; Check(!MotionTriggerMode(),"other weapons retain native triggers"); gun=1;
+        g_hFireWeapon.m_trampoline=reinterpret_cast<void*>(&FakeFire);
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeHandJoint));
+        const bool neutral=VR().m_firstPersonNeutralValid;
+        VR().m_firstPersonNeutralValid=true;
+        for (auto& controller:VR().m_rawControllerPose) {
+            controller=VR().m_rawHeadPose;
+        }
+        const int16_t aim[2]={};
+        g_gunTriggers.Reset(); g_gunTriggers.Update(true,true,false,false,0);
+        g_gunTriggers.Update(true,true,true,false,1);
+        g_gunTriggers.Update(true,true,false,false,2);
+        Check(FireWeaponForHand(1,1,nullptr,nullptr,aim)==0 && nativeShotCalls==0,
+              "right native firing skipped for left-only tap");
+        Check(FireWeaponForHand(0,1,nullptr,nullptr,aim)==-1 && nativeShotCalls==1 &&
+              nativeShotHand==0,"left tap fires exactly the left native shot");
+        Check(FireWeaponForHand(0,1,nullptr,nullptr,aim)==0 && nativeShotCalls==1,
+              "repeated simulation calls cannot duplicate a consumed tap");
+        g_gunTriggers.Update(true,true,false,true,3);
+        Check(FireWeaponForHand(0,1,nullptr,nullptr,aim)==0 &&
+              FireWeaponForHand(1,1,nullptr,nullptr,aim)==-1 &&
+              nativeShotCalls==2 && nativeShotHand==1,"right tap fires only right native shot");
+        g_gunTriggers.Update(true,true,true,false,4);
+        g_gunTriggers.Update(true,true,false,false,5);
+        VR().m_controllerPoseValid[0]=false;
+        Check(FireWeaponForHand(0,1,nullptr,nullptr,aim)==0 && nativeShotCalls==2,
+              "lost tracking cannot convert queued shot to head aiming");
+        VR().m_controllerPoseValid[0]=true;
+        Check(FireWeaponForHand(-1,1,nullptr,nullptr,aim)==-1 && nativeShotCalls==3,
+              "unrecognized native firing caller is not suppressed");
+        g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeHandDraw);
+        auto& meshBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
+        const uint32_t savedBits=meshBits;
+        meshBits=0x7fff; Detour_DrawCreatureHD(itemMemory,0,0);
+        Check(handDrawCalls==0 && meshBits==0x7fff,"body/upper-arm pass completely skipped");
+        for (uint32_t mask:{0x600u,0x3000u}) {
+            meshBits=mask; Detour_DrawCreatureHD(itemMemory,1,0);
+            Check(meshBits==mask && g_renderArm==-1,"native mesh mask and arm scope restored after draw");
+        }
+        Check(handDrawCalls==2,"exactly two hand-only draws");
+        meshBits=savedBits;
+        auto& leftFlash=*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+20);
+        auto& rightFlash=*reinterpret_cast<int16_t*>(laraMemory+off::lara_right_arm+20);
+        leftFlash=rightFlash=0; gun=2;
+        g_hPistolHandler.m_trampoline=reinterpret_cast<void*>(&FakeUziHandler);
+        Detour_PistolHandler(2);
+        Check(leftFlash==3 && rightFlash==0,"left-only Uzi flash moved from native right counter to left");
+        leftFlash=rightFlash=0;
+        g_gunTriggers.Reset();
+        g_handFired[0]=g_handFired[1]=false;
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeJoint));
+        VR().m_firstPersonNeutralValid=neutral;
+        g_motionHooksReady=false;
         config=savedConfig; status=oldStatus; gun=oldGun; appMemory[0x9e4]=0;
         g_scenePoseValid=savedScene; g_motionDll=nullptr;
         VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=false;

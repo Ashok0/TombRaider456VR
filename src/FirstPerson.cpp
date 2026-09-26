@@ -8,6 +8,7 @@
 #include "LocomotionMath.h"
 #include "FirstPersonClearance.h"
 #include "MotionGunMath.h"
+#include "MotionGunInput.h"
 
 #include <windows.h>
 #include <intrin.h>
@@ -148,6 +149,9 @@ bool g_motionHooksReady = false;
 bool g_scenePoseValid = false;
 PHD_3DPOS g_scenePose{};
 int g_renderArm = -1; // 0=left, 1=right
+motiongun::TriggerInput g_gunTriggers;
+motiongun::EquipInput g_gunEquip;
+bool g_handFired[2]{};
 int g_firingHand = -1;
 int16_t g_firingAim[2] = {};
 PHD_3DPOS g_firingPose{};
@@ -379,6 +383,19 @@ const char* MotionBlockedReason() {
 
 bool MotionReady() {
     return MotionBlockedReason()==nullptr;
+}
+
+bool MotionTriggerMode() {
+    if (!Cfg().firstPersonMotionGuns || !g_boundDll || !g_boundBase ||
+        GameDllBound()!=g_boundDll || GameDllBase()!=g_boundBase ||
+        !g_motionHooksReady || !g_motionDll || !g_active || !Gate() ||
+        !Cfg().positionalTracking || !Cfg().firstPersonHeadTranslation) return false;
+    const auto* app=*Ptr<uint8_t*>(g_motionDll->app);
+    if (!app || !(app[0x9e4]&1)) return false;
+    const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
+    int gun=*reinterpret_cast<const int16_t*>(lara+4);
+    if (gun==0) gun=*reinterpret_cast<const int16_t*>(lara+8); // last equipped
+    return gun==1 || gun==2;
 }
 
 const char* g_gunPoseFailure[2] = {"not-built","not-built"};
@@ -672,17 +689,18 @@ bool AssistGunShot(const GunPose& gun, void* target, motiongun::Vec& direction) 
     return true;
 }
 
-int32_t __cdecl Detour_FireWeapon(int32_t weapon, void* target, void* extra,
-                                  const int16_t* aim) {
-    const auto caller = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_boundBase;
-    const int hand = g_motionDll && weapon >= 1 && weapon <= 2
-        ? (caller == g_motionDll->rightFireReturn ? 1 :
-           caller == g_motionDll->leftFireReturn ? 0 : -1) : -1;
+int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
+                         const int16_t* aim) {
+    const bool separateTriggers=hand>=0 && g_gunTriggers.active && MotionTriggerMode();
+    // Native return 0 skips ammo/hits, muzzle flash, shell, sound and shot stats.
+    // Keep unknown callers and non-motion modes entirely native.
+    if (separateTriggers && !g_gunTriggers.pending[hand]) return 0;
     GunPose gun{};
     const int previousHand = g_firingHand;
     bool assisted=false, tracked=false;
     int hpBefore=0;
     if (hand >= 0 && aim && BuildGunPose(hand, gun)) {
+        if (separateTriggers) g_gunTriggers.Consume(hand);
         tracked=true;
         if (target) hpBefore=*reinterpret_cast<const int16_t*>(
             static_cast<uint8_t*>(target)+off::item_hit_points);
@@ -710,8 +728,11 @@ int32_t __cdecl Detour_FireWeapon(int32_t weapon, void* target, void* extra,
         }
         ++g_motionShots[hand];
     }
+    // Do not turn a queued controller shot into a head-aimed shot on pose loss.
+    if (separateTriggers && !tracked) return 0;
     const int32_t result = g_hFireWeapon.Original<Fn_FireWeapon>()(
         weapon, target, extra, aim);
+    if (tracked && result) g_handFired[hand]=true;
     if (tracked && g_motionShots[hand]==1)
         LogF("firstperson: Touch %s shot target=%p assist=%d hp=%d->%d native=%d",
             hand ? "right" : "left",target,int(assisted),hpBefore,
@@ -719,6 +740,15 @@ int32_t __cdecl Detour_FireWeapon(int32_t weapon, void* target, void* extra,
                 static_cast<uint8_t*>(target)+off::item_hit_points)) : 0,result);
     g_firingHand = previousHand;
     return result;
+}
+
+int32_t __cdecl Detour_FireWeapon(int32_t weapon, void* target, void* extra,
+                                  const int16_t* aim) {
+    const auto caller = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_boundBase;
+    const int hand = g_motionDll && weapon >= 1 && weapon <= 2
+        ? (caller == g_motionDll->rightFireReturn ? 1 :
+           caller == g_motionDll->leftFireReturn ? 0 : -1) : -1;
+    return FireWeaponForHand(hand,weapon,target,extra,aim);
 }
 
 int32_t __cdecl Detour_GetTargetOnLOS(PHD_VECTOR* source, PHD_VECTOR* dest,
@@ -756,13 +786,32 @@ int32_t __cdecl Detour_GetTargetOnLOS(PHD_VECTOR* source, PHD_VECTOR* dest,
 }
 
 void __cdecl Detour_PistolHandler(int32_t weapon) {
+    const bool separate=g_gunTriggers.active && MotionTriggerMode() && MotionReady();
+    auto* lara=separate ? Ptr<uint8_t>(g_boundDll->lara) : nullptr;
+    int16_t beforeFlash[2]{};
+    if (separate) {
+        for (int hand=0;hand<2;++hand)
+            beforeFlash[hand]=*reinterpret_cast<int16_t*>(lara+
+                (hand ? off::lara_right_arm : off::lara_left_arm)+20);
+        g_handFired[0]=g_handFired[1]=false;
+    }
     g_hPistolHandler.Original<Fn_PistolHandler>()(weapon);
+    if (separate) {
+        auto& left=*reinterpret_cast<int16_t*>(lara+off::lara_left_arm+20);
+        auto& right=*reinterpret_cast<int16_t*>(lara+off::lara_right_arm+20);
+        // Native left-Uzi firing writes the RIGHT arm flash counter. Split
+        // that shared dual-fire convention when only the left hand fires.
+        const int16_t flash=std::max(left,right);
+        if (!g_handFired[0]) left=beforeFlash[0];
+        else if (weapon==2) left=flash;
+        if (!g_handFired[1]) right=beforeFlash[1];
+    }
     if (!MotionReady()) return;
     // PistolHandler copies the averaged arm aim into Lara's torso and head.
     // The FP camera anchors to the animated head on the next render, so a
     // physical hand movement otherwise drags the entire view. Keep the arms'
     // independent aim, but leave torso/head neutral for the camera skeleton.
-    uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
+    lara = Ptr<uint8_t>(g_boundDll->lara);
     for (uint32_t offset = off::lara_head_y_rot;
          offset <= off::lara_torso_z_rot; offset += sizeof(int16_t))
         *reinterpret_cast<int16_t*>(lara + offset) = 0;
@@ -1223,28 +1272,17 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
     }
     const bool motion = lara && MotionReady();
     int armDraw = -1;
+    uint32_t savedMotionBits=0;
     if (motion) {
-        // The base pass contains the upper arms as well as the body. Draw
-        // only those two meshes, once per hand; the later masked gun passes
-        // provide the forearms, hands and equipped weapons.
+        // Skip the body/upper arms; trim forearms out of the two gun passes.
+        // Keep the complete skeleton so wrist pivot and gun placement stay put.
         auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
-        if (!useMeshBits) {
-            const uint32_t saved = bits;
-            const int previousArm = g_renderArm;
-            for (int hand = 0; hand < 2; ++hand) {
-                bits = hand ? 0x100 : 0x800;
-                g_renderArm = hand;
-                g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(
-                    item, 1, renderPass);
-            }
-            g_renderArm = previousArm;
-            bits = saved;
-            return;
-        }
-        const uint32_t mask = bits;
-        if (useMeshBits && mask == 0x600) armDraw = 1;
-        else if (useMeshBits && mask == 0x3000) armDraw = 0;
-        else return;
+        if (!useMeshBits) return;
+        const uint32_t handMask=motiongun::HandOnlyMask(bits);
+        if (!handMask) return;
+        savedMotionBits=bits;
+        armDraw=handMask==0x400 ? 1 : 0;
+        bits=handMask;
     }
     const int previousArm = g_renderArm;
     g_renderArm = armDraw;
@@ -1252,6 +1290,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         item, lara && (Cfg().firstPersonHideHead || motion) ? 1 :
             useMeshBits, renderPass);
     g_renderArm = previousArm;
+    if (motion) *reinterpret_cast<uint32_t*>(item+off::item_mesh_bits)=savedMotionBits;
 }
 
 void __cdecl Detour_DrawHair(int32_t argument) {
@@ -1430,6 +1469,8 @@ bool Install(const GameDllLayout& d, uint64_t base) {
 }
 
 void Remove() {
+    g_gunTriggers.Reset();
+    g_gunEquip.Reset();
     g_calibrationActive=false;
     g_cameraMotionTrace = {};
     if (g_active) VR().RecenterThirdPersonHead();
@@ -1467,7 +1508,31 @@ void Remove() {
 
 } // namespace
 
+void FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed) {
+    DWORD process=0;
+    GetWindowThreadProcessId(GetForegroundWindow(),&process);
+    const bool enabled=!chordConsumed && process==GetCurrentProcessId() && MotionTriggerMode();
+    const uint64_t now=GetTickCount64();
+    g_gunTriggers.Update(enabled,enabled && MotionReady(),left>30,right>30,now);
+    if (!enabled) { g_gunEquip.Reset(); return; }
+    const auto* app=*Ptr<uint8_t*>(g_motionDll->app);
+    // LaraGun selects the setting for classic/modern controls, not graphics.
+    const unsigned controlScheme=(app[0x9e4]>>1)&1;
+    const bool holdMode=app[0x9ec+controlScheme]==0;
+    const int status=*Ptr<int16_t>(g_boundDll->lara+2);
+    const bool equipRequest=g_gunTriggers.Equip(now);
+    if (equipRequest && !g_gunEquip.requestHeld)
+        LogF("firstperson: Touch equip gesture native=%s status=%d",
+            holdMode ? "hold" : "toggle",status);
+    left=g_gunEquip.Update(holdMode,status,equipRequest) ? 255 : 0;
+    right=g_gunTriggers.WantsShot() ? 255 : 0;
+}
+
 void FirstPersonUpdate() {
+    if (g_gunTriggers.active && !MotionTriggerMode()) {
+        g_gunTriggers.Reset();
+        g_gunEquip.Reset();
+    }
     PollMotionGunCalibration();
     ReportMotionActivity();
     static bool recenterHeld = false;

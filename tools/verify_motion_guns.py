@@ -22,6 +22,12 @@ aim_builds = {
     "retail/tomb4.dll": (0x5DFF0,0x145D0,0x15498),
     "retail/tomb5.dll": (0x5C320,0x12500,0x133F6),
 }
+lara_gun_builds = {
+    "PDB/tomb4.dll": 0x5CF80,
+    "PDB/tomb5.dll": 0x5A2A0,
+    "retail/tomb4.dll": 0x5CC80,
+    "retail/tomb5.dll": 0x5AFF0,
+}
 
 root = Path(__file__).resolve().parents[1]
 # path, stamp, GetJoints, FireWeapon, FireWeapon->W2V return,
@@ -49,6 +55,12 @@ for (path, stamp, get_joints, fire, view_ret, right_ret, left_ret,
     pe = pefile.PE(str(root / path))
     data = pe.get_memory_mapped_image()
     assert pe.FILE_HEADER.TimeDateStamp == stamp, path
+    gun=lara_gun_builds[path]
+    setup=list(decoder.disasm(data[gun:gun+190],gun))
+    assert any(i.mnemonic=="cmp" and "rax + r10 + 0x9ec" in i.op_str
+               for i in setup), (path,"native per-control draw setting")
+    assert any(i.mnemonic=="shr" and i.op_str=="rax, 1" for i in setup)
+    assert any(i.mnemonic=="and" and i.op_str=="eax, 1" for i in setup)
     assert data[get_joints:get_joints+5] == bytes.fromhex("44 89 44 24 18"), path
     assert data[fire:fire+5] == bytes.fromhex("4c 89 44 24 18"), path
     pistol_bytes = "48 89 5c 24 18" if "tomb4" in path else "48 89 5c 24 10"
@@ -58,6 +70,10 @@ for (path, stamp, get_joints, fire, view_ret, right_ret, left_ret,
     assert call_target(data, view_ret) == w2v, (path, "shot view")
     assert call_target(data, right_ret) == fire, (path, "right gun")
     assert call_target(data, left_ret) == fire, (path, "left gun")
+    for ret in (right_ret,left_ret):
+        ins=list(decoder.disasm(data[ret:ret+12],ret))
+        assert ins[0].mnemonic=="test" and ins[0].op_str=="eax, eax", (path,"shot result test")
+        assert ins[1].mnemonic=="je" and int(ins[1].op_str,16)>ret+64, (path,"zero suppresses shot effects")
     assert call_target(data, hit_ret) == los, (path, "target hit LOS")
     assert call_target(data, miss_ret) == los, (path, "wall impact LOS")
     target_point, sight, sight_return = aim_builds[path]

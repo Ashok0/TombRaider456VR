@@ -4683,8 +4683,8 @@ defaults, not a promise that an older installed INI has been updated.
 
 `FirstPersonMotionGuns=1` is an opt-in first-person test build for dual
 pistols and Uzis with both Touch controllers tracked and Lara's guns ready.
-It moves each arm/gun draw with its own controller, suppresses the rest of
-Lara's body and hair, and replaces each native hitscan shot's origin and
+It moves each hand/gun draw with its own controller, hides both upper arms
+and forearms as well as Lara's body and hair, and replaces each native hitscan shot's origin and
 direction at the firing-view call so the ray begins at that hand's muzzle.
 The wrist is recovered from the renderer's skinning palette and inverse bind
 pose before placing each arm. The palette translation alone is not the wrist:
@@ -4744,6 +4744,35 @@ The latest installed Quest fit uses `FirstPersonMotionGunPitchDegrees=-20`
 to tilt both hands/barrels down 20 degrees, with the existing position values
 unchanged. This is a personal calibration, not a changed default. The grip
 pivot remains fixed; use Ctrl+Shift+F3/F4 to fine-tune pitch and Ctrl+F7 to save.
+
+#### Independent motion-gun triggers
+
+In first-person remastered/HD motion-gun mode with pistols or Uzis selected:
+
+- Short LT squeeze: fire the left gun on release.
+- RT press: fire the right gun.
+- Hold LT for 3 seconds: draw/holster once; release before toggling again.
+
+Each tap requests one native shot, including with Uzis; holding RT does not
+auto-repeat. A short LT tap waits for release to distinguish it from the long
+equip gesture, which never also fires the left gun. Both hands can have one
+shot queued at once. The long gesture supports both native draw settings:
+in **hold-to-draw**, the mod maintains the equip input until the next long
+gesture; in **toggle-to-draw**, it sends a pulse that ends when the native
+weapon state acknowledges it. This fixes guns immediately holstering after
+the earlier 150 ms pulse ended in hold mode, without changing game settings.
+Both control schemes (classic/modern) use their own native draw setting.
+Requests wait for the native firing cycle and are canceled
+on loss of readiness or leaving the mode. Native ammo, spread, damage and firing
+effects remain in use, with unrequested hands blocked before native firing.
+The left-Uzi shared flash counter is corrected so left-only shots flash on the
+left gun. Hand mesh masking does not change the calibrated wrist or muzzle.
+
+Y+LT (view), Y+RT (graphics), menus, third person, classic graphics, other
+weapons and TR6 keep their existing controls. Entering the mode with a trigger
+already held requires release before the new controls activate. Trigger timing,
+per-hand requests and hand-only masks have automated coverage; actual controller
+feel and rendering still require in-headset testing.
 
 #### Live gun calibration keys
 

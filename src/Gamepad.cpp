@@ -290,6 +290,7 @@ void ApplyMergedChords(XGamepad& pad, bool gameplay,
     }
 
     const bool actionConsumed = ApplyViewChords(pad);
+    FirstPersonGunTriggers(pad.bLeftTrigger,pad.bRightTrigger,actionConsumed);
     // Add synthetic Action AFTER Y+trigger handling so holding grips with a
     // trigger cannot switch the view or graphics. This also supports a physical
     // Xbox pad's LB+RB chord when one is merged with Touch input.
@@ -471,6 +472,7 @@ void GamepadUpdate() {
                  : "",
              Cfg().gamepadMenuUsesBack ? "BACK" : "START",
              Cfg().dpadShift ? " dpad=R3+Lstick" : "");
+        Log("pad: FP motion pistols/Uzis: tap LT=left shot on release, tap RT=right shot; hold LT 3s=draw/holster once");
     }
 }
 

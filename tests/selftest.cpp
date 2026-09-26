@@ -21,6 +21,7 @@
 #include "InlineHook.h"
 #include "Log.h"
 #include "MotionGunMath.h"
+#include "MotionGunInput.h"
 #include "Config.h"
 
 #include <windows.h>
@@ -741,6 +742,103 @@ static void TestGunCalibrationPersistence() {
     DeleteFileW(ini);
 }
 
+static void TestMotionGunTriggers() {
+    using namespace tr::motiongun;
+    TriggerInput t;
+    t.Update(true,true,false,false,0);
+    t.Update(true,true,true,false,10);
+    Check(!t.WantsShot() && !t.Equip(10),"LT press waits to distinguish tap from hold");
+    t.Update(true,true,false,false,100);
+    Check(t.pending[0] && !t.pending[1],"LT release queues only left");
+    for (uint64_t now=101;now<120;++now) t.Update(true,true,false,false,now);
+    Check(t.pending[0],"shot survives multiple input polls until native gun ready");
+    Check(!t.Consume(1) && t.Consume(0) && !t.Consume(0),"only requested hand fires once");
+    t.Update(true,true,false,true,200);
+    Check(t.pending[1] && !t.pending[0] && t.Consume(1),"RT press fires only right");
+    t.Update(true,true,false,true,300);
+    Check(!t.WantsShot(),"held RT does not repeat a tap");
+    t.Update(true,true,true,false,400);
+    t.Update(true,true,false,true,500);
+    Check(t.Consume(0) && t.Consume(1),"simultaneous LT release and RT press fire independently");
+    t.Update(true,true,false,false,600);
+    t.Update(true,true,true,false,1000);
+    t.Update(true,true,true,false,3999);
+    Check(!t.Equip(3999) && !t.WantsShot(),"LT below threshold neither toggles nor fires");
+    t.Update(true,true,true,false,4000);
+    Check(t.Equip(4000) && !t.WantsShot(),"LT at three seconds emits equip only");
+    t.Update(true,true,true,false,8000);
+    Check(!t.Equip(8000) && !t.WantsShot(),"long hold toggles once only");
+    t.Update(true,true,false,false,8010);
+    Check(!t.WantsShot(),"release after long hold never shoots");
+    t.Update(true,false,true,false,9000);
+    t.Update(true,false,false,false,12001);
+    Check(t.Equip(12001) && !t.WantsShot(),"unarmed long hold works even with sparse polling");
+    t.Update(true,true,false,false,12200);
+    t.Update(true,true,false,true,12201);
+    t.Update(false,true,false,true,12202);
+    Check(!t.active && !t.WantsShot(),"menu or mode change discards pending shots");
+    t.Update(true,true,true,true,12203);
+    t.Update(true,true,true,true,18000);
+    Check(!t.WantsShot() && !t.Equip(18000),"held triggers entering mode require release");
+    t.Update(true,true,false,false,18001);
+    t.Update(true,true,false,true,18002);
+    Check(t.pending[1],"fresh press after reentry works");
+    t.Update(true,false,false,true,18003);
+    Check(!t.WantsShot(),"lost readiness cancels queued fire");
+    Check(HandOnlyMask(0x600)==(1u<<10) && HandOnlyMask(0x3000)==(1u<<13),
+          "native gun passes retain only right/left hand meshes");
+    Check(HandOnlyMask(0x100)==0 && HandOnlyMask(0x800)==0 && HandOnlyMask(0x7fff)==0,
+          "upper arm and body passes suppressed");
+}
+
+static void TestMotionGunEquipStyles() {
+    using namespace tr::motiongun;
+    for (int mode=0;mode<2;++mode) {
+        const bool holdMode=mode!=0;
+        TriggerInput trigger;
+        EquipInput equip;
+        int status=0, transition=0, starts=0;
+        bool unexpectedShot=false;
+        // Minimal native LaraGun model, matching its two draw-input branches.
+        auto nativeTick=[&](bool lt) {
+            if (status==0 && lt) { status=2; transition=6; ++starts; }
+            else if (status==4 && (holdMode ? !lt : lt)) {
+                status=3; transition=6; ++starts;
+            } else if ((status==2 || status==3) && --transition==0)
+                status=status==2 ? 4 : 0;
+        };
+        for (uint64_t now=0;now<16000;now+=20) {
+            // First long hold draws; second long hold holsters.
+            const bool lt=(now>=100 && now<4000) || (now>=8100 && now<12000);
+            trigger.Update(true,status==4,lt,false,now);
+            nativeTick(equip.Update(holdMode,status,trigger.Equip(now)));
+            if (now==7000) Check(status==4 && starts==1,
+                "guns remain armed after LT release and draw-pulse expiry");
+            unexpectedShot=unexpectedShot || trigger.WantsShot();
+        }
+        Check(status==0 && starts==2,"second long hold holsters exactly once in either native style");
+        Check(!unexpectedShot,"draw/holster gestures do not fire either gun");
+        if (holdMode) {
+            status=transition=starts=0;
+            for (int now=0;now<1000;now+=20)
+                nativeTick(now>=100 && now<250); // previous 150 ms pulse
+            Check(status==0 && starts==2,
+                "fixture reproduces immediate holster with the previous pulse-only output");
+        }
+    }
+    EquipInput equipped;
+    Check(equipped.Update(true,4,false),"entering hold mode preserves already-armed guns");
+    Check(equipped.Update(true,4,false),"ordinary input polls maintain armed hold state");
+    Check(!equipped.Update(true,4,true),"long gesture releases native hold to holster");
+    Check(!equipped.Update(true,0,true),"repeated request polls do not rearm");
+    equipped.Reset();
+    Check(!equipped.Update(true,0,false),"reset does not retain stale armed latch");
+    EquipInput toggle;
+    Check(toggle.Update(false,0,true),"toggle style begins draw request");
+    Check(!toggle.Update(false,2,true),"toggle request ends as native draw starts");
+    Check(!toggle.Update(false,0,true),"acknowledged request never repeats if native status changes back");
+}
+
 static void TestMotionGunEnemyAim() {
     using namespace tr::motiongun;
     Vec ray{9,9,9};
@@ -788,6 +886,8 @@ int main() {
     TestInlineHook();
     TestMotionGunMath();
     TestMotionGunEnemyAim();
+    TestMotionGunTriggers();
+    TestMotionGunEquipStyles();
     TestGunCalibration();
     TestGunCalibrationPersistence();
 
