@@ -194,6 +194,7 @@ void VRSystem::Shutdown() {
     m_compositor = nullptr;
     m_loggedTr6Origin = false;
     m_poseValid = false;
+    m_controllerPoseValid[0] = m_controllerPoseValid[1] = false;
     m_firstPersonNeutralValid = false;
     m_thirdPersonNeutralValid = m_thirdPersonRecenterPending = false;
     if (m_dll) { FreeLibrary(m_dll); m_dll = nullptr; }
@@ -370,6 +371,7 @@ void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
 }
 
 void VRSystem::BeginFrame() {
+    m_controllerPoseValid[0] = m_controllerPoseValid[1] = false;
     if (!m_system) return;
 
     vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
@@ -433,6 +435,18 @@ void VRSystem::BeginFrame() {
             FirstPersonRecenter();
     }
 
+    const vr::ETrackedControllerRole roles[2] = {
+        vr::TrackedControllerRole_LeftHand, vr::TrackedControllerRole_RightHand
+    };
+    for (int hand = 0; hand < 2; ++hand) {
+        const auto idx = m_system->GetTrackedDeviceIndexForControllerRole(roles[hand]);
+        m_controllerPoseValid[hand] = idx != vr::k_unTrackedDeviceIndexInvalid &&
+            idx < vr::k_unMaxTrackedDeviceCount && poses[idx].bPoseIsValid &&
+            poses[idx].bDeviceIsConnected;
+        if (m_controllerPoseValid[hand])
+            m_rawControllerPose[hand] = poses[idx].mDeviceToAbsoluteTracking;
+    }
+
     if (wasValid != m_poseValid) {
         LogF("vr: head pose %s", m_poseValid ? "ACQUIRED" : "LOST");
     }
@@ -482,9 +496,34 @@ void VRSystem::RecenterThirdPersonHead() {
         m_offsetWorld[i] = 0;
         m_headFromTracking.r[i][3] = 0;
     }
+
     m_offsetValid = false;
     m_recentreRequested = false;
     Log("vr: third-person position centred at FP handoff; tracked rotation preserved");
+}
+
+bool VRSystem::ControllerPose(int hand, vr::HmdMatrix34_t& out) const {
+    if (hand < 0 || hand > 1 || !m_controllerPoseValid[hand]) return false;
+    out = m_rawControllerPose[hand];
+    return true;
+}
+
+bool VRSystem::HeadPose(vr::HmdMatrix34_t& out) const {
+    if (!m_poseValid) return false;
+    out = m_rawHeadPose;
+    return true;
+}
+
+bool VRSystem::FirstPersonControllerOffset(int hand, float& right, float& down,
+                                           float& forward) const {
+    if (hand < 0 || hand > 1 || !m_poseValid || !m_firstPersonNeutralValid ||
+        !m_controllerPoseValid[hand]) return false;
+    HeadFloorOffset(right, forward);
+    const auto& controller = m_rawControllerPose[hand];
+    right += controller.m[0][3] - m_rawHeadPose.m[0][3];
+    forward -= controller.m[2][3] - m_rawHeadPose.m[2][3];
+    down = m_firstPersonNeutral[1] - controller.m[1][3];
+    return std::isfinite(right) && std::isfinite(down) && std::isfinite(forward);
 }
 
 void VRSystem::HeadFloorOffset(float& right, float& forward) const {

@@ -844,6 +844,11 @@ FirstPersonBodyTurnDegreesPerFrame=4
 
 ; Both gun arms and firing direction follow headset yaw/pitch in first person.
 FirstPersonHeadAim=1
+; Experimental dual pistols/Uzis: controller-tracked arms and muzzle shots.
+; Other weapons retain FirstPersonHeadAim. Requires both Touch controllers.
+FirstPersonMotionGuns=0
+; Wrist pivot is recovered from the mesh bind pose. Old GripBack/GripUp
+; experimental compensation keys are ignored; no draw-time offset is latched.
 
 ; Smooth right-stick turning while first person is active.
 FirstPersonTurnDegreesPerSecond=120

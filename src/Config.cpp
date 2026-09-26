@@ -284,6 +284,8 @@ void LoadConfig(const wchar_t* ini) {
         L"FirstPersonBodyTurnDegreesPerFrame", g_cfg.firstPersonBodyTurnDegreesPerFrame, ini);
     g_cfg.firstPersonHeadAim = GetBool(
         L"FirstPersonHeadAim", g_cfg.firstPersonHeadAim, ini);
+    g_cfg.firstPersonMotionGuns = GetBool(
+        L"FirstPersonMotionGuns", g_cfg.firstPersonMotionGuns, ini);
 
     g_cfg.dynamicBones           = GetBool (L"DynamicBones",           g_cfg.dynamicBones,           ini);
     g_cfg.dynamicBonesTorsoJoint = GetInt  (L"DynamicBonesTorsoJoint", g_cfg.dynamicBonesTorsoJoint, ini);

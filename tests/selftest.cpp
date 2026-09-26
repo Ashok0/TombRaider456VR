@@ -20,6 +20,7 @@
 #include "PortalGeom.h"
 #include "InlineHook.h"
 #include "Log.h"
+#include "MotionGunMath.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -259,6 +260,21 @@ static const uint8_t kTargetCode[] = {
 };
 
 static hook::InlineHook g_testHook;
+static hook::InlineHook g_fourArgHook;
+
+using FourArgFn = int (*)(int, int, int, int);
+static const uint8_t kFourArgCode[] = {
+    0x40, 0x55, 0x56, 0x57, 0x41, 0x56, // six-byte LOS-style prologue
+    0x44, 0x89, 0xC0,                   // mov eax, r8d
+    0x44, 0x01, 0xC8,                   // add eax, r9d
+    0x01, 0xC8,                         // add eax, ecx
+    0x01, 0xD0,                         // add eax, edx
+    0x41, 0x5E, 0x5F, 0x5E, 0x5D, 0xC3 // balanced pops + ret
+};
+
+static int DetourFourArg(int a, int b, int flags, int mode) {
+    return g_fourArgHook.Original<FourArgFn>()(a, b, flags, mode) + 1000;
+}
 
 static int DetourTarget() {
     return g_testHook.Original<TargetFn>()() + 100;
@@ -293,6 +309,24 @@ static void TestInlineHook() {
     Check(fn() == 42, "original bytes restored on Remove()");
 
     VirtualFree(mem, 0, MEM_RELEASE);
+
+    void* four = VirtualAlloc(nullptr, 0x1000, MEM_COMMIT | MEM_RESERVE,
+                              PAGE_EXECUTE_READWRITE);
+    Check(four != nullptr, "allocated four-argument LOS-style target");
+    if (!four) return;
+    memcpy(four, kFourArgCode, sizeof(kFourArgCode));
+    FlushInstructionCache(GetCurrentProcess(), four, sizeof(kFourArgCode));
+    FourArgFn fourFn = reinterpret_cast<FourArgFn>(four);
+    Check(fourFn(1,2,3,4) == 10, "native target reads all four arguments");
+    Check(g_fourArgHook.Install(four, reinterpret_cast<void*>(&DetourFourArg),
+                                6, kFourArgCode, 6, "four-arg-selftest"),
+          "six-byte LOS-style hook installs");
+    Check(fourFn(1,2,3,4) == 1010,
+          "detour forwards both LOS flags in r8/r9");
+    g_fourArgHook.Remove();
+    Check(fourFn(1,2,3,4) == 10,
+          "four-argument target restored after Remove()");
+    VirtualFree(four, 0, MEM_RELEASE);
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +469,118 @@ static void TestPortalGeometry() {
     Check(!tr::portal::BoxVisible(behind, root, nRoot), "a box wholly behind the head is culled");
 }
 
+static void TestMotionGunMath() {
+    printf("\nTouch controller -> bind-pose wrist and muzzle\n");
+    using namespace tr::motiongun;
+    const float identity[3][4] = {{1,0,0,0},{0,1,0,0},{0,0,1,0}};
+    const Basis straight = ControllerBasis(identity, 0);
+    const Basis pistol = GunBasis(straight);
+    const Vec barrel = Transform(pistol, {0,1,0});
+    CheckNear(barrel.x, 0, "native barrel +Y maps to controller forward X");
+    CheckNear(barrel.y, 0, "barrel remains level, not wrist-to-tip tilted");
+    CheckNear(barrel.z, 1, "native barrel +Y maps to controller forward Z");
+    const Vec rightTip=Transform(pistol,MuzzleLocal(1,1));
+    const Vec leftTip=Transform(pistol,MuzzleLocal(1,0));
+    CheckNear(rightTip.x,-10,"right pistol keeps native muzzle side offset");
+    CheckNear(leftTip.x,10,"left pistol keeps native muzzle side offset");
+    CheckNear(rightTip.y,-35,"muzzle above wrist does not pitch barrel down");
+    CheckNear(leftTip.z,190,"HD pistol flash and shot share muzzle length");
+
+    // Nonzero bind pivot is essential: the old tests used only controller
+    // vectors and could not detect rotation around the palette translation.
+    const Basis one{{{1,0,0},{0,1,0},{0,0,1}}};
+    const Frame bindPose{one,{123,-487,231}};
+    Frame inverseBind{};
+    Check(Inverse(bindPose,inverseBind),"inverse bind with nonzero wrist origin");
+    bool anchorOk=true, barrelOk=true, muzzleOk=true, roundTripOk=true;
+    bool oldPivotFails=false, blendOk=true;
+    float worstError=0;
+    auto closeVec=[](Vec a,Vec b) { const Vec d=Sub(a,b); return Dot(d,d)<0.0025f; };
+    for (int hd=0;hd<2;++hd) {
+        const Frame ib=hd ? HdInverseBind(inverseBind) : inverseBind;
+        Frame bind{};
+        Check(Inverse(ib,bind),"invert both native and HD axis-swizzled bind");
+        const Vec meshWrist=Transform(bind,{0,0,0});
+        for (int hand=0;hand<2;++hand)
+        for (int axis=0;axis<3;++axis)
+        for (int step=0;step<=36;++step) {
+            const float angle=step*6.28318530718f/36;
+            const float c=std::cos(angle),s=std::sin(angle);
+            float tracked[3][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0}};
+            const int u=(axis+1)%3,v=(axis+2)%3;
+            tracked[u][u]=tracked[v][v]=c;
+            tracked[u][v]=-s; tracked[v][u]=s;
+            // Also vary artificial/body heading throughout a full turn.
+            for (int headingStep=0;headingStep<8;++headingStep) {
+                const float heading=headingStep*6.28318530718f/8;
+                const Basis controller=ControllerBasis(tracked,heading);
+                const Vec handWorld=HandInWorld({1250,-530,2410},
+                    hand ? .23f : -.23f, .2f,.4f,heading,500);
+                const Frame desired{GunBasis(controller),handWorld};
+                // Include non-orthonormal native animation interpolation.
+                const Frame native{{{{.85f,.12f,0},{0,1.1f,.08f},{.02f,0,.9f}}},
+                                   {410,-150,820}};
+                const Frame palette=Multiply(native,ib);
+                Frame correction{};
+                if (!PaletteCorrection(palette,ib,desired,correction)) {
+                    anchorOk=false; continue;
+                }
+                const Frame moved=Multiply(correction,palette);
+                const Vec actual=Transform(moved,meshWrist);
+                const Vec error=Sub(actual,handWorld);
+                worstError=std::fmax(worstError,std::sqrt(Dot(error,error)));
+                anchorOk &= closeVec(actual,handWorld);
+                for (int weapon=1;weapon<=2;++weapon) {
+                    const Vec tip=MuzzleLocal(weapon,hand);
+                    const Vec renderedTip=Transform(moved,Transform(bind,tip));
+                    const Vec flashAndShot=Transform(desired,tip);
+                    muzzleOk &= closeVec(renderedTip,flashAndShot);
+                    const Vec barrelDelta=Sub(
+                        Transform(moved,Transform(bind,Add(tip,{0,64,0}))),renderedTip);
+                    barrelOk &= closeVec(barrelDelta,
+                        Scale({controller.r[0][2],controller.r[1][2],controller.r[2][2]},64));
+                }
+                float packed[12]{};
+                WriteRows(moved,packed);
+                roundTripOk &= closeVec(Transform(ReadRows(packed),meshWrist),actual);
+                // All helper bones must receive the same affine correction:
+                // linear skin blends commute with this rigid placement.
+                const Frame helper{native.basis,Add(native.origin,{20,30,40})};
+                const Vec p{10,20,30};
+                const Vec blend=Add(Scale(Transform(palette,p),.6f),
+                                    Scale(Transform(helper,p),.4f));
+                const Vec movedBlend=Add(Scale(Transform(moved,p),.6f),
+                    Scale(Transform(Multiply(correction,helper),p),.4f));
+                blendOk &= closeVec(movedBlend,Transform(correction,blend));
+                // Reproduce the OLD pivot formula; fixture must reject it.
+                const Vec old=Add(Add(palette.origin,
+                    Transform(correction.basis,Sub(Transform(palette,meshWrist),palette.origin))),
+                    Sub(handWorld,native.origin));
+                oldPivotFails |= !closeVec(old,handWorld);
+            }
+        }
+    }
+    Check(anchorOk,"wrist stays at controller through yaw/pitch/roll and full heading rotation");
+    Check(barrelOk,"left/right barrel direction stays controller-parallel through rotations");
+    Check(muzzleOk,"rendered muzzle equals flash/shot position for pistols and Uzis");
+    Check(blendOk,"HD blended helper bones follow the same arm placement");
+    Check(roundTripOk,"shader row packing preserves corrected wrist");
+    Check(oldPivotFails,"regression fixture detects the old skin-palette pivot bug");
+    printf("  worst synthetic wrist error: %.6f game units\n",worstError);
+    Frame singular{}, result{};
+    Check(!Inverse(singular,result),"singular frame is rejected safely");
+
+    const Vec shot=ShotForward(1.5707963268f,.5235987756f);
+    CheckNear(shot.x,std::cos(.5235987756f),"native +90 yaw fires right");
+    CheckNear(shot.y,-.5f,"native +30 pitch fires upward");
+    const float yawVr[3][4]={{0,0,1,0},{0,1,0,0},{-1,0,0,0}};
+    CheckNear(ControllerBasis(yawVr,0).r[0][2],-1,"OpenVR yaw sign maps correctly");
+    const Vec hand=HandInWorld({100,200,300},.2f,.1f,.5f,1.5707963268f,100);
+    CheckNear(hand.x,150,"heading rotates forward offset into world X");
+    CheckNear(hand.y,210,"hand height uses Y-down");
+    CheckNear(hand.z,280,"heading rotates right offset into world -Z");
+}
+
 int main() {
     printf("TombRaiderVR self-test\n======================\n");
 
@@ -447,6 +593,7 @@ int main() {
     TestPackedView();
     TestPortalGeometry();
     TestInlineHook();
+    TestMotionGunMath();
 
     printf("\n%s (%d failure%s)\n",
            g_fail == 0 ? "ALL PASSED" : "FAILURES",

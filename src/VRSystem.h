@@ -90,6 +90,15 @@ public:
     };
     // [0] = left hand, [1] = right hand.
     void ReadControllers(HandState out[2]) const;
+    // Frame-latched tracking-space poses, matching the HMD sample used by
+    // BeginFrame. Hand 0 is left, hand 1 is right.
+    bool ControllerPose(int hand, vr::HmdMatrix34_t& out) const;
+    bool HeadPose(vr::HmdMatrix34_t& out) const;
+    // Controller translation relative to the FP camera's head anchor, in
+    // metres (right, down, forward). Applies the same neck correction as
+    // HeadView so the rendered gun does not drift when turning in place.
+    bool FirstPersonControllerOffset(int hand, float& right, float& down,
+                                     float& forward) const;
 
     bool poseValid() const { return m_poseValid; }
 
@@ -147,6 +156,8 @@ private:
 
     Affine m_headFromTracking = Affine::Identity();  // inverse(hmdPose)
     vr::HmdMatrix34_t m_rawHeadPose{};
+    vr::HmdMatrix34_t m_rawControllerPose[2]{};
+    bool m_controllerPoseValid[2] = {};
     float m_firstPersonNeutral[3] = {};
     float m_firstPersonNeutralNeck[2] = {};
     bool m_firstPersonNeutralValid = false;

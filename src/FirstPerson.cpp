@@ -7,6 +7,7 @@
 #include "VRSystem.h"
 #include "LocomotionMath.h"
 #include "FirstPersonClearance.h"
+#include "MotionGunMath.h"
 
 #include <windows.h>
 #include <intrin.h>
@@ -45,6 +46,8 @@ constexpr uint32_t arm_x_rot        = 16;
 constexpr uint32_t arm_z_rot        = 18;
 constexpr uint32_t lara_left_arm    = 240;
 constexpr uint32_t lara_right_arm   = 264;
+constexpr uint32_t lara_head_y_rot  = 224;
+constexpr uint32_t lara_torso_z_rot = 234;
 constexpr uint32_t lara_turn_rate   = 220;
 constexpr uint32_t lara_move_angle  = 222;
 constexpr uint32_t lara_vehicle     = 38;
@@ -66,6 +69,12 @@ using Fn_DrawCreatureHD = void (__cdecl*)(uint8_t*, int32_t, int32_t);
 using Fn_DrawHair = void (__cdecl*)(int32_t);
 using Fn_GetJointAbsPositionLerp = void (__cdecl*)(uint8_t*, PHD_VECTOR*, int32_t, int32_t);
 using Fn_AimWeapon = void (__cdecl*)(void*, uint8_t*);
+using Fn_GetJoints = int32_t (__cdecl*)(uint8_t*, float*, int32_t);
+using Fn_FireWeapon = int32_t (__cdecl*)(int32_t, void*, void*, const int16_t*);
+using Fn_SetGunFlash = void (__cdecl*)(int32_t, int32_t);
+using Fn_PistolHandler = void (__cdecl*)(int32_t);
+using Fn_GetTargetOnLOS = int32_t (__cdecl*)(
+    PHD_VECTOR*, PHD_VECTOR*, int32_t, int32_t);
 using Fn_LaraAboveWater = void (__cdecl*)(uint8_t*, void*);
 using Fn_AnimateLara = void (__cdecl*)(uint8_t*);
 
@@ -73,6 +82,11 @@ hook::InlineHook g_hGenerateW2V;
 hook::InlineHook g_hDrawCreatureHD;
 hook::InlineHook g_hDrawHair;
 hook::InlineHook g_hAimWeapon;
+hook::InlineHook g_hGetJoints;
+hook::InlineHook g_hFireWeapon;
+hook::InlineHook g_hPistolHandler;
+hook::InlineHook g_hSetGunFlash;
+hook::InlineHook g_hGetTargetOnLOS;
 hook::InlineHook g_hLaraAboveWater;
 hook::InlineHook g_hAnimateLara;
 const GameDllLayout* g_boundDll = nullptr;
@@ -108,6 +122,37 @@ unsigned g_hairSkips = 0;
 bool g_loggedFirst = false;
 bool g_loggedLost = false;
 
+// PDB and retail call sites were checked against the four supported DLLs.
+// The two AnimatePistols return addresses distinguish the actual firing hand.
+struct MotionDll {
+    uint32_t timestamp, getJoints, fireWeapon, fireViewReturn;
+    uint32_t rightFireReturn, leftFireReturn, app, pistolHandler;
+    uint32_t getTargetOnLOS, hitLosReturn, missLosReturn;
+    uint32_t setGunFlash, floatMatrixPtr, rightFlashReturn, leftFlashReturn;
+};
+constexpr MotionDll kMotionDlls[] = {
+    {0x696B4999, 0xC09E0, 0x5E4B0, 0x5E5C4, 0x5A97F, 0x5AC2A, 0x663F08, 0x5A270,
+     0x15860, 0x5E701, 0x5E79B, 0x8EDD0, 0x1B6D18, 0x2F763, 0x2F819},
+    {0x696B499C, 0xB5880, 0x5B790, 0x5B8A4, 0x57CBF, 0x57F6A, 0x66D1A0, 0x576A0,
+     0x132F0, 0x5BA0C, 0x5BAA3, 0x8D790, 0x1B2AC8, 0x306A3, 0x30756},
+    {0x68C12FDA, 0xC1440, 0x5E1B0, 0x5E2C6, 0x5A67F, 0x5A92A, 0x664E48, 0x59F70,
+     0x15440, 0x5E401, 0x5E49B, 0x8F7E0, 0x1B7D18, 0x2F5D3, 0x2F689},
+    {0x68C12FE9, 0xB5A00, 0x5C4E0, 0x5C5F6, 0x58A0F, 0x58CBA, 0x66D0E0, 0x583F0,
+     0x133A0, 0x5C759, 0x5C7F0, 0x8DAA0, 0x1B2AC8, 0x30B23, 0x30BD6},
+};
+const MotionDll* g_motionDll = nullptr;
+bool g_motionHooksReady = false;
+bool g_scenePoseValid = false;
+PHD_3DPOS g_scenePose{};
+int g_renderArm = -1; // 0=left, 1=right
+int g_firingHand = -1;
+int16_t g_firingAim[2] = {};
+PHD_3DPOS g_firingPose{};
+motiongun::Vec g_firingDirection{};
+unsigned g_motionArmDraws[2] = {};
+unsigned g_motionShots[2] = {};
+uint64_t g_motionReportTime = 0;
+
 struct MotionRange {
     float low = 0, high = 0;
     void Add(float value, bool first) {
@@ -129,6 +174,14 @@ const uint8_t kDrawCreatureDebug[] = { 0x48, 0x89, 0x5C, 0x24, 0x08 };
 const uint8_t kDrawCreatureRetail[] = { 0x48, 0x89, 0x5C, 0x24, 0x18 };
 const uint8_t kDrawHairPrologue[] = { 0x48, 0x89, 0x5C, 0x24, 0x20 };
 const uint8_t kAimWeaponPrologue[] = { 0x48, 0x89, 0x5C, 0x24, 0x08 };
+const uint8_t kSetGunFlashTR4[] = {0x4C,0x8B,0xDC,0x48,0x81,0xEC,0x98,0,0,0};
+const uint8_t kSetGunFlashTR5[] = {0x48,0x81,0xEC,0xA8,0,0,0};
+const uint8_t kGetJointsPrologue[] = { 0x44, 0x89, 0x44, 0x24, 0x18 };
+const uint8_t kFireWeaponPrologue[] = { 0x4C, 0x89, 0x44, 0x24, 0x18 };
+const uint8_t kPistolHandlerTR4[] = { 0x48, 0x89, 0x5C, 0x24, 0x18 };
+const uint8_t kPistolHandlerTR5[] = { 0x48, 0x89, 0x5C, 0x24, 0x10 };
+const uint8_t kGetTargetOnLOSTR4[] = { 0x40, 0x55, 0x56, 0x57, 0x41, 0x56 };
+const uint8_t kGetTargetOnLOSTR5[] = { 0x40, 0x55, 0x53, 0x57, 0x41, 0x55 };
 const uint8_t kLaraAboveWaterTR4[] = { 0x48, 0x89, 0x6C, 0x24, 0x20 };
 const uint8_t kLaraAboveWaterTR5[] = { 0x48, 0x89, 0x5C, 0x24, 0x08 };
 const uint8_t kAnimateLaraTR4[] = { 0x40, 0x53, 0x41, 0x57, 0x48, 0x81, 0xEC, 0x88, 0x00, 0x00, 0x00 };
@@ -274,13 +327,288 @@ void TurnBodyToHead(uint8_t* item, float dt) {
     pos.y_rot = Angle(Radians(pos.y_rot) + std::clamp(move, -limit, limit));
 }
 
+using GunVec = motiongun::Vec;
+using GunBasis = motiongun::Basis;
+using motiongun::Add;
+using motiongun::Sub;
+using motiongun::Transform;
+struct GunPose {
+    GunVec nativeHand{}, trackedHand{}, muzzle{}, direction{};
+    GunBasis desired{};
+    int16_t yaw = 0, pitch = 0;
+};
+
+bool MotionReady() {
+    if (!Cfg().firstPersonMotionGuns || !g_motionHooksReady || !g_motionDll ||
+        !g_scenePoseValid || !g_active || !g_haveHeading || !Gate() ||
+        !Cfg().positionalTracking || !Cfg().firstPersonHeadTranslation)
+        return false;
+    // Classic graphics use a separate Lara renderer. Keep the old head-aim
+    // path there until that renderer has its own tracked-arm implementation.
+    uint8_t* app = *Ptr<uint8_t*>(g_motionDll->app);
+    if (!app || !(*reinterpret_cast<const uint8_t*>(app + 0x9e4) & 1))
+        return false;
+    const uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
+    if (item != g_headingItem) return false;
+    const uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
+    const int16_t status = *reinterpret_cast<const int16_t*>(lara + 2);
+    const int16_t gun = *reinterpret_cast<const int16_t*>(lara + 4);
+    if (status != 4 || (gun != 1 && gun != 2)) return false;
+    vr::HmdMatrix34_t pose{};
+    return VR().ControllerPose(0, pose) && VR().ControllerPose(1, pose);
+}
+
+void ReportMotionActivity() {
+    if (!g_motionHooksReady) return;
+    const uint64_t now = GetTickCount64();
+    if (!g_motionReportTime) g_motionReportTime = now;
+    if (now - g_motionReportTime < 5000) return;
+    const bool ready = MotionReady();
+    if (ready || g_motionArmDraws[0] || g_motionArmDraws[1] ||
+        g_motionShots[0] || g_motionShots[1]) {
+        LogF("firstperson: Touch ready=%d arms L=%u R=%u shots L=%u R=%u",
+             ready ? 1 : 0,
+             g_motionArmDraws[0], g_motionArmDraws[1],
+             g_motionShots[0], g_motionShots[1]);
+    }
+    g_motionArmDraws[0] = g_motionArmDraws[1] = 0;
+    g_motionShots[0] = g_motionShots[1] = 0;
+    g_motionReportTime = now;
+}
+
+// Native joint 10 is the right gun and joint 13 the left gun. Query the
+// interpolated native joint axes so the renderer's whole arm pass can be moved
+// rigidly without touching Lara's simulation skeleton or doing IK.
+GunVec JointPoint(uint8_t* item, int joint, int x, int y, int z) {
+    PHD_VECTOR p{x, y, z};
+    const int frac = std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac), 0, 256);
+    reinterpret_cast<Fn_GetJointAbsPositionLerp>(
+        g_boundBase + g_boundDll->getJointAbsPositionLerp)(item, &p, joint, frac);
+    return {float(p.x), float(p.y), float(p.z)};
+}
+
+bool BuildGunPose(int hand, GunPose& out) {
+    if (!MotionReady()) {
+        return false;
+    }
+    if (hand < 0 || hand > 1) return false;
+    float right, down, forward;
+    vr::HmdMatrix34_t tracked{};
+    if (!VR().FirstPersonControllerOffset(hand, right, down, forward) ||
+        !VR().ControllerPose(hand, tracked) ||
+        std::fabs(right) > 2 || std::fabs(down) > 2 || std::fabs(forward) > 2)
+        return false;
+    const float scale = LiveWorldUnitsPerMetre();
+    if (!std::isfinite(scale) || scale <= 1) return false;
+    const GunBasis controller = motiongun::ControllerBasis(tracked.m, g_headingBase);
+    out.trackedHand = motiongun::HandInWorld(
+        {float(g_scenePose.x_pos), float(g_scenePose.y_pos), float(g_scenePose.z_pos)},
+        right, down, forward, g_headingBase, scale);
+    // Old draw-time latched offsets compensated for a skin-palette pivot bug.
+    // Do not reuse them: the actual wrist now anchors directly to the controller.
+    const int16_t gun = *Ptr<int16_t>(g_boundDll->lara + 4);
+    out.desired = motiongun::GunBasis(controller);
+
+    uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
+    const int joint = hand ? 10 : 13;
+    out.nativeHand = JointPoint(item, joint, 0, 0, 0);
+    const auto& body = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
+    if (std::fabs(out.nativeHand.x - body.x_pos) > 4096 ||
+        std::fabs(out.nativeHand.y - body.y_pos) > 4096 ||
+        std::fabs(out.nativeHand.z - body.z_pos) > 4096)
+        return false;
+    out.muzzle = Add(out.trackedHand,
+        Transform(out.desired, motiongun::MuzzleLocal(gun, hand)));
+    if (!std::isfinite(out.muzzle.x) || !std::isfinite(out.muzzle.y) ||
+        !std::isfinite(out.muzzle.z)) return false;
+    const GunVec ray{controller.r[0][2], controller.r[1][2],
+                     controller.r[2][2]};
+    out.direction = ray;
+    const float flat = std::hypot(ray.x, ray.z);
+    if (flat < 0.01f) return false;
+    out.yaw = Angle(std::atan2(ray.x, ray.z));
+    out.pitch = Angle(std::atan2(-ray.y, flat));
+    return true;
+}
+
+int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
+    const int32_t count = g_hGetJoints.Original<Fn_GetJoints>()(item, joints, pass);
+    if (g_renderArm < 0 || count < 15 || !joints || !MotionReady() ||
+        item != *Ptr<uint8_t*>(g_boundDll->laraItem)) return count;
+    GunPose gun{};
+    if (!BuildGunPose(g_renderArm, gun)) return count;
+    const int nativeJoint = g_renderArm ? 10 : 13;
+    const int object = *reinterpret_cast<const int16_t*>(item + off::item_object);
+    if (object < 0) return count;
+    const uint8_t* obj = Ptr<uint8_t>(g_boundDll->objects) +
+        object * off::object_stride;
+    const uint8_t* geom = obj + off::object_geom;
+    const int bones = *reinterpret_cast<const int32_t*>(geom + 28);
+    int pivot = nativeJoint;
+    motiongun::Frame inverseBind{};
+    if (bones > 0) {
+        if (bones != count || count > 256) return count;
+        const auto mapping = *reinterpret_cast<const int32_t* const*>(geom + 48);
+        const auto poses = *reinterpret_cast<const float* const*>(geom + 72);
+        if (!mapping || !poses) return count;
+        pivot = -1;
+        for (int i=0; i<count; ++i)
+            if (mapping[i] == nativeJoint) { pivot=i; break; }
+        if (pivot < 0) return count;
+        inverseBind = motiongun::HdInverseBind(
+            motiongun::ReadRows(poses + pivot*12));
+    } else {
+        if (count > 33 || pivot >= count) return count;
+        // object_info::BindMatrix is column-major mat4[33].
+        const float* bind = reinterpret_cast<const float*>(obj + 1676) + pivot*16;
+        for (int row=0; row<3; ++row)
+            for (int col=0; col<3; ++col)
+                inverseBind.basis.r[row][col]=bind[col*4+row];
+        inverseBind.origin={bind[12],bind[13],bind[14]};
+    }
+    const auto palette = motiongun::ReadRows(joints + pivot*12);
+    motiongun::Frame bind{}, correction{};
+    if (!motiongun::Inverse(inverseBind, bind)) return count;
+    const auto wrist = motiongun::Multiply(palette, bind);
+    const motiongun::Frame desired{gun.desired,
+        Add(wrist.origin, Sub(gun.trackedHand, gun.nativeHand))};
+    if (!motiongun::PaletteCorrection(palette, inverseBind, desired, correction))
+        return count;
+    // MaskJoints runs after us. Move the whole palette, including HD helper
+    // bones, so weighted hand/gun vertices receive the same rigid transform.
+    for (int joint=0; joint<count; ++joint) {
+        float* bone=joints + joint*12;
+        motiongun::WriteRows(motiongun::Multiply(correction,
+            motiongun::ReadRows(bone)), bone);
+    }
+    ++g_motionArmDraws[g_renderArm];
+    return count;
+}
+
+void __cdecl Detour_SetGunFlash(int32_t weapon, int32_t left) {
+    const auto original = g_hSetGunFlash.Original<Fn_SetGunFlash>();
+    const uint64_t caller = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_boundBase;
+    const int hand = g_motionDll && weapon >= 1 && weapon <= 2
+        ? (caller == g_motionDll->rightFlashReturn && !left ? 1 :
+           caller == g_motionDll->leftFlashReturn && left == 1 ? 0 : -1) : -1;
+    GunPose gun{};
+    if (hand < 0 || !BuildGunPose(hand, gun)) { original(weapon,left); return; }
+    float* fm = *Ptr<float*>(g_motionDll->floatMatrixPtr);
+    int32_t* im = *Ptr<int32_t*>(g_boundDll->phdMxptr);
+    if (!fm || !im) { original(weapon,left); return; }
+    float savedFloat[12];
+    int32_t savedInt[12];
+    std::memcpy(savedFloat,fm,sizeof(savedFloat));
+    std::memcpy(savedInt,im,sizeof(savedInt));
+    const auto native = motiongun::ReadRows(fm);
+    const motiongun::Frame desired{gun.desired,
+        Add(native.origin, Sub(gun.trackedHand,gun.nativeHand))};
+    motiongun::WriteRows(desired,fm);
+    for (int i=0; i<12; ++i)
+        im[i]=int32_t(std::lround(fm[i]*16384.0f));
+    // Native SetGunFlash applies the same HD MuzzleLocal offset, flash spin
+    // and weapon-specific orientation. Never touch enemy or mirror callers.
+    original(weapon,left);
+    std::memcpy(fm,savedFloat,sizeof(savedFloat));
+    std::memcpy(im,savedInt,sizeof(savedInt));
+}
+
+int32_t __cdecl Detour_FireWeapon(int32_t weapon, void* target, void* extra,
+                                  const int16_t* aim) {
+    const auto caller = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_boundBase;
+    const int hand = g_motionDll && weapon >= 1 && weapon <= 2
+        ? (caller == g_motionDll->rightFireReturn ? 1 :
+           caller == g_motionDll->leftFireReturn ? 0 : -1) : -1;
+    GunPose gun{};
+    const int previousHand = g_firingHand;
+    if (hand >= 0 && aim && BuildGunPose(hand, gun)) {
+        g_firingHand = hand;
+        g_firingDirection = gun.direction;
+        g_firingAim[0] = aim[0]; g_firingAim[1] = aim[1];
+        g_firingPose.x_pos = int32_t(std::lround(gun.muzzle.x));
+        g_firingPose.y_pos = int32_t(std::lround(gun.muzzle.y));
+        g_firingPose.z_pos = int32_t(std::lround(gun.muzzle.z));
+        g_firingPose.x_rot = gun.pitch;
+        g_firingPose.y_rot = gun.yaw;
+        if (!g_motionShots[hand]) {
+            LogF("firstperson: Touch %s muzzle=(%d,%d,%d) yaw=%d pitch=%d",
+                 hand ? "right" : "left", g_firingPose.x_pos,
+                 g_firingPose.y_pos, g_firingPose.z_pos,
+                 int(g_firingPose.y_rot), int(g_firingPose.x_rot));
+        }
+        ++g_motionShots[hand];
+    }
+    const int32_t result = g_hFireWeapon.Original<Fn_FireWeapon>()(
+        weapon, target, extra, aim);
+    g_firingHand = previousHand;
+    return result;
+}
+
+int32_t __cdecl Detour_GetTargetOnLOS(PHD_VECTOR* source, PHD_VECTOR* dest,
+                                      int32_t flags, int32_t mode) {
+    const uint64_t caller = reinterpret_cast<uint64_t>(_ReturnAddress()) -
+        g_boundBase;
+    if (source && dest && g_firingHand >= 0 && g_motionDll &&
+        (caller == g_motionDll->hitLosReturn ||
+         caller == g_motionDll->missLosReturn)) {
+        // FireWeapon normally re-targets an enemy sphere or a 20k-unit
+        // endpoint using its own view matrix. For VR, make the FINAL
+        // collision/impact ray explicit: tracked muzzle -> tracked barrel.
+        // Preserve source.room, which native FireWeapon already resolved.
+        source->x = g_firingPose.x_pos;
+        source->y = g_firingPose.y_pos;
+        source->z = g_firingPose.z_pos;
+        constexpr float range = 20480.0f;
+        dest->x = source->x + int32_t(std::lround(g_firingDirection.x * range));
+        dest->y = source->y + int32_t(std::lround(g_firingDirection.y * range));
+        dest->z = source->z + int32_t(std::lround(g_firingDirection.z * range));
+        const PHD_VECTOR requested = *dest;
+        const int32_t result =
+            g_hGetTargetOnLOS.Original<Fn_GetTargetOnLOS>()(
+                source, dest, flags, mode);
+        if (g_motionShots[g_firingHand] == 1)
+            LogF("firstperson: Touch %s LOS src=(%d,%d,%d) ray=(%d,%d,%d) result=%d",
+                 g_firingHand ? "right" : "left",
+                 source->x, source->y, source->z,
+                 requested.x, requested.y, requested.z, result);
+        return result;
+    }
+    return g_hGetTargetOnLOS.Original<Fn_GetTargetOnLOS>()(
+        source, dest, flags, mode);
+}
+
+void __cdecl Detour_PistolHandler(int32_t weapon) {
+    g_hPistolHandler.Original<Fn_PistolHandler>()(weapon);
+    if (!MotionReady()) return;
+    // PistolHandler copies the averaged arm aim into Lara's torso and head.
+    // The FP camera anchors to the animated head on the next render, so a
+    // physical hand movement otherwise drags the entire view. Keep the arms'
+    // independent aim, but leave torso/head neutral for the camera skeleton.
+    uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
+    for (uint32_t offset = off::lara_head_y_rot;
+         offset <= off::lara_torso_z_rot; offset += sizeof(int16_t))
+        *reinterpret_cast<int16_t*>(lara + offset) = 0;
+}
+
 void __cdecl Detour_AimWeapon(void* weapon, uint8_t* arm) {
     g_hAimWeapon.Original<Fn_AimWeapon>()(weapon, arm);
-    if (!Cfg().firstPersonHeadAim || !g_active || !g_haveHeading || !Gate()) return;
+    if (!g_active || !g_haveHeading || !Gate()) return;
     uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
     if (item != g_headingItem) return;
     uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
     if (arm != lara + off::lara_left_arm && arm != lara + off::lara_right_arm) return;
+    const int hand = arm == lara + off::lara_left_arm ? 0 : 1;
+    GunPose gun{};
+    if (BuildGunPose(hand, gun)) {
+        const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
+        *reinterpret_cast<int16_t*>(arm + off::arm_lock) = 1;
+        *reinterpret_cast<int16_t*>(arm + off::arm_y_rot) =
+            Angle(Radians(gun.yaw) - Radians(pos.y_rot));
+        *reinterpret_cast<int16_t*>(arm + off::arm_x_rot) = gun.pitch;
+        *reinterpret_cast<int16_t*>(arm + off::arm_z_rot) = 0;
+        return;
+    }
+    if (!Cfg().firstPersonHeadAim) return;
     const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
     const int16_t yaw = Angle(g_headingBase + VR().HeadYawRadians() - Radians(pos.y_rot));
     const int16_t pitch = Angle(VR().HeadPitchRadians());
@@ -704,20 +1032,50 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
     if (g_active && g_rollHidden && g_boundDll && g_boundBase &&
         item == *Ptr<uint8_t*>(g_boundDll->laraItem)) return;
     bool lara = false;
-    if (g_active && Cfg().firstPersonHideHead && item && g_boundDll) {
+    if (g_active && item && g_boundDll) {
         const GameDllLayout& dll = *g_boundDll;
         lara = item == *Ptr<uint8_t*>(dll.laraItem);
     }
-    if (lara && DrawingLaraHead(item)) {
+    if (lara && (Cfg().firstPersonHideHead || MotionReady()) &&
+        DrawingLaraHead(item)) {
         ++g_faceSkips;
         return;
     }
+    const bool motion = lara && MotionReady();
+    int armDraw = -1;
+    if (motion) {
+        // The base pass contains the upper arms as well as the body. Draw
+        // only those two meshes, once per hand; the later masked gun passes
+        // provide the forearms, hands and equipped weapons.
+        auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
+        if (!useMeshBits) {
+            const uint32_t saved = bits;
+            const int previousArm = g_renderArm;
+            for (int hand = 0; hand < 2; ++hand) {
+                bits = hand ? 0x100 : 0x800;
+                g_renderArm = hand;
+                g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(
+                    item, 1, renderPass);
+            }
+            g_renderArm = previousArm;
+            bits = saved;
+            return;
+        }
+        const uint32_t mask = bits;
+        if (useMeshBits && mask == 0x600) armDraw = 1;
+        else if (useMeshBits && mask == 0x3000) armDraw = 0;
+        else return;
+    }
+    const int previousArm = g_renderArm;
+    g_renderArm = armDraw;
     g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(
-        item, lara ? 1 : useMeshBits, renderPass);
+        item, lara && (Cfg().firstPersonHideHead || motion) ? 1 :
+            useMeshBits, renderPass);
+    g_renderArm = previousArm;
 }
 
 void __cdecl Detour_DrawHair(int32_t argument) {
-    if (g_active && (g_headHidden || g_rollHidden)) {
+    if (g_active && (g_headHidden || g_rollHidden || MotionReady())) {
         ++g_hairSkips;
         return;
     }
@@ -728,9 +1086,12 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
     const bool wasActive = g_active;
     if (Gate() && Anchor(pose)) {
         g_active = true;
+        g_scenePose = pose;
+        g_scenePoseValid = true;
         ++g_anchored;
     } else {
         g_active = false;
+        g_scenePoseValid = false;
         g_haveHeading = false;
         // Keep item identity and last viewing heading across UI/cameras.
         g_haveManualInput = false;
@@ -748,7 +1109,24 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
 }
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {
-    if (pose && IsSceneCall(_ReturnAddress())) UpdateSceneCamera(*pose);
+    const void* caller = _ReturnAddress();
+    if (pose && IsSceneCall(caller)) UpdateSceneCamera(*pose);
+    if (pose && g_firingHand >= 0 && g_motionDll &&
+        reinterpret_cast<uint64_t>(caller) ==
+            g_boundBase + g_motionDll->fireViewReturn) {
+        const int16_t spreadPitch = int16_t(pose->x_rot - g_firingAim[1]);
+        const int16_t spreadYaw = int16_t(pose->y_rot - g_firingAim[0]);
+        pose->x_pos = g_firingPose.x_pos;
+        pose->y_pos = g_firingPose.y_pos;
+        pose->z_pos = g_firingPose.z_pos;
+        pose->x_rot = int16_t(g_firingPose.x_rot + spreadPitch);
+        pose->y_rot = int16_t(g_firingPose.y_rot + spreadYaw);
+        // Native phd_GenerateW2V's third row is the actual shot direction:
+        // (sin(yaw)*cos(pitch), -sin(pitch), cos(yaw)*cos(pitch)).
+        const float yaw = Radians(pose->y_rot);
+        const float pitch = Radians(pose->x_rot);
+        g_firingDirection = motiongun::ShotForward(yaw, pitch);
+    }
     g_hGenerateW2V.Original<Fn_GenerateW2V>()(pose);
 }
 
@@ -787,6 +1165,47 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             reinterpret_cast<void*>(&Detour_AimWeapon), 5,
             kAimWeaponPrologue, sizeof(kAimWeaponPrologue), "AimWeapon"))
         return false;
+    if (Cfg().firstPersonMotionGuns) {
+        for (const auto& entry : kMotionDlls)
+            if (entry.timestamp == d.timestamp) g_motionDll = &entry;
+        if (g_motionDll &&
+            g_hGetJoints.Install(
+                reinterpret_cast<void*>(base + g_motionDll->getJoints),
+                reinterpret_cast<void*>(&Detour_GetJoints), 5,
+                kGetJointsPrologue, sizeof(kGetJointsPrologue), "GetJoints") &&
+            g_hFireWeapon.Install(
+                reinterpret_cast<void*>(base + g_motionDll->fireWeapon),
+                reinterpret_cast<void*>(&Detour_FireWeapon), 5,
+                kFireWeaponPrologue, sizeof(kFireWeaponPrologue), "FireWeapon") &&
+            g_hPistolHandler.Install(
+                reinterpret_cast<void*>(base + g_motionDll->pistolHandler),
+                reinterpret_cast<void*>(&Detour_PistolHandler), 5,
+                d.game == 0 ? kPistolHandlerTR4 : kPistolHandlerTR5,
+                5, "PistolHandler") &&
+            g_hGetTargetOnLOS.Install(
+                reinterpret_cast<void*>(base + g_motionDll->getTargetOnLOS),
+                reinterpret_cast<void*>(&Detour_GetTargetOnLOS), 6,
+                d.game == 0 ? kGetTargetOnLOSTR4 : kGetTargetOnLOSTR5,
+                6, "GetTargetOnLOS") &&
+            g_hSetGunFlash.Install(
+                reinterpret_cast<void*>(base + g_motionDll->setGunFlash),
+                reinterpret_cast<void*>(&Detour_SetGunFlash),
+                d.game == 0 ? sizeof(kSetGunFlashTR4) : sizeof(kSetGunFlashTR5),
+                d.game == 0 ? kSetGunFlashTR4 : kSetGunFlashTR5,
+                d.game == 0 ? sizeof(kSetGunFlashTR4) : sizeof(kSetGunFlashTR5),
+                "SetGunFlash")) {
+            g_motionHooksReady = true;
+            Log("firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready");
+        } else {
+            g_hSetGunFlash.Remove();
+            g_hGetTargetOnLOS.Remove();
+            g_hPistolHandler.Remove();
+            g_hFireWeapon.Remove();
+            g_hGetJoints.Remove();
+            g_motionDll = nullptr;
+            Log("firstperson: Touch dual-gun hooks unavailable; head aim preserved");
+        }
+    }
     if (!g_hGenerateW2V.Install(
             reinterpret_cast<void*>(base + d.phdGenerateW2V),
             reinterpret_cast<void*>(&Detour_GenerateW2V), 5,
@@ -812,6 +1231,17 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             kDrawHairPrologue, sizeof(kDrawHairPrologue), "DrawHair"))
             Log("firstperson: hair hook unavailable");
     }
+    if (g_motionHooksReady &&
+        (!g_hDrawCreatureHD.installed() || !g_hDrawHair.installed())) {
+        g_motionHooksReady = false;
+        g_hSetGunFlash.Remove();
+        g_hGetTargetOnLOS.Remove();
+        g_hPistolHandler.Remove();
+        g_hFireWeapon.Remove();
+        g_hGetJoints.Remove();
+        g_motionDll = nullptr;
+        Log("firstperson: Touch dual-gun mode disabled; body/hair hooks unavailable");
+    }
     return true;
 }
 
@@ -819,6 +1249,18 @@ void Remove() {
     g_cameraMotionTrace = {};
     if (g_active) VR().RecenterThirdPersonHead();
     RestoreHeadMesh();
+    g_motionHooksReady = false;
+    g_firingHand = g_renderArm = -1;
+    g_scenePoseValid = false;
+    g_motionArmDraws[0] = g_motionArmDraws[1] = 0;
+    g_motionShots[0] = g_motionShots[1] = 0;
+    g_motionReportTime = 0;
+    g_hSetGunFlash.Remove();
+    g_hGetTargetOnLOS.Remove();
+    g_hPistolHandler.Remove();
+    g_hFireWeapon.Remove();
+    g_hGetJoints.Remove();
+    g_motionDll = nullptr;
     g_hDrawHair.Remove();
     g_hDrawCreatureHD.Remove();
     g_hGenerateW2V.Remove();
@@ -839,6 +1281,7 @@ void Remove() {
 } // namespace
 
 void FirstPersonUpdate() {
+    ReportMotionActivity();
     static bool recenterHeld = false;
     const bool recenterDown = Cfg().firstPersonRecenterKey &&
         (GetAsyncKeyState(Cfg().firstPersonRecenterKey) & 0x8000) != 0;

@@ -707,6 +707,7 @@ struct Config {
     float firstPersonBodyDeadzoneDegrees = 0.0f;
     float firstPersonBodyTurnDegreesPerFrame = 4.0f;
     bool  firstPersonHeadAim = true;
+    bool  firstPersonMotionGuns = false; // opt-in dual pistols/Uzis prototype
     float firstPersonTurnDegreesPerSecond = 120.0f;
     float firstPersonTurnDeadzone = 0.25f;
 

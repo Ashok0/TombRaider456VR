@@ -4668,8 +4668,51 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonBodyDeadzoneDegrees` | `0` | Body-follow angular deadzone |
 | `FirstPersonBodyTurnDegreesPerFrame` | `4` | Body-follow turn limit at a 60 Hz reference, scaled by elapsed time |
 | `FirstPersonHeadAim` | `1` | Write headset yaw/pitch into gun-arm controls; visible vertical gun tilt is currently defective |
+| `FirstPersonMotionGuns` | `0` | Experimental Quest Touch dual-pistol/Uzi tracking in remastered/HD graphics; off by default |
 | `FirstPersonTurnDegreesPerSecond` | `120` | Maximum continuous right-stick yaw rate |
 | `FirstPersonTurnDeadzone` | `0.25` | Right-stick turning deadzone |
+
+### Experimental Touch motion guns (TR4/TR5)
+
+`FirstPersonMotionGuns=1` is an opt-in first-person test build for dual
+pistols and Uzis with both Touch controllers tracked and Lara's guns ready.
+It moves each arm/gun draw with its own controller, suppresses the rest of
+Lara's body and hair, and replaces each native hitscan shot's origin and
+direction at the firing-view call so the ray begins at that hand's muzzle.
+The wrist is recovered from the renderer's skinning palette and inverse bind
+pose before placing each arm. The palette translation alone is not the wrist:
+using it as a pivot caused the hand and attached gun to orbit with wrist
+rotation. Both native and HD mapped-bone paths now apply the correction to
+the entire masked palette, including helper bones and blended vertices.
+The barrel's local +Y axis follows controller forward; the separate native HD
+muzzle offset supplies shot position without tilting the barrel toward the
+wrist-to-tip vector. Lara's native muzzle-flash generation uses the same
+tracked wrist frame. The pistol wall-impact LOS is redirected from the
+tracked muzzle along the spread-adjusted controller ray.
+Pistol arm aim is prevented from rotating the camera's head/torso anchor.
+Native spread, ammunition and hit processing remain in place. The other guns,
+classic graphics, third person, missing controller poses and TR6 retain the
+existing behavior; `FirstPersonHeadAim` remains the fallback.
+
+The earlier 0.30 m/0.173 m backward and 0.127 m upward compensations have been
+removed. `FirstPersonMotionGunGripBackMetres` and
+`FirstPersonMotionGunGripUpMetres` in existing INIs are ignored. No controller
+direction is latched when drawing the guns; those compensations could drift
+during physical turns and did not correct the underlying pivot.
+Regression tests now include nonzero bind offsets, both palette layouts,
+scaled/non-orthogonal animation frames, left/right hands, full wrist rotations,
+heading rotations, helper-bone blends, and matching rendered muzzle/shot positions.
+The test fixture explicitly detects the previous pivot formula's failure.
+Binary checks cover shot and flash hooks/call sites for all four supported DLLs.
+These are synthetic and static checks, not an in-headset verification: grip
+fit, physical 360-degree turns, flash placement and actual wall impacts still
+need Quest testing. Smoke and shell effects are not controller-rebased.
+If the mode is unusable, set `FirstPersonMotionGuns=0` and restart.
+`TombRaiderVR.log` reports tracked arm draws and left/right shots in
+five-second windows for diagnosis. LOS logs show the requested ray and return
+value, not a measured wall impact (native collision uses a local endpoint).
+There is no VRIK: the arms move as rigid
+pieces and need not connect anatomically to Lara's hidden torso.
 
 ### Remaining motion issues and diagnostics
 
