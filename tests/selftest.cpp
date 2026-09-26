@@ -762,10 +762,10 @@ static void TestMotionGunTriggers() {
     Check(t.Consume(0) && t.Consume(1),"simultaneous LT release and RT press fire independently");
     t.Update(true,true,false,false,600);
     t.Update(true,true,true,false,1000);
-    t.Update(true,true,true,false,3999);
-    Check(!t.Equip(3999) && !t.WantsShot(),"LT below threshold neither toggles nor fires");
-    t.Update(true,true,true,false,4000);
-    Check(t.Equip(4000) && !t.WantsShot(),"LT at three seconds emits equip only");
+    t.Update(true,true,true,false,2499);
+    Check(!t.Equip(2499) && !t.WantsShot(),"LT at 1499 ms neither toggles nor fires");
+    t.Update(true,true,true,false,2500);
+    Check(t.Equip(2500) && !t.WantsShot(),"LT at 1500 ms emits equip only");
     t.Update(true,true,true,false,8000);
     Check(!t.Equip(8000) && !t.WantsShot(),"long hold toggles once only");
     t.Update(true,true,false,false,8010);
@@ -809,7 +809,7 @@ static void TestMotionGunEquipStyles() {
         };
         for (uint64_t now=0;now<16000;now+=20) {
             // First long hold draws; second long hold holsters.
-            const bool lt=(now>=100 && now<4000) || (now>=8100 && now<12000);
+            const bool lt=(now>=100 && now<2000) || (now>=8100 && now<10000);
             trigger.Update(true,status==4,lt,false,now);
             nativeTick(equip.Update(holdMode,status,trigger.Equip(now)));
             if (now==7000) Check(status==4 && starts==1,

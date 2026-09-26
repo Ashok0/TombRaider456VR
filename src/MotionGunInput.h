@@ -26,7 +26,7 @@ struct TriggerInput {
         }
         // Use elapsed wall-clock time, including a release poll which may
         // arrive after the threshold without any intervening held poll.
-        if ((left || leftHeld) && !longFired && now-leftSince>=3000) {
+        if ((left || leftHeld) && !longFired && now-leftSince>=1500) {
             longFired=true; leftCanTap=false;
             pending[0]=pending[1]=false;
             equipUntil=now+150;

@@ -4751,7 +4751,7 @@ In first-person remastered/HD motion-gun mode with pistols or Uzis selected:
 
 - Short LT squeeze: fire the left gun on release.
 - RT press: fire the right gun.
-- Hold LT for 3 seconds: draw/holster once; release before toggling again.
+- Hold LT for 1.5 seconds: draw/holster once; release before toggling again.
 
 Each tap requests one native shot, including with Uzis; holding RT does not
 auto-repeat. A short LT tap waits for release to distinguish it from the long
