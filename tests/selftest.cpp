@@ -741,6 +741,39 @@ static void TestGunCalibrationPersistence() {
     DeleteFileW(ini);
 }
 
+static void TestMotionGunEnemyAim() {
+    using namespace tr::motiongun;
+    Vec ray{9,9,9};
+    const Vec muzzle{100,200,300}, forward{0,0,1};
+    Check(AssistedDirection(muzzle,forward,{200,200,1300},ray),"near-barrel enemy assisted");
+    CheckNear(Dot(ray,ray),1.f,"assist ray normalized");
+    Check(ray.x>0 && ray.z>0,"assist originates at muzzle not Lara");
+    Check(AssistedDirection(muzzle,forward,{100,100,1300},ray),"vertical enemy assist");
+    Check(ray.y<0,"assist includes vertical aim");
+    Check(!AssistedDirection(muzzle,forward,{400,200,1300},ray),"outside 12 degree cone unchanged");
+    Check(!AssistedDirection(muzzle,forward,{100,200,-700},ray),"enemy behind hand rejected");
+    Check(!AssistedDirection(muzzle,forward,muzzle,ray),"zero distance rejected");
+    Check(!AssistedDirection(muzzle,forward,{100,200,10000},ray),"distant enemy rejected");
+    Check(!AssistedDirection(muzzle,{0,0,0},{100,200,1300},ray),"invalid barrel rejected");
+    const Vec nativeEnd{123,245,678};
+    const auto hit=CollisionEndpoint(true,nativeEnd,muzzle,forward);
+    Check(hit.x==nativeEnd.x && hit.y==nativeEnd.y && hit.z==nativeEnd.z,
+          "confirmed sphere hit retains short native endpoint for HitTarget");
+    const auto miss=CollisionEndpoint(false,nativeEnd,muzzle,forward);
+    Check(miss.x==100 && miss.y==200 && miss.z==20780,"miss retains long muzzle impact ray");
+    Calibration c; c.pitchDegrees=-20;
+    const Basis identity{{{1,0,0},{0,1,0},{0,0,1}}};
+    const auto controller=CalibratedController(identity,c);
+    const auto down=Transform(controller,forward);
+    CheckNear(down.y,std::sin(20.f*.01745329252f),"minus 20 pitch points down in game axes");
+    const auto gun=GunBasis(controller);
+    const auto wrist=GripFrame(gun,muzzle,c.gripForwardMetres,c.raiseMetres,c.rightMetres);
+    const auto grip=Transform(wrist,{-c.rightMetres,c.gripForwardMetres,-c.raiseMetres});
+    CheckNear(grip.x,muzzle.x,"20 degree tilt keeps grip X");
+    CheckNear(grip.y,muzzle.y,"20 degree tilt keeps grip Y");
+    CheckNear(grip.z,muzzle.z,"20 degree tilt keeps grip Z");
+}
+
 int main() {
     printf("TombRaiderVR self-test\n======================\n");
 
@@ -754,6 +787,7 @@ int main() {
     TestPortalGeometry();
     TestInlineHook();
     TestMotionGunMath();
+    TestMotionGunEnemyAim();
     TestGunCalibration();
     TestGunCalibrationPersistence();
 

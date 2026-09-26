@@ -16,6 +16,12 @@ flash_builds = {
 }
 decoder = Cs(CS_ARCH_X86, CS_MODE_64)
 decoder.detail = True
+aim_builds = {
+    "PDB/tomb4.dll": (0x5E2F0,0x149F0,0x158B8),
+    "PDB/tomb5.dll": (0x5B5D0,0x12450,0x13346),
+    "retail/tomb4.dll": (0x5DFF0,0x145D0,0x15498),
+    "retail/tomb5.dll": (0x5C320,0x12500,0x133F6),
+}
 
 root = Path(__file__).resolve().parents[1]
 # path, stamp, GetJoints, FireWeapon, FireWeapon->W2V return,
@@ -54,6 +60,14 @@ for (path, stamp, get_joints, fire, view_ret, right_ret, left_ret,
     assert call_target(data, left_ret) == fire, (path, "left gun")
     assert call_target(data, hit_ret) == los, (path, "target hit LOS")
     assert call_target(data, miss_ret) == los, (path, "wall impact LOS")
+    target_point, sight, sight_return = aim_builds[path]
+    helper_prefix=bytes.fromhex("48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18")
+    assert data[target_point:target_point+15]==helper_prefix, (path,"target point")
+    assert data[sight:sight+15]==helper_prefix, (path,"LOS helper")
+    assert call_target(data,sight_return)==sight, (path,"native visibility call")
+    # The target helper writes room at +12 in addition to XYZ; never use a
+    # twelve-byte PHD_VECTOR for this call. Confirm all four implementations.
+    assert bytes.fromhex("66 41 89 47 0c") in data[target_point:target_point+269], (path,"target room")
     flash, fmx, right_flash, left_flash = flash_builds[path]
     prologue = bytes.fromhex("4c 8b dc 48 81 ec 98 00 00 00" if "tomb4" in path
                              else "48 81 ec a8 00 00 00")

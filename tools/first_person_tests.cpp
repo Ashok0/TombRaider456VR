@@ -43,6 +43,7 @@ bool worldCameraValid = false;
 float worldCameraRot[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
 float worldCameraPos[3] = {};
 uint8_t* laraItem = itemMemory;
+uint8_t* motionApp = appMemory;
 int fraction = 128, game = 0, water = 0, checks = 0;
 bool jointCalled = false;
 void Check(bool ok, const char* label) {
@@ -50,6 +51,23 @@ void Check(bool ok, const char* label) {
     if (!ok) { std::printf("FAIL: %s\n", label); std::exit(1); }
 }
 bool Near(float a, float b) { return std::fabs(a - b) < 0.002f; }
+bool shotVisible=true;
+int shotSightCalls=0, shotTargetCalls=0;
+tr::ShotVector shotTarget{100,100,1300,9,0};
+void __cdecl FakeShotTarget(void*, tr::ShotVector* end) {
+    ++shotTargetCalls; *end=shotTarget;
+}
+void* __cdecl FakeShotFloor(int32_t x,int32_t y,int32_t z,int16_t* room) {
+    Check(x==100 && y==200 && z==300 && *room==7,"assist resolves muzzle room from Lara room");
+    *room=8; return nullptr;
+}
+int32_t __cdecl FakeShotSight(tr::ShotVector* start,tr::ShotVector* end) {
+    ++shotSightCalls;
+    Check(start->room==8 && end->room==9,"assist uses full room-aware vectors");
+    Check(start->x==100 && start->y==200 && start->z==300,"assist visibility starts at muzzle");
+    end->z=500; // Native LOS is allowed to clip its private endpoint.
+    return shotVisible ? 1 : 0;
+}
 void __cdecl FakeJoint(uint8_t* item, tr::PHD_VECTOR* v, int joint, int frac) {
     Check(item == itemMemory && joint == 14 && frac == fraction, "native joint arguments");
     const int state = *reinterpret_cast<const int16_t*>(item + tr::off::item_anim_state);
@@ -163,6 +181,12 @@ bool InlineHook::Install(void*, void*, size_t, const uint8_t*, size_t,
 }
 namespace tr {
 const Config& Cfg() { return config; }
+const motiongun::Calibration& LiveMotionGunCalibration() {
+    static motiongun::Calibration calibration; return calibration;
+}
+void AdjustMotionGunCalibration(int) {}
+bool SaveMotionGunCalibration() { return false; }
+void RestoreMotionGunCalibration() {}
 float LiveWorldUnitsPerMetre() { return 1000.0f; }
 float LiveIpdScale() { return 1.0f; }
 uint64_t Base() { return reinterpret_cast<uint64_t>(appMemory); }
@@ -208,6 +232,34 @@ int main() {
     auto& state = *reinterpret_cast<int16_t*>(itemMemory + off::item_anim_state);
     *reinterpret_cast<int16_t*>(itemMemory + off::item_hit_points) = 1000;
     state = 2;
+
+    {
+        MotionDll motion{};
+        motion.findTargetPoint=rva(reinterpret_cast<void*>(&FakeShotTarget));
+        motion.lineOfSight=rva(reinterpret_cast<void*>(&FakeShotSight));
+        g_motionDll=&motion; g_headingItem=itemMemory;
+        dll.getFloor=rva(reinterpret_cast<void*>(&FakeShotFloor));
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_room)=7;
+        GunPose gun{}; gun.muzzle={100,200,300}; gun.direction={0,0,1};
+        motiongun::Vec direction=gun.direction;
+        Check(!AssistGunShot(gun,nullptr,direction) && shotTargetCalls==0,"no native target means no assist");
+        Check(AssistGunShot(gun,itemMemory,direction),"actual shot assist accepts visible selected target");
+        Check(direction.y<0 && direction.z>0 && Near(direction.x,0),"actual assist uses unclipped target direction");
+        shotVisible=false; direction=gun.direction;
+        Check(!AssistGunShot(gun,itemMemory,direction) && direction.z==1 && direction.y==0,
+              "occluded target never redirects shot");
+        shotTarget.x=1000; shotVisible=true;
+        const int calls=shotSightCalls;
+        Check(!AssistGunShot(gun,itemMemory,direction) && shotSightCalls==calls,
+              "outside-cone target does not invoke native visibility");
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points)=0;
+        const int targetCalls=shotTargetCalls;
+        Check(!AssistGunShot(gun,itemMemory,direction) && shotTargetCalls==targetCalls,
+              "dead target never invokes native aim helpers");
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points)=1000;
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_room)=0;
+        g_motionDll=nullptr; g_headingItem=nullptr; dll.getFloor=0;
+    }
 
     // Menu state cannot change the meaning of either chord. Repeated polls
     // must not turn a held view chord into repeated toggles or native START.
@@ -364,6 +416,39 @@ int main() {
     }
     Head(0.75f, -0.3f); Detour_AimWeapon(nullptr, laraMemory + off::lara_right_arm);
     Check(Near(Radians(*reinterpret_cast<int16_t*>(laraMemory + off::lara_right_arm + off::arm_x_rot)), -0.3f), "gun follows look-down");
+    {
+        const auto savedConfig=config;
+        const bool savedScene=g_scenePoseValid;
+        MotionDll motion{}; motion.app=rva(&motionApp);
+        g_motionDll=&motion; g_motionHooksReady=true; g_scenePoseValid=true;
+        config.firstPersonMotionGuns=true; config.firstPersonHeadTranslation=true;
+        appMemory[0x9e4]=1;
+        auto& status=*reinterpret_cast<int16_t*>(laraMemory+2);
+        auto& gun=*reinterpret_cast<int16_t*>(laraMemory+4);
+        const auto oldStatus=status,oldGun=gun;
+        status=4; gun=1;
+        VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+        Check(MotionReady(),"motion readiness accepts HD pistols and both controller poses");
+        auto blocked=[](const char* expected) {
+            const char* reason=MotionBlockedReason();
+            Check(reason && !std::strcmp(reason,expected),"motion fallback diagnostic identifies failing gate");
+        };
+        VR().m_controllerPoseValid[0]=false; blocked("left-controller-pose-missing");
+        VR().m_controllerPoseValid[0]=true;
+        VR().m_controllerPoseValid[1]=false; blocked("right-controller-pose-missing");
+        VR().m_controllerPoseValid[1]=true;
+        appMemory[0x9e4]=0; blocked("classic-graphics-or-no-app"); appMemory[0x9e4]=1;
+        gun=3; blocked("weapon-not-pistols-or-Uzis"); gun=2;
+        Check(MotionReady(),"motion readiness accepts Uzis");
+        status=0; blocked("guns-not-ready"); status=4;
+        g_scenePoseValid=false; blocked("no-scene-camera"); g_scenePoseValid=true;
+        config.positionalTracking=false; blocked("positional-tracking-disabled"); config.positionalTracking=true;
+        config.firstPersonHeadTranslation=false; blocked("head-translation-disabled"); config.firstPersonHeadTranslation=true;
+        g_motionHooksReady=false; blocked("motion-hooks-unavailable");
+        config=savedConfig; status=oldStatus; gun=oldGun; appMemory[0x9e4]=0;
+        g_scenePoseValid=savedScene; g_motionDll=nullptr;
+        VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=false;
+    }
     g_runtimeEnabled = false; Detour_AimWeapon(nullptr, laraMemory + off::lara_left_arm);
     Check(*reinterpret_cast<int16_t*>(laraMemory + off::lara_left_arm + off::arm_y_rot) == 123, "third person uses native gun aim");
     // The simulation hook must see the original stick intent even after the

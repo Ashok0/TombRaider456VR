@@ -71,6 +71,24 @@ inline float Dot(Vec a, Vec b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
 inline Vec Cross(Vec a, Vec b) {
     return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x};
 }
+// Small per-hand assist, never a head/body-aim override. The caller supplies
+// only the native selected, living, unobstructed target.
+inline bool AssistedDirection(Vec muzzle, Vec barrel, Vec target, Vec& result) {
+    const Vec delta=Sub(target,muzzle);
+    const float length2=Dot(delta,delta), barrel2=Dot(barrel,barrel);
+    if (!std::isfinite(length2) || !std::isfinite(barrel2) ||
+        length2<1.f || length2>8192.f*8192.f || barrel2<.0001f) return false;
+    const Vec direction=Scale(delta,1.f/std::sqrt(length2));
+    constexpr float cosCone=.978147601f; // 12 degrees
+    if (Dot(direction,barrel)/std::sqrt(barrel2)<cosCone) return false;
+    result=direction;
+    return true;
+}
+inline Vec CollisionEndpoint(bool confirmedHit, Vec nativeEnd, Vec muzzle, Vec ray) {
+    // A confirmed sphere hit uses a SHORT segment ending before the sphere.
+    // Extending it changes GetTargetOnLOS's result and bypasses HitTarget.
+    return confirmedHit ? nativeEnd : Add(muzzle,Scale(ray,20480.f));
+}
 inline Vec Transform(const Basis& m, Vec p) {
     return {m.r[0][0]*p.x + m.r[0][1]*p.y + m.r[0][2]*p.z,
             m.r[1][0]*p.x + m.r[1][1]*p.y + m.r[1][2]*p.z,

@@ -4696,6 +4696,20 @@ muzzle offset supplies shot position without tilting the barrel toward the
 wrist-to-tip vector. Lara's native muzzle-flash generation uses the same
 tracked wrist frame. The pistol wall-impact LOS is redirected from the
 tracked muzzle along the spread-adjusted controller ray.
+Confirmed enemy-sphere hits retain the native short LOS segment instead of
+extending it to wall-impact range; extending that segment could bypass the
+native `HitTarget` path. Motion guns also apply up to 12 degrees of per-hand
+aim assistance to the game's already-selected living enemy, within 8192 game
+units and only when native LOS from that muzzle is clear. This includes
+vertical aim. It does not select enemies behind the controller or replace
+hand aiming with head aiming. The assisted shot still starts at the tracked
+muzzle; native spread and damage rules remain intact. Logs include the native
+selected target, assist status, sphere-hit branch and target HP before/after.
+If motion guns fall back to head aiming, the log now reports the blocking
+readiness condition (graphics, weapon/state, controller tracking, scene camera,
+or configuration), per-hand pose-build failures and fallback counts. These
+diagnostics do not change aiming or calibration; a "hooks ready" message alone
+does not mean the runtime motion-gun conditions were met.
 Pistol arm aim is prevented from rotating the camera's head/torso anchor.
 Native spread, ammunition and hit processing remain in place. The other guns,
 classic graphics, third person, missing controller poses and TR6 retain the
@@ -4726,6 +4740,10 @@ to move the guns forward and increase raise to move them up; one inch is
 Angle calibration rotates around the adjusted grip anchor and updates both
 the rendered barrel and shot direction; muzzle flash and shot origin remain
 on the same calibrated frame. With angles zero the previous fit is preserved.
+The latest installed Quest fit uses `FirstPersonMotionGunPitchDegrees=-20`
+to tilt both hands/barrels down 20 degrees, with the existing position values
+unchanged. This is a personal calibration, not a changed default. The grip
+pivot remains fixed; use Ctrl+Shift+F3/F4 to fine-tune pitch and Ctrl+F7 to save.
 
 #### Live gun calibration keys
 
@@ -4761,6 +4779,11 @@ The test fixture explicitly detects the previous pivot formula's failure.
 It also checks the calibrated grip through full rotations, 1:1 controller
 translation, zero-calibration compatibility, and shared muzzle placement.
 Binary checks cover shot and flash hooks/call sites for all four supported DLLs.
+Additional regression checks cover the 20-degree grip pivot, horizontal and
+vertical aim-assist directions, cone/range rejection, and preservation of the
+short enemy-hit segment versus the full-length miss ray. Target-point and LOS
+helper addresses are checked in all four DLLs. Enemy damage still needs live
+combat confirmation; these checks do not run the native game in a headset.
 These are synthetic and static checks, not an in-headset verification: grip
 fit, physical 360-degree turns, flash placement and actual wall impacts still
 need Quest testing. Smoke and shell effects are not controller-rebased.
