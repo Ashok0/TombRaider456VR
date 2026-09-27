@@ -4783,6 +4783,23 @@ in remastered/HD graphics with Lara's weapon ready. This now includes:
 - TR4: pistols, Uzis, revolver, shotgun, grenade launcher and crossbow.
 - TR5: pistols, Uzis, revolver/Desert Eagle, shotgun, HK and grappling gun.
 
+The follow-up native-binary audit confirmed these weapon IDs and the mod's
+matching trigger routes:
+
+| Weapon | Native gun ID | Motion-control firing |
+| --- | --- | --- |
+| Revolver / Desert Eagle | 2 | Right controller and RT; corrected in the latest firing fix |
+| Shotgun (TR4/TR5) | 4 | Right controller and RT; one request for the six-pellet volley |
+| Grappling gun (TR5) | 6 | Right controller and RT, in laser-sight mode with a valid attachment target |
+
+ID 6 is the crossbow slot in TR4; TR5 reuses that slot and the native
+`FireCrossbow` routine for its grappling gun. The audit checked ammo selection
+and native firing paths across the PDB and retail builds of both games, including
+TR5's grapple-target checks and projectile type. No further ID correction or
+DLL change was needed. The 15,666-check first-person regression suite also
+passed again, and the installed DLL matched the tested build. This verifies
+IDs and routing, not full in-headset weapon behavior.
+
 Pistols/Uzis use both controllers independently. Single weapons use the right
 controller and RT; the left controller can move the visible support hand but
 does not steer the barrel (no two-hand constraint or VRIK). Only the right
