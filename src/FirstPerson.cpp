@@ -917,14 +917,21 @@ void __cdecl Detour_RifleHandler(int32_t weapon) {
         *reinterpret_cast<int16_t*>(lara+offset)=0;
 }
 
+int32_t FireWeaponForCaller(uint64_t caller,int32_t weapon,void* target,void* extra,
+                            const int16_t* aim) {
+    // AnimatePistols skips its right call for the revolver/Desert Eagle (2).
+    // Its shared left-arm call fires that RIGHT-hand gun, or the left pistol/Uzi.
+    const int hand = g_longShot && g_longShot->weapon==weapon ? 1 :
+        g_motionDll && (motiongun::DualWeapon(weapon) || weapon==motiongun::Revolver)
+        ? (caller == g_motionDll->rightFireReturn && motiongun::DualWeapon(weapon) ? 1 :
+           caller == g_motionDll->leftFireReturn ? (weapon==motiongun::Revolver ? 1 : 0) : -1) : -1;
+    return FireWeaponForHand(hand,weapon,target,extra,aim);
+}
+
 int32_t __cdecl Detour_FireWeapon(int32_t weapon, void* target, void* extra,
                                   const int16_t* aim) {
-    const auto caller = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_boundBase;
-    const int hand = g_longShot && g_longShot->weapon==weapon ? 1 :
-        g_motionDll && weapon >= 1 && weapon <= 3
-        ? (caller == g_motionDll->rightFireReturn ? 1 :
-           caller == g_motionDll->leftFireReturn && weapon<=2 ? 0 : -1) : -1;
-    return FireWeaponForHand(hand,weapon,target,extra,aim);
+    return FireWeaponForCaller(reinterpret_cast<uint64_t>(_ReturnAddress())-g_boundBase,
+        weapon,target,extra,aim);
 }
 
 int32_t GetTargetOnLOSForCaller(uint64_t caller,PHD_VECTOR* source,PHD_VECTOR* dest,
@@ -933,7 +940,7 @@ int32_t GetTargetOnLOSForCaller(uint64_t caller,PHD_VECTOR* source,PHD_VECTOR* d
     if (g_longGunHooksReady && g_longGunDll && g_firingHand<0)
         for (auto address:g_longGunDll->opticReturns) opticCaller|=caller==address;
     const int weapon=CurrentMotionWeapon();
-    if (opticCaller && (weapon==3 || weapon==5 || weapon==6) && MotionTriggerMode()) {
+    if (opticCaller && (weapon==motiongun::Revolver || weapon==5 || weapon==6) && MotionTriggerMode()) {
         GunPose gun{};
         if (!BuildGunPose(1,gun))
             return g_hGetTargetOnLOS.Original<Fn_GetTargetOnLOS>()(source,dest,flags,0);
@@ -1005,11 +1012,10 @@ void __cdecl Detour_PistolHandler(int32_t weapon) {
     if (separate) {
         auto& left=*reinterpret_cast<int16_t*>(lara+off::lara_left_arm+20);
         auto& right=*reinterpret_cast<int16_t*>(lara+off::lara_right_arm+20);
-        // Native left-Uzi firing writes the RIGHT arm flash counter. Split
-        // that shared dual-fire convention when only the left hand fires.
-        const int16_t flash=std::max(left,right);
+        // Pistols (1) and Uzis (3) already write the matching arm's counter.
+        // Only the revolver (2), handled by RifleHandler, uses the shared
+        // left-arm firing branch with a right-hand flash.
         if (!g_handFired[0]) left=beforeFlash[0];
-        else if (weapon==2) left=flash;
         if (!g_handFired[1]) right=beforeFlash[1];
     }
     if (!MotionReady()) return;

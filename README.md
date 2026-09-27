@@ -4907,8 +4907,19 @@ Both control schemes (classic/modern) use their own native draw setting.
 Requests wait for the native firing cycle and are canceled
 on loss of readiness, switching weapons or leaving the mode. Native ammo, spread, damage and firing
 effects remain in use, with unrequested hands blocked before native firing.
-The left-Uzi shared flash counter is corrected so left-only shots flash on the
-left gun. Hand mesh masking does not change the calibrated wrist or muzzle.
+The Uzi/Desert Eagle trigger-routing correction (2026-09-26) fixes two reports:
+LT not firing the left Uzi, and RT not firing the Desert Eagle. The previous
+code had their native IDs reversed: Uzis are ID 3; the revolver/Desert Eagle is
+ID 2. Pistols and Uzis now route each native firing call to its own controller.
+The revolver/Desert Eagle skips the native right-arm firing call and fires via
+the shared left-arm call, which is now correctly mapped to RT and the right
+controller. Its laser-sight path also uses the corrected ID.
+
+The earlier explanation of a shared **Uzi** flash counter was incorrect: that
+special right-hand flash belongs to the revolver/Desert Eagle. Uzis already
+write the matching hand's native counter; left-only/right-only requests now
+retain their matching shots and flashes. This correction does not change hand
+calibration, wrist pivots, muzzle offsets, camera behavior or third-person firing.
 
 Y+LT (view), Y+RT (graphics), menus, third person, classic graphics, flares/torches
 and TR6 keep their existing controls. Entering the mode with a trigger
@@ -5019,13 +5030,17 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest cutscene-enabled run (2026-09-26) passed **15,539 checks**. These are
-synthetic checks, including parameter sweeps, not 15,539 in-game scenarios or
+The latest Uzi/Desert Eagle fix run (2026-09-26) passed **15,666 checks**. These are
+synthetic checks, including parameter sweeps, not 15,666 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
 automatic resumption. Cutscene tests verify native camera/visibility restoration,
 canceled gun requests and that third-person players stay in third person.
+New handgun tests exercise the production caller dispatcher for all four
+supported builds, covering independent Uzi/pistol taps, the revolver/Desert
+Eagle's shared firing branch, matching Uzi flashes, consumed requests, tracking
+loss, third-person passthrough and revolver laser-sight request gating.
 The Release x64 build also succeeded. Native address/prologue/layout checks
 were extended in `tools/verify_addresses.py`; the latest recorded run against
 the available PDB/retail binaries passed **806 checks**. To include an installed
@@ -5037,11 +5052,15 @@ python tools\verify_addresses.py "C:\Program Files (x86)\Steam\steamapps\common\
 
 `python tools/verify_motion_guns.py` also passed for all four supported
 TR4/TR5 DLL builds, checking the production hook table, native firing/flash
-calls, six shotgun pellets, launchers and optic callers. The complete
+calls, six shotgun pellets, launchers and optic callers. It now independently
+checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skipped
+right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger and INI save/restore tests. The deployed
-cutscene-enabled DLL's SHA-256 is
-`C6D366D2B78E578344843773C08A72CCA848CF673075A6C854F0B81EDCE0E30B`.
+Uzi/Desert Eagle fix DLL (including cutscene suspension) has SHA-256
+`7D100487F88998229C8B6A4E48F543C546FEED0E4B5B8571178F70A0CC07A2CD`.
+The prior installed DLL and INI were backed up under
+`build/before-uzi-desert-eagle-fix-20260926-225002/`.
 The previous all-weapon DLL remains as `TombRaiderVR.dll.x` in the game folder.
 Deployment verified the active DLL's hash and left the INI/calibration
 unchanged; saves were not edited.

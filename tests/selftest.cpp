@@ -790,7 +790,7 @@ static void TestMotionGunTriggers() {
     Check(HandOnlyMask(0x3600)==0x2400,"combined rifle hand pass excludes both forearms");
     Check(SupportedWeapon(1) && SupportedWeapon(6) && !SupportedWeapon(0) &&
           !SupportedWeapon(7) && !SupportedWeapon(8),"only actual gun IDs are motion weapons");
-    Check(DualWeapon(1) && DualWeapon(2) && !DualWeapon(3) && !DualWeapon(5),
+    Check(DualWeapon(1) && DualWeapon(3) && !DualWeapon(2) && !DualWeapon(5),
           "single weapons cannot inherit independent left-gun firing");
     Check(HandOnlyMask(0x100)==0 && HandOnlyMask(0x800)==0 && HandOnlyMask(0x7fff)==0,
           "upper arm and body passes suppressed");

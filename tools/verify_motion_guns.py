@@ -31,6 +31,7 @@ lara_gun_builds = {
 }
 
 root = Path(__file__).resolve().parents[1]
+game_source = (root / "src/GameDll.cpp").read_text()
 # path, stamp, GetJoints, FireWeapon, FireWeapon->W2V return,
 # right/left AnimatePistols->FireWeapon returns, phd_GenerateW2V,
 # PistolHandler (decouples the camera from arm aim), GetTargetOnLOS and
@@ -71,6 +72,50 @@ for (path, stamp, get_joints, fire, view_ret, right_ret, left_ret,
     assert call_target(data, view_ret) == w2v, (path, "shot view")
     assert call_target(data, right_ret) == fire, (path, "right gun")
     assert call_target(data, left_ret) == fire, (path, "left gun")
+    # Verify identities from native ammo dispatch, independently of the C++
+    # routing tests. PDB lara_inv fields: pistols +0x190, revolver +0x194,
+    # Uzis +0x192. The latter two were previously reversed in motion input.
+    lara_match = re.search(
+        rf'0x{stamp:08X}, L"tomb[45]\.dll", "[^"]+",\s*'
+        r'/\* lara\s*\*/\s*(0x[0-9A-F]+)', game_source)
+    assert lara_match, (path, "production Lara address")
+    lara = int(lara_match[1], 16)
+    early_calls = [i for i in decoder.disasm(data[fire:fire+100], fire)
+                   if i.mnemonic == "call"]
+    assert len(early_calls) == 2, (path, "joint then ammo lookup")
+    ammo = int(early_calls[1].op_str, 16)
+    for weapon, field in ((1, 0x190), (2, 0x194), (3, 0x192)):
+        pc, value, zero, result = ammo, weapon, False, None
+        for _ in range(20):
+            ins = next(decoder.disasm(data[pc:pc+15], pc))
+            pc += ins.size
+            if ins.mnemonic in ("sub", "cmp"):
+                assert ins.op_str.startswith("ecx, "), (path, "ammo selector")
+                comparison = value - ins.operands[1].imm
+                zero = comparison == 0
+                if ins.mnemonic == "sub":
+                    value = comparison
+            elif ins.mnemonic == "je":
+                if zero:
+                    pc = ins.operands[0].imm
+            elif ins.mnemonic == "lea":
+                assert ins.op_str.startswith("rax, [rip"), (path, "ammo field")
+                result = pc + ins.disp
+            elif ins.mnemonic == "ret":
+                break
+            else:
+                raise AssertionError((path, weapon, "unexpected ammo path", ins.op_str))
+        assert result == lara + field, (path, weapon, "native gun ID / ammo field")
+    # Weapon 2 skips the right call and instead uses the shared left-arm call
+    # with a RIGHT-hand flash. Weapon 3 uses both calls and matching flashes.
+    branch = list(decoder.disasm(data[right_ret-56:right_ret-40], right_ret-56))
+    assert branch[0].mnemonic == "cmp" and branch[0].op_str == "r14d, 2"
+    assert branch[1].mnemonic == "je" and branch[1].operands[0].imm > right_ret
+    effects = list(decoder.disasm(data[left_ret:left_ret+140], left_ret))
+    assert any(i.mnemonic == "cmp" and i.op_str == "r14d, 2" for i in effects)
+    flash_fields = [i.address+i.size+i.disp for i in effects
+                    if i.mnemonic == "mov" and i.op_str.startswith("word ptr [rip")]
+    assert flash_fields[:2] == [lara+0x11c, lara+0x104], (path, "single/dual flash counters")
     for ret in (right_ret,left_ret):
         ins=list(decoder.disasm(data[ret:ret+12],ret))
         assert ins[0].mnemonic=="test" and ins[0].op_str=="eax, eax", (path,"shot result test")
@@ -96,7 +141,7 @@ for (path, stamp, get_joints, fire, view_ret, right_ret, left_ret,
     assert any("qword ptr [rip" in i.op_str and
                i.address+i.size+i.disp == fmx
                for i in decoder.disasm(data[flash:flash+340],flash)), (path,"float stack")
-    print(f"{path}: hook bytes and both shot sites OK")
+    print(f"{path}: hook bytes, native weapon IDs, both shot sites and single/dual flashes OK")
 
 print("motion-gun addresses: all four builds verified")
 

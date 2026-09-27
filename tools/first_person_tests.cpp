@@ -144,10 +144,13 @@ void __cdecl FakeHandDraw(uint8_t* item,int32_t useBits,int32_t) {
           (tr::g_renderArm==0 && handDrawMask==0x2000)),
           "actual draw retains only the tracked hand and gun");
 }
-void __cdecl FakeUziHandler(int32_t) {
-    // Reproduce native left-Uzi behavior: it writes the right flash field.
-    tr::g_handFired[0]=true;
-    *reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_right_arm+20)=3;
+void __cdecl FakeUziHandler(int32_t weapon) {
+    Check(weapon==3,"native Uzi ID is 3");
+    const int16_t aim[2]={};
+    if (tr::FireWeaponForCaller(tr::g_motionDll->rightFireReturn,weapon,nullptr,nullptr,aim))
+        *reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_right_arm+20)=3;
+    if (tr::FireWeaponForCaller(tr::g_motionDll->leftFireReturn,weapon,nullptr,nullptr,aim))
+        *reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_left_arm+20)=3;
 }
 bool shotVisible=true;
 int shotSightCalls=0, shotTargetCalls=0;
@@ -536,7 +539,7 @@ int main() {
         VR().m_controllerPoseValid[1]=false; blocked("right-controller-pose-missing");
         VR().m_controllerPoseValid[1]=true;
         appMemory[0x9e4]=0; blocked("classic-graphics-or-no-app"); appMemory[0x9e4]=1;
-        gun=3; blocked("weapon-not-supported"); gun=2;
+        gun=2; blocked("weapon-not-supported"); gun=3;
         Check(MotionReady(),"motion readiness accepts Uzis");
         status=0; blocked("guns-not-ready"); status=4;
         g_scenePoseValid=false; blocked("no-scene-camera"); g_scenePoseValid=true;
@@ -547,7 +550,7 @@ int main() {
         status=0;
         Check(MotionTriggerMode(),"holstered pistols/Uzis retain long-hold equip controls");
         status=4;
-        gun=3; Check(!MotionTriggerMode(),"other weapons retain native triggers"); gun=1;
+        gun=2; Check(!MotionTriggerMode(),"single weapons need the additional hooks"); gun=1;
         g_hFireWeapon.m_trampoline=reinterpret_cast<void*>(&FakeFire);
         dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeHandJoint));
         const bool neutral=VR().m_firstPersonNeutralValid;
@@ -590,10 +593,15 @@ int main() {
         meshBits=savedBits;
         auto& leftFlash=*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+20);
         auto& rightFlash=*reinterpret_cast<int16_t*>(laraMemory+off::lara_right_arm+20);
-        leftFlash=rightFlash=0; gun=2;
+        leftFlash=rightFlash=0; gun=3;
+        motion.rightFireReturn=0x111; motion.leftFireReturn=0x222;
+        g_gunTriggers.pending[0]=true; g_gunTriggers.pending[1]=false;
         g_hPistolHandler.m_trampoline=reinterpret_cast<void*>(&FakeUziHandler);
-        Detour_PistolHandler(2);
-        Check(leftFlash==3 && rightFlash==0,"left-only Uzi flash moved from native right counter to left");
+        Detour_PistolHandler(3);
+        Check(leftFlash==3 && rightFlash==0,"left-only Uzi shot and flash stay on the left");
+        leftFlash=rightFlash=0;
+        g_gunTriggers.pending[1]=true; Detour_PistolHandler(3);
+        Check(leftFlash==0 && rightFlash==3,"right-only Uzi shot and flash stay on the right");
         leftFlash=rightFlash=0;
         // Additional weapon hooks are independently gated: failures must
         // leave the previously working pistols/Uzis usable.
@@ -609,8 +617,52 @@ int main() {
         const auto savedFloor=dll.getFloor;
         dll.getFloor=rva(reinterpret_cast<void*>(&FakeProjectileFloor));
         const int savedGame=dll.game;
+        // Exercise the production caller dispatcher, not just FireWeaponForHand.
+        // All four native binaries use ID 2 for revolver/Desert Eagle, 3 for Uzis.
+        for (const auto& native:kMotionDlls) {
+            motion.rightFireReturn=native.rightFireReturn;
+            motion.leftFireReturn=native.leftFireReturn;
+            for (int weapon:{1,3,2}) {
+                gun=int16_t(weapon);
+                const bool dual=weapon!=2;
+                const auto leftCaller=motion.leftFireReturn;
+                const auto rightCaller=dual ? motion.rightFireReturn : leftCaller;
+                auto fire=[&](uint64_t caller) {
+                    return FireWeaponForCaller(caller,weapon,nullptr,nullptr,aim);
+                };
+                g_gunTriggers.Reset(); g_gunTriggers.Update(true,true,false,false,0);
+                g_gunTriggers.Update(true,true,true,false,1);
+                g_gunTriggers.Update(true,true,false,false,2);
+                const int before=nativeShotCalls;
+                Check(fire(rightCaller)==0,"LT cannot fire the right pistol/Uzi or Desert Eagle");
+                if (dual) {
+                    Check(fire(leftCaller)==-1 && nativeShotHand==0 && nativeShotCalls==before+1,
+                          "LT release fires native left pistol/Uzi from left controller");
+                    Check(fire(leftCaller)==0,"native left call cannot repeat a consumed tap");
+                }
+                g_gunTriggers.pending[0]=false;
+                g_gunTriggers.Update(true,true,false,true,3);
+                const int beforeRight=nativeShotCalls;
+                if (dual) Check(fire(leftCaller)==0,"RT cannot fire left pistol/Uzi");
+                Check(fire(rightCaller)==-1 && nativeShotHand==1 && nativeShotCalls==beforeRight+1,
+                      "RT fires right pistol/Uzi or shared revolver branch from right controller");
+                Check(!g_gunTriggers.WantsShot() && fire(rightCaller)==0,
+                      "one RT request is consumed exactly once through native caller routing");
+                g_gunTriggers.pending[1]=true; VR().m_controllerPoseValid[1]=false;
+                Check(fire(rightCaller)==0,"missing right pose cannot produce a head-aimed shot");
+                VR().m_controllerPoseValid[1]=true;
+                Check(fire(0xdeadbeef)==-1 && nativeShotHand==-1,
+                      "unrecognized caller remains native for every handgun");
+                const bool wasActive=g_active; g_active=false;
+                Check(fire(rightCaller)==-1 && nativeShotHand==-1,
+                      "third-person firing bypasses motion routing for every handgun");
+                g_active=wasActive;
+            }
+        }
+        g_gunTriggers.Reset(); g_gunTriggers.Update(true,true,false,false,0);
         VR().m_controllerPoseValid[0]=false;
-        for (gun=3;gun<=6;++gun) {
+        for (int weapon:{2,4,5,6}) {
+            gun=int16_t(weapon);
             Check(MotionReady() && MotionTriggerMode(),"single weapons need only right-controller tracking");
             GunPose rightGun{};
             Check(BuildGunPose(1,rightGun),"all remaining weapons build calibrated wrist and muzzle");
@@ -663,6 +715,13 @@ int main() {
         Check(cameraStart.x==999 && cameraEnd.x==999,"optic shot cannot overwrite camera vectors");
         GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,1);
         Check(opticMode==0 && longCalls==beforeGrapple+1,"repeated optic poll cannot duplicate shot");
+        gun=2; g_gunTriggers.pending[1]=true;
+        GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,1);
+        Check(opticMode==1 && !g_gunTriggers.pending[1],
+              "revolver/Desert Eagle optic shot uses right controller and consumes RT");
+        GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,1);
+        Check(opticMode==0 && cameraStart.x==999 && cameraEnd.x==999,
+              "revolver optic polling cannot duplicate shots or overwrite the camera");
         g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeHandDraw);
         const int beforeCombined=handDrawCalls;
         meshBits=0x3600; Detour_DrawCreatureHD(itemMemory,1,0);

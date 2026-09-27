@@ -3,7 +3,10 @@
 
 namespace tr::motiongun {
 
-inline bool DualWeapon(int weapon) { return weapon==1 || weapon==2; }
+// Native TR4/5 gun IDs, verified against get_current_ammo_pointer and lara_inv.
+// Revolver includes TR5's Desert Eagle; the Uzi ID is 3, not 2.
+enum Weapon { Pistols=1, Revolver=2, Uzis=3 };
+inline bool DualWeapon(int weapon) { return weapon==Pistols || weapon==Uzis; }
 inline bool SupportedWeapon(int weapon) { return weapon>=1 && weapon<=6; }
 
 // One queued shot per hand, consumed by the native FireWeapon hook rather
