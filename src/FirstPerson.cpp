@@ -7,6 +7,7 @@
 #include "VRSystem.h"
 #include "LocomotionMath.h"
 #include "FirstPersonClearance.h"
+#include "FirstPersonStabilization.h"
 #include "MotionGunMath.h"
 #include "MotionGunInput.h"
 
@@ -112,6 +113,17 @@ bool g_haveManualInput = false;
 bool g_shifted = false;
 bool g_jumpPressed = false;
 int g_directionalRootScale = 1;
+bool g_stabilizeRoot=false;
+uint64_t g_stabilizeAction=0;
+locomotion::Vec g_stabilizeDirection{};
+stabilization::RootMotion g_rootMotion;
+stabilization::GroundEye g_groundEye;
+
+void ResetMovementStabilization() {
+    g_stabilizeRoot=false;
+    g_rootMotion.Reset();
+    g_groundEye.Reset();
+}
 
 bool g_meshOverride = false;
 bool g_headHidden = false;
@@ -1164,7 +1176,8 @@ void __cdecl Detour_AnimateLara(uint8_t* item) {
     auto original = g_hAnimateLara.Original<Fn_AnimateLara>();
     const int scale = item && item == g_headingItem
         ? std::clamp(g_directionalRootScale, 1, 3) : 1;
-    if (scale == 1) {
+    const bool stabilize=g_stabilizeRoot && item && item==g_headingItem && CanTurnBody(item);
+    if (scale == 1 && !stabilize) {
         original(item);
         return;
     }
@@ -1175,12 +1188,25 @@ void __cdecl Detour_AnimateLara(uint8_t* item) {
     pos.z_pos = oldZ + (pos.z_pos - oldZ) * scale;
     auto& speed = *reinterpret_cast<int16_t*>(item + off::item_speed);
     speed = static_cast<int16_t>(std::clamp<int>(speed * scale, -32768, 32767));
+    // Native animation has run exactly once; its collision routine has NOT.
+    // Never straighten a collision-resolved position or touch vertical motion.
+    if (stabilize && CanTurnBody(item) &&
+        !(*reinterpret_cast<const uint32_t*>(item+0x1820)&8)) {
+        locomotion::Vec step;
+        if (g_rootMotion.Step({float(pos.x_pos-oldX),float(pos.z_pos-oldZ)},
+            g_stabilizeDirection,*reinterpret_cast<int16_t*>(item+off::item_anim_state),
+            g_stabilizeAction,step)) {
+            pos.x_pos=oldX+int32_t(step.x); pos.z_pos=oldZ+int32_t(step.z);
+            speed=int16_t(std::copysign(std::round(g_rootMotion.speed),float(speed)));
+        }
+    } else if (stabilize) g_rootMotion.Reset();
 }
 
 void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     using namespace locomotion;
     g_dragPrevious = g_dragCurrent;
     g_directionalRootScale = 1;
+    g_stabilizeRoot=false;
     if (item && item == g_headingItem && g_active && g_haveHeading && Gate()) {
         const int state = *reinterpret_cast<int16_t*>(item + off::item_anim_state);
         const bool ground = CanTurnBody(item);
@@ -1217,10 +1243,16 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
                     input = (input & ~Directions) | action;
                     if (ground)
                         g_directionalRootScale = DirectionalRootScale(action, preparingJump);
+                    if (ground && !preparingJump && Cfg().firstPersonMovementStabilization) {
+                        g_stabilizeRoot=true;
+                        g_stabilizeDirection=directionalWorld;
+                        g_stabilizeAction=action;
+                    }
                 }
             }
         }
     }
+    if (!g_stabilizeRoot) g_rootMotion.Reset();
     // Physical steps never enter XInput or advance the walk animation.
     if (item && item == g_headingItem && g_active && g_haveHeading && Gate()) {
         const Vec dragged = DragBody(item);
@@ -1245,6 +1277,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     }
     g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
     g_directionalRootScale = 1;
+    g_stabilizeRoot=false;
 }
 
 void UpdateLocomotion(PHD_3DPOS& pose) {
@@ -1266,6 +1299,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         g_dragShown = shown;
     }
     if (!g_haveHeading || g_headingItem != item || relocated) {
+        ResetMovementStabilization();
         const float facing = g_headingItem == item && !relocated
             ? g_lastHeadWorld : Radians(pos.y_rot);
         g_headingBase = Wrap(facing - VR().HeadYawRadians());
@@ -1311,7 +1345,7 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
 
     locomotion::Vec tracked{};
     if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation) {
-        VR().HeadFloorOffset(tracked.x, tracked.z);
+        VR().FirstPersonViewOffset(tracked.x, tracked.z);
         tracked = locomotion::Rotate(tracked, g_headingBase) * LiveWorldUnitsPerMetre();
     }
     if (!std::isfinite(tracked.x) || !std::isfinite(tracked.z) ||
@@ -1354,7 +1388,8 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
 // and physical translation. Extrema over a full second avoid aliasing a gait
 // cycle with a slow periodic log sample. Never modify the camera or input here.
 void TraceForwardCamera(const uint8_t* item, const float body[3],
-                        const PHD_VECTOR& head, int frac, uint64_t now) {
+                        const PHD_VECTOR& head, int frac, uint64_t now,
+                        const PHD_3DPOS* rendered = nullptr) {
     const int state = *reinterpret_cast<const int16_t*>(item + off::item_anim_state);
     if (!Cfg().firstPersonDriftLog || !g_haveManualInput || g_shifted ||
         g_manualLocal.z <= 0.2f || std::fabs(g_manualLocal.x) > g_manualLocal.z ||
@@ -1373,8 +1408,10 @@ void TraceForwardCamera(const uint8_t* item, const float body[3],
     const float headYaw = Wrap(g_headingBase + VR().HeadYawRadians());
     const Vec bodyWorld{body[0], body[2]};
     const Vec headWorld{float(head.x), float(head.z)};
-    Vec pending; VR().HeadFloorOffset(pending.x, pending.z);
-    const Vec eyeWorld = headWorld + Rotate(pending, g_headingBase) * LiveWorldUnitsPerMetre();
+    Vec pending; VR().FirstPersonViewOffset(pending.x, pending.z);
+    if (!Cfg().firstPersonHeadTranslation || !Cfg().positionalTracking) pending={};
+    const Vec cameraWorld = rendered ? Vec{float(rendered->x_pos),float(rendered->z_pos)} : headWorld;
+    const Vec eyeWorld = cameraWorld + Rotate(pending, g_headingBase) * LiveWorldUnitsPerMetre();
     trace.animatedSide.Add(Rotate(headWorld - bodyWorld, -bodyYaw).x, first);
     trace.trackedSide.Add(Rotate(pending, -VR().HeadYawRadians()).x, first);
     trace.yawError.Add(Wrap(headYaw - bodyYaw) * 180 / kPi, first);
@@ -1440,8 +1477,18 @@ bool Anchor(PHD_3DPOS& pose) {
     pose.z_pos = head.z;
     pose.x_rot = 0;
     UpdateLocomotion(pose);
+    if (Cfg().firstPersonMovementStabilization && CanTurnBody(item)) {
+        // Physical head yaw rotates Lara, not the scene-camera origin. Only
+        // artificial yaw changes this reference frame; HMD pose is applied
+        // separately, identically for both eyes, culling and tracked guns.
+        const auto eye=g_groundEye.Apply({body[0],body[1],body[2]},g_headingBase,
+            {float(head.x),float(head.y),float(head.z)});
+        pose.x_pos=int32_t(std::lround(eye.x));
+        pose.y_pos=int32_t(std::lround(eye.y));
+        pose.z_pos=int32_t(std::lround(eye.z));
+    } else g_groundEye.Reset();
     ClampRenderedHeadToCollision(item, pose);
-    TraceForwardCamera(item, body, head, frac, GetTickCount64());
+    TraceForwardCamera(item, body, head, frac, GetTickCount64(), &pose);
     pose.z_rot = 0;
     if (!g_loggedFirst) {
         LogF("firstperson: native joint %d anchored; offset from body=(%.0f,%.0f,%.0f)",
@@ -1541,6 +1588,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         // Keep item identity and last viewing heading across UI/cameras.
         g_haveManualInput = false;
         g_directionalRootScale = 1;
+        ResetMovementStabilization();
         g_inputTime = g_bodyTime = {};
         g_dragPrevious = g_dragCurrent = g_dragShown = {};
         ++g_skipped;
@@ -1755,6 +1803,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
 }
 
 void Remove() {
+    ResetMovementStabilization();
     RemoveLongGunHooks();
     g_gunTriggers.Reset();
     g_gunEquip.Reset();
@@ -1866,6 +1915,7 @@ void FirstPersonUpdate() {
 }
 
 void FirstPersonRecenter() {
+    g_rootMotion.Reset();
     g_cameraMotionTrace = {};
     VR().RecenterFirstPersonHead();
     g_dragPrevious = g_dragCurrent = g_dragShown = {};
@@ -1873,6 +1923,7 @@ void FirstPersonRecenter() {
 }
 
 void FirstPersonToggle() {
+    ResetMovementStabilization();
     g_calibrationActive=false;
     g_cameraMotionTrace = {};
     const bool wasActive = g_active;

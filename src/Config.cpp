@@ -302,6 +302,8 @@ void LoadConfig(const wchar_t* ini) {
         L"FirstPersonInteractionAnchorZ", g_cfg.firstPersonInteractionAnchorZ, ini);
     g_cfg.firstPersonHeadTranslation = GetBool(
         L"FirstPersonHeadTranslation", g_cfg.firstPersonHeadTranslation, ini);
+    g_cfg.firstPersonMovementStabilization = GetBool(
+        L"FirstPersonMovementStabilization", g_cfg.firstPersonMovementStabilization, ini);
     g_cfg.firstPersonRoomscaleNeckMetres = GetFloat(
         L"FirstPersonRoomscaleNeckMetres", g_cfg.firstPersonRoomscaleNeckMetres, ini);
     g_cfg.firstPersonRoomscaleMove = GetBool(
@@ -460,13 +462,14 @@ void LoadConfig(const wchar_t* ini) {
          g_cfg.cullFarUnits, g_cfg.cullWidenBounds, g_cfg.cullObjects,
          g_cfg.skyAtInfinity ? "infinity" : "ENGINE (finite dome)");
     LogF("config: first person TR4/TR5 joint=%d anchor=(%d,%d,%d), "
-         "translation=%s head=%s move-with-head=%s turn=%.0fdeg/s",
+         "translation=%s head=%s move-with-head=%s turn=%.0fdeg/s stabilization=%s",
          g_cfg.firstPersonJoint, g_cfg.firstPersonAnchorX,
          g_cfg.firstPersonAnchorY, g_cfg.firstPersonAnchorZ,
          g_cfg.firstPersonHeadTranslation ? "on" : "OFF",
          g_cfg.firstPersonHideHead ? "hidden" : "DRAWN",
          g_cfg.firstPersonMoveWithHead ? "on" : "OFF",
-         g_cfg.firstPersonTurnDegreesPerSecond);
+         g_cfg.firstPersonTurnDegreesPerSecond,
+         g_cfg.firstPersonMovementStabilization ? "on" : "OFF");
     LogF("config: first person body-follow=%d deadzone=%.1f turn=%.1fdeg/60Hz "
          "head-aim=%d; Y+LT=view, Y+RT=graphics (including menus)",
          g_cfg.firstPersonBodyFollowsHead, g_cfg.firstPersonBodyDeadzoneDegrees,

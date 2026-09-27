@@ -518,7 +518,7 @@ bool VRSystem::FirstPersonControllerOffset(int hand, float& right, float& down,
                                            float& forward) const {
     if (hand < 0 || hand > 1 || !m_poseValid || !m_firstPersonNeutralValid ||
         !m_controllerPoseValid[hand]) return false;
-    HeadFloorOffset(right, forward);
+    FirstPersonViewOffset(right, forward);
     const auto& controller = m_rawControllerPose[hand];
     right += controller.m[0][3] - m_rawHeadPose.m[0][3];
     forward -= controller.m[2][3] - m_rawHeadPose.m[2][3];
@@ -545,7 +545,9 @@ void VRSystem::PivotHeadFloorOffset(float yawDelta) {
         std::clamp(Cfg().firstPersonRoomscaleNeckMetres, 0.0f, 0.4f));
     const auto neckArc = pivot - locomotion::Vec{m_firstPersonNeutralNeck[0],
                                                m_firstPersonNeutralNeck[1]};
-    const auto after = locomotion::PivotFloorOffset(before, neckArc, yawDelta);
+    const auto after = Cfg().firstPersonMovementStabilization
+        ? locomotion::Rotate(before,-yawDelta)
+        : locomotion::PivotFloorOffset(before, neckArc, yawDelta);
     ConsumeHeadFloorOffset(before.x - after.x, before.z - after.z);
 }
 
@@ -557,6 +559,19 @@ void VRSystem::ConsumeHeadFloorOffset(float right, float forward) {
     // see this change in the same frame, without a stale cached eye origin.
 }
 
+void VRSystem::FirstPersonViewOffset(float& right,float& forward) const {
+    if (!Cfg().firstPersonMovementStabilization) {
+        HeadFloorOffset(right,forward); return;
+    }
+    right=forward=0;
+    if (!m_poseValid || !m_firstPersonNeutralValid) return;
+    // Stabilized camera no longer follows the animated body's physical-yaw
+    // orbit. Render actual HMD translation, not an invented neck arc. The
+    // compensated neck position still drives room-scale BODY movement only.
+    right=m_rawHeadPose.m[0][3]-m_firstPersonNeutral[0];
+    forward=-(m_rawHeadPose.m[2][3]-m_firstPersonNeutral[2]);
+}
+
 void VRSystem::RecentreOffset() {
     m_recentreRequested = true;
     if (FirstPersonActive()) FirstPersonRecenter();
@@ -565,17 +580,17 @@ void VRSystem::RecentreOffset() {
 
 Affine VRSystem::TrackedHeadView() const {
     if (!FirstPersonActive()) return m_headFromTracking;
-    // The animated joint supplies eye height. Only physical displacement since
+    // The scene anchor supplies eye height. Only physical displacement since
     // entering first person belongs on top of it; never the standing origin's
     // full floor-to-head height or the third-person world-offset accumulator.
     auto pose = m_rawHeadPose;
     for (int i = 0; i < 3; ++i)
         pose.m[i][3] = m_firstPersonNeutralValid
             ? pose.m[i][3] - m_firstPersonNeutral[i] : 0.0f;
-    // Do not count the neck-to-eye arc twice as Lara follows physical yaw.
-    // Keep real horizontal leaning and the unmodified vertical displacement.
+    // Stabilization uses raw tracking; the opt-out retains legacy neck-arc
+    // compensation. Vertical displacement is unmodified in either mode.
     float right, forward;
-    HeadFloorOffset(right, forward);
+    FirstPersonViewOffset(right, forward);
     pose.m[0][3] = right;
     pose.m[2][3] = -forward;
     return InvertRigid(FromHmd(pose));

@@ -112,6 +112,7 @@ public:
     // current physical position, including views already sampled this frame.
     void RecenterThirdPersonHead();
     void HeadFloorOffset(float& right, float& forward) const;
+    void FirstPersonViewOffset(float& right, float& forward) const;
     void ConsumeHeadFloorOffset(float right, float forward);
     void PivotHeadFloorOffset(float yawDelta);
 

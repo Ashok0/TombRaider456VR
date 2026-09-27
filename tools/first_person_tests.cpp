@@ -197,6 +197,39 @@ void __cdecl FakeAnimate(uint8_t* item) {
     pos.x_pos += 3; pos.y_pos += 7; pos.z_pos += 5;
     *reinterpret_cast<int16_t*>(item + tr::off::item_speed) = 10;
 }
+tr::locomotion::Vec unstableStep{};
+int unstableHeight=0, nativeCollisionPasses=0;
+bool blockStableMotion=false, startAirborne=false;
+tr::locomotion::Vec beforeNativeCollision{};
+tr::PHD_VECTOR gaitSway{};
+void __cdecl FakeUnstableAnimate(uint8_t* item) {
+    ++animationTicks;
+    auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    p.x_pos+=int32_t(unstableStep.x); p.z_pos+=int32_t(unstableStep.z);
+    p.y_pos+=unstableHeight;
+    *reinterpret_cast<int16_t*>(item+tr::off::item_speed)=int16_t(tr::locomotion::Length(unstableStep));
+    if (startAirborne) *reinterpret_cast<int16_t*>(item+tr::off::item_anim_state)=3;
+}
+void __cdecl FakeUnstableAboveWater(uint8_t* item,void*) {
+    ++simulationTicks;
+    auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    const auto previous=p;
+    tr::Detour_AnimateLara(item);
+    beforeNativeCollision={float(p.x_pos-previous.x_pos),float(p.z_pos-previous.z_pos)};
+    ++nativeCollisionPasses;
+    if (blockStableMotion) { p.x_pos=previous.x_pos; p.z_pos=previous.z_pos; }
+}
+void __cdecl FakeGaitJoint(uint8_t* item,tr::PHD_VECTOR* v,int joint,int frac) {
+    Check(joint==14,"stabilized eye still queries native head joint");
+    const auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    const auto& old=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos_prev);
+    const float t=frac/256.f;
+    const float yaw=tr::Radians(old.y_rot)+tr::Wrap(tr::Radians(p.y_rot)-tr::Radians(old.y_rot))*t;
+    const auto flat=tr::locomotion::Rotate({float(v->x+gaitSway.x),float(v->z+gaitSway.z)},yaw);
+    *v={int32_t(std::lround(old.x_pos+(p.x_pos-old.x_pos)*t+flat.x)),
+        int32_t(std::lround(old.y_pos+(p.y_pos-old.y_pos)*t-700+gaitSway.y)),
+        int32_t(std::lround(old.z_pos+(p.z_pos-old.z_pos)*t+flat.z))};
+}
 void __cdecl FakeAboveWater(uint8_t* item, void*) {
     ++simulationTicks;
     seenInput = actionInput;
@@ -214,8 +247,8 @@ void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z
         Check((airborne || (c->badPos == 384 && c->badNeg == -384)) &&
               c->badCeiling == 0 && c->flags == 5 && height == 762,
               "camera uses native ground or airborne collision parameters");
-        Check(std::hypot(float(x - c->old[0]), float(z - c->old[2])) <= 17,
-              "rendered eye sweep advances at most 16 units per step");
+        Check(std::hypot(float(x - c->old[0]), float(z - c->old[2])) <= 16+std::sqrt(2.f),
+              "rendered eye sweep advances at most 16 units plus two-axis integer rounding");
         Check(room == *reinterpret_cast<int16_t*>(itemMemory + tr::off::item_room),
               "camera sweep starts in Lara's room");
         c->floorSamples[0] = collisionMode == 12 ? 1000 : 0;
@@ -229,7 +262,7 @@ void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z
     Check(c->radius == 100 && c->badPos == 384 && c->badNeg == -384 &&
           c->badCeiling == 0 && c->flags == 5 && height == 762,
           "native room-scale query uses verified standing collision parameters");
-    Check(std::hypot(float(x - c->old[0]), float(z - c->old[2])) <= 33,
+    Check(std::hypot(float(x - c->old[0]), float(z - c->old[2])) <= 32+std::sqrt(2.f),
           "physical displacement split into short collision sweeps");
     Check(room == *reinterpret_cast<int16_t*>(itemMemory + tr::off::item_room),
           "each sweep uses current Lara room");
@@ -310,6 +343,10 @@ uint64_t GameDllBase() { return g_boundBase; }
 int main() {
     using namespace tr;
     config.enabled = config.firstPerson = true;
+    // Original behavior remains explicitly covered with the opt-out, then
+    // new stabilized fixtures below exercise the enabled default separately.
+    Check(config.firstPersonMovementStabilization,"movement stabilization defaults on for existing INIs");
+    config.firstPersonMovementStabilization=false;
     config.positionalTracking = true;
     VR().m_system = reinterpret_cast<vr::IVRSystem*>(uintptr_t(1));
     VR().m_poseValid = true;
@@ -1271,6 +1308,171 @@ int main() {
     config.firstPersonDriftLog = false; g_manualLocal = {0,1};
     TraceForwardCamera(itemMemory, traceBody, traceHead, 128, 2048);
     Check(g_cameraMotionTrace.samples == 0, "disabled diagnostics remain inactive");
+    // Enabled stabilization: test the production animation/simulation hooks,
+    // not only a camera math helper, and retain post-animation collision.
+    for (int which:{0,1}) {
+        game=dll.game=which;
+        for (const auto& d:dirs) {
+            resetRoomscale(); physicalPose(0); FirstPersonRecenter();
+            config.firstPersonMovementStabilization=true;
+            g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAnimate);
+            g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAboveWater);
+            float x=d.x,z=d.z,r=0; FirstPersonInput(x,z,r,false);
+            const auto unit=locomotion::CardinalMovement({d.x,d.z});
+            const auto direction=unit*(1/locomotion::Length(unit));
+            unstableHeight=7; startAirborne=false; blockStableMotion=false;
+            float filteredLow=10000,filteredHigh=0;
+            for (int tick=0;tick<80;++tick) {
+                const int amount=tick%2 ? 12 : 8;
+                unstableStep={direction.x*amount+direction.z*3,
+                              direction.z*amount-direction.x*3};
+                const auto before=pos;
+                const int animations=animationTicks,collisions=nativeCollisionPasses;
+                Detour_LaraAboveWater(itemMemory,nullptr);
+                const auto step=beforeNativeCollision;
+                Check(std::fabs(step.x*direction.z-step.z*direction.x)<0.01f,
+                      "all stabilized ground directions remove native lateral root wobble");
+                Check(pos.y_pos==before.y_pos+7 && animationTicks==animations+1 &&
+                      nativeCollisionPasses==collisions+1,
+                      "stabilization preserves vertical motion and one animation/collision pass");
+                if (tick>20) {
+                    const float length=locomotion::Length(step);
+                    filteredLow=std::min(filteredLow,length); filteredHigh=std::max(filteredHigh,length);
+                }
+            }
+            Check(filteredHigh-filteredLow<4*d.scale,
+                  "native speed pulses are reduced for forward, sidestep and backpedal");
+            blockStableMotion=true; const auto blocked=pos;
+            for (int tick=0;tick<20;++tick) Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(pos.x_pos==blocked.x_pos && pos.z_pos==blocked.z_pos,
+                  "native wall collision remains authoritative after stabilized movement");
+            blockStableMotion=false; unstableStep={}; unstableHeight=0;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(pos.x_pos==blocked.x_pos && pos.z_pos==blocked.z_pos && !g_rootMotion.valid,
+                  "zero native motion stops immediately without filter drift or accumulated wall motion");
+            x=z=r=0; FirstPersonInput(x,z,r,false);
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(!g_rootMotion.valid,"stick release discards speed history");
+            unstableStep={3,5}; startAirborne=true;
+            x=0; z=1; FirstPersonInput(x,z,r,false);
+            const auto airborne=pos; Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(state==3 && pos.x_pos==airborne.x_pos+3 && pos.z_pos==airborne.z_pos+5 && !g_rootMotion.valid,
+                  "native animation transition to airborne bypasses ground root filtering");
+            startAirborne=false;
+        }
+        // Render the same moving root through deliberately violent head sway.
+        // Start/stop and all standing gaits share one eye reference; HMD lean
+        // remains a separate, immediate translation after the scene camera.
+        resetRoomscale(); physicalPose(0); FirstPersonRecenter();
+        collisionMode=0; gaitSway={}; fraction=256;
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+        Check(Anchor(camera),"stable-eye baseline captured from the native head");
+        for (int gait:{0,1,16,20,21,2}) {
+            state=int16_t(gait);
+            for (int tick=0;tick<24;++tick) {
+                prev=pos; pos.x_pos+=5; pos.z_pos+=9; pos.y_pos+=2;
+                gaitSway={tick%2 ? 180 : -180,tick%3 ? 90 : -90,tick%2 ? -130 : 130};
+                for (int f:{0,64,128,192,256}) {
+                    fraction=f;
+                    Check(Anchor(camera),"stabilized gait camera remains valid");
+                    const float t=f/256.f;
+                    Check(std::fabs(camera.x_pos-(prev.x_pos+5*t))<=0.51f &&
+                          std::fabs(camera.z_pos-(prev.z_pos+9*t+144))<=0.51f &&
+                          std::fabs(camera.y_pos-(prev.y_pos+2*t-700))<=0.51f,
+                          "ground eye ignores lateral, forward and vertical gait animation but follows interpolated root");
+                }
+            }
+        }
+        prev=pos; physicalPose(0,0.025f,0,-0.04f);
+        Anchor(camera);
+        checkViews(0.025f,0,-0.04f);
+        const auto lean=InvertRigid(VR().HeadView());
+        Check(std::fabs(camera.x_pos+lean.r[0][3]-(pos.x_pos+25))<1,
+              "physical head translation is immediate, not EMA filtered");
+        config.firstPersonMovementStabilization=false; gaitSway={100,50,70};
+        Check(Anchor(camera) && camera.x_pos==pos.x_pos+100 && camera.y_pos==pos.y_pos-650 &&
+              camera.z_pos==pos.z_pos+214 && !g_groundEye.valid,
+              "INI opt-out restores the native animated eye");
+        config.firstPersonMovementStabilization=true;
+        state=71;
+        Check(Anchor(camera) && camera.x_pos==pos.x_pos+100 && !g_groundEye.valid,
+              "reverted crouch behavior stays native and never receives grounded-eye stabilization");
+        state=2; gaitSway={}; Anchor(camera);
+        pos.x_pos+=10000; prev=pos; gaitSway={10,20,30};
+        Check(Anchor(camera) && camera.x_pos==pos.x_pos+10 && camera.y_pos==pos.y_pos-680,
+              "teleport recaptures the eye reference instead of retaining stale camera offsets");
+        state=2; g_runtimeEnabled=false; UpdateSceneCamera(camera);
+        Check(!g_groundEye.valid && !g_rootMotion.valid,"leaving first person clears stabilization state");
+    }
+    // World stability: vary HMD orientation and real translation independently.
+    // Test both render-only and native room-scale simulation/interpolation;
+    // synthetic neck compensation may move the BODY, never the rendered world.
+    for (int which:{0,1}) for (bool moveBody:{false,true}) {
+        game=dll.game=which; resetRoomscale(); collisionMode=0;
+        config.firstPersonMovementStabilization=true;
+        physicalPose(0); Head(0); FirstPersonRecenter();
+        ResetMovementStabilization();
+        unstableStep={}; unstableHeight=0; startAirborne=blockStableMotion=false;
+        g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAnimate);
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAboveWater);
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+        gaitSway={}; fraction=256; Anchor(camera);
+        const auto baseEye=camera;
+        VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+        for (int hand=0;hand<2;++hand) {
+            VR().m_rawControllerPose[hand]=VR().m_rawHeadPose;
+            VR().m_rawControllerPose[hand].m[0][3]+=hand ? 0.2f : -0.2f;
+        }
+        for (int tick=0;tick<=72;++tick) {
+            const float yaw=tick*kPi/18, pitch=0.35f*std::sin(yaw);
+            const float leanX=tick>36 ? 0.08f*std::sin(yaw) : 0;
+            const float leanY=tick>36 ? 0.04f*std::cos(yaw) : 0;
+            const float leanZ=tick>36 ? -0.05f*std::cos(yaw) : 0;
+            Head(yaw,pitch);
+            VR().m_rawHeadPose.m[0][3]+=leanX;
+            VR().m_rawHeadPose.m[1][3]+=leanY;
+            VR().m_rawHeadPose.m[2][3]+=leanZ;
+            VR().m_headFromTracking=InvertRigid(FromHmd(VR().m_rawHeadPose));
+            prev=pos;
+            if (moveBody) Detour_LaraAboveWater(itemMemory,nullptr);
+            for (int f:{0,64,128,192,256}) {
+                fraction=f; Anchor(camera);
+                const auto eye=InvertRigid(VR().HeadView());
+                if (!(std::fabs(camera.x_pos+eye.r[0][3]-baseEye.x_pos-leanX*1000)<1.1f &&
+                      std::fabs(camera.y_pos+eye.r[1][3]-baseEye.y_pos+leanY*1000)<1.1f &&
+                      std::fabs(camera.z_pos-eye.r[2][3]-baseEye.z_pos+leanZ*1000)<1.1f))
+                    std::printf("stability fixture: game=%d move=%d tick=%d frac=%d eye=(%.2f,%.2f,%.2f) expected=(%.2f,%.2f,%.2f) flipY=%d\n",
+                        which,int(moveBody),tick,f,camera.x_pos+eye.r[0][3],camera.y_pos+eye.r[1][3],camera.z_pos-eye.r[2][3],
+                        baseEye.x_pos+leanX*1000,baseEye.y_pos-leanY*1000,baseEye.z_pos-leanZ*1000,int(config.flipViewY));
+                Check(std::fabs(camera.x_pos+eye.r[0][3]-baseEye.x_pos-leanX*1000)<1.1f &&
+                      std::fabs(camera.y_pos+eye.r[1][3]-baseEye.y_pos+leanY*1000)<1.1f &&
+                      std::fabs(camera.z_pos-eye.r[2][3]-baseEye.z_pos+leanZ*1000)<1.1f,
+                      "world eye receives only real HMD translation, no yaw/pitch orbit or room-scale double motion");
+                const auto leftEye=InvertRigid(VR().EyeView(Eye::Left));
+                const auto rightEye=InvertRigid(VR().EyeView(Eye::Right));
+                for (int axis=0;axis<3;++axis)
+                    Check(Near((leftEye.r[axis][3]+rightEye.r[axis][3])*0.5f,eye.r[axis][3]),
+                          "both stereo eyes share the same world-stable head centre");
+                for (int hand=0;hand<2;++hand) {
+                    float right,down,forward;
+                    Check(VR().FirstPersonControllerOffset(hand,right,down,forward),"stable controller offset available");
+                    Check(std::fabs(camera.x_pos+right*1000-baseEye.x_pos-(hand ? 200 : -200))<1.1f &&
+                          std::fabs(camera.z_pos+forward*1000-baseEye.z_pos)<1.1f,
+                          "stationary controllers cannot drift when only the head turns or leans");
+                }
+            }
+        }
+        config.firstPersonRoomscaleMove=false;
+        collisionMode=11; Head(0); VR().m_rawHeadPose.m[0][3]+=0.4f;
+        VR().m_headFromTracking=InvertRigid(FromHmd(VR().m_rawHeadPose));
+        Anchor(camera);
+        const auto clamped=InvertRigid(VR().HeadView());
+        Check(camera.x_pos+clamped.r[0][3]<100,
+              "wall clearance clamps the same raw rendered eye used by stereo, including physical lean");
+        const auto native=VR().m_headFromTracking; g_active=false;
+        const auto third=VR().TrackedHeadView();
+        Check(std::memcmp(&native,&third,sizeof(native))==0,"third-person head tracking is unchanged");
+    }
     VR().m_system = nullptr;
     std::printf("OK: %d first-person regression checks passed.\n", checks);
     return 0;

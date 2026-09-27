@@ -705,6 +705,13 @@ static void TestGunCalibrationPersistence() {
     WritePrivateProfileStringW(L"VR",L"UnrelatedUserSetting",L"123",ini);
     tr::LoadConfig(ini);
     const auto baseline=tr::LiveMotionGunCalibration();
+    Check(tr::Cfg().firstPersonMovementStabilization,"old INIs default to movement stabilization");
+    WritePrivateProfileStringW(L"VR",L"FirstPersonMovementStabilization",L"0",ini);
+    tr::LoadConfig(ini);
+    Check(!tr::Cfg().firstPersonMovementStabilization,"INI can disable movement stabilization");
+    WritePrivateProfileStringW(L"VR",L"FirstPersonMovementStabilization",L"1",ini);
+    tr::LoadConfig(ini);
+    Check(tr::Cfg().firstPersonMovementStabilization,"INI can enable movement stabilization");
     tr::AdjustMotionGunCalibration(3);
     tr::RestoreMotionGunCalibration();
     CheckNear(tr::LiveMotionGunCalibration().raiseMetres,baseline.raiseMetres,

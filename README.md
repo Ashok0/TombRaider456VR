@@ -4548,9 +4548,10 @@ The reported disappearing-room culling case and the earlier dual-gun setup
 were confirmed working by the user. The additional weapons and newly restored
 cutscene cases have automated coverage but still need broader headset testing.
 The reference is the first-person implementation in `TombRaider123VR`; this is
-not a claim of identical in-headset smoothness. Forward-motion sideways wobble,
-subtle stick-turn judder and visible vertical tilt in the **head-aim fallback**
-remain open; the latter is separate from controller-based motion-gun aiming.
+not a claim of identical in-headset smoothness. New ground-motion and head-tracking
+stabilization targets forward/side/back wobble and world swim; it still needs
+headset validation. Subtle stick-turn judder and visible vertical tilt in the
+**head-aim fallback** remain open; the latter is separate from motion-gun aiming.
 TR6 uses a different engine and has **no first-person port**; its existing
 stereo and third-person paths are unchanged by this feature.
 
@@ -4559,7 +4560,8 @@ stereo and third-person paths are unchanged by this feature.
 | Area | Current behavior / fix |
 | --- | --- |
 | View/graphics chords | Y+LT owns the FP toggle in gameplay and menus; Y+RT owns graphics switching |
-| Eye position and physical rotation | Interpolated head anchor, relative tracking neutral and neck-pivot compensation remove the floating/high camera and duplicated 360-degree rotation arc |
+| Eye position and physical rotation | Stable ground anchor plus raw relative HMD tracking avoids animation sway and duplicated physical-yaw motion; native animated anchor outside eligible ground states |
+| Ground stabilization | Default-on eye stabilization and pre-collision horizontal speed/direction correction target forward, sidestep and backpedal wobble; live validation pending |
 | Ground controls | Forward, native sidestep and backpedal replace camera-relative sideways/backward running; TR5 no longer uses TR4's vehicle sentinel |
 | Camera/gun separation | Hand aiming no longer drives the camera through Lara's head/torso aim; wrist rotation uses the recovered grip pivot rather than orbiting the hands |
 | Gun targeting | Tracked muzzle origins, native hit processing and bounded hitscan aim assistance; all-weapon extension preserves shotgun pellets and launcher physics |
@@ -4610,7 +4612,10 @@ the legacy controller-chord behavior.
 
 - **Animated eye anchor:** the camera uses the game's interpolated head joint
   (`GetJointAbsPositionLerp`, joint 14), with local eye offset `(0, -32, 144)`
-  in game units. It does not reuse the third-person camera's height. Headset
+  in game units to establish its reference. With stabilization enabled, eligible
+  grounded states hold that offset relative to the interpolated root and
+  artificial-yaw frame instead of following each animated head-bone oscillation.
+  Other states retain the native animated anchor. It does not reuse third-person height. Headset
   translation is relative to a captured neutral, not absolute standing height.
 - **Directional ground movement:** forward, sidestep and continuous backward
   walking use native animation/action states. Backward uses `Back | Walk`, not
@@ -4624,10 +4629,12 @@ the legacy controller-chord behavior.
   reference. Native interactions, climbing, swimming, death and TR4 vehicles
   retain their own movement rules. Jump preparation and forward-jump steering
   have explicit handling rather than treating airborne movement as walking.
-- **Physical-turn centering:** the neck-to-head compensation removes the
-  duplicate horizontal eye arc that made physical rotation move the view off
-  Lara's center and return after 360 degrees. Artificial turns also pivot the
-  accumulated tracking offset. Actual leaning and ducking remain tracked.
+- **Physical-turn centering:** stabilization keeps Lara's physical body rotation
+  from orbiting the scene origin. The rendered eye uses actual relative HMD
+  translation, with no added neck arc; neck compensation still drives body
+  room-scale movement. Artificial turns pivot the accumulated tracking offset.
+  Real leaning/ducking remains immediate, including normal positional parallax.
+  Eyes, tracked guns and wall-clearance queries use the same view offset.
 - **Room-scale movement:** physical horizontal steps can move Lara through
   native wall, floor/ledge and room-transition checks. This moves her body
   directly rather than synthesizing stick input. Only accepted body motion
@@ -4753,7 +4760,8 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonAnchorZ` | `144` | Local forward eye offset |
 | `FirstPersonInteractionAnchorZ` | `16` | Retract forward eye offset during constrained interactions; cannot extend a custom normal anchor |
 | `FirstPersonHeadTranslation` | `1` | Physical leaning/ducking relative to neutral; tracked rotation remains active |
-| `FirstPersonRoomscaleNeckMetres` | `0.15` | Neck-to-head compensation distance, clamped to 0–0.4 m; `0` disables it |
+| `FirstPersonMovementStabilization` | `1` | Stable grounded eye anchor, pre-collision horizontal root-motion stabilization and raw relative HMD view; `0` restores the legacy paths |
+| `FirstPersonRoomscaleNeckMetres` | `0.15` | Body room-scale neck compensation, clamped to 0–0.4 m; also used for the rendered eye with stabilization disabled |
 | `FirstPersonRoomscaleMove` | `1` | Let collision-checked physical steps move Lara |
 | `FirstPersonRoomscaleDeadzoneMetres` | `0.02` | Lean allowance before the body follows |
 | `FirstPersonRecenterKey` | `0x23` | End; recapture positional neutral while preserving viewing heading |
@@ -4997,15 +5005,36 @@ grips. Both upper arms and forearms remain hidden while motion-ready.
 
 ### Remaining motion issues and diagnostics
 
-**Sideways wobble while moving forward is not yet resolved.** Enabling the
-forward-motion diagnostics does not change controls or camera behavior. With
+**Ground-motion stabilization is implemented; headset confirmation is pending.**
+Historical forward traces showed large lateral animated-head excursions while
+the root moved almost straight. `FirstPersonMovementStabilization=1` (also the
+fallback for older INIs) holds a grounded eye reference across standing/walking,
+sidestepping and backpedaling, using the interpolated root instead of animated
+head sway. Horizontal animation displacement is directed along the existing
+native gait intent and its speed filtered once per simulation step, before
+native collision resolution. Vertical movement, wall/floor collision, room
+transitions and native action selection remain authoritative. Zero displacement
+stops immediately; gait changes/reversals reset the speed filter. Jump preparation,
+airborne movement and interactions retain native behavior. This does not restore
+the reverted crouch/prone room-scale extension.
+
+The same option addresses head-turn/lean world swim: physical body-follow yaw no
+longer rotates the grounded camera offset, and rendered tracking no longer
+subtracts a synthetic neck arc. Accepted room-scale displacement is still
+accounted for at the current interpolation fraction. HMD poses are not smoothed;
+normal VR parallax is preserved. Third-person tracking and hand calibration are
+unchanged. To compare with the previous behavior, add
+`FirstPersonMovementStabilization=0` under `[VR]` and restart.
+
+Enabling diagnostics alone does not change controls or camera behavior. With
 `FirstPersonDriftLog=1`, `fp-forward:` lines summarize roughly one-second windows
 of eligible forward movement, measuring animated head offset (`animSide`),
 per-sample lateral body/eye movement (`rootSideStep`, `eyeSideStep`), pending
 tracked displacement (`trackedSide`), heading error (`bodyYawError`) and render
 interpolation fraction (`frac`). Existing `locomotion:` lines report body-drag
-and heading data. These separate candidate sources; animated head sway is a
-hypothesis, not a confirmed diagnosis or a deployed stabilization fix.
+and heading data. `animSide` remains the raw animated head measurement;
+`eyeSideStep` now uses the stabilized, wall-clamped scene pose plus the actual
+rendered tracking offset, so it can distinguish animation from visible sway.
 
 For a capture, restart with logging enabled, enter first person, hold forward
 in an open area for 10–15 seconds with the headset reasonably still and no
@@ -5026,7 +5055,8 @@ handoff regression coverage.
 ### Implementation and validation
 
 The port lives in `src/FirstPerson.cpp`, `src/FirstPerson.h`,
-`src/FirstPersonClearance.h` and `src/LocomotionMath.h`, with integration in `Gamepad`, `VRSystem`, `Hooks`,
+`src/FirstPersonClearance.h`, `src/FirstPersonStabilization.h` and
+`src/LocomotionMath.h`, with integration in `Gamepad`, `VRSystem`, `Hooks`,
 `Config` and the per-build `GameDll` address tables. Camera replacement is
 limited to the scene-camera call site. Required camera/aim/locomotion hooks
 verify their prologues; installation failure rolls them back and leaves the
@@ -5047,8 +5077,8 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest Uzi/Desert Eagle fix run (2026-09-26) passed **15,666 checks**. These are
-synthetic checks, including parameter sweeps, not 15,666 in-game scenarios or
+The latest stabilization run passed **118,885 checks**. These are
+synthetic checks, including parameter sweeps, not 118,885 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5058,6 +5088,12 @@ New handgun tests exercise the production caller dispatcher for all four
 supported builds, covering independent Uzi/pistol taps, the revolver/Desert
 Eagle's shared firing branch, matching Uzi flashes, consumed requests, tracking
 loss, third-person passthrough and revolver laser-sight request gating.
+Stabilization coverage includes both games, all four ground directions,
+alternating animation speeds, exaggerated head-bone sway, wall stops, vertical
+motion, jump transitions, interpolation fractions and the legacy opt-out.
+Physical yaw/pitch and lean sweeps check world-space eye and stationary-controller
+positions, with room-scale body movement both enabled and disabled. Crouch stays
+on its native path; third-person tracking remains unchanged.
 The Release x64 build also succeeded. Native address/prologue/layout checks
 were extended in `tools/verify_addresses.py`; the latest recorded run against
 the available PDB/retail binaries passed **806 checks**. To include an installed
@@ -5073,11 +5109,12 @@ calls, six shotgun pellets, launchers and optic callers. It now independently
 checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skipped
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
-calibration/pivot, trigger and INI save/restore tests. The deployed
-Uzi/Desert Eagle fix DLL (including cutscene suspension) has SHA-256
-`7D100487F88998229C8B6A4E48F543C546FEED0E4B5B8571178F70A0CC07A2CD`.
+calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
+tests. The deployed stabilization DLL (including the prior all-weapon,
+Uzi/Desert Eagle and cutscene fixes) has SHA-256
+`EBE5ACB1156275F3CFDDEA1D748B53CDB8280B53C1C7571F742F1C9947A40D8F`.
 The prior installed DLL and INI were backed up under
-`build/before-uzi-desert-eagle-fix-20260926-225002/`.
+`build/before-movement-stabilization-20260926-235822/`.
 The previous all-weapon DLL remains as `TombRaiderVR.dll.x` in the game folder.
 Deployment verified the active DLL's hash and left the INI/calibration
 unchanged; saves were not edited.
@@ -5099,8 +5136,9 @@ tests alone.
 
 These are honest gaps, not oversights.
 
-- **TR4/5 first-person motion is still being refined.** Sideways forward-motion
-  wobble and subtle stick-turn judder remain under investigation. Horizontal
+- **TR4/5 first-person motion is still being refined.** Ground-motion/head-tracking
+  stabilization has automated coverage but still needs headset confirmation.
+  Subtle stick-turn judder remains under investigation. Horizontal
   head aiming works, but its fallback visible guns do not tilt vertically with
   gaze; this is distinct from controller-driven motion guns. The
   reported disappearing-room culling case is fixed, though broader headset

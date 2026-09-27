@@ -697,6 +697,7 @@ struct Config {
     int   firstPersonAnchorZ    = 144;
     int   firstPersonInteractionAnchorZ = 16;
     bool  firstPersonHeadTranslation = true;
+    bool  firstPersonMovementStabilization = true; // stable ground eye + pre-collision root motion
     float firstPersonRoomscaleNeckMetres = 0.15f;
     bool  firstPersonRoomscaleMove = true;
     float firstPersonRoomscaleDeadzoneMetres = 0.02f;
