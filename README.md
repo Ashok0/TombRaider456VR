@@ -4542,15 +4542,16 @@ lookup through `g_tr6`), `src\Engine.h` (`shader_init` in the HD/retail rows),
 
 ## Phase 23: TR4/5 First Person
 
-Status as of 2026-09-26: implemented and deployed for supported TR4/5 builds,
+Status as of 2026-09-27: implemented and deployed for supported TR4/5 builds,
 including all-weapon Touch motion controls and restored cutscene suspension.
 The reported disappearing-room culling case and the earlier dual-gun setup
 were confirmed working by the user. The additional weapons and newly restored
 cutscene cases have automated coverage but still need broader headset testing.
 The reference is the first-person implementation in `TombRaider123VR`; this is
 not a claim of identical in-headset smoothness. New ground-motion and head-tracking
-stabilization targets forward/side/back wobble and world swim; it still needs
-headset validation. Subtle stick-turn judder and visible vertical tilt in the
+stabilization targets forward/side/back wobble and world swim; the user reports
+movement now feels great, while head-motion and broader level coverage still need
+validation. Subtle stick-turn judder and visible vertical tilt in the
 **head-aim fallback** remain open; the latter is separate from motion-gun aiming.
 TR6 uses a different engine and has **no first-person port**; its existing
 stereo and third-person paths are unchanged by this feature.
@@ -4562,11 +4563,12 @@ stereo and third-person paths are unchanged by this feature.
 | View/graphics chords | Y+LT owns the FP toggle in gameplay and menus; Y+RT owns graphics switching |
 | Eye position and physical rotation | Stable ground anchor plus raw relative HMD tracking avoids animation sway and duplicated physical-yaw motion; native animated anchor outside eligible ground states |
 | Ground stabilization | Default-on eye stabilization and pre-collision horizontal speed/direction correction target forward, sidestep and backpedal wobble; live validation pending |
+| Body visibility | Crouch/prone/crawl body hiding in FP, with tracked hands/guns retained; scoped HD head masks address the missing-body startup case |
 | Ground controls | Forward, native sidestep and backpedal replace camera-relative sideways/backward running; TR5 no longer uses TR4's vehicle sentinel |
 | Camera/gun separation | Hand aiming no longer drives the camera through Lara's head/torso aim; wrist rotation uses the recovered grip pivot rather than orbiting the hands |
 | Gun targeting | Tracked muzzle origins, native hit processing and bounded hitscan aim assistance; all-weapon extension preserves shotgun pellets and launcher physics |
 | Gun presentation and fit | Hands and guns only when motion-ready; position/angle calibration retains the grip pivot and supports live function-key adjustment |
-| Trigger handling | Independent pistol/Uzi taps; RT for single weapons; 1.5-second LT equip gesture supports hold/toggle draw settings without instant re-holstering |
+| Trigger handling | Independent pistol/Uzi taps; RT for single weapons; native held RT grab/Action preserved when guns are not ready; 1.5-second LT equip gesture retained |
 | Cutscenes | Native presentation during cutsequences, transitions, flybys and TR4 tutorial scenes; restore the player's FP preference afterward and cancel queued shots |
 | Culling versus wall clearance | Portal traversal starts in the effective FP eye's room; a separate swept eye-clearance path limits wall clipping |
 | Return to third person | Fresh positional neutral and cleared translation prevent the off-center FP-to-third-person handoff; startup limitations are documented below |
@@ -4652,12 +4654,33 @@ the legacy controller-chord behavior.
   or projectile path follows vertical gaze.
 - **Visibility:** head, face attachments and braid are hidden while anchored
   when enabled. Rolls temporarily hide the whole body even if head hiding is
-  disabled. Original mesh visibility is restored when leaving the mode.
+  disabled. Crouching, crawling/prone, and their turn states also hide the body
+  and braid, independently of the head-hiding option; motion-ready hands and
+  guns remain visible. Standing restores the body. Menus, cutscenes and third
+  person restore native visibility. This is visibility-only, not a restoration
+  of the reverted crouch/prone room-scale movement changes.
+  HD body passes normally ignore the item's persistent mesh mask. First person
+  now removes the head from that pass's effective mask temporarily, instead of
+  forcing a zero/stale startup item mask onto the whole body. Native masked
+  weapon passes keep their restrictions, and the original item mask is restored
+  after each draw. Empty geometry slots no longer count as matching head meshes.
+  This targets the reported body-absent-until-TP-toggle case; live confirmation
+  is still needed. Movement, aiming, tracking and calibration are unchanged.
 - **Recenter:** End captures a new first-person positional neutral and clears
   room-scale counters without changing world viewing heading. The existing
   `RecentreKey` (Numpad 5 by default) uses the same first-person reset.
 
 ### Regression fixes after the initial port
+
+The FP motion-gun handler previously replaced RT with a queued-shot signal even
+when Lara's guns were holstered or her hands were busy. With no shot queued,
+that erased native RT grab/Action input, including ledge catches. RT now retains
+its original analog value and held duration whenever gun status is not ready
+(`4`). Ready guns retain independent tap firing and tracking-loss protection;
+the LT hold-to-equip gesture remains active. Held grab input cannot turn into
+a shot simply because the guns become ready. This changes input ownership only,
+not movement stabilization, aiming or camera behavior. Live ledge testing remains
+necessary despite passing the synthetic input checks.
 
 The TR5 movement regression came from treating its `lara.Vehicle` struct slot
 like TR4's. TR4 uses `-1` for no vehicle; TR5 leaves the unused slot zero and
@@ -5005,7 +5028,8 @@ grips. Both upper arms and forearms remain hidden while motion-ready.
 
 ### Remaining motion issues and diagnostics
 
-**Ground-motion stabilization is implemented; headset confirmation is pending.**
+**Ground-motion stabilization is implemented; the user reports movement feels great.**
+Broader level/state coverage and head-motion world stability still need validation.
 Historical forward traces showed large lateral animated-head excursions while
 the root moved almost straight. `FirstPersonMovementStabilization=1` (also the
 fallback for older INIs) holds a grounded eye reference across standing/walking,
@@ -5077,8 +5101,8 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest stabilization run passed **118,885 checks**. These are
-synthetic checks, including parameter sweeps, not 118,885 in-game scenarios or
+The latest RT-grab fix run (2026-09-27) passed **124,412 checks**. These are
+synthetic checks, including parameter sweeps, not 124,412 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5093,7 +5117,19 @@ alternating animation speeds, exaggerated head-bone sway, wall stops, vertical
 motion, jump transitions, interpolation fractions and the legacy opt-out.
 Physical yaw/pitch and lean sweeps check world-space eye and stationary-controller
 positions, with room-scale body movement both enabled and disabled. Crouch stays
-on its native path; third-person tracking remains unchanged.
+on its native movement path; third-person tracking remains unchanged.
+Visibility tests cover both games' crouch/crawl/turn states, head hiding on/off,
+standing and cutscene restoration, tracked hands while crouched, and rolls.
+Startup tests use zero, partial and full mesh masks across HD render passes;
+they verify draw-local head hiding, preservation of masked passes and persistent
+item data, unchanged third-person rendering, and empty versus loaded head meshes.
+Trigger tests cover both games/all six weapons, non-ready gun states, jump/hang/
+climb states, initial RT press, analog holds/releases, ready/busy transitions,
+independent taps and LT equip in both native draw styles. Centering diagnostics
+also reproduce raw room-space translation at cold third-person startup and verify
+that the existing FP handoff neutral removes it. Third-person startup behavior
+was inspected, not changed; this does not establish Lara's exact on-screen framing
+in a live game or replace a headset check.
 The Release x64 build also succeeded. Native address/prologue/layout checks
 were extended in `tools/verify_addresses.py`; the latest recorded run against
 the available PDB/retail binaries passed **806 checks**. To include an installed
@@ -5110,11 +5146,11 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests. The deployed stabilization DLL (including the prior all-weapon,
+tests. The deployed RT-grab fix DLL (including visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`EBE5ACB1156275F3CFDDEA1D748B53CDB8280B53C1C7571F742F1C9947A40D8F`.
+`71DDC569636250384E7D9C1EA9F94772CD195DCC542291E98234424EAD130B99`.
 The prior installed DLL and INI were backed up under
-`build/before-movement-stabilization-20260926-235822/`.
+`build/before-fp-rt-grab-20260927-010807/`.
 The previous all-weapon DLL remains as `TombRaiderVR.dll.x` in the game folder.
 Deployment verified the active DLL's hash and left the INI/calibration
 unchanged; saves were not edited.

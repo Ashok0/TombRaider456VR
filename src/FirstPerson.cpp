@@ -128,6 +128,7 @@ void ResetMovementStabilization() {
 bool g_meshOverride = false;
 bool g_headHidden = false;
 bool g_rollHidden = false;
+bool g_crouchHidden = false;
 uint8_t* g_meshItem = nullptr;
 uint32_t g_meshBaseBits = 0;
 unsigned g_anchored = 0;
@@ -304,11 +305,11 @@ void RestoreHeadMesh() {
     }
     g_meshOverride = false;
     g_meshItem = nullptr;
-    g_headHidden = g_rollHidden = false;
+    g_headHidden = g_rollHidden = g_crouchHidden = false;
 }
 
-void SetMeshVisibility(bool hideHead, bool hideRoll) {
-    if ((!hideHead && !hideRoll) || !g_boundDll || !g_boundBase) {
+void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false) {
+    if ((!hideHead && !hideRoll && !hideCrouch) || !g_boundDll || !g_boundBase) {
         RestoreHeadMesh();
         return;
     }
@@ -316,6 +317,7 @@ void SetMeshVisibility(bool hideHead, bool hideRoll) {
     if (!item) {
         g_meshOverride = false;
         g_meshItem = nullptr;
+        g_headHidden = g_rollHidden = g_crouchHidden = false;
         return;
     }
     if (!g_meshOverride || item != g_meshItem) {
@@ -323,19 +325,33 @@ void SetMeshVisibility(bool hideHead, bool hideRoll) {
         g_meshItem = item;
         g_meshBaseBits = *reinterpret_cast<uint32_t*>(
             item + off::item_mesh_bits);
+        g_headHidden = g_rollHidden = g_crouchHidden = false;
     }
     auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
-    const uint32_t expected = g_rollHidden ? 0 :
+    const uint32_t expected = (g_rollHidden || g_crouchHidden) ? 0 :
         (g_headHidden ? g_meshBaseBits & ~kHeadMeshBit : g_meshBaseBits);
     if (g_meshOverride && bits != expected) {
         // Preserve native visibility changes outside our owned mask. During
-        // a roll we own the full mask and must retain the pre-roll snapshot.
-        if (!g_rollHidden)
+        // a hidden stance we own the full mask and retain its original snapshot.
+        if (!g_rollHidden && !g_crouchHidden)
             g_meshBaseBits = (bits & ~kHeadMeshBit) | (g_meshBaseBits & kHeadMeshBit);
     }
     g_headHidden = hideHead;
     g_rollHidden = hideRoll;
-    bits = hideRoll ? 0 : (hideHead ? g_meshBaseBits & ~kHeadMeshBit : g_meshBaseBits);
+    g_crouchHidden = hideCrouch;
+    bits = (hideRoll || hideCrouch) ? 0 :
+        (hideHead ? g_meshBaseBits & ~kHeadMeshBit : g_meshBaseBits);
+}
+
+bool IsCrouchState(const uint8_t* item) {
+    if (!item) return false;
+    // Verified in both games' lara_control_routines: duck, all4s/crawl,
+    // all4turnl/r, crawlb and duckl/r. Duck-roll already uses IsRollState.
+    switch (*reinterpret_cast<const int16_t*>(item + off::item_anim_state)) {
+    case 71: case 80: case 81: case 84: case 85: case 86:
+    case 105: case 106: return true;
+    default: return false;
+    }
 }
 
 bool IsRollState(const uint8_t* item) {
@@ -1509,6 +1525,7 @@ bool DrawingLaraHead(const uint8_t* item) {
         static_cast<uint32_t>(object) * off::object_stride;
     const void* mesh = *reinterpret_cast<void* const*>(
         objectInfo + off::object_geom + off::geom_mesh);
+    if (!mesh) return false; // Uninitialized geometry is not a face match.
     const uint8_t* heads = Ptr<uint8_t>(dll.gLaraHeads);
     for (int i = 0; i < kLaraHeadGeoms; ++i) {
         const void* headMesh = *reinterpret_cast<void* const*>(
@@ -1533,6 +1550,9 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         return;
     }
     const bool motion = lara && MotionReady();
+    // Hide crouched/prone geometry, but retain the existing tracked-hand/gun
+    // passes when available. Rolls still suppress everything above.
+    if (lara && g_crouchHidden && !motion) return;
     if (motion) {
         // Skip the body/upper arms; trim forearms out of the two gun passes.
         // Keep the complete skeleton so wrist pivot and gun placement stay put.
@@ -1556,14 +1576,24 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
     }
     const int previousArm = g_renderArm;
     g_renderArm = -1;
-    g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(
-        item, lara && (Cfg().firstPersonHideHead || motion) ? 1 :
-            useMeshBits, renderPass);
+    if (lara && Cfg().firstPersonHideHead) {
+        auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
+        const uint32_t savedBits = bits;
+        // Native HD body passes use useMeshBits=0: their effective mask is ALL
+        // joints, even if the item's persistent mask is zero/stale at startup.
+        // Only remove the head from that effective mask, for this draw alone.
+        // Already-masked weapon passes must retain their native restrictions.
+        bits = (useMeshBits ? savedBits : UINT32_MAX) & ~kHeadMeshBit;
+        g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item, 1, renderPass);
+        bits = savedBits;
+    } else {
+        g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item, useMeshBits, renderPass);
+    }
     g_renderArm = previousArm;
 }
 
 void __cdecl Detour_DrawHair(int32_t argument) {
-    if (g_active && (g_headHidden || g_rollHidden || MotionReady())) {
+    if (g_active && (g_headHidden || g_rollHidden || g_crouchHidden || MotionReady())) {
         ++g_hairSkips;
         return;
     }
@@ -1598,7 +1628,8 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
     const auto* item = g_boundDll && g_boundBase
         ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
     SetMeshVisibility(g_active && Cfg().firstPersonHideHead,
-                      g_active && IsRollState(item));
+                      g_active && IsRollState(item),
+                      g_active && IsCrouchState(item));
 }
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {
@@ -1842,13 +1873,7 @@ void Remove() {
     g_boundBase = 0;
 }
 
-} // namespace
-
-void FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed) {
-    DWORD process=0;
-    GetWindowThreadProcessId(GetForegroundWindow(),&process);
-    const bool enabled=!chordConsumed && process==GetCurrentProcessId() && MotionTriggerMode();
-    const uint64_t now=GetTickCount64();
+void UpdateGunTriggers(uint8_t& left, uint8_t& right, bool enabled, uint64_t now) {
     int weapon=enabled ? CurrentMotionWeapon() : 0;
     if (enabled && !weapon) weapon=*Ptr<int16_t>(g_boundDll->lara+8);
     if (weapon!=g_triggerWeapon) {
@@ -1867,7 +1892,19 @@ void FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed) {
         LogF("firstperson: Touch equip gesture native=%s status=%d",
             holdMode ? "hold" : "toggle",status);
     left=g_gunEquip.Update(holdMode,status,equipRequest) ? 255 : 0;
-    right=g_gunTriggers.WantsShot() ? 255 : 0;
+    // RT also owns native grab/Action while the guns are away or Lara's hands
+    // are busy. Keep its analog value AND hold duration in those states. LT's
+    // long-hold equip gesture still works; only ready guns own shot-only RT.
+    if (status==4) right=g_gunTriggers.WantsShot() ? 255 : 0;
+}
+
+} // namespace
+
+void FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed) {
+    DWORD process=0;
+    GetWindowThreadProcessId(GetForegroundWindow(),&process);
+    const bool enabled=!chordConsumed && process==GetCurrentProcessId() && MotionTriggerMode();
+    UpdateGunTriggers(left,right,enabled,GetTickCount64());
 }
 
 void FirstPersonUpdate() {

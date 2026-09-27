@@ -293,7 +293,13 @@ void __cdecl FakeNewRoom(int16_t item, int16_t room) {
     ++roomChanges;
     *reinterpret_cast<int16_t*>(itemMemory + tr::off::item_room) = room;
 }
-void __cdecl FakeDraw(uint8_t*, int32_t, int32_t) { ++draws; }
+uint32_t drawnBodyBits=0;
+int drawnUseBits=-1, drawnPass=-1;
+void __cdecl FakeDraw(uint8_t* item, int32_t useBits, int32_t pass) {
+    ++draws;
+    drawnBodyBits=*reinterpret_cast<uint32_t*>(item+tr::off::item_mesh_bits);
+    drawnUseBits=useBits; drawnPass=pass;
+}
 void __cdecl FakeHair(int32_t) { ++hairs; }
 void Head(float yaw, float pitch = 0) {
     auto& vr = tr::VR();
@@ -627,6 +633,18 @@ int main() {
             Check(meshBits==mask && g_renderArm==-1,"native mesh mask and arm scope restored after draw");
         }
         Check(handDrawCalls==2,"exactly two hand-only draws");
+        g_crouchHidden=true;
+        const int beforeCrouchedHands=handDrawCalls;
+        meshBits=0; Detour_DrawCreatureHD(itemMemory,0,0);
+        Check(handDrawCalls==beforeCrouchedHands,"crouched body stays hidden with motion guns");
+        for (uint32_t mask:{0x600u,0x3000u}) {
+            meshBits=mask; Detour_DrawCreatureHD(itemMemory,1,0);
+            Check(meshBits==mask,"crouched hand draw restores native gun mask");
+        }
+        Check(handDrawCalls==beforeCrouchedHands+2,"crouched motion guns retain both hands");
+        g_rollHidden=true; Detour_DrawCreatureHD(itemMemory,1,0);
+        Check(handDrawCalls==beforeCrouchedHands+2,"roll still hides hands as well as body");
+        g_rollHidden=g_crouchHidden=false;
         meshBits=savedBits;
         auto& leftFlash=*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+20);
         auto& rightFlash=*reinterpret_cast<int16_t*>(laraMemory+off::lara_right_arm+20);
@@ -765,6 +783,47 @@ int main() {
         Check(handDrawCalls==beforeCombined+2 && meshBits==0x3600 && g_renderArm==-1,
               "combined long-gun pass splits into two hand-only tracked draws and restores state");
         meshBits=savedBits;
+        const auto triggerState=state;
+        for (int which:{0,1}) for (int weapon=1;weapon<=6;++weapon)
+        for (int gunState:{0,1,2,3,5}) for (int actionState:{2,3,10,19,28,56,57}) {
+            dll.game=which; gun=int16_t(weapon); status=int16_t(gunState); state=int16_t(actionState);
+            g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=weapon;
+            Check(MotionTriggerMode(),"FP equip handler remains available during native grab/action states");
+            for (uint8_t raw:{uint8_t(255),uint8_t(255),uint8_t(128),uint8_t(0),uint8_t(31),uint8_t(0)}) {
+                uint8_t l=0,r=raw;
+                UpdateGunTriggers(l,r,MotionTriggerMode(),100);
+                Check(r==raw && !g_gunTriggers.WantsShot(),
+                      "non-ready RT preserves analog value, first press, hold and release for ledge grab");
+            }
+        }
+        state=triggerState; status=4; gun=1;
+        g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=1;
+        uint8_t lt=0,rt=0; UpdateGunTriggers(lt,rt,true,0);
+        lt=0; rt=255; UpdateGunTriggers(lt,rt,true,10);
+        Check(rt==255 && g_gunTriggers.Consume(1),"ready RT still queues exactly one right-hand shot");
+        lt=0; rt=255; UpdateGunTriggers(lt,rt,true,20);
+        Check(rt==0 && !g_gunTriggers.WantsShot(),"holding ready RT cannot turn into repeated native fire");
+        status=1; lt=0; rt=255; UpdateGunTriggers(lt,rt,true,30);
+        Check(rt==255 && !g_gunTriggers.WantsShot(),"ready-to-hands-busy transition immediately restores held grab");
+        status=4; lt=0; rt=255; UpdateGunTriggers(lt,rt,true,40);
+        Check(rt==0 && !g_gunTriggers.WantsShot(),"held grab cannot become a shot when guns become ready");
+        lt=0; rt=0; UpdateGunTriggers(lt,rt,true,50);
+        lt=255; rt=0; UpdateGunTriggers(lt,rt,true,60);
+        lt=0; rt=0; UpdateGunTriggers(lt,rt,true,70);
+        Check(rt==255 && g_gunTriggers.pending[0] && !g_gunTriggers.pending[1],
+              "left-only tap still sends native firing request exclusively for left gun");
+        for (uint8_t holdMode:{uint8_t(0),uint8_t(1)}) {
+            appMemory[0x9ec]=holdMode; appMemory[0x9e4]=1; status=0;
+            g_gunTriggers.Reset(); g_gunEquip.Reset();
+            lt=rt=0; UpdateGunTriggers(lt,rt,true,0);
+            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,10);
+            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,1510);
+            Check(lt==255 && rt==200,"1.5-second equip gesture coexists with native held RT in either draw style");
+        }
+        lt=180; rt=210; UpdateGunTriggers(lt,rt,false,2000);
+        Check(lt==180 && rt==210 && !g_gunTriggers.active,
+              "third-person/disabled/chord-owned trigger input is untouched");
+        appMemory[0x9ec]=0;
         dll.game=savedGame; dll.getFloor=savedFloor;
         g_longGunHooksReady=false; g_longGunDll=nullptr; g_longShot=nullptr;
         g_gunTriggers.Reset();
@@ -1190,6 +1249,61 @@ int main() {
                   "inventory during a roll restores full original mask");
             std::memset(appMemory, 0, sizeof(appMemory));
         }
+        for (bool hideHead:{false,true}) for (int crouch:{71,80,81,84,85,86,105,106}) {
+            RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
+            state=int16_t(crouch); UpdateSceneCamera(camera);
+            Check(g_crouchHidden && bits==0 && !g_rollHidden,
+                  "crouch/crawl idle, movement and turns hide classic body independently of head option");
+            const int oldDraws=draws, oldHairs=hairs;
+            Detour_DrawCreatureHD(itemMemory,0,0); Detour_DrawHair(0);
+            Check(draws==oldDraws && hairs==oldHairs,"crouched HD body and hair do not draw");
+            state=2; UpdateSceneCamera(camera);
+            Check(!g_crouchHidden && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
+                  "standing restores the pre-crouch mesh mask");
+            state=int16_t(crouch); UpdateSceneCamera(camera);
+            spotCamera=1; UpdateSceneCamera(camera);
+            Check(!g_crouchHidden && bits==baseBits,"scripted camera restores crouched body normally");
+            spotCamera=0; UpdateSceneCamera(camera);
+            Check(g_crouchHidden && bits==0,"returning from cutscene restores crouch hiding");
+            state=2; UpdateSceneCamera(camera);
+        }
+        for (int nativeState:{0,1,2,3,16,20,21,22,73,75,76,82,83,89,104,107,108}) {
+            state=int16_t(nativeState);
+            Check(!IsCrouchState(itemMemory),"standing/jump/hang/scripted states are not classified as crouch");
+        }
+        state=2; config.firstPersonHideHead=true;
+        for (uint32_t initialBits:{0u,0x400u,0x7ffbu,UINT32_MAX}) {
+            RestoreHeadMesh(); bits=initialBits; UpdateSceneCamera(camera);
+            const uint32_t persistentBits=bits;
+            for (int pass:{0,1,4}) {
+                Detour_DrawCreatureHD(itemMemory,0,pass);
+                Check(drawnUseBits==1 && drawnBodyBits==(UINT32_MAX&~kHeadMeshBit) && drawnPass==pass,
+                      "FP-first HD body draw enables all native joints except head even with zero/stale initial mask");
+                Check(bits==persistentBits,"headless HD body draw never contaminates persistent item mask");
+                Detour_DrawCreatureHD(itemMemory,1,pass);
+                Check(drawnBodyBits==(persistentBits&~kHeadMeshBit) && bits==persistentBits,
+                      "already-masked native passes keep their original restrictions");
+            }
+            RestoreHeadMesh(); g_active=false;
+            Detour_DrawCreatureHD(itemMemory,0,4);
+            Check(drawnUseBits==0 && drawnBodyBits==initialBits && bits==initialBits,
+                  "third-person draw keeps native mask and unmasked flag unchanged");
+        }
+        // Empty geometry slots at startup must not compare equal to empty heads.
+        alignas(16) static uint8_t objectInfo[off::object_stride]{};
+        alignas(16) static uint8_t heads[off::geom_stride*kLaraHeadGeoms]{};
+        std::memset(objectInfo,0,sizeof(objectInfo));
+        std::memset(heads,0,sizeof(heads));
+        const auto oldObjects=dll.objects, oldHeads=dll.gLaraHeads;
+        dll.objects=rva(objectInfo); dll.gLaraHeads=rva(heads);
+        auto& object=*reinterpret_cast<int16_t*>(itemMemory+off::item_object);
+        const auto oldObject=object; object=0;
+        Check(!DrawingLaraHead(itemMemory),"uninitialized body and head meshes are not a face match");
+        *reinterpret_cast<void**>(objectInfo+off::object_geom+off::geom_mesh)=objectInfo;
+        *reinterpret_cast<void**>(heads+off::geom_mesh)=objectInfo;
+        Check(DrawingLaraHead(itemMemory),"loaded matching face geometry is still hidden");
+        object=oldObject; dll.objects=oldObjects; dll.gLaraHeads=oldHeads;
+        RestoreHeadMesh(); bits=baseBits;
         state = 45; UpdateSceneCamera(camera); FirstPersonToggle();
         Check(bits == baseBits && !g_rollHidden && !g_haveHeading && !g_headingItem,
               "toggle during roll restores mesh and clears heading identity");
@@ -1268,6 +1382,17 @@ int main() {
     const auto tr6Head = thirdPersonSample();
     Check(Near(tr6Head.r[0][3],1000) && Near(tr6Head.r[1][3],-1700) && Near(tr6Head.r[2][3],-2000),
           "TR6 tracking does not inherit a TR4/5 first-person neutral");
+    // Diagnostic-only check: cold TP startup currently lacks the FP handoff's
+    // positional neutral. Reproduce that distinction without changing it.
+    for (int which:{0,1}) {
+        game=which; g_active=false; config.headOffsetWorld=true; worldCameraValid=true;
+        VR().m_thirdPersonNeutralValid=VR().m_thirdPersonRecenterPending=false;
+        VR().m_offsetValid=VR().m_recentreRequested=false; Head(0);
+        const auto cold=thirdPersonSample();
+        Check(Near(cold.r[0][3],1000) && Near(cold.r[1][3],-1700) && Near(cold.r[2][3],-2000),
+              "cold third-person startup still includes raw tracking-space origin (diagnosed, not changed)");
+        VR().RecenterThirdPersonHead(); thirdPersonSample(); centredEyes();
+    }
     game = 1;
     // Diagnostic capture must distinguish camera animation from real motion,
     // and must not change any of the gameplay state it observes.
