@@ -547,7 +547,7 @@ static void TestMotionGunMath() {
                     Add(handWorld,physicalStep),gripUnits,raiseUnits);
                 translationOk &= closeVec(Sub(translated.origin,calibrated.origin),
                                           physicalStep);
-                for (int weapon=1;weapon<=2;++weapon) {
+                for (int weapon=1;weapon<=6;++weapon) {
                     const Vec localMuzzle=MuzzleLocal(weapon,hand);
                     const Vec rendered=Transform(gripPalette,Transform(bind,localMuzzle));
                     const Vec shotAndFlash=Transform(calibrated,localMuzzle);
@@ -557,7 +557,7 @@ static void TestMotionGunMath() {
                 const Vec error=Sub(actual,handWorld);
                 worstError=std::fmax(worstError,std::sqrt(Dot(error,error)));
                 anchorOk &= closeVec(actual,handWorld);
-                for (int weapon=1;weapon<=2;++weapon) {
+                for (int weapon=1;weapon<=6;++weapon) {
                     const Vec tip=MuzzleLocal(weapon,hand);
                     const Vec renderedTip=Transform(moved,Transform(bind,tip));
                     const Vec flashAndShot=Transform(desired,tip);
@@ -685,7 +685,7 @@ static void TestGunCalibration() {
         const Frame moved=Multiply(correction,palette);
         pivot &= closeVec(Transform(moved,Transform(bind,
             {-c.rightMetres*500,c.gripForwardMetres*500,-c.raiseMetres*500})),{17,23,31});
-        for (int hand=0;hand<2;++hand) for (int weapon=1;weapon<=2;++weapon)
+        for (int hand=0;hand<2;++hand) for (int weapon=1;weapon<=6;++weapon)
             muzzle &= closeVec(Transform(moved,Transform(bind,MuzzleLocal(weapon,hand))),
                                Transform(desired,MuzzleLocal(weapon,hand)));
     }
@@ -787,6 +787,11 @@ static void TestMotionGunTriggers() {
     Check(!t.WantsShot(),"lost readiness cancels queued fire");
     Check(HandOnlyMask(0x600)==(1u<<10) && HandOnlyMask(0x3000)==(1u<<13),
           "native gun passes retain only right/left hand meshes");
+    Check(HandOnlyMask(0x3600)==0x2400,"combined rifle hand pass excludes both forearms");
+    Check(SupportedWeapon(1) && SupportedWeapon(6) && !SupportedWeapon(0) &&
+          !SupportedWeapon(7) && !SupportedWeapon(8),"only actual gun IDs are motion weapons");
+    Check(DualWeapon(1) && DualWeapon(2) && !DualWeapon(3) && !DualWeapon(5),
+          "single weapons cannot inherit independent left-gun firing");
     Check(HandOnlyMask(0x100)==0 && HandOnlyMask(0x800)==0 && HandOnlyMask(0x7fff)==0,
           "upper arm and body passes suppressed");
 }

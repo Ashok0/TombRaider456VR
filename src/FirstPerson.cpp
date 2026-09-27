@@ -145,6 +145,26 @@ constexpr MotionDll kMotionDlls[] = {
      0x133A0, 0x5C759, 0x5C7F0, 0x8DAA0, 0x1B2AC8, 0x30B23, 0x30BD6, 0x5C320, 0x12500},
 };
 const MotionDll* g_motionDll = nullptr;
+// Separate, optional extension: a mismatch must not disable working dual guns.
+struct LongGunDll {
+    uint32_t timestamp, rifle, shotgun, special, crossbow, joint, initialise, items;
+    uint32_t opticReturns[4];
+};
+constexpr LongGunDll kLongGunDlls[] = {
+    {0x696B4999,0x55ED0,0x56420,0x56A70,0x57D30,0xA37C0,0x40840,0x699CA0,
+     {0xE347F,0xE34C9,0xE3F6A,0xE3F88}},
+    {0x696B499C,0x54D40,0x55150,0x557A0,0x558C0,0x9C9C0,0x45800,0x66D1A8,
+     {0xD7A1F,0xD7A69,0xD84FA,0xD8518}},
+    {0x68C12FDA,0x55BE0,0x56130,0x56770,0x57A20,0xA4360,0x40300,0x69ABE0,
+     {0xE3F9F,0xE3FE9,0xE4A9E,0xE4ABC}},
+    {0x68C12FE9,0x55A70,0x55E80,0x564C0,0x565E0,0x9CD30,0x46160,0x66D0E8,
+     {0xD7C9F,0xD7CE9,0xD878E,0xD87AC}},
+};
+const LongGunDll* g_longGunDll=nullptr;
+bool g_longGunHooksReady=false, g_opticShot=false;
+int g_triggerWeapon=0;
+hook::InlineHook g_hRifleHandler, g_hFireShotgun, g_hFireSpecial, g_hFireCrossbow;
+hook::InlineHook g_hGunJoint, g_hInitialiseProjectile;
 bool g_motionHooksReady = false;
 bool g_scenePoseValid = false;
 PHD_3DPOS g_scenePose{};
@@ -236,13 +256,25 @@ bool IsSceneCall(const void* returnAddress) {
             g_boundBase + g_boundDll->w2vSceneReturn;
 }
 
+bool ScriptedCameraActive() {
+    if (!g_boundDll || !g_boundBase) return false;
+    const auto& d=*g_boundDll;
+    if (d.playingCutseq && *Ptr<int32_t>(d.playingCutseq)) return true;
+    // Native handle_cutseq_triggering only uses this state while an ID is
+    // active. Include fade-in/out without treating a stale trigger as a scene.
+    if (d.cutseqNum && d.cutseqTrigger && *Ptr<int32_t>(d.cutseqNum) &&
+        *Ptr<int32_t>(d.cutseqTrigger)) return true;
+    if (d.useSpotCam && *Ptr<int32_t>(d.useSpotCam)) return true;
+    return d.vonCroyCutscene && *Ptr<uint8_t>(d.vonCroyCutscene);
+}
+
 bool Gate() {
     if (!g_boundDll || !g_boundBase || !Cfg().enabled ||
         !Cfg().firstPerson || !g_runtimeEnabled)
         return false;
     if (!VR().active() || !VR().poseValid()) return false;
     if (InInventory() || InFMV() || InTitle()) return false;
-    if (g_boundDll->playingCutseq && *Ptr<int32_t>(g_boundDll->playingCutseq)) return false;
+    if (ScriptedCameraActive()) return false;
     const GameDllLayout& dll = *g_boundDll;
     if (!*Ptr<uint8_t*>(dll.laraItem)) return false;
     const int32_t type = *Ptr<int32_t>(g_boundDll->camera + off::camera_type);
@@ -345,6 +377,22 @@ struct GunPose {
     int16_t yaw = 0, pitch = 0;
 };
 
+struct LongShot {
+    int weapon=0;
+    GunPose gun{};
+    int16_t baseAim[2]{};
+    bool projectile=false;
+};
+const LongShot* g_longShot=nullptr;
+
+int CurrentMotionWeapon() {
+    return g_boundDll ? *Ptr<int16_t>(g_boundDll->lara+4) : 0;
+}
+bool MotionWeaponSupported(int gun) {
+    return motiongun::DualWeapon(gun) ||
+        (g_longGunHooksReady && motiongun::SupportedWeapon(gun));
+}
+
 HHOOK g_calibrationMessageHook=nullptr;
 HWND g_calibrationWindow=nullptr;
 bool g_calibrationActive=false;
@@ -374,9 +422,10 @@ const char* MotionBlockedReason() {
     const int16_t status = *reinterpret_cast<const int16_t*>(lara + 2);
     const int16_t gun = *reinterpret_cast<const int16_t*>(lara + 4);
     if (status != 4) return "guns-not-ready";
-    if (gun != 1 && gun != 2) return "weapon-not-pistols-or-Uzis";
+    if (!MotionWeaponSupported(gun)) return "weapon-not-supported";
     vr::HmdMatrix34_t pose{};
-    if (!VR().ControllerPose(0,pose)) return "left-controller-pose-missing";
+    if (motiongun::DualWeapon(gun) && !VR().ControllerPose(0,pose))
+        return "left-controller-pose-missing";
     if (!VR().ControllerPose(1,pose)) return "right-controller-pose-missing";
     return nullptr;
 }
@@ -395,7 +444,7 @@ bool MotionTriggerMode() {
     const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
     int gun=*reinterpret_cast<const int16_t*>(lara+4);
     if (gun==0) gun=*reinterpret_cast<const int16_t*>(lara+8); // last equipped
-    return gun==1 || gun==2;
+    return MotionWeaponSupported(gun);
 }
 
 const char* g_gunPoseFailure[2] = {"not-built","not-built"};
@@ -570,7 +619,7 @@ bool BuildGunPose(int hand, GunPose& out) {
         std::fabs(out.nativeHand.z - body.z_pos) > 4096)
         return rejected("native-wrist-out-of-range");
     out.muzzle = Add(out.trackedHand,
-        Transform(out.desired, motiongun::MuzzleLocal(gun, hand)));
+        Transform(out.desired, motiongun::MuzzleLocal(gun, hand, g_boundDll->game)));
     if (!std::isfinite(out.muzzle.x) || !std::isfinite(out.muzzle.y) ||
         !std::isfinite(out.muzzle.z)) return rejected("nonfinite-muzzle");
     const GunVec ray{controller.r[0][2], controller.r[1][2],
@@ -641,7 +690,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
 void __cdecl Detour_SetGunFlash(int32_t weapon, int32_t left) {
     const auto original = g_hSetGunFlash.Original<Fn_SetGunFlash>();
     const uint64_t caller = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_boundBase;
-    const int hand = g_motionDll && weapon >= 1 && weapon <= 2
+    const int hand = g_motionDll && MotionWeaponSupported(weapon)
         ? (caller == g_motionDll->rightFlashReturn && !left ? 1 :
            caller == g_motionDll->leftFlashReturn && left == 1 ? 0 : -1) : -1;
     GunPose gun{};
@@ -691,7 +740,8 @@ bool AssistGunShot(const GunPose& gun, void* target, motiongun::Vec& direction) 
 
 int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
                          const int16_t* aim) {
-    const bool separateTriggers=hand>=0 && g_gunTriggers.active && MotionTriggerMode();
+    const bool longShot=g_longShot && g_longShot->weapon==weapon && hand==1;
+    const bool separateTriggers=!longShot && hand>=0 && g_gunTriggers.active && MotionTriggerMode();
     // Native return 0 skips ammo/hits, muzzle flash, shell, sound and shot stats.
     // Keep unknown callers and non-motion modes entirely native.
     if (separateTriggers && !g_gunTriggers.pending[hand]) return 0;
@@ -699,7 +749,7 @@ int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
     const int previousHand = g_firingHand;
     bool assisted=false, tracked=false;
     int hpBefore=0;
-    if (hand >= 0 && aim && BuildGunPose(hand, gun)) {
+    if (hand >= 0 && aim && (longShot ? (gun=g_longShot->gun,true) : BuildGunPose(hand, gun))) {
         if (separateTriggers) g_gunTriggers.Consume(hand);
         tracked=true;
         if (target) hpBefore=*reinterpret_cast<const int16_t*>(
@@ -707,7 +757,10 @@ int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
         g_firingHand = hand;
         g_firingDirection = gun.direction;
         assisted=AssistGunShot(gun,target,g_firingDirection);
-        g_firingAim[0] = aim[0]; g_firingAim[1] = aim[1];
+        // Shotgun randomises each pellet BEFORE FireWeapon. Subtract the
+        // pre-volley aim, not that pellet's aim, to retain all native spread.
+        g_firingAim[0] = longShot ? g_longShot->baseAim[0] : aim[0];
+        g_firingAim[1] = longShot ? g_longShot->baseAim[1] : aim[1];
         g_firingPose.x_pos = int32_t(std::lround(gun.muzzle.x));
         g_firingPose.y_pos = int32_t(std::lround(gun.muzzle.y));
         g_firingPose.z_pos = int32_t(std::lround(gun.muzzle.z));
@@ -742,19 +795,166 @@ int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
     return result;
 }
 
+// One trigger request owns the complete native firing operation, not one
+// FireWeapon call (a shotgun operation contains six of those).
+template<class Fire>
+void RunLongShot(int weapon, bool projectile, Fire fire) {
+    if (CurrentMotionWeapon()!=weapon || !MotionTriggerMode()) { fire(nullptr); return; }
+    if (g_gunTriggers.active && !g_opticShot && !g_gunTriggers.pending[1]) return;
+    LongShot shot{};
+    shot.weapon=weapon; shot.projectile=projectile;
+    if (!BuildGunPose(1,shot.gun)) return; // Never silently shoot from the head.
+    if (g_gunTriggers.active && !g_opticShot) g_gunTriggers.Consume(1);
+    auto* arm=Ptr<uint8_t>(g_boundDll->lara+off::lara_left_arm);
+    int16_t saved[3]{};
+    std::memcpy(saved,arm+off::arm_lock,sizeof(saved));
+    const auto& body=*reinterpret_cast<const PHD_3DPOS*>(g_headingItem+off::item_pos);
+    *reinterpret_cast<int16_t*>(arm+off::arm_lock)=1;
+    *reinterpret_cast<int16_t*>(arm+off::arm_y_rot)=int16_t(shot.gun.yaw-body.y_rot);
+    *reinterpret_cast<int16_t*>(arm+off::arm_x_rot)=
+        int16_t(shot.gun.pitch-(projectile ? body.x_rot : 0));
+    shot.baseAim[0]=shot.gun.yaw;
+    shot.baseAim[1]=shot.gun.pitch;
+    const auto* previous=g_longShot;
+    g_longShot=&shot;
+    fire(&shot);
+    g_longShot=previous;
+    std::memcpy(arm+off::arm_lock,saved,sizeof(saved));
+}
+
+void __cdecl Detour_FireShotgun() {
+    RunLongShot(4,false,[](const LongShot*) {
+        g_hFireShotgun.Original<void (__cdecl*)()>()();
+    });
+}
+
+void __cdecl Detour_FireGrenade() {
+    RunLongShot(5,true,[](const LongShot*) {
+        g_hFireSpecial.Original<void (__cdecl*)()>()();
+    });
+}
+
+void __cdecl Detour_FireHK(int32_t running) {
+    RunLongShot(5,false,[&](const LongShot*) {
+        g_hFireSpecial.Original<void (__cdecl*)(int32_t)>()(running);
+    });
+}
+
+void __cdecl Detour_FireCrossbow(PHD_3DPOS* pose) {
+    // TR5's launcher requires a valid native laser/grapple target. Its
+    // non-optic null-pose branch is not a usable native firing path.
+    if (!pose && g_boundDll && g_boundDll->game==1 && MotionTriggerMode()) {
+        g_gunTriggers.Consume(1); // Don't carry an invalid attempt into later optic mode.
+        return;
+    }
+    RunLongShot(6,true,[&](const LongShot* shot) {
+        PHD_3DPOS tracked{};
+        auto* argument=pose;
+        if (shot && pose) {
+            tracked=*pose;
+            tracked.x_pos=int32_t(std::lround(shot->gun.muzzle.x));
+            tracked.y_pos=int32_t(std::lround(shot->gun.muzzle.y));
+            tracked.z_pos=int32_t(std::lround(shot->gun.muzzle.z));
+            // The native optic LOS has already selected/quantised the valid
+            // grapple anchor from our muzzle. Preserve its attachment angle.
+            if (!g_opticShot) {
+                tracked.x_rot=shot->gun.pitch;
+                tracked.y_rot=shot->gun.yaw;
+                tracked.z_rot=0;
+            }
+            argument=&tracked;
+        }
+        // Keep TR4's null-pose branch: it owns normal ammunition consumption.
+        g_hFireCrossbow.Original<void (__cdecl*)(PHD_3DPOS*)>()(argument);
+    });
+}
+
+void __cdecl Detour_GunJoint(uint8_t* item, PHD_VECTOR* point, int32_t joint) {
+    if (g_longShot && item==g_headingItem && point && joint==10) {
+        const auto& gun=g_longShot->gun;
+        const auto p=Add(gun.trackedHand,Transform(gun.desired,
+            {float(point->x),float(point->y),float(point->z)}));
+        *point={int32_t(std::lround(p.x)),int32_t(std::lround(p.y)),int32_t(std::lround(p.z))};
+        return;
+    }
+    g_hGunJoint.Original<void (__cdecl*)(uint8_t*,PHD_VECTOR*,int32_t)>()(item,point,joint);
+}
+
+void __cdecl Detour_InitialiseProjectile(int16_t index) {
+    if (g_longShot && g_longShot->projectile && g_longGunDll && index>=0) {
+        auto* items=*Ptr<uint8_t*>(g_longGunDll->items);
+        if (items) {
+            auto* item=items+size_t(index)*9416;
+            const int object=*reinterpret_cast<int16_t*>(item+off::item_object);
+            const int expected=g_boundDll->game==1 ? 0x158 :
+                g_longShot->weapon==5 ? 0x16d : 0x168;
+            if (object==expected) {
+                auto& pos=*reinterpret_cast<PHD_3DPOS*>(item+off::item_pos);
+                const auto muzzle=g_longShot->gun.muzzle;
+                if (g_boundDll->game==1) {
+                    pos.x_pos=int32_t(std::lround(muzzle.x));
+                    pos.y_pos=int32_t(std::lround(muzzle.y));
+                    pos.z_pos=int32_t(std::lround(muzzle.z));
+                } // TR4 already used the tracked joint and native floor guard.
+                auto& room=*reinterpret_cast<int16_t*>(item+off::item_room);
+                room=*reinterpret_cast<const int16_t*>(g_headingItem+off::item_room);
+                using Floor=void* (__cdecl*)(int32_t,int32_t,int32_t,int16_t*);
+                reinterpret_cast<Floor>(g_boundBase+g_boundDll->getFloor)(
+                    pos.x_pos,pos.y_pos,pos.z_pos,&room);
+                // InitialiseItem now links the projectile into the correct
+                // room and seeds its previous position at the tracked muzzle.
+            }
+        }
+    }
+    g_hInitialiseProjectile.Original<void (__cdecl*)(int16_t)>()(index);
+}
+
+void __cdecl Detour_RifleHandler(int32_t weapon) {
+    g_hRifleHandler.Original<Fn_PistolHandler>()(weapon);
+    if (!MotionReady()) return;
+    auto* lara=Ptr<uint8_t>(g_boundDll->lara);
+    for (uint32_t offset=off::lara_head_y_rot;offset<=off::lara_torso_z_rot;offset+=2)
+        *reinterpret_cast<int16_t*>(lara+offset)=0;
+}
+
 int32_t __cdecl Detour_FireWeapon(int32_t weapon, void* target, void* extra,
                                   const int16_t* aim) {
     const auto caller = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_boundBase;
-    const int hand = g_motionDll && weapon >= 1 && weapon <= 2
+    const int hand = g_longShot && g_longShot->weapon==weapon ? 1 :
+        g_motionDll && weapon >= 1 && weapon <= 3
         ? (caller == g_motionDll->rightFireReturn ? 1 :
-           caller == g_motionDll->leftFireReturn ? 0 : -1) : -1;
+           caller == g_motionDll->leftFireReturn && weapon<=2 ? 0 : -1) : -1;
     return FireWeaponForHand(hand,weapon,target,extra,aim);
 }
 
-int32_t __cdecl Detour_GetTargetOnLOS(PHD_VECTOR* source, PHD_VECTOR* dest,
-                                      int32_t flags, int32_t mode) {
-    const uint64_t caller = reinterpret_cast<uint64_t>(_ReturnAddress()) -
-        g_boundBase;
+int32_t GetTargetOnLOSForCaller(uint64_t caller,PHD_VECTOR* source,PHD_VECTOR* dest,
+                               int32_t flags,int32_t mode) {
+    bool opticCaller=false;
+    if (g_longGunHooksReady && g_longGunDll && g_firingHand<0)
+        for (auto address:g_longGunDll->opticReturns) opticCaller|=caller==address;
+    const int weapon=CurrentMotionWeapon();
+    if (opticCaller && (weapon==3 || weapon==5 || weapon==6) && MotionTriggerMode()) {
+        GunPose gun{};
+        if (!BuildGunPose(1,gun))
+            return g_hGetTargetOnLOS.Original<Fn_GetTargetOnLOS>()(source,dest,flags,0);
+        ShotVector start{int32_t(std::lround(gun.muzzle.x)),int32_t(std::lround(gun.muzzle.y)),
+            int32_t(std::lround(gun.muzzle.z)),
+            *reinterpret_cast<int16_t*>(g_headingItem+off::item_room),0};
+        using Floor=void* (__cdecl*)(int32_t,int32_t,int32_t,int16_t*);
+        reinterpret_cast<Floor>(g_boundBase+g_boundDll->getFloor)(start.x,start.y,start.z,&start.room);
+        const auto endpoint=Add(gun.muzzle,motiongun::Scale(gun.direction,20000.f));
+        ShotVector end{int32_t(std::lround(endpoint.x)),int32_t(std::lround(endpoint.y)),
+            int32_t(std::lround(endpoint.z)),start.room,0};
+        if (mode && g_gunTriggers.active) mode=g_gunTriggers.Consume(1) ? mode : 0;
+        const bool previous=g_opticShot;
+        g_opticShot=mode!=0;
+        const int result=g_hGetTargetOnLOS.Original<Fn_GetTargetOnLOS>()(
+            reinterpret_cast<PHD_VECTOR*>(&start),reinterpret_cast<PHD_VECTOR*>(&end),flags,mode);
+        g_opticShot=previous;
+        // Do not overwrite the scene camera, whose vectors the native caller
+        // passes directly. The native reticle uses its own LOS result.
+        return result;
+    }
     if (source && dest && g_firingHand >= 0 && g_motionDll &&
         (caller == g_motionDll->hitLosReturn ||
          caller == g_motionDll->missLosReturn)) {
@@ -783,6 +983,12 @@ int32_t __cdecl Detour_GetTargetOnLOS(PHD_VECTOR* source, PHD_VECTOR* dest,
     }
     return g_hGetTargetOnLOS.Original<Fn_GetTargetOnLOS>()(
         source, dest, flags, mode);
+}
+
+int32_t __cdecl Detour_GetTargetOnLOS(PHD_VECTOR* source,PHD_VECTOR* dest,
+                                     int32_t flags,int32_t mode) {
+    return GetTargetOnLOSForCaller(reinterpret_cast<uint64_t>(_ReturnAddress())-g_boundBase,
+        source,dest,flags,mode);
 }
 
 void __cdecl Detour_PistolHandler(int32_t weapon) {
@@ -824,7 +1030,10 @@ void __cdecl Detour_AimWeapon(void* weapon, uint8_t* arm) {
     if (item != g_headingItem) return;
     uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
     if (arm != lara + off::lara_left_arm && arm != lara + off::lara_right_arm) return;
-    const int hand = arm == lara + off::lara_left_arm ? 0 : 1;
+    // Native rifles use left_arm as their shared aim state; the actual grip
+    // and trigger belong to the right controller, including the revolver.
+    const int hand = !motiongun::DualWeapon(CurrentMotionWeapon()) ? 1 :
+        arm == lara + off::lara_left_arm ? 0 : 1;
     GunPose gun{};
     if (BuildGunPose(hand, gun)) {
         const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
@@ -1271,8 +1480,6 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         return;
     }
     const bool motion = lara && MotionReady();
-    int armDraw = -1;
-    uint32_t savedMotionBits=0;
     if (motion) {
         // Skip the body/upper arms; trim forearms out of the two gun passes.
         // Keep the complete skeleton so wrist pivot and gun placement stay put.
@@ -1280,17 +1487,26 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         if (!useMeshBits) return;
         const uint32_t handMask=motiongun::HandOnlyMask(bits);
         if (!handMask) return;
-        savedMotionBits=bits;
-        armDraw=handMask==0x400 ? 1 : 0;
-        bits=handMask;
+        const uint32_t savedMotionBits=bits;
+        const int previousArm=g_renderArm;
+        // Long guns can put both hands in one native mesh pass. Split it
+        // before applying the two independent wrist transforms.
+        for (int hand=0;hand<2;++hand) {
+            const uint32_t mask=hand ? 0x400 : 0x2000;
+            vr::HmdMatrix34_t pose{};
+            if (!(handMask&mask) || !VR().ControllerPose(hand,pose)) continue;
+            bits=mask; g_renderArm=hand;
+            g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
+        }
+        bits=savedMotionBits; g_renderArm=previousArm;
+        return;
     }
     const int previousArm = g_renderArm;
-    g_renderArm = armDraw;
+    g_renderArm = -1;
     g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(
         item, lara && (Cfg().firstPersonHideHead || motion) ? 1 :
             useMeshBits, renderPass);
     g_renderArm = previousArm;
-    if (motion) *reinterpret_cast<uint32_t*>(item+off::item_mesh_bits)=savedMotionBits;
 }
 
 void __cdecl Detour_DrawHair(int32_t argument) {
@@ -1312,6 +1528,10 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         g_active = false;
         g_scenePoseValid = false;
         g_haveHeading = false;
+        // Suspend, don't toggle the user's preference. No queued shot or
+        // equip gesture may leak out of a cutscene/menu into resumed play.
+        g_gunTriggers.Reset();
+        g_gunEquip.Reset();
         // Keep item identity and last viewing heading across UI/cameras.
         g_haveManualInput = false;
         g_directionalRootScale = 1;
@@ -1349,6 +1569,56 @@ void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {
     g_hGenerateW2V.Original<Fn_GenerateW2V>()(pose);
 }
 
+void RemoveLongGunHooks() {
+    g_longGunHooksReady=false; g_longShot=nullptr; g_opticShot=false;
+    g_triggerWeapon=0;
+    g_hInitialiseProjectile.Remove(); g_hGunJoint.Remove();
+    g_hFireCrossbow.Remove(); g_hFireSpecial.Remove();
+    g_hFireShotgun.Remove(); g_hRifleHandler.Remove();
+    g_longGunDll=nullptr;
+}
+
+bool InstallLongGunHooks(const GameDllLayout& d,uint64_t base) {
+    for (const auto& row:kLongGunDlls)
+        if (row.timestamp==d.timestamp) g_longGunDll=&row;
+    if (!g_longGunDll) return false;
+    const auto& r=*g_longGunDll;
+    // Optic calls are also verified at runtime, not just in the binary audit.
+    for (auto ret:r.opticReturns) {
+        const auto* call=reinterpret_cast<const uint8_t*>(base+ret-5);
+        int32_t delta=0; std::memcpy(&delta,call+1,4);
+        if (*call!=0xe8 || int64_t(ret)+delta!=g_motionDll->getTargetOnLOS)
+            return false;
+    }
+    const uint8_t rifle4[]={0x40,0x53,0x57,0x48,0x81,0xec,0x98,0,0,0};
+    const uint8_t rifle5[]={0x40,0x53,0x56,0x57,0x41,0x56};
+    const uint8_t shotgun[]={0x48,0x89,0x5c,0x24,0x18};
+    const uint8_t grenade[]={0x41,0x55,0x48,0x81,0xec,0xb0,0,0,0};
+    const uint8_t hk[]={0x89,0x4c,0x24,0x08,0x48,0x83,0xec,0x38};
+    const uint8_t crossbow4[]={0x40,0x57,0x48,0x83,0xec,0x60};
+    const uint8_t crossbow5[]={0x48,0x89,0x7c,0x24,0x18};
+    const uint8_t helper[]={0x48,0x89,0x5c,0x24,0x08};
+    auto install=[&](hook::InlineHook& h,uint32_t address,void* detour,
+                     const uint8_t* bytes,size_t size,const char* name) {
+        return h.Install(reinterpret_cast<void*>(base+address),detour,size,bytes,size,name);
+    };
+    const bool tr4=d.game==0;
+    return install(g_hRifleHandler,r.rifle,reinterpret_cast<void*>(&Detour_RifleHandler),
+            tr4 ? rifle4 : rifle5,tr4 ? sizeof(rifle4) : sizeof(rifle5),"MotionRifleHandler") &&
+        install(g_hFireShotgun,r.shotgun,reinterpret_cast<void*>(&Detour_FireShotgun),
+            shotgun,sizeof(shotgun),"MotionFireShotgun") &&
+        install(g_hFireSpecial,r.special,tr4 ? reinterpret_cast<void*>(&Detour_FireGrenade) :
+            reinterpret_cast<void*>(&Detour_FireHK),tr4 ? grenade : hk,
+            tr4 ? sizeof(grenade) : sizeof(hk),"MotionFireSpecial") &&
+        install(g_hFireCrossbow,r.crossbow,reinterpret_cast<void*>(&Detour_FireCrossbow),
+            tr4 ? crossbow4 : crossbow5,tr4 ? sizeof(crossbow4) : sizeof(crossbow5),
+            "MotionFireCrossbow") &&
+        install(g_hGunJoint,r.joint,reinterpret_cast<void*>(&Detour_GunJoint),
+            helper,sizeof(helper),"MotionGunJoint") &&
+        install(g_hInitialiseProjectile,r.initialise,reinterpret_cast<void*>(&Detour_InitialiseProjectile),
+            helper,sizeof(helper),"MotionInitialiseProjectile");
+}
+
 bool Install(const GameDllLayout& d, uint64_t base) {
     if (!d.phdGenerateW2V) return false;
     if (!d.w2vSceneReturn) return false;
@@ -1357,7 +1627,8 @@ bool Install(const GameDllLayout& d, uint64_t base) {
     if (!d.getJointAbsPositionLerp || !d.aimWeapon) return false;
     if (!d.laraAboveWater || !d.animateLara || !d.analogInput || !d.input) return false;
     if (!d.getCollisionInfo || !d.getFloor || !d.getHeight || !d.itemNewRoom ||
-        !d.playingCutseq) return false;
+        !d.playingCutseq || !d.cutseqNum || !d.cutseqTrigger || !d.useSpotCam ||
+        (d.game==0 && !d.vonCroyCutscene)) return false;
     const bool retail = d.timestamp == 0x68C12FDA || d.timestamp == 0x68C12FE9;
     if (std::memcmp(reinterpret_cast<const void*>(base + d.getCollisionInfo),
                     retail ? kCollisionRetail : kCollisionDebug, sizeof(kCollisionDebug)) ||
@@ -1465,10 +1736,20 @@ bool Install(const GameDllLayout& d, uint64_t base) {
         g_motionDll = nullptr;
         Log("firstperson: Touch dual-gun mode disabled; body/hair hooks unavailable");
     }
+    if (g_motionHooksReady) {
+        if (InstallLongGunHooks(d,base)) {
+            g_longGunHooksReady=true;
+            Log("firstperson: Touch all-weapon hooks ready (single weapons use right controller)");
+        } else {
+            RemoveLongGunHooks();
+            Log("firstperson: Touch additional weapon hooks unavailable; dual guns preserved");
+        }
+    }
     return true;
 }
 
 void Remove() {
+    RemoveLongGunHooks();
     g_gunTriggers.Reset();
     g_gunEquip.Reset();
     g_calibrationActive=false;
@@ -1513,7 +1794,13 @@ void FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed) {
     GetWindowThreadProcessId(GetForegroundWindow(),&process);
     const bool enabled=!chordConsumed && process==GetCurrentProcessId() && MotionTriggerMode();
     const uint64_t now=GetTickCount64();
+    int weapon=enabled ? CurrentMotionWeapon() : 0;
+    if (enabled && !weapon) weapon=*Ptr<int16_t>(g_boundDll->lara+8);
+    if (weapon!=g_triggerWeapon) {
+        g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=weapon;
+    }
     g_gunTriggers.Update(enabled,enabled && MotionReady(),left>30,right>30,now);
+    if (!motiongun::DualWeapon(weapon)) g_gunTriggers.pending[0]=false;
     if (!enabled) { g_gunEquip.Reset(); return; }
     const auto* app=*Ptr<uint8_t*>(g_motionDll->app);
     // LaraGun selects the setting for classic/modern controls, not graphics.

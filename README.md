@@ -29,8 +29,16 @@ for in-headset validation, and the remaining motion issues are listed there.
 * First person for TR4/5, ported from TR1–3: directional movement, headset-driven
   arm aiming, body-follow rotation, collision-checked room-scale movement and
   eye-room portal culling. Rendered-eye wall clearance is deployed but still needs
-  headset testing. Visible vertical gun tilt and motion polish remain under
-  investigation; TR6 first person is not implemented.
+  headset testing. Motion polish and vertical tilt in the head-aim fallback remain
+  under investigation; TR6 first person is not implemented.
+* Opt-in Quest Touch motion controls for all TR4/5 guns in remastered graphics:
+  tracked hands/muzzles, corrected grip pivots, aim assistance, independent dual
+  triggers, 1.5-second equip gestures and live position/angle calibration.
+  The new non-dual weapons still need headset validation.
+* Automatic first-person suspension during cutscenes/flybys, with native Lara
+  visibility and automatic return to the selected view after gameplay resumes.
+* FP-to-third-person recentering and a world-space third-person ceiling clamp;
+  the separate reverted cold-start centering correction is not currently present.
 
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
@@ -92,6 +100,15 @@ also changes your view, and Lara follows during supported ground movement.
 R3's D-pad shift remains available. See [Phase 23](#phase-23-tr45-first-person)
 for settings, gameplay exceptions and the current motion limitations.
 
+With `FirstPersonMotionGuns=1` in first-person remastered/HD gameplay, the
+weapon controls above are overridden: **hold LT for 1.5 seconds** to toggle
+draw/holster, **tap LT** to fire the left pistol/Uzi on release, and **tap RT**
+to fire the right pistol/Uzi or selected single weapon. Single weapons aim with
+the right controller. Holding RT does not auto-repeat. TR5 grappling still
+requires native laser targeting and a valid attachment point. For calibration
+keys and readiness/fallback rules, see
+[Touch motion guns](#experimental-touch-motion-guns-tr4tr5).
+
 ## Development Notes
 
 **A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a),
@@ -127,7 +144,7 @@ one set of hooks; settings select optional paths at runtime.
 | **Phase 20** | **TR6 pickup and scene-object retention** — candy bars, pickups, barrels and props survive preparation and the final paired bounds tests | Built. Awaiting in-headset revalidation. TR6 only |
 | **Phase 21** | **TR4/5 chest physics** — TR6's dynamic bones reimplemented: a damped spring driven by Lara's own airborne state, applied per vertex in the HD skinning shader | Working. On by default. TR4 / TR5 |
 | **Phase 22** | **Retail and Definitive Edition builds** — every game-DLL address set made per build, so the retail Steam release and the HD Definitive Patch get the DLL-side fixes too | Working. Confirmed in-headset on both ported builds |
-| **Phase 23** | **TR4/5 first person** — head anchor, directional locomotion, head aiming, room-scale movement, camera handoff and eye-room culling, ported from TR1–3 | Implemented and regression-tested; the reported disappearing-room case is fixed in headset. Visible vertical gun tilt, sideways forward-motion wobble and subtle stick-turn judder remain open. No TR6 first person |
+| **Phase 23** | **TR4/5 first person** — directional movement, room-scale tracking, camera handoff, eye-room culling, wall clearance, all-weapon Touch tracking and cutscene suspension | Deployed and regression-tested; reported room-culling and earlier dual-gun setup confirmed working. New weapons/cutscene cases need headset testing. Head-aim fallback vertical tilt and motion polish remain open. No TR6 first person |
 
 **Phase 1** is not a lesser version of Phase 2; it is the instrument that makes
 Phase 2 debuggable. One image, the engine's own field of view, no compositor —
@@ -241,6 +258,8 @@ checked against the shipped ones. See
 head/body alignment, aiming and room-scale behavior. It also records the TR5
 vehicle-field regression, the first-to-third-person translation fix, the
 headset-confirmed room-culling fix and remaining aiming and motion gaps. See
+also the all-weapon motion controls, wrist/muzzle fixes, hands-only visibility,
+trigger/equip fixes, calibration hotkeys and restored cutscene suspension in
 [Phase 23: TR4/5 First Person](#phase-23-tr45-first-person).
 
 **The repository's `TombRaiderVR.ini` is the configuration template.** The DLL
@@ -3023,6 +3042,10 @@ integrated state alone, so walking into a taller room gives your real height
 straight back. `CeilingClearance` and `CeilingMarginUnits` keep their names and
 their meaning.
 
+For TR4/5 first-to-third-person recentering, and the distinction between this
+ceiling clamp and the reverted cold-start camera correction, see
+[Third-person camera clamping and startup status](#third-person-camera-clamping-and-startup-status).
+
 ### TR6 follow-up: restoring the camera below ceilings and inside walls
 
 TR6 later exposed two gaps in that work. The visible symptom was intermittent
@@ -4519,14 +4542,35 @@ lookup through `g_tr6`), `src\Engine.h` (`shader_init` in the HD/retail rows),
 
 ## Phase 23: TR4/5 First Person
 
-Status as of 2026-09-25: implemented for supported TR4/5 builds, with subsequent
-regression fixes and diagnostic logging. The reported first-person
-disappearing-room culling case is now confirmed fixed in headset. The reference
-is the first-person implementation in `TombRaider123VR`; this is not a claim of
-identical in-headset smoothness. Sideways wobble while moving forward, subtle
-stick-turn judder and visible vertical gun aiming are still open. TR6 uses a
-different engine and has **no first-person port**;
-its existing stereo and third-person paths are unchanged by this feature.
+Status as of 2026-09-26: implemented and deployed for supported TR4/5 builds,
+including all-weapon Touch motion controls and restored cutscene suspension.
+The reported disappearing-room culling case and the earlier dual-gun setup
+were confirmed working by the user. The additional weapons and newly restored
+cutscene cases have automated coverage but still need broader headset testing.
+The reference is the first-person implementation in `TombRaider123VR`; this is
+not a claim of identical in-headset smoothness. Forward-motion sideways wobble,
+subtle stick-turn judder and visible vertical tilt in the **head-aim fallback**
+remain open; the latter is separate from controller-based motion-gun aiming.
+TR6 uses a different engine and has **no first-person port**; its existing
+stereo and third-person paths are unchanged by this feature.
+
+### Current fixes at a glance
+
+| Area | Current behavior / fix |
+| --- | --- |
+| View/graphics chords | Y+LT owns the FP toggle in gameplay and menus; Y+RT owns graphics switching |
+| Eye position and physical rotation | Interpolated head anchor, relative tracking neutral and neck-pivot compensation remove the floating/high camera and duplicated 360-degree rotation arc |
+| Ground controls | Forward, native sidestep and backpedal replace camera-relative sideways/backward running; TR5 no longer uses TR4's vehicle sentinel |
+| Camera/gun separation | Hand aiming no longer drives the camera through Lara's head/torso aim; wrist rotation uses the recovered grip pivot rather than orbiting the hands |
+| Gun targeting | Tracked muzzle origins, native hit processing and bounded hitscan aim assistance; all-weapon extension preserves shotgun pellets and launcher physics |
+| Gun presentation and fit | Hands and guns only when motion-ready; position/angle calibration retains the grip pivot and supports live function-key adjustment |
+| Trigger handling | Independent pistol/Uzi taps; RT for single weapons; 1.5-second LT equip gesture supports hold/toggle draw settings without instant re-holstering |
+| Cutscenes | Native presentation during cutsequences, transitions, flybys and TR4 tutorial scenes; restore the player's FP preference afterward and cancel queued shots |
+| Culling versus wall clearance | Portal traversal starts in the effective FP eye's room; a separate swept eye-clearance path limits wall clipping |
+| Return to third person | Fresh positional neutral and cleared translation prevent the off-center FP-to-third-person handoff; startup limitations are documented below |
+
+These summarize implemented fixes, not headset validation of every weapon,
+level or movement state. Details, known gaps and the test scope follow.
 
 ### Enabling and using it
 
@@ -4537,8 +4581,21 @@ the feature is enabled in TR4/5. The first-person chord is edge-triggered and
 has the same ownership in gameplay and menus, so it does not toggle graphics
 in a menu. Its action/trigger inputs are consumed to avoid leaking into gameplay.
 
+**LB+RB (both grips)** holds Action/Y for pushing/pulling blocks and other
+interactions without simultaneously sending Duck/Walk/Sneak. This shared
+gameplay mapping applies to TR4, TR5 and TR6, not only first person; menus and
+FMVs retain the separate grip bindings.
+
 The camera is anchored only during eligible gameplay. Inventory, title screens,
 FMVs, cutsequences and fixed/cinematic cameras retain their own presentation.
+First person also suspends for scripted flyby cameras, cutsequence entry/exit
+transitions, and TR4's separate Von Croy tutorial scenes. During these scenes
+the native camera and Lara's body/head/hair rendering are restored, and pending
+motion-gun shots/equip gestures are cleared. First person returns automatically
+when gameplay resumes if it was enabled beforehand; a third-person player
+stays in third person. Existing hand calibration and all-weapon support are
+unchanged. Both games have automated suspension/resume regression coverage;
+individual scenes still need in-headset confirmation.
 Returning from a menu preserves the previous viewing heading when Lara is the
 same item and has not been relocated. A new item or large relocation establishes
 a fresh anchor instead of reusing stale positional state.
@@ -4578,7 +4635,8 @@ the legacy controller-chord behavior.
   pending headset displacement, avoiding double-counting. D-pad shifting and
   unsupported movement states do not perform this body drag; interaction
   transitions clear stale horizontal displacement.
-- **Head aiming:** the native `AimWeapon` hook writes headset yaw/pitch into
+- **Head-aim fallback:** when motion-gun tracking is not in use, the native
+  `AimWeapon` hook writes headset yaw/pitch into
   both arm controls before animation/firing, including the revolver's differing
   aim/fire arm paths. The arm lock prevents long guns from adding torso rotation
   twice. Horizontal head aiming works in headset, but the visible guns remain
@@ -4643,6 +4701,44 @@ installed DLL is preserved beside it as
 not overwritten; older INIs can omit `FirstPersonInteractionAnchorZ` and use
 its built-in default of 16.
 
+### Third-person camera clamping and startup status
+
+Three separate behaviors should not be confused:
+
+- **World-space head-offset integration:** with positional tracking and
+  `HeadOffsetFrame=world`, turning the native camera with the stick does not
+  rotate the accumulated physical head displacement into a new position.
+  Actual physical movement still adds displacement. Camera jumps over 2048
+  game units re-anchor the offset; unavailable camera data waits for a valid
+  frame instead of integrating against an invalid camera.
+- **Ceiling clearance:** `CeilingClearance=1` caps the actual world-Y eye
+  displacement using native camera-room headroom and `CeilingMarginUnits`
+  (default 128). Applying the limit after world-space conversion keeps it
+  meaningful when the camera is pitched. Only the output is clamped, so
+  entering a taller room restores the accumulated height. Invalid room
+  indices or implausible headroom are rejected. This is a ceiling limit,
+  **not a full wall-collision sweep for third-person headset translation**;
+  the native chase camera still owns its own wall handling.
+- **FP-to-third-person handoff:** first person does not keep accumulating
+  chase-camera displacement in the background. Leaving it captures a fresh
+  third-person positional neutral and clears stale translation immediately,
+  including after temporary camera/menu/cutscene interruptions. Tracking loss
+  defers neutral capture until a valid pose returns. Head rotation and stereo
+  separation remain intact.
+
+**Cold-start limitation:** the separate correction for starting directly in
+third person was reverted and is not in the current source/deployed build.
+Initial third-person tracking does not automatically capture the same neutral
+as an FP handoff. The reported case where stick orbit can put the VR viewpoint
+outside the world until switching FP on and off must therefore **not** be
+listed as fixed. That round trip still applies the implemented handoff
+recenter, but it is not a replacement for a restored startup correction.
+This README update does not reintroduce reverted code.
+
+The first-person swept wall-clearance fix above is independent: it runs only
+for the active FP eye, not the third-person chase camera. TR6 has its own
+[camera/ceiling implementation](#tr6-follow-up-restoring-the-camera-below-ceilings-and-inside-walls).
+
 ### First-person settings
 
 All settings below belong in `[VR]`. These are repository/generated-template
@@ -4667,8 +4763,8 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonBodyFollowsHead` | `1` | Enable body following during supported ground states |
 | `FirstPersonBodyDeadzoneDegrees` | `0` | Body-follow angular deadzone |
 | `FirstPersonBodyTurnDegreesPerFrame` | `4` | Body-follow turn limit at a 60 Hz reference, scaled by elapsed time |
-| `FirstPersonHeadAim` | `1` | Write headset yaw/pitch into gun-arm controls; visible vertical gun tilt is currently defective |
-| `FirstPersonMotionGuns` | `0` | Experimental Quest Touch dual-pistol/Uzi tracking in remastered/HD graphics; off by default |
+| `FirstPersonHeadAim` | `1` | Headset-aim fallback when motion tracking is inactive; its visible vertical tilt remains defective, separate from motion-gun aiming |
+| `FirstPersonMotionGuns` | `0` | Experimental Quest Touch tracking for TR4/TR5 guns in remastered/HD graphics; off by default |
 | `FirstPersonMotionGunGripForwardMetres` | `0.1778` | Mesh grip calibration; positive moves the gun back along its barrel axis, with the calibrated grip anchored to the controller |
 | `FirstPersonMotionGunRaiseMetres` | `0.0254` | Raise the mesh in controller-local up while preserving the calibrated grip anchor; metres |
 | `FirstPersonMotionGunRightMetres` | `0` | Controller-local lateral mesh offset; positive right |
@@ -4681,8 +4777,16 @@ defaults, not a promise that an older installed INI has been updated.
 
 ### Experimental Touch motion guns (TR4/TR5)
 
-`FirstPersonMotionGuns=1` is an opt-in first-person test build for dual
-pistols and Uzis with both Touch controllers tracked and Lara's guns ready.
+`FirstPersonMotionGuns=1` enables experimental first-person motion guns
+in remastered/HD graphics with Lara's weapon ready. This now includes:
+
+- TR4: pistols, Uzis, revolver, shotgun, grenade launcher and crossbow.
+- TR5: pistols, Uzis, revolver/Desert Eagle, shotgun, HK and grappling gun.
+
+Pistols/Uzis use both controllers independently. Single weapons use the right
+controller and RT; the left controller can move the visible support hand but
+does not steer the barrel (no two-hand constraint or VRIK). Only the right
+controller must be tracked for single-weapon aiming.
 It moves each hand/gun draw with its own controller, hides both upper arms
 and forearms as well as Lara's body and hair, and replaces each native hitscan shot's origin and
 direction at the firing-view call so the ray begins at that hand's muzzle.
@@ -4710,10 +4814,30 @@ readiness condition (graphics, weapon/state, controller tracking, scene camera,
 or configuration), per-hand pose-build failures and fallback counts. These
 diagnostics do not change aiming or calibration; a "hooks ready" message alone
 does not mean the runtime motion-gun conditions were met.
-Pistol arm aim is prevented from rotating the camera's head/torso anchor.
-Native spread, ammunition and hit processing remain in place. The other guns,
-classic graphics, third person, missing controller poses and TR6 retain the
-existing behavior; `FirstPersonHeadAim` remains the fallback.
+Pistol and rifle arm aim is prevented from rotating the camera's head/torso
+anchor. Native spread, ammunition and hit processing remain in place.
+Shotguns consume one trigger request for the complete six-pellet volley and
+retain pellet spread; the native shared rifle aim state is mapped to the
+right controller. Grenades/bolts use the tracked muzzle while retaining native
+ammo variants, gravity, speed, fuse and collision behavior. Newly initialized
+projectiles use the resolved muzzle room. Laser-sight rays also originate at
+the tracked muzzle without writing into the scene camera vectors.
+TR5's grappling gun still requires its native laser-sight mode and a valid
+attachment target; native target validation and attachment angles are retained.
+This is not unrestricted grappling onto arbitrary walls.
+
+Classic graphics, third person, flares/torches and TR6 retain their existing
+behavior; `FirstPersonHeadAim` remains the fallback. A queued motion shot is
+blocked if the required controller pose is lost, not converted to a head shot.
+The additional hooks are verified separately: if they cannot be installed,
+working pistol/Uzi support remains available. Logs report this explicitly.
+The all-weapon extension preserves existing INI calibration and does not
+reapply reverted camera or hand-position changes. Cutscene suspension was
+subsequently restored separately at the user's request, as described above.
+Binary checks cover the PDB and retail builds of both games. Automated tests
+cover wrist pivots, all six shotgun pellets, right-hand rifle aim, scoped state
+restoration, projectile origins/rooms and optic shot gating. Per-weapon visual
+fit, impact alignment and grappling behavior still need in-headset testing.
 
 The earlier 0.30 m/0.173 m backward and 0.127 m upward compensations have been
 removed. `FirstPersonMotionGunGripBackMetres` and
@@ -4731,29 +4855,47 @@ recovery. The same adjusted frame drives the mesh, muzzle flash and shot
 origin; barrel direction is unchanged. Actual hand fit still needs headset
 confirmation. Adjust the value and restart; 0 restores the preceding build's
 placement without reverting its pivot or aiming fixes (with raise also zero).
-The latest requested fit is **1 inch up and 5 inches forward** relative to
-that 12-inch-back test: grip-forward is now `0.1778` (7 inches back) and
-raise is `0.0254` (1 inch up). These are controller-local mesh calibration
+An earlier requested fit was **1 inch up and 5 inches forward** relative to
+that 12-inch-back test: `0.1778` grip-forward (7 inches back) and
+`0.0254` raise (1 inch up). Those remain template defaults, not the current
+personal fit. These are controller-local mesh calibration
 values, not a headset-facing offset. For manual tuning, decrease grip-forward
 to move the guns forward and increase raise to move them up; one inch is
 `0.0254` metres. INI edits take effect on restart, or use the live keys below.
 Angle calibration rotates around the adjusted grip anchor and updates both
 the rendered barrel and shot direction; muzzle flash and shot origin remain
 on the same calibrated frame. With angles zero the previous fit is preserved.
-The latest installed Quest fit uses `FirstPersonMotionGunPitchDegrees=-20`
-to tilt both hands/barrels down 20 degrees, with the existing position values
-unchanged. This is a personal calibration, not a changed default. The grip
-pivot remains fixed; use Ctrl+Shift+F3/F4 to fine-tune pitch and Ctrl+F7 to save.
+The installed Quest 3/Touch fit checked on 2026-09-26 is:
+
+```ini
+FirstPersonMotionGuns=1
+FirstPersonMotionGunGripForwardMetres=0.2032
+FirstPersonMotionGunRaiseMetres=-0.0254
+FirstPersonMotionGunRightMetres=0
+FirstPersonMotionGunPitchDegrees=-30
+FirstPersonMotionGunYawDegrees=0
+FirstPersonMotionGunRollDegrees=0
+FirstPersonMotionGunHotkeys=1
+```
+
+That is an 8-inch local grip-back calibration, 1 inch down and 30 degrees
+downward pitch, with no lateral/yaw/roll adjustment. These are empirical
+mesh-fit values, not a desired physical hand-to-controller separation.
+The earlier -20-degree fit is historical. These are personal settings, not
+new defaults, and the all-weapon/cutscene deployments preserved them unchanged.
+The grip pivot remains fixed; use Ctrl+Shift+F3/F4 to fine-tune pitch and
+Ctrl+F7 to save. No extra one-inch-forward adjustment was reapplied.
 
 #### Independent motion-gun triggers
 
-In first-person remastered/HD motion-gun mode with pistols or Uzis selected:
+In first-person remastered/HD motion-gun mode:
 
-- Short LT squeeze: fire the left gun on release.
-- RT press: fire the right gun.
+- Short LT squeeze: fire the left pistol/Uzi on release; no shot for single weapons.
+- RT press: fire the right pistol/Uzi or the selected single weapon.
 - Hold LT for 1.5 seconds: draw/holster once; release before toggling again.
 
-Each tap requests one native shot, including with Uzis; holding RT does not
+Each tap requests one native shot (one full volley for the shotgun), including
+with Uzis and HK; holding RT does not
 auto-repeat. A short LT tap waits for release to distinguish it from the long
 equip gesture, which never also fires the left gun. Both hands can have one
 shot queued at once. The long gesture supports both native draw settings:
@@ -4763,21 +4905,21 @@ weapon state acknowledges it. This fixes guns immediately holstering after
 the earlier 150 ms pulse ended in hold mode, without changing game settings.
 Both control schemes (classic/modern) use their own native draw setting.
 Requests wait for the native firing cycle and are canceled
-on loss of readiness or leaving the mode. Native ammo, spread, damage and firing
+on loss of readiness, switching weapons or leaving the mode. Native ammo, spread, damage and firing
 effects remain in use, with unrequested hands blocked before native firing.
 The left-Uzi shared flash counter is corrected so left-only shots flash on the
 left gun. Hand mesh masking does not change the calibrated wrist or muzzle.
 
-Y+LT (view), Y+RT (graphics), menus, third person, classic graphics, other
-weapons and TR6 keep their existing controls. Entering the mode with a trigger
+Y+LT (view), Y+RT (graphics), menus, third person, classic graphics, flares/torches
+and TR6 keep their existing controls. Entering the mode with a trigger
 already held requires release before the new controls activate. Trigger timing,
 per-hand requests and hand-only masks have automated coverage; actual controller
 feel and rendering still require in-headset testing.
 
 #### Live gun calibration keys
 
-Focus the game window, enter first person and draw pistols/Uzis in remastered
-graphics with both controllers tracked. These keys adjust **both hands**:
+Focus the game window, enter first person and draw a supported gun in remastered
+graphics with its controller tracked. These keys adjust the shared fit for **all weapons**:
 
 | Keys | Position | With Shift also held |
 | --- | --- | --- |
@@ -4811,17 +4953,19 @@ Binary checks cover shot and flash hooks/call sites for all four supported DLLs.
 Additional regression checks cover the 20-degree grip pivot, horizontal and
 vertical aim-assist directions, cone/range rejection, and preservation of the
 short enemy-hit segment versus the full-length miss ray. Target-point and LOS
-helper addresses are checked in all four DLLs. Enemy damage still needs live
-combat confirmation; these checks do not run the native game in a headset.
-These are synthetic and static checks, not an in-headset verification: grip
-fit, physical 360-degree turns, flash placement and actual wall impacts still
-need Quest testing. Smoke and shell effects are not controller-rebased.
+helper addresses are checked in all four DLLs. The earlier dual-gun setup was
+reported working in headset, including the corrected pivot/aiming and trigger
+behavior. These tests do not independently verify native combat or replace
+headset feedback: the newly added weapons still need grip-fit, physical-turn,
+flash, impact and enemy-damage checks, plus native grappling-target tests.
+Shotgun/grenade firing-time joint queries rebase their smoke origin/direction;
+persistent smoke and shell effects are not comprehensively controller-rebased.
 If the mode is unusable, set `FirstPersonMotionGuns=0` and restart.
 `TombRaiderVR.log` reports tracked arm draws and left/right shots in
 five-second windows for diagnosis. LOS logs show the requested ray and return
 value, not a measured wall impact (native collision uses a local endpoint).
-There is no VRIK: the arms move as rigid
-pieces and need not connect anatomically to Lara's hidden torso.
+There is no VRIK: the visible hand/gun meshes move rigidly about the calibrated
+grips. Both upper arms and forearms remain hidden while motion-ready.
 
 ### Remaining motion issues and diagnostics
 
@@ -4875,16 +5019,32 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest run passed **14,736 checks**. These are synthetic checks, including
-parameter sweeps, not 14,736 in-game scenarios or proof of headset smoothness.
+The latest cutscene-enabled run (2026-09-26) passed **15,539 checks**. These are
+synthetic checks, including parameter sweeps, not 15,539 in-game scenarios or
+proof of headset smoothness. They include all-weapon firing scopes, six-pellet
+volleys, projectile initialization/room handling, laser/grapple request gating,
+combined hand masks, and cutscene transitions/flybys/tutorial suspension and
+automatic resumption. Cutscene tests verify native camera/visibility restoration,
+canceled gun requests and that third-person players stay in third person.
 The Release x64 build also succeeded. Native address/prologue/layout checks
 were extended in `tools/verify_addresses.py`; the latest recorded run against
-the available PDB/retail binaries passed **791 checks**. To include an installed
+the available PDB/retail binaries passed **806 checks**. To include an installed
 game directory in binary discovery:
 
 ```bat
 python tools\verify_addresses.py "C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered"
 ```
+
+`python tools/verify_motion_guns.py` also passed for all four supported
+TR4/TR5 DLL builds, checking the production hook table, native firing/flash
+calls, six shotgun pellets, launchers and optic callers. The complete
+`tests/build_selftest.cmd` suite passed with zero failures, including
+calibration/pivot, trigger and INI save/restore tests. The deployed
+cutscene-enabled DLL's SHA-256 is
+`C6D366D2B78E578344843773C08A72CCA848CF673075A6C854F0B81EDCE0E30B`.
+The previous all-weapon DLL remains as `TombRaiderVR.dll.x` in the game folder.
+Deployment verified the active DLL's hash and left the INI/calibration
+unchanged; saves were not edited.
 
 Live validation still needs both TR4 and TR5: forward/side/back movement,
 physical and stick turns, leaning/room-scale collision, guns, jumps/rolls,
@@ -4905,10 +5065,16 @@ These are honest gaps, not oversights.
 
 - **TR4/5 first-person motion is still being refined.** Sideways forward-motion
   wobble and subtle stick-turn judder remain under investigation. Horizontal
-  head aiming works, but visible guns do not tilt vertically with gaze. The
+  head aiming works, but its fallback visible guns do not tilt vertically with
+  gaze; this is distinct from controller-driven motion guns. The
   reported disappearing-room culling case is fixed, though broader headset
   validation remains. TR6 first person is not implemented. See
   [Phase 23](#phase-23-tr45-first-person).
+- **TR4/5 cold-start third-person centering is not restored.** The FP handoff
+  recenter and world-space ceiling clamp are implemented, but the separate
+  reverted startup correction is absent. The FP wall sweep is not a general
+  third-person wall clamp. See
+  [camera clamping and startup status](#third-person-camera-clamping-and-startup-status).
 - **`Config.h`'s fallbacks are not the generated ini's values.** `EyeOffsetMode`
   falls back to the superseded `2` and `Mode` to `mono`; the generated
   `TombRaiderVR.ini` overrides both. Running with no ini and no way to write one

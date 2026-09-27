@@ -147,6 +147,7 @@ LAYOUT = ['lara', 'lara_item', 'camera', 'room', 'number_rooms',
           'GetJointAbsPositionLerp', 'AimWeapon',
           'LaraAboveWater', 'AnimateLara', 'analogInput', 'input',
           'GetCollisionInfo', 'GetFloor', 'GetHeight', 'ItemNewRoom', 'GLOBAL_playing_cutseq',
+          'cutseq_num', 'cutseq_trig', 'bUseSpotCam', 'bVoncroyCutScene',
           'DrawNormalBinocs', 'DrawVCIHeadset', 'DrawLabyrinthFishEye',
           'DrawNormalLaserSight', 'DoInfraRedQuad']
 
@@ -239,6 +240,10 @@ for game, stamp, dll, vals, prologue_names in rows:
                       ('slopes_are_walls', 140), ('lava_is_pit', 140)):
         check('%s COLL_INFO::%s' % (dll, fld), want, f.get(fld))
     check('%s sizeof(GLOBAL_playing_cutseq)' % dll, 4, ds['GLOBAL_playing_cutseq'][2])
+    for name in ('cutseq_num', 'cutseq_trig', 'bUseSpotCam'):
+        check('%s sizeof(%s)' % (dll, name), 4, ds[name][2])
+    if game == 0:
+        check('%s sizeof(bVoncroyCutScene)' % dll, 1, ds['bVoncroyCutScene'][2])
     size, f = udt(dll, 'ANALOG_INPUT_INFO')
     check('%s sizeof(ANALOG_INPUT_INFO)' % dll, 56, size)
     for fld, want in (('turn', 0), ('tilt', 2), ('camTurn', 4), ('oldCamTurn', 6)):

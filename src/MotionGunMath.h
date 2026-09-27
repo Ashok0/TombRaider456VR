@@ -183,9 +183,16 @@ inline Frame GripFrame(const Basis& gun, Vec controllerPosition,
     // mesh while keeping the calibrated grip point on the controller.
     return {gun, Sub(controllerPosition,Transform(gun,{-rightUnits,gripForwardUnits,-raiseUnits}))};
 }
-inline Vec MuzzleLocal(int weapon, int hand) {
+inline Vec MuzzleLocal(int weapon, int hand, int game=0) {
     // HD SetGunFlash offsets, shared by TR4/5 (hand 0=left, 1=right).
-    return weapon==2 ? Vec{-11,195,60} : Vec{hand ? -10.0f : 10.0f,190,35};
+    switch (weapon) {
+    case 2: return {-11,195,60};
+    case 3: return {hand ? -10.0f : 10.0f,180,45};
+    case 4: return {0,228,32}; // FireShotgun's barrel/smoke origin
+    case 5: return game==0 ? Vec{0,276,80} : Vec{0,275,80};
+    case 6: return {0,228,32}; // bolt launcher
+    default: return {hand ? -10.0f : 10.0f,190,35};
+    }
 }
 
 inline Vec HandInWorld(Vec camera, float right, float down, float forward,

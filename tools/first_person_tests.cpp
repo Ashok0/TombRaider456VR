@@ -38,6 +38,8 @@ int animationTicks = 0, simulationTicks = 0;
 int collisionMode = 0, collisionCalls = 0, floorCalls = 0, roomChanges = 0;
 int cameraCollisionCalls = 0;
 int cutseq = 0, floorToken = 0, draws = 0, hairs = 0;
+int cutseqNumber=0, cutseqTransition=0, spotCamera=0;
+uint8_t vonCroyScene=0;
 bool nativeMoves = true, jointFollowsBody = false;
 bool worldCameraValid = false;
 float worldCameraRot[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
@@ -61,6 +63,79 @@ void __cdecl FakeHandJoint(uint8_t* item,tr::PHD_VECTOR* p,int joint,int) {
 int32_t __cdecl FakeFire(int32_t,void*,void*,const int16_t*) {
     ++nativeShotCalls; nativeShotHand=tr::g_firingHand;
     return -1; // A native miss is still a successfully fired shot.
+}
+int longCalls=0, pelletChecks=0, initCalls=0, opticMode=-1;
+tr::PHD_3DPOS crossbowArgument{};
+bool crossbowWasNull=false, sawOpticScope=false;
+alignas(16) uint8_t projectileMemory[9416]{};
+uint8_t* projectileItems=projectileMemory;
+void* __cdecl FakeProjectileFloor(int32_t,int32_t,int32_t,int16_t* room) {
+    *room=9; return nullptr;
+}
+void __cdecl FakeProjectileInit(int16_t index) {
+    Check(index==0,"only newly created player projectile is initialized");
+    ++initCalls;
+    std::memcpy(projectileMemory+tr::off::item_pos_prev,
+        projectileMemory+tr::off::item_pos,sizeof(tr::PHD_3DPOS));
+}
+void __cdecl FakeShotgun() {
+    ++longCalls;
+    if (!tr::g_longShot) return;
+    for (int pellet=0;pellet<6;++pellet) {
+        const int16_t aim[]={int16_t(tr::g_longShot->baseAim[0]+(pellet-3)*120),
+                             int16_t(tr::g_longShot->baseAim[1]+(pellet-2)*80)};
+        Check(tr::Detour_FireWeapon(4,nullptr,nullptr,aim)==-1,"all six native pellets fire");
+        Check(tr::g_firingAim[0]==tr::g_longShot->baseAim[0] &&
+              tr::g_firingAim[1]==tr::g_longShot->baseAim[1],
+              "pellet spread is measured from volley base, not erased per pellet");
+        ++pelletChecks;
+    }
+}
+void __cdecl FakeHK(int32_t running) {
+    Check(running==7,"HK native argument preserved");
+    ++longCalls;
+    if (tr::g_longShot)
+        tr::Detour_FireWeapon(5,nullptr,nullptr,tr::g_longShot->baseAim);
+}
+void __cdecl FakeGrenade() {
+    ++longCalls;
+    if (!tr::g_longShot) return;
+    const auto& gun=tr::g_longShot->gun;
+    const auto& body=*reinterpret_cast<tr::PHD_3DPOS*>(itemMemory+tr::off::item_pos);
+    Check(int16_t(*reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_left_arm+16)+body.x_rot)==gun.pitch &&
+          int16_t(*reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_left_arm+14)+body.y_rot)==gun.yaw,
+          "launcher native angles include body-relative pitch and yaw exactly once");
+    tr::PHD_VECTOR point{0,276,80};
+    tr::Detour_GunJoint(itemMemory,&point,10);
+    Check(std::abs(point.x-gun.muzzle.x)<=0.51f && std::abs(point.y-gun.muzzle.y)<=0.51f &&
+          std::abs(point.z-gun.muzzle.z)<=0.51f,"grenade native joint starts at tracked muzzle");
+    auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(projectileMemory+tr::off::item_pos);
+    p={point.x,point.y,point.z,gun.pitch,gun.yaw,0,0};
+    *reinterpret_cast<int16_t*>(projectileMemory+tr::off::item_object)=0x16d;
+    tr::Detour_InitialiseProjectile(0);
+}
+void __cdecl FakeCrossbow(tr::PHD_3DPOS* pose) {
+    ++longCalls; crossbowWasNull=pose==nullptr;
+    if (pose) crossbowArgument=*pose;
+    sawOpticScope=tr::g_opticShot;
+    if (pose && tr::g_longShot) {
+        *reinterpret_cast<tr::PHD_3DPOS*>(projectileMemory+tr::off::item_pos)=*pose;
+        *reinterpret_cast<int16_t*>(projectileMemory+tr::off::item_object)=0x158;
+        tr::Detour_InitialiseProjectile(0);
+    }
+}
+void __cdecl FakeRifle(int32_t) {
+    for (unsigned offset=tr::off::lara_head_y_rot;offset<=tr::off::lara_torso_z_rot;offset+=2)
+        *reinterpret_cast<int16_t*>(laraMemory+offset)=800;
+}
+int32_t __cdecl FakeOptic(tr::PHD_VECTOR* start,tr::PHD_VECTOR* end,int32_t,int32_t mode) {
+    opticMode=mode;
+    Check(start->x!=999 && end->x!=999,"optic receives private tracked vectors, not camera aliases");
+    if (mode && tr::CurrentMotionWeapon()==6) {
+        tr::PHD_3DPOS p{start->x,start->y,start->z,1234,2345,0,0};
+        tr::Detour_FireCrossbow(&p);
+    }
+    return 42;
 }
 void __cdecl FakeHandDraw(uint8_t* item,int32_t useBits,int32_t) {
     ++handDrawCalls;
@@ -461,7 +536,7 @@ int main() {
         VR().m_controllerPoseValid[1]=false; blocked("right-controller-pose-missing");
         VR().m_controllerPoseValid[1]=true;
         appMemory[0x9e4]=0; blocked("classic-graphics-or-no-app"); appMemory[0x9e4]=1;
-        gun=3; blocked("weapon-not-pistols-or-Uzis"); gun=2;
+        gun=3; blocked("weapon-not-supported"); gun=2;
         Check(MotionReady(),"motion readiness accepts Uzis");
         status=0; blocked("guns-not-ready"); status=4;
         g_scenePoseValid=false; blocked("no-scene-camera"); g_scenePoseValid=true;
@@ -520,6 +595,82 @@ int main() {
         Detour_PistolHandler(2);
         Check(leftFlash==3 && rightFlash==0,"left-only Uzi flash moved from native right counter to left");
         leftFlash=rightFlash=0;
+        // Additional weapon hooks are independently gated: failures must
+        // leave the previously working pistols/Uzis usable.
+        LongGunDll longDll{}; longDll.items=rva(&projectileItems);
+        longDll.opticReturns[0]=0x12345;
+        g_longGunDll=&longDll; g_longGunHooksReady=true;
+        g_hFireShotgun.m_trampoline=reinterpret_cast<void*>(&FakeShotgun);
+        g_hFireSpecial.m_trampoline=reinterpret_cast<void*>(&FakeGrenade);
+        g_hFireCrossbow.m_trampoline=reinterpret_cast<void*>(&FakeCrossbow);
+        g_hInitialiseProjectile.m_trampoline=reinterpret_cast<void*>(&FakeProjectileInit);
+        g_hRifleHandler.m_trampoline=reinterpret_cast<void*>(&FakeRifle);
+        g_hGetTargetOnLOS.m_trampoline=reinterpret_cast<void*>(&FakeOptic);
+        const auto savedFloor=dll.getFloor;
+        dll.getFloor=rva(reinterpret_cast<void*>(&FakeProjectileFloor));
+        const int savedGame=dll.game;
+        VR().m_controllerPoseValid[0]=false;
+        for (gun=3;gun<=6;++gun) {
+            Check(MotionReady() && MotionTriggerMode(),"single weapons need only right-controller tracking");
+            GunPose rightGun{};
+            Check(BuildGunPose(1,rightGun),"all remaining weapons build calibrated wrist and muzzle");
+            Detour_AimWeapon(nullptr,laraMemory+off::lara_left_arm);
+            Check(*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+16)==rightGun.pitch,
+                  "native shared rifle arm follows right-controller pitch");
+            Detour_RifleHandler(gun);
+            for (unsigned offset=off::lara_head_y_rot;offset<=off::lara_torso_z_rot;offset+=2)
+                Check(*reinterpret_cast<int16_t*>(laraMemory+offset)==0,"rifle aiming cannot sway head/torso camera");
+        }
+        VR().m_controllerPoseValid[0]=true;
+        for (gun=7;gun<=9;++gun) Check(!MotionTriggerMode(),"flares/torch/non-guns remain native");
+        gun=4; g_gunTriggers.pending[0]=true; g_gunTriggers.pending[1]=false;
+        Detour_FireShotgun(); Check(longCalls==0,"LT tap cannot discharge a single weapon");
+        const auto savedBody=pos;
+        int16_t savedArm[3]; std::memcpy(savedArm,laraMemory+off::lara_left_arm+12,sizeof(savedArm));
+        const int beforeShots=nativeShotCalls;
+        g_gunTriggers.pending[1]=true; Detour_FireShotgun();
+        Check(pelletChecks==6 && nativeShotCalls==beforeShots+6 && !g_gunTriggers.pending[1],
+              "one RT request produces exactly six pellets and consumes one request");
+        Detour_FireShotgun(); Check(longCalls==1,"no repeated volley after request consumed");
+        Check(!g_longShot && g_firingHand==-1 &&
+              !std::memcmp(savedArm,laraMemory+off::lara_left_arm+12,sizeof(savedArm)) &&
+              !std::memcmp(&savedBody,&pos,sizeof(pos)),"shot restores scoped arm and leaves body pose untouched");
+        VR().m_controllerPoseValid[1]=false; g_gunTriggers.pending[1]=true;
+        Detour_FireShotgun(); Check(longCalls==1,"lost right tracking blocks shotgun, not head fallback");
+        VR().m_controllerPoseValid[1]=true;
+        dll.game=0; gun=5; Detour_FireGrenade();
+        Check(initCalls==1 && *reinterpret_cast<int16_t*>(projectileMemory+off::item_room)==9,
+              "grenade initialization keeps native physics and resolves muzzle room");
+        Check(!std::memcmp(projectileMemory+off::item_pos,projectileMemory+off::item_pos_prev,sizeof(PHD_3DPOS)),
+              "projectile previous position starts at muzzle, not Lara's body");
+        gun=6; g_gunTriggers.pending[1]=true; Detour_FireCrossbow(nullptr);
+        Check(crossbowWasNull,"TR4 crossbow retains null-pose ammo-consuming branch");
+        dll.game=1; gun=5; g_gunTriggers.pending[1]=true;
+        g_hFireSpecial.m_trampoline=reinterpret_cast<void*>(&FakeHK);
+        const int beforeHK=nativeShotCalls; Detour_FireHK(7);
+        Check(nativeShotCalls==beforeHK+1 && nativeShotHand==1,"HK fires from right controller once");
+        gun=6; g_gunTriggers.pending[1]=true;
+        const int beforeGrapple=longCalls; Detour_FireCrossbow(nullptr);
+        Check(longCalls==beforeGrapple && !g_gunTriggers.pending[1],
+              "TR5 invalid non-optic grapple attempt cannot stick RT or fire on later mode entry");
+        g_gunTriggers.pending[1]=true; // A new press in native laser-sight mode.
+        PHD_VECTOR cameraStart{999,999,999},cameraEnd=cameraStart;
+        Check(GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,1)==42 &&
+              opticMode==1 && sawOpticScope && !g_opticShot && !g_gunTriggers.pending[1],
+              "one queued grapple shot passes through native target validation exactly once");
+        Check(crossbowArgument.x_rot==1234 && crossbowArgument.y_rot==2345,
+              "native grapple attachment angles preserved after controller target selection");
+        Check(cameraStart.x==999 && cameraEnd.x==999,"optic shot cannot overwrite camera vectors");
+        GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,1);
+        Check(opticMode==0 && longCalls==beforeGrapple+1,"repeated optic poll cannot duplicate shot");
+        g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeHandDraw);
+        const int beforeCombined=handDrawCalls;
+        meshBits=0x3600; Detour_DrawCreatureHD(itemMemory,1,0);
+        Check(handDrawCalls==beforeCombined+2 && meshBits==0x3600 && g_renderArm==-1,
+              "combined long-gun pass splits into two hand-only tracked draws and restores state");
+        meshBits=savedBits;
+        dll.game=savedGame; dll.getFloor=savedFloor;
+        g_longGunHooksReady=false; g_longGunDll=nullptr; g_longShot=nullptr;
         g_gunTriggers.Reset();
         g_handFired[0]=g_handFired[1]=false;
         dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeJoint));
@@ -668,6 +819,9 @@ int main() {
     dll.getHeight = rva(reinterpret_cast<void*>(&FakeHeight));
     dll.itemNewRoom = rva(reinterpret_cast<void*>(&FakeNewRoom));
     dll.playingCutseq = rva(&cutseq);
+    dll.cutseqNum = rva(&cutseqNumber);
+    dll.cutseqTrigger = rva(&cutseqTransition);
+    dll.useSpotCam = rva(&spotCamera);
     g_hDrawCreatureHD.m_trampoline = reinterpret_cast<void*>(&FakeDraw);
     g_hDrawHair.m_trampoline = reinterpret_cast<void*>(&FakeHair);
     nativeMoves = false; jointFollowsBody = true;
@@ -688,6 +842,8 @@ int main() {
         // TR5 InitialiseLara zeroes this unused field; only TR4 has the
         // -1/no-vehicle contract consumed by native LaraAboveWater.
         vehicle = dll.game == 0 ? -1 : 0; hp = 1000; water = 0; cutseq = 0;
+        cutseqNumber=cutseqTransition=spotCamera=0; vonCroyScene=0;
+        dll.vonCroyCutscene=dll.game==0 ? rva(&vonCroyScene) : 0;
         std::memset(appMemory, 0, sizeof(appMemory));
         std::memset(cameraMemory, 0, sizeof(cameraMemory));
         fraction = 0; collisionCalls = floorCalls = roomChanges = 0;
@@ -853,19 +1009,54 @@ int main() {
         resetRoomscale(); physicalPose(0.7f); g_headingBase = 0.4f;
         UpdateLocomotion(camera);
         const float savedHeading = g_lastHeadWorld;
-        for (int interruption = 0; interruption < 4; ++interruption) {
+        for (int interruption = 0; interruption < 12; ++interruption) {
+            if (interruption==9 && which==1) continue; // no Von Croy in TR5
             *reinterpret_cast<int32_t*>(appMemory + drva::app_off::InventoryActive) = interruption == 0;
             *reinterpret_cast<int32_t*>(appMemory + drva::app_off::InTitle) = interruption == 1;
             cutseq = interruption == 2;
-            *reinterpret_cast<int32_t*>(cameraMemory + off::camera_type) = interruption == 3 ? 1 : 0;
+            cutseqNumber=interruption>=4 && interruption<=7 ? 12 : 0;
+            cutseqTransition=cutseqNumber ? interruption-3 : 0;
+            spotCamera=interruption==8;
+            vonCroyScene=interruption==9;
+            *reinterpret_cast<int32_t*>(cameraMemory + off::camera_type) =
+                interruption==3 ? 1 : interruption>=10 ? interruption-6 : 0;
+            const auto nativeCamera=camera;
+            auto& cutsceneBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
+            cutsceneBits=0x7fff; SetMeshVisibility(true,false);
+            g_gunTriggers.active=true; g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
+            g_gunEquip.initialized=true;
             UpdateSceneCamera(camera);
-            Check(!g_active && !g_haveHeading, "UI/cutscene/fixed camera suspends FP");
+            Check(!g_active && !g_haveHeading && !g_scenePoseValid,
+                  "UI/cutscene transitions/flyby/tutorial/fixed camera suspend FP");
+            Check(g_runtimeEnabled && !std::memcmp(&camera,&nativeCamera,sizeof(camera)),
+                  "cutscene uses untouched native camera without toggling FP preference");
+            Check(cutsceneBits==0x7fff && !g_headHidden && !g_rollHidden,
+                  "native Lara head/body visibility restored during cutscene");
+            Check(!g_gunTriggers.active && !g_gunTriggers.WantsShot() && !g_gunEquip.initialized,
+                  "cutscene cancels queued hand shots and equip gestures");
+            const int beforeDraw=draws,beforeHair=hairs;
+            Detour_DrawCreatureHD(itemMemory,0,0); Detour_DrawHair(0);
+            Check(draws==beforeDraw+1 && hairs==beforeHair+1,
+                  "cutscene body and hair use native rendering");
             std::memset(appMemory, 0, sizeof(appMemory)); cutseq = 0;
+            cutseqNumber=cutseqTransition=spotCamera=0; vonCroyScene=0;
             *reinterpret_cast<int32_t*>(cameraMemory + off::camera_type) = 0;
             physicalPose(-0.4f); pos.y_rot = Angle(-1.2f);
             UpdateSceneCamera(camera);
             Check(g_active && Near(g_lastHeadWorld, savedHeading), "resuming FP preserves viewing heading");
         }
+        cutseqTransition=4; cutseqNumber=0;
+        Check(!ScriptedCameraActive() && Gate(),"stale cutscene transition without an ID does not lock FP off");
+        cutseqTransition=0;
+        if (which==1) {
+            vonCroyScene=1;
+            Check(!ScriptedCameraActive(),"TR5 never reads a nonexistent tutorial-scene flag");
+            vonCroyScene=0;
+        }
+        g_runtimeEnabled=false; spotCamera=1; UpdateSceneCamera(camera);
+        spotCamera=0; UpdateSceneCamera(camera);
+        Check(!g_active && !g_runtimeEnabled,"cutscene completion cannot enable FP for a third-person player");
+        g_runtimeEnabled=true; UpdateSceneCamera(camera);
         pos.x_pos = prev.x_pos = 5000; pos.y_rot = Angle(-0.8f);
         UpdateLocomotion(camera);
         Check(Near(g_lastHeadWorld, -0.8f) && Near(g_dragCurrent.x, 0),

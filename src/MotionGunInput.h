@@ -3,6 +3,9 @@
 
 namespace tr::motiongun {
 
+inline bool DualWeapon(int weapon) { return weapon==1 || weapon==2; }
+inline bool SupportedWeapon(int weapon) { return weapon>=1 && weapon<=6; }
+
 // One queued shot per hand, consumed by the native FireWeapon hook rather
 // than by XInput polling. LT fires on release to distinguish draw/holster.
 struct TriggerInput {
@@ -75,6 +78,7 @@ struct EquipInput {
 // Native masked gun passes include forearm and hand. Keep only the hand
 // (the equipped gun is part of that mesh), preserving the full bone palette.
 inline uint32_t HandOnlyMask(uint32_t nativeMask) {
-    return nativeMask==0x600 ? 0x400 : nativeMask==0x3000 ? 0x2000 : 0;
+    return nativeMask==0x600 ? 0x400 : nativeMask==0x3000 ? 0x2000 :
+        nativeMask==0x3600 ? 0x2400 : 0;
 }
 } // namespace tr::motiongun

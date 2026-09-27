@@ -5,6 +5,7 @@ Requires pefile (already used by the other address tools).
 """
 from pathlib import Path
 import struct
+import re
 import pefile
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 
@@ -98,3 +99,52 @@ for (path, stamp, get_joints, fire, view_ret, right_ret, left_ret,
     print(f"{path}: hook bytes and both shot sites OK")
 
 print("motion-gun addresses: all four builds verified")
+
+# Parse the actual C++ extension table so stale test-only addresses cannot
+# accidentally validate an incorrect production row.
+source = (root / "src/FirstPerson.cpp").read_text()
+table = source.split("constexpr LongGunDll kLongGunDlls[] = {", 1)[1].split("\n};", 1)[0]
+rows = re.findall(r"\{(0x[0-9A-F]+),([^{}]+),\s*\{([^}]+)\}\}", table)
+assert len(rows) == 4
+for build, row in zip(builds, rows):
+    path, stamp, _, fire, _, _, _, _, _, los, _, _ = build
+    row_stamp, numbers, optic_returns = row
+    assert int(row_stamp, 16) == stamp
+    rifle, shotgun, special, crossbow, joint, initialise, items = [
+        int(n, 16) for n in numbers.split(",")]
+    pe = pefile.PE(str(root / path))
+    data = pe.get_memory_mapped_image()
+    tr4 = "tomb4" in path
+    prefixes = [
+        (rifle, "40 53 57 48 81 ec 98 00 00 00" if tr4 else "40 53 56 57 41 56"),
+        (shotgun, "48 89 5c 24 18"),
+        (special, "41 55 48 81 ec b0 00 00 00" if tr4 else "89 4c 24 08 48 83 ec 38"),
+        (crossbow, "40 57 48 83 ec 60" if tr4 else "48 89 7c 24 18"),
+        (joint, "48 89 5c 24 08"),
+        (initialise, "48 89 5c 24 08"),
+    ]
+    for address, prefix in prefixes:
+        expected = bytes.fromhex(prefix)
+        assert data[address:address+len(expected)] == expected, (path, hex(address), "hook bytes")
+        ins = list(decoder.disasm(expected, address))
+        assert sum(i.size for i in ins) == len(expected), (path, "whole instructions")
+        assert not any("rip" in i.op_str or i.mnemonic.startswith("j") for i in ins)
+    for ret in [int(n,16) for n in optic_returns.split(",")]:
+        assert call_target(data, ret) == los, (path, "optic call")
+    def calls(address, size, target):
+        return [i for i in decoder.disasm(data[address:address+size], address)
+                if i.mnemonic == "call" and i.op_str == hex(target)]
+    assert len(calls(shotgun,1602,fire)) == 6, (path, "six-pellet shotgun")
+    assert len(calls(shotgun,1602,joint)) == 2, (path, "shotgun smoke origin/direction")
+    if tr4:
+        assert len(calls(special,983,joint)) == 2, (path, "grenade muzzle/direction")
+        assert len(calls(special,983,initialise)) == 1, (path, "grenade initialization")
+        assert len(calls(crossbow,682,joint)) == 1, (path, "normal bolt muzzle")
+        assert len(calls(crossbow,682,initialise)) == 2, (path, "normal/optic bolt initialization")
+    else:
+        assert len(calls(special,276,fire)) == 1, (path, "HK native shot")
+        assert len(calls(crossbow,333,initialise)) == 1, (path, "grapple initialization")
+    assert any("qword ptr [rip" in i.op_str and i.address+i.size+i.disp == items
+               for i in decoder.disasm(data[crossbow:crossbow+(682 if tr4 else 333)],crossbow)), (
+                   path, "projectile item table")
+    print(f"{path}: all-weapon hooks, six pellets, launchers and optic calls OK")

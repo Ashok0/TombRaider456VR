@@ -113,6 +113,10 @@ struct GameDllLayout {
     uint32_t getHeight;
     uint32_t itemNewRoom;
     uint32_t playingCutseq;
+    uint32_t cutseqNum;         // int32: active/requested cutsequence ID
+    uint32_t cutseqTrigger;     // int32: entry/playback/exit transition state
+    uint32_t useSpotCam;        // int32: scripted flyby owns the camera
+    uint32_t vonCroyCutscene;   // uint8: TR4 tutorial scenes; absent in TR5
 
     // --- the optic overlays, stubbed rather than hooked (see Overlay.h) -------
     //
