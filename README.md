@@ -4662,6 +4662,12 @@ the legacy controller-chord behavior.
   guns remain visible. Standing restores the body. Menus, cutscenes and third
   person restore native visibility. This is visibility-only, not a restoration
   of the reverted crouch/prone room-scale movement changes.
+  Native `UNDERWATER` status (`1`) now also hides the first-person body, head
+  and braid in classic and HD rendering. Surface swimming, wading, dry land,
+  fly-cheat and unknown water status do not activate this rule. Surfacing,
+  cutscenes and third person restore the previous native mask; any motion-ready
+  tracked hand/gun passes remain unchanged. This does not alter swim controls,
+  camera anchoring or body movement, and needs no new INI setting.
   Ledge hanging, shimmying and hang turns instead retain both upper arms,
   forearms and hands while hiding the torso, legs, head and braid. This mask
   works independently of the head-hiding setting and restores on leaving the
@@ -4704,7 +4710,8 @@ live log contains state-12 impacts; both PDB builds' `lara_col_run` enter state
 12 on wall impact and `lara_col_splat` uses the ground-style +/-384 limits.
 The camera now keeps those ground limits during the impact animation. This is
 a camera-only classification change; body-turn eligibility, native movement,
-head tracking, aiming and actual airborne clearance remain unchanged.
+head tracking and aiming remain unchanged. Airborne clearance was addressed
+separately afterward, as described below.
 
 A new run -> impact -> stop regression fails under the previous classification
 and passes with the correction. It covers both games, multiple headings/render
@@ -4713,6 +4720,23 @@ X/Z collision shift, checking unchanged root positions, eye height and tracking
 neutral. The replacement DLL is deployed; running into the user's affected
 crate still needs an in-headset retest. Synthetic checks do not establish that
 every instance of crate clipping has this cause.
+
+The follow-up walk-into-crate -> jump report exposed the actual airborne gap:
+allowing floor drops had also skipped raised-floor rejection at camera height.
+Jump/fall camera sweeps now compare the native centre/front/side floor and
+ceiling samples against the rendered eye height, including vertical physical
+lean, with a 64-unit clearance margin. Floors below the eye remain open;
+crate tops at eye height block the view, and the camera can pass above them
+once it clears the top. Missing-height samples and static hits also block.
+Airborne queries omit walking-only slope/pit flags; ground and wall-impact
+limits are unchanged. Translation-disabled and optic modes are respected.
+The correction adjusts camera X/Z only, not the jump, Lara's root, eye height,
+body facing or tracking neutral. The rejected climb-only guard remains absent.
+
+The expanded walk/impact/jump/fall regression failed before this correction
+and passes afterward. Real-height cases cover clearing the top, front-radius
+contact, physical lean, tracking/optic gates and both games. These are synthetic
+tests; the specific crate and underwater swimming still need headset testing.
 
 The FP motion-gun handler previously replaced RT with a queued-shot signal even
 when Lara's guns were holstered or her hands were busy. With no shot queued,
@@ -5182,9 +5206,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest crate-impact run (2026-09-27) passed **139,950 checks**. The rejected
+The latest underwater/jump run (2026-09-28) passed **257,442 checks**. The rejected
 climb-only implementation and its tests were removed. These are synthetic
-checks, including parameter sweeps, not 139,950 in-game scenarios or
+checks, including parameter sweeps, not 257,442 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5200,7 +5224,9 @@ motion, jump transitions, interpolation fractions and the legacy opt-out.
 Physical yaw/pitch and lean sweeps check world-space eye and stationary-controller
 positions, with room-scale body movement both enabled and disabled. Crouch stays
 on its native movement path; third-person tracking remains unchanged.
-Visibility tests cover both games' crouch/crawl/turn states, head hiding on/off,
+Visibility tests cover both games' underwater entry/exit, surface/wading/dry
+restoration, submerged classic/HD body and hair suppression, tracked-hand pass
+preservation, cutscene and third-person restoration, plus crouch/crawl/turn states, head hiding on/off,
 standing and cutscene restoration, tracked hands while crouched, and rolls.
 Startup tests use zero, partial and full mesh masks across HD render passes;
 they verify draw-local head hiding, preservation of masked passes and persistent
@@ -5243,12 +5269,12 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 999/1000 ms boundary. The deployed crate-impact DLL
+tests, including the LT 999/1000 ms boundary. The deployed underwater/jump DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`14339F71EB89E14FBD892685342513232632F00BA8302CF75A11DD0BEC269523`.
+`489DEDFDBDDD45673A3C953DDE7B0DFD2E6CE54AB3993B1E4EA9974F8C11664A`.
 The prior installed DLL and INI were backed up under
-`build/before-crate-impact-20260927-233854/` (the rejected climb-clearance build).
+`build/before-underwater-jump-20260928-003824/` (the previous crate-impact build).
 The pre-climb Action-icon build is still available under
 `build/before-climb-clearance-20260927-232221/`.
 The previous all-weapon DLL remains as `TombRaiderVR.dll.x` in the game folder.

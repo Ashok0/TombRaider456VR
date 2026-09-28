@@ -589,6 +589,11 @@ void VRSystem::FirstPersonViewOffset(float& right,float& forward) const {
     forward=-(m_rawHeadPose.m[2][3]-m_firstPersonNeutral[2]);
 }
 
+float VRSystem::FirstPersonVerticalOffset() const {
+    if (!m_poseValid || !m_firstPersonNeutralValid) return 0;
+    return (m_rawHeadPose.m[1][3]-m_firstPersonNeutral[1])*(Cfg().flipViewY ? -1.0f : 1.0f);
+}
+
 void VRSystem::RecentreOffset() {
     m_recentreRequested = true;
     if (FirstPersonActive()) FirstPersonRecenter();

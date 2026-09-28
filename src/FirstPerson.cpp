@@ -142,6 +142,7 @@ bool g_meshOverride = false;
 bool g_headHidden = false;
 bool g_rollHidden = false;
 bool g_crouchHidden = false;
+bool g_underwaterHidden = false;
 bool g_ledgeArmsOnly = false;
 uint8_t* g_meshItem = nullptr;
 uint32_t g_meshBaseBits = 0;
@@ -319,7 +320,7 @@ void RestoreHeadMesh() {
     }
     g_meshOverride = false;
     g_meshItem = nullptr;
-    g_headHidden = g_rollHidden = g_crouchHidden = g_ledgeArmsOnly = false;
+    g_headHidden = g_rollHidden = g_crouchHidden = g_underwaterHidden = g_ledgeArmsOnly = false;
 }
 
 // Native icons are world points projected into a flat HUD, not Lara meshes.
@@ -392,15 +393,15 @@ void __cdecl Detour_DrawActionIndicators() {
     }
 }
 
-uint32_t VisibleMeshBits(uint32_t base, bool head, bool roll, bool crouch, bool ledge) {
-    if (roll || crouch) return 0;
+uint32_t VisibleMeshBits(uint32_t base, bool head, bool roll, bool crouch, bool ledge, bool underwater = false) {
+    if (roll || crouch || underwater) return 0;
     if (ledge) return base & kArmMeshBits;
     return head ? base & ~kHeadMeshBit : base;
 }
 
 void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
-                       bool ledgeArms = false) {
-    if ((!hideHead && !hideRoll && !hideCrouch && !ledgeArms) || !g_boundDll || !g_boundBase) {
+                       bool ledgeArms = false, bool hideUnderwater = false) {
+    if ((!hideHead && !hideRoll && !hideCrouch && !ledgeArms && !hideUnderwater) || !g_boundDll || !g_boundBase) {
         RestoreHeadMesh();
         return;
     }
@@ -408,7 +409,7 @@ void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
     if (!item) {
         g_meshOverride = false;
         g_meshItem = nullptr;
-        g_headHidden = g_rollHidden = g_crouchHidden = g_ledgeArmsOnly = false;
+        g_headHidden = g_rollHidden = g_crouchHidden = g_underwaterHidden = g_ledgeArmsOnly = false;
         return;
     }
     if (!g_meshOverride || item != g_meshItem) {
@@ -416,22 +417,23 @@ void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
         g_meshItem = item;
         g_meshBaseBits = *reinterpret_cast<uint32_t*>(
             item + off::item_mesh_bits);
-        g_headHidden = g_rollHidden = g_crouchHidden = g_ledgeArmsOnly = false;
+        g_headHidden = g_rollHidden = g_crouchHidden = g_underwaterHidden = g_ledgeArmsOnly = false;
     }
     auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
     const uint32_t expected = VisibleMeshBits(g_meshBaseBits,g_headHidden,
-        g_rollHidden,g_crouchHidden,g_ledgeArmsOnly);
+        g_rollHidden,g_crouchHidden,g_ledgeArmsOnly,g_underwaterHidden);
     if (g_meshOverride && bits != expected) {
         // Preserve native visibility changes outside our owned mask. During
         // a hidden stance we own the full mask and retain its original snapshot.
-        if (!g_rollHidden && !g_crouchHidden && !g_ledgeArmsOnly)
+        if (!g_rollHidden && !g_crouchHidden && !g_underwaterHidden && !g_ledgeArmsOnly)
             g_meshBaseBits = (bits & ~kHeadMeshBit) | (g_meshBaseBits & kHeadMeshBit);
     }
     g_headHidden = hideHead;
     g_rollHidden = hideRoll;
     g_crouchHidden = hideCrouch;
+    g_underwaterHidden = hideUnderwater;
     g_ledgeArmsOnly = ledgeArms;
-    bits = VisibleMeshBits(g_meshBaseBits,hideHead,hideRoll,hideCrouch,ledgeArms);
+    bits = VisibleMeshBits(g_meshBaseBits,hideHead,hideRoll,hideCrouch,ledgeArms,hideUnderwater);
 }
 
 bool IsCrouchState(const uint8_t* item) {
@@ -1454,7 +1456,7 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
                              lerp(prev.z_pos, pos.z_pos)};
 
     locomotion::Vec tracked{};
-    if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation) {
+    if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation && !VR().headAtCamera()) {
         VR().FirstPersonViewOffset(tracked.x, tracked.z);
         tracked = locomotion::Rotate(tracked, g_headingBase) * LiveWorldUnitsPerMetre();
     }
@@ -1474,6 +1476,10 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     // airborne +/-4096 also skipped raised-floor rejection, letting the eye
     // enter a crate just for the impact animation. Keep body-turn gating as-is.
     const bool airborne = !ground && state != 15 && state != 12;
+    double eyeY=pose.y_pos;
+    if (airborne && Cfg().positionalTracking && Cfg().firstPersonHeadTranslation && !VR().headAtCamera())
+        eyeY+=VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre();
+    if (!std::isfinite(eyeY) || std::fabs(eyeY-pose.y_pos)>4096) return;
     firstperson::ClampEyeToWall(body, eye,
         [&](int32_t x, int32_t z, int32_t clearX, int32_t clearZ) {
             RoomCollision coll{};
@@ -1481,11 +1487,24 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
             coll.badPos = airborne ? 4096 : 384;
             coll.badNeg = airborne ? -4096 : -384;
             coll.badCeiling = 0;
-            coll.flags = 5;
+            coll.flags = airborne ? 0 : 5; // airborne eyes need geometry, not walkable slope/pit rules
             coll.old[0] = clearX; coll.old[1] = body[1]; coll.old[2] = clearZ;
             coll.facing = Angle(std::atan2(float(x - clearX), float(z - clearZ)));
             reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase + g_boundDll->getCollisionInfo)(
                 &coll, x, body[1], z, room, 762);
+            if (airborne) {
+                // Allow open space below a jump, not a raised floor at eye
+                // height. Native samples are relative to capsule bottom/top.
+                // Check centre/front/sides at the existing 64-unit radius so
+                // stereo eyes and the near plane stay outside the obstacle.
+                for (int sample=0;sample<18;sample+=3) {
+                    const int floor=coll.floorSamples[sample], ceiling=coll.floorSamples[sample+1];
+                    if (floor==-32512 || ceiling==-32512 ||
+                        double(body[1])+floor<=eyeY+64 ||
+                        double(body[1])-762+ceiling>=eyeY-64) return true;
+                }
+                if (coll.hitStatic) return true;
+            }
             return (!airborne && (coll.floorSamples[0] < -384 ||
                                   coll.floorSamples[0] > 384 ||
                                   coll.floorSamples[1] >= 0)) ||
@@ -1653,9 +1672,9 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         return;
     }
     const bool motion = lara && MotionReady();
-    // Hide crouched/prone geometry, but retain the existing tracked-hand/gun
+    // Hide crouched/prone/submerged geometry, but retain the existing tracked-hand/gun
     // passes when available. Rolls still suppress everything above.
-    if (lara && g_crouchHidden && !motion) return;
+    if (lara && (g_crouchHidden || g_underwaterHidden) && !motion) return;
     if (motion) {
         // Skip the body/upper arms; trim forearms out of the two gun passes.
         // Keep the complete skeleton so wrist pivot and gun placement stay put.
@@ -1697,7 +1716,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
 }
 
 void __cdecl Detour_DrawHair(int32_t argument) {
-    if (g_active && (g_headHidden || g_rollHidden || g_crouchHidden || g_ledgeArmsOnly || MotionReady())) {
+    if (g_active && (g_headHidden || g_rollHidden || g_crouchHidden || g_underwaterHidden || g_ledgeArmsOnly || MotionReady())) {
         ++g_hairSkips;
         return;
     }
@@ -1735,7 +1754,8 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
                       g_active && IsRollState(item),
                       g_active && IsCrouchState(item),
                       g_active && item && locomotion::IsLedgeHangState(
-                          *reinterpret_cast<const int16_t*>(item+off::item_anim_state)));
+                          *reinterpret_cast<const int16_t*>(item+off::item_anim_state)),
+                      g_active && item && LaraWaterStatus()==1); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
 }
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {

@@ -113,6 +113,9 @@ public:
     void RecenterThirdPersonHead();
     void HeadFloorOffset(float& right, float& forward) const;
     void FirstPersonViewOffset(float& right, float& forward) const;
+    // Physical vertical displacement in engine Y convention (metres), without
+    // modifying tracking neutral. Caller applies translation/optic gates.
+    float FirstPersonVerticalOffset() const;
     void ConsumeHeadFloorOffset(float right, float forward);
     void PivotHeadFloorOffset(float yawDelta);
 

@@ -253,18 +253,29 @@ void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z
         ++cameraCollisionCalls;
         const bool airborne = c->badPos == 4096 && c->badNeg == -4096;
         Check((airborne || (c->badPos == 384 && c->badNeg == -384)) &&
-              c->badCeiling == 0 && c->flags == 5 && height == 762,
+              c->badCeiling == 0 && c->flags == (airborne ? 0 : 5) && height == 762,
               "camera uses native ground or airborne collision parameters");
         Check(std::hypot(float(x - c->old[0]), float(z - c->old[2])) <= 16+std::sqrt(2.f),
               "rendered eye sweep advances at most 16 units plus two-axis integer rounding");
         Check(room == *reinterpret_cast<int16_t*>(itemMemory + tr::off::item_room),
               "camera sweep starts in Lara's room");
+        for (int sample=0;sample<18;sample+=3) {
+            c->floorSamples[sample]=0; c->floorSamples[sample+1]=-1024;
+        }
         c->floorSamples[0] = collisionMode == 12 ? 1000 : 0;
         if (collisionMode==14 && x*impactNormalX+z*impactNormalZ>=100)
             c->floorSamples[0]=-768; // raised crate, no synthetic shift needed
         c->floorSamples[1] = -1024;
         if (collisionMode == 11 && x >= 100) c->shift[0] = 99 - x;
         if (collisionMode == 13) c->type = 8;
+        if (collisionMode==15) {
+            for (int sample=0;sample<18;sample+=3) {
+                c->floorSamples[sample]=-y;
+                c->floorSamples[sample+1]=-4096-(y-height);
+            }
+            if (x*impactNormalX+z*impactNormalZ+64>=100)
+                c->floorSamples[3]=-768-y; // front radius sample hits crate before eye centre
+        }
         (void)y;
         return;
     }
@@ -720,6 +731,16 @@ int main() {
         g_rollHidden=true; Detour_DrawCreatureHD(itemMemory,1,0);
         Check(handDrawCalls==beforeCrouchedHands+2,"roll still hides hands as well as body");
         g_rollHidden=g_crouchHidden=false;
+        g_underwaterHidden=true;
+        const int beforeSubmergedHands=handDrawCalls;
+        meshBits=0; Detour_DrawCreatureHD(itemMemory,0,0);
+        Check(handDrawCalls==beforeSubmergedHands,"submerged body pass stays hidden with motion guns ready");
+        for (uint32_t mask:{0x600u,0x3000u}) {
+            meshBits=mask; Detour_DrawCreatureHD(itemMemory,1,0);
+            Check(meshBits==mask,"underwater hiding preserves hand-pass native mask");
+        }
+        Check(handDrawCalls==beforeSubmergedHands+2,"underwater body hiding does not disable tracked-hand passes");
+        g_underwaterHidden=false;
         meshBits=savedBits;
         auto& leftFlash=*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+20);
         auto& rightFlash=*reinterpret_cast<int16_t*>(laraMemory+off::lara_right_arm+20);
@@ -1342,6 +1363,28 @@ int main() {
             Check(g_crouchHidden && bits==0,"returning from cutscene restores crouch hiding");
             state=2; UpdateSceneCamera(camera);
         }
+        for (bool hideHead:{false,true}) for (int swim:{13,17,18,35}) {
+            RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
+            water=1; state=int16_t(swim); UpdateSceneCamera(camera);
+            Check(g_underwaterHidden && bits==0,"submerged classic body hidden independently of head setting and swim animation");
+            const int beforeDraw=draws,beforeHair=hairs;
+            for (int pass:{0,1,2}) Detour_DrawCreatureHD(itemMemory,0,pass);
+            Detour_DrawHair(0);
+            Check(draws==beforeDraw && hairs==beforeHair,"submerged HD body/head and hair hidden on all passes");
+            for (int otherWater:{2,4,0,3,-1}) {
+                water=otherWater; UpdateSceneCamera(camera);
+                Check(!g_underwaterHidden && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
+                      "surface/wade/dry/fly/unknown water states restore pre-submerged body mask");
+                water=1; UpdateSceneCamera(camera);
+            }
+            spotCamera=1; UpdateSceneCamera(camera);
+            Check(!g_underwaterHidden && bits==baseBits,"underwater cutscene restores native body");
+            spotCamera=0; UpdateSceneCamera(camera);
+            Check(g_underwaterHidden && bits==0,"resuming underwater first person hides body again");
+            g_runtimeEnabled=false; UpdateSceneCamera(camera);
+            Check(!g_underwaterHidden && bits==baseBits,"third person underwater keeps native body visible");
+            g_runtimeEnabled=true; water=0; state=2; UpdateSceneCamera(camera);
+        }
         for (bool hideHead:{false,true}) for (int hanging:{10,30,31,75,82,83,139}) {
             RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
             state=int16_t(hanging); UpdateSceneCamera(camera);
@@ -1718,7 +1761,7 @@ int main() {
         const auto moved=locomotion::Rotate({0,20},heading);
         pos.x_pos=int32_t(std::lround(moved.x)); pos.z_pos=int32_t(std::lround(moved.z));
         const auto savedPos=pos,savedPrev=prev;
-        for (int s:{1,12,12,2}) for (int f:{0,64,128,192,256}) for (float lean:{0.f,.08f}) {
+        for (int s:{0,1,12,15,3,28,25,26,27,29,9,2}) for (int f:{0,64,128,192,256}) for (float lean:{0.f,.08f}) {
             state=int16_t(s); fraction=f;
             Head(.6f,.2f); VR().m_rawHeadPose.m[2][3]=neutral[2]-lean;
             const auto wanted=locomotion::Rotate({0,200+20*f/256.f},heading);
@@ -1726,7 +1769,7 @@ int main() {
             ClampRenderedHeadToCollision(itemMemory,p);
             const auto physical=locomotion::Rotate({0,lean*1000},heading);
             const float rendered=(p.x_pos+physical.x)*impactNormalX+(p.z_pos+physical.z)*impactNormalZ;
-            Check(rendered<101.5f,"run/wall-impact/stop camera consistently stops before raised crate");
+            Check(rendered<101.5f,"walk/impact/prepare-jump/jump/fall camera consistently stops before raised crate");
             Check(p.y_pos==-700,"wall-impact correction preserves camera height");
             Check(!std::memcmp(&pos,&savedPos,sizeof(pos)) && !std::memcmp(&prev,&savedPrev,sizeof(prev)),
                   "wall-impact camera never changes Lara's current or interpolated root");
@@ -1735,6 +1778,39 @@ int main() {
         }
         collisionMode=0; impactNormalX=0; impactNormalZ=1;
         resetRoomscale();
+    }
+    // Real-height jump clearance: floor drops remain open; a crate at head
+    // height blocks, and clears as soon as both the eye and margin are above.
+    for (int which:{0,1}) for (float heading:{0.f,.8f,-1.9f}) {
+        game=dll.game=which; resetRoomscale(); collisionMode=15;
+        config.firstPersonMovementStabilization=true; g_headingBase=heading;
+        impactNormalX=std::sin(heading); impactNormalZ=std::cos(heading);
+        Head(0); VR().RecenterFirstPersonHead();
+        float neutral[3]; std::copy(VR().m_firstPersonNeutral,VR().m_firstPersonNeutral+3,neutral);
+        prev={}; pos={}; pos.y_pos=-1024; pos.y_rot=prev.y_rot=Angle(heading);
+        const auto beforeRoot=pos,beforePrev=prev;
+        for (int s:{3,9,25,26,27,28,29}) for (int f:{0,16,32,64,128,192,256})
+        for (float leanY:{-.10f,0.f,.10f}) for (int gate=0;gate<4;++gate) {
+            state=int16_t(s); fraction=f; Head(.6f,.2f);
+            config.positionalTracking=gate!=1; config.firstPersonHeadTranslation=gate!=2;
+            VR().SetHeadAtCamera(gate==3);
+            VR().m_rawHeadPose.m[1][3]=neutral[1]+leanY;
+            const auto desired=locomotion::Rotate({0,200},heading);
+            PHD_3DPOS p{int32_t(std::lround(desired.x)),-700-4*f,int32_t(std::lround(desired.z)),0,0,0,0};
+            const auto before=p;
+            ClampRenderedHeadToCollision(itemMemory,p);
+            const float eyeY=before.y_pos-(gate ? 0 : leanY*1000);
+            if (-768<=eyeY+64)
+                Check(p.x_pos*impactNormalX+p.z_pos*impactNormalZ+64<101.5f,
+                      "jump/lean eye radius cannot penetrate the raised crate at head height");
+            else Check(p.x_pos==before.x_pos && p.z_pos==before.z_pos,
+                       "camera crosses crate freely once eye clearance is above its top");
+            Check(p.y_pos==before.y_pos && !std::memcmp(&pos,&beforeRoot,sizeof(pos)) &&
+                  !std::memcmp(&prev,&beforePrev,sizeof(prev)),"airborne clearance never changes jump animation height or roots");
+            Check(!std::memcmp(neutral,VR().m_firstPersonNeutral,sizeof(neutral)),"jump clearance never recenters tracking");
+        }
+        VR().SetHeadAtCamera(false); config.positionalTracking=config.firstPersonHeadTranslation=true;
+        collisionMode=0; impactNormalX=0; impactNormalZ=1; resetRoomscale();
     }
     // World stability: vary HMD orientation and real translation independently.
     // Test both render-only and native room-scale simulation/interpolation;
