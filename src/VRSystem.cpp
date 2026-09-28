@@ -266,11 +266,28 @@ void VRSystem::GetEyeSize(uint32_t& w, uint32_t& h) const {
 // go from the mod's -Z-forward eye space to phd view's +Z-forward. Checked
 // numerically against that chain rather than trusted.
 void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
-    // Ordinary third-person startup keeps its established behavior. After an
-    // FP handoff, however, raw standing/seated room coordinates are NOT a
-    // camera offset. Track subsequent movement relative to that handoff.
-    if (CurrentGame() != 2) {
+    // The native chase camera already owns collision. An absolute tracking-space
+    // position is NOT an offset from that camera: adding it moves the rendered
+    // eye outside the position the game collision-tested. Cold TR4/5 startup
+    // needs the same relative neutral as an FP handoff, without a mode toggle.
+    const int game=CurrentGame();
+    if (game != 2) {
         if (m_thirdPersonRecenterPending && m_poseValid) RecenterThirdPersonHead();
+        if ((game==0 || game==1) && !m_thirdPersonNeutralValid) {
+            float initialRot[3][3], initialPos[3];
+            if (m_poseValid && !InTitle() && !InFMV() && !InInventory() &&
+                CameraViewFrame(initialRot,initialPos)) {
+                RecenterThirdPersonHead();
+                Log("vr: TR4/5 third-person startup neutral captured at gameplay camera");
+            } else {
+                // Loading/title may sample a headset on the desk. Keep the view
+                // at the native camera until gameplay can establish its neutral.
+                // Preserve rotation and stereo IPD; do not latch a stale pose.
+                for (int i=0;i<3;++i) { pose.m[i][3]=0; m_offsetWorld[i]=0; }
+                m_offsetValid=false;
+                return;
+            }
+        }
         if (m_thirdPersonNeutralValid)
             for (int i = 0; i < 3; ++i) pose.m[i][3] -= m_thirdPersonNeutral[i];
     } else {
@@ -499,7 +516,7 @@ void VRSystem::RecenterThirdPersonHead() {
 
     m_offsetValid = false;
     m_recentreRequested = false;
-    Log("vr: third-person position centred at FP handoff; tracked rotation preserved");
+    Log("vr: third-person positional neutral captured; tracked rotation preserved");
 }
 
 bool VRSystem::ControllerPose(int hand, vr::HmdMatrix34_t& out) const {
@@ -575,7 +592,7 @@ void VRSystem::FirstPersonViewOffset(float& right,float& forward) const {
 void VRSystem::RecentreOffset() {
     m_recentreRequested = true;
     if (FirstPersonActive()) FirstPersonRecenter();
-    else if (m_thirdPersonNeutralValid && CurrentGame() != 2) RecenterThirdPersonHead();
+    else if (CurrentGame()==0 || CurrentGame()==1) RecenterThirdPersonHead();
 }
 
 Affine VRSystem::TrackedHeadView() const {

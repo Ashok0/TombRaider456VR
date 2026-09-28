@@ -32,12 +32,21 @@ inline Vec PivotFloorOffset(Vec rawEyeOffset, Vec neckArc, float yawDelta) {
     return Rotate(NeckFloorOffset(rawEyeOffset, neckArc), -yawDelta) + neckArc;
 }
 inline bool IsJumpSteeringState(int state) { return state == 15 || state == 3; }
+inline bool IsLedgeHangState(int state) {
+    // Shared TR4/5 hang, shimmy, alternate hang/turn and stop-to-hang states.
+    switch (state) {
+    case 10: case 30: case 31: case 75: case 82: case 83: case 139: return true;
+    default: return false;
+    }
+}
 inline bool IsConstrainedInteractionState(int state) {
     // Classic states retained by TR4/5: hang/pull-up, push/pull, climb.
     // Do not carry over TR3-only hang-turn state numbers.
+    if (IsLedgeHangState(state)) return true;
     switch (state) {
     case 10: case 19: case 30: case 31:
     case 36: case 37: case 38:
+    case 54: // Gymnast pull-up, also pitches the head through the ledge.
     case 56: case 57: case 58: case 59: case 60: case 61:
         return true;
     default: return false;

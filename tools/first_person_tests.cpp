@@ -817,8 +817,8 @@ int main() {
             g_gunTriggers.Reset(); g_gunEquip.Reset();
             lt=rt=0; UpdateGunTriggers(lt,rt,true,0);
             lt=255; rt=200; UpdateGunTriggers(lt,rt,true,10);
-            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,1510);
-            Check(lt==255 && rt==200,"1.5-second equip gesture coexists with native held RT in either draw style");
+            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,1010);
+            Check(lt==255 && rt==200,"1.0-second equip gesture coexists with native held RT in either draw style");
         }
         lt=180; rt=210; UpdateGunTriggers(lt,rt,false,2000);
         Check(lt==180 && rt==210 && !g_gunTriggers.active,
@@ -1267,6 +1267,24 @@ int main() {
             Check(g_crouchHidden && bits==0,"returning from cutscene restores crouch hiding");
             state=2; UpdateSceneCamera(camera);
         }
+        for (bool hideHead:{false,true}) for (int hanging:{10,30,31,75,82,83,139}) {
+            RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
+            state=int16_t(hanging); UpdateSceneCamera(camera);
+            Check(g_ledgeArmsOnly && bits==(baseBits&kArmMeshBits),
+                  "ledge idle, shimmy and turns hide classic torso/legs/head but keep both complete arms");
+            const int oldHairs=hairs;
+            Detour_DrawCreatureHD(itemMemory,0,0); Detour_DrawHair(0);
+            Check(drawnBodyBits==kArmMeshBits && drawnUseBits==1 && hairs==oldHairs,
+                  "HD ledge pass retains upper arms, forearms and hands, with no body or hair");
+            Check(bits==(baseBits&kArmMeshBits),"ledge draw restores persistent mask");
+            state=19; UpdateSceneCamera(camera);
+            Check(!g_ledgeArmsOnly && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
+                  "pull-up exits the arms-only mask without losing the standing body snapshot");
+            state=int16_t(hanging); UpdateSceneCamera(camera);
+            spotCamera=1; UpdateSceneCamera(camera);
+            Check(!g_ledgeArmsOnly && bits==baseBits,"cutscene suspends ledge visibility override");
+            spotCamera=0; state=2; UpdateSceneCamera(camera);
+        }
         for (int nativeState:{0,1,2,3,16,20,21,22,73,75,76,82,83,89,104,107,108}) {
             state=int16_t(nativeState);
             Check(!IsCrouchState(itemMemory),"standing/jump/hang/scripted states are not classified as crouch");
@@ -1382,16 +1400,46 @@ int main() {
     const auto tr6Head = thirdPersonSample();
     Check(Near(tr6Head.r[0][3],1000) && Near(tr6Head.r[1][3],-1700) && Near(tr6Head.r[2][3],-2000),
           "TR6 tracking does not inherit a TR4/5 first-person neutral");
-    // Diagnostic-only check: cold TP startup currently lacks the FP handoff's
-    // positional neutral. Reproduce that distinction without changing it.
-    for (int which:{0,1}) {
-        game=which; g_active=false; config.headOffsetWorld=true; worldCameraValid=true;
+    // Cold startup must equal a centred FP handoff without requiring a toggle.
+    // Do not capture a headset on the desk during loading/title presentation.
+    for (int which:{0,1}) for (bool worldLocked:{false,true}) {
+        game=which; g_active=false; config.headOffsetWorld=worldLocked; worldCameraValid=false;
         VR().m_thirdPersonNeutralValid=VR().m_thirdPersonRecenterPending=false;
         VR().m_offsetValid=VR().m_recentreRequested=false; Head(0);
-        const auto cold=thirdPersonSample();
-        Check(Near(cold.r[0][3],1000) && Near(cold.r[1][3],-1700) && Near(cold.r[2][3],-2000),
-              "cold third-person startup still includes raw tracking-space origin (diagnosed, not changed)");
-        VR().RecenterThirdPersonHead(); thirdPersonSample(); centredEyes();
+        thirdPersonSample(); centredEyes();
+        Check(!VR().m_thirdPersonNeutralValid,"cold startup does not anchor before a valid gameplay camera");
+        worldCameraValid=true;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InTitle)=1;
+        thirdPersonSample(); centredEyes();
+        Check(!VR().m_thirdPersonNeutralValid,"title camera cannot capture an early desk-height neutral");
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InTitle)=0;
+        VR().m_poseValid=false;
+        thirdPersonSample(); centredEyes();
+        Check(!VR().m_thirdPersonNeutralValid,"invalid tracking cannot initialize startup neutral");
+        VR().m_poseValid=true; Head(0.7f);
+        VR().m_rawHeadPose.m[0][3]=4; VR().m_rawHeadPose.m[1][3]=1.8f; VR().m_rawHeadPose.m[2][3]=-3;
+        thirdPersonSample(); centredEyes();
+        Check(VR().m_thirdPersonNeutralValid && Near(VR().m_thirdPersonNeutral[0],4) &&
+              Near(VR().m_thirdPersonNeutral[1],1.8f) && Near(VR().m_thirdPersonNeutral[2],-3),
+              "first gameplay frame captures current physical position, not earlier loading pose");
+        Check(Near(VR().HeadYawRadians(),0.7f),"startup centering preserves physical look rotation");
+        for (float yaw:{-3.f,-1.5f,0.f,1.5f,3.f}) for (float pitch:{-0.8f,0.f,0.8f}) {
+            const float c=std::cos(yaw),s=std::sin(yaw),cp=std::cos(pitch),sp=std::sin(pitch);
+            const float rotation[3][3]={{c,0,s},{sp*s,cp,-sp*c},{-cp*s,sp,cp*c}};
+            std::memcpy(worldCameraRot,rotation,sizeof(rotation));
+            worldCameraPos[0]+=20; worldCameraPos[1]-=10; worldCameraPos[2]+=30;
+            thirdPersonSample(); centredEyes();
+            Check(Near(VR().m_thirdPersonNeutral[0],4),"stick camera yaw/pitch does not rebase physical neutral");
+        }
+        const float identity[3][3]={{1,0,0},{0,1,0},{0,0,1}};
+        std::memcpy(worldCameraRot,identity,sizeof(identity));
+        VR().m_rawHeadPose.m[0][3]+=0.1f;
+        const auto moved=thirdPersonSample();
+        Check(std::fabs(moved.r[0][3]-100)<0.01f,"real lean remains tracked after automatic startup centering");
+        VR().RecentreOffset(); thirdPersonSample(); centredEyes();
+        worldCameraPos[0]+=10000;
+        thirdPersonSample(); centredEyes();
+        Check(VR().m_thirdPersonNeutralValid,"camera teleport cannot restore absolute room-space offset");
     }
     game = 1;
     // Diagnostic capture must distinguish camera animation from real motion,
@@ -1528,6 +1576,59 @@ int main() {
               "teleport recaptures the eye reference instead of retaining stale camera offsets");
         state=2; g_runtimeEnabled=false; UpdateSceneCamera(camera);
         Check(!g_groundEye.valid && !g_rootMotion.valid,"leaving first person clears stabilization state");
+    }
+    // Stand -> jump/hang -> vault/pull-up -> stand. The last climb skeleton
+    // can coexist with a newly relocated standing root during interpolation.
+    // It must never replace the persistent standing reference (sky/side drift).
+    for (int which:{0,1}) for (float heading:{0.f,0.8f,-1.9f}) {
+        game=dll.game=which; resetRoomscale(); ResetMovementStabilization();
+        config.firstPersonMovementStabilization=true; config.firstPersonRoomscaleMove=false;
+        config.firstPersonBodyFollowsHead=false; collisionMode=0;
+        physicalPose(0); FirstPersonRecenter(); g_headingBase=heading;
+        pos.y_rot=prev.y_rot=Angle(heading); fraction=256; gaitSway={};
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+        Check(Anchor(camera),"capture standing reference before ledge sequence");
+        const auto standingReference=g_groundEye.local;
+        float neutral[3]; std::copy(VR().m_firstPersonNeutral,VR().m_firstPersonNeutral+3,neutral);
+        for (int interaction:{3,10,30,31,75,82,83,139,19,54,56,57,58,59,60,61,71,80}) {
+            state=int16_t(interaction); gaitSway={120,-480,-250};
+            Head(0.7f,0.2f);
+            VR().m_rawHeadPose.m[0][3]=neutral[0]+0.06f;
+            VR().m_rawHeadPose.m[1][3]=neutral[1]-0.04f;
+            VR().m_rawHeadPose.m[2][3]=neutral[2]+0.03f;
+            const auto beforeRoot=pos;
+            for (int f:{0,64,128,192,256}) {
+                fraction=f; PHD_VECTOR animated{config.firstPersonAnchorX,config.firstPersonAnchorY,
+                    locomotion::FirstPersonAnchorZ(interaction,config.firstPersonAnchorZ,config.firstPersonInteractionAnchorZ)};
+                FakeGaitJoint(itemMemory,&animated,14,f);
+                Check(Anchor(camera),"interaction remains on native animated head path");
+                Check(camera.y_pos==animated.y,"vault/climb height follows native rendered head, not standing height above raised root");
+                Check(g_groundEye.valid && Near(g_groundEye.local.x,standingReference.x) &&
+                      Near(g_groundEye.local.y,standingReference.y) && Near(g_groundEye.local.z,standingReference.z),
+                      "climb/jump/crouch never replaces or erases standing eye reference");
+                Check(!std::memcmp(neutral,VR().m_firstPersonNeutral,sizeof(neutral)),
+                      "interaction head turns and lean do not silently shift the physical neutral");
+                Check(!std::memcmp(&beforeRoot,&pos,sizeof(pos)),"camera and visibility do not move or rotate constrained Lara");
+            }
+        }
+        // Native mount completion advances root onto crate while cached head
+        // matrices still contain a high, laterally shifted pull-up frame.
+        prev=pos; pos.x_pos+=96; pos.z_pos+=128; pos.y_pos-=768;
+        state=2; gaitSway={240,-1200,300};
+        for (int f:{0,32,64,128,192,256}) {
+            fraction=f; Check(Anchor(camera),"first standing frame after vault remains valid");
+            const float t=f/256.f;
+            const auto offset=locomotion::Rotate({standingReference.x,standingReference.z},heading);
+            Check(std::fabs(camera.x_pos-(prev.x_pos+96*t+offset.x))<1.1f &&
+                  std::fabs(camera.z_pos-(prev.z_pos+128*t+offset.z))<1.1f &&
+                  std::fabs(camera.y_pos-(prev.y_pos-768*t+standingReference.y))<1.1f,
+                  "post-pull-up camera remains at original root-relative height/centre instead of capturing stale climb offsets");
+        }
+        prev=pos; gaitSway={}; fraction=256; Anchor(camera);
+        Check(Near(g_groundEye.local.y,standingReference.y),"settled standing frame retains the same camera height");
+        g_runtimeEnabled=false; UpdateSceneCamera(camera);
+        Check(!g_groundEye.valid,"FP exit still discards the saved standing reference");
+        config.firstPersonBodyFollowsHead=true;
     }
     // World stability: vary HMD orientation and real translation independently.
     // Test both render-only and native room-scale simulation/interpolation;

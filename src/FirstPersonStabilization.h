@@ -36,6 +36,8 @@ struct Point { float x=0,y=0,z=0; };
 // Hold the eye offset in the artificial-yaw frame across grounded gaits.
 // Physical body yaw must not orbit this origin a second time. Lara's
 // interpolated world root and physical headset translation are NOT filtered.
+// Keep this reference while native non-ground animation drives the eye; only
+// a new camera session/item/relocation should discard the standing reference.
 struct GroundEye {
     bool valid=false;
     Point local{};

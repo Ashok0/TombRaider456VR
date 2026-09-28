@@ -64,6 +64,7 @@ constexpr uint32_t geom_mesh        = 16;
 
 constexpr float kPi = 3.14159265358979323846f;
 constexpr uint32_t kHeadMeshBit = 1u << 14;
+constexpr uint32_t kArmMeshBits = 0x3f00; // upper arm, forearm, hand on both sides
 constexpr int kLaraHeadGeoms = 4;
 constexpr int32_t kCamFixed = 1;
 constexpr int32_t kCamCinematic = 4;
@@ -129,6 +130,7 @@ bool g_meshOverride = false;
 bool g_headHidden = false;
 bool g_rollHidden = false;
 bool g_crouchHidden = false;
+bool g_ledgeArmsOnly = false;
 uint8_t* g_meshItem = nullptr;
 uint32_t g_meshBaseBits = 0;
 unsigned g_anchored = 0;
@@ -305,11 +307,18 @@ void RestoreHeadMesh() {
     }
     g_meshOverride = false;
     g_meshItem = nullptr;
-    g_headHidden = g_rollHidden = g_crouchHidden = false;
+    g_headHidden = g_rollHidden = g_crouchHidden = g_ledgeArmsOnly = false;
 }
 
-void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false) {
-    if ((!hideHead && !hideRoll && !hideCrouch) || !g_boundDll || !g_boundBase) {
+uint32_t VisibleMeshBits(uint32_t base, bool head, bool roll, bool crouch, bool ledge) {
+    if (roll || crouch) return 0;
+    if (ledge) return base & kArmMeshBits;
+    return head ? base & ~kHeadMeshBit : base;
+}
+
+void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
+                       bool ledgeArms = false) {
+    if ((!hideHead && !hideRoll && !hideCrouch && !ledgeArms) || !g_boundDll || !g_boundBase) {
         RestoreHeadMesh();
         return;
     }
@@ -317,7 +326,7 @@ void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false) {
     if (!item) {
         g_meshOverride = false;
         g_meshItem = nullptr;
-        g_headHidden = g_rollHidden = g_crouchHidden = false;
+        g_headHidden = g_rollHidden = g_crouchHidden = g_ledgeArmsOnly = false;
         return;
     }
     if (!g_meshOverride || item != g_meshItem) {
@@ -325,22 +334,22 @@ void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false) {
         g_meshItem = item;
         g_meshBaseBits = *reinterpret_cast<uint32_t*>(
             item + off::item_mesh_bits);
-        g_headHidden = g_rollHidden = g_crouchHidden = false;
+        g_headHidden = g_rollHidden = g_crouchHidden = g_ledgeArmsOnly = false;
     }
     auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
-    const uint32_t expected = (g_rollHidden || g_crouchHidden) ? 0 :
-        (g_headHidden ? g_meshBaseBits & ~kHeadMeshBit : g_meshBaseBits);
+    const uint32_t expected = VisibleMeshBits(g_meshBaseBits,g_headHidden,
+        g_rollHidden,g_crouchHidden,g_ledgeArmsOnly);
     if (g_meshOverride && bits != expected) {
         // Preserve native visibility changes outside our owned mask. During
         // a hidden stance we own the full mask and retain its original snapshot.
-        if (!g_rollHidden && !g_crouchHidden)
+        if (!g_rollHidden && !g_crouchHidden && !g_ledgeArmsOnly)
             g_meshBaseBits = (bits & ~kHeadMeshBit) | (g_meshBaseBits & kHeadMeshBit);
     }
     g_headHidden = hideHead;
     g_rollHidden = hideRoll;
     g_crouchHidden = hideCrouch;
-    bits = (hideRoll || hideCrouch) ? 0 :
-        (hideHead ? g_meshBaseBits & ~kHeadMeshBit : g_meshBaseBits);
+    g_ledgeArmsOnly = ledgeArms;
+    bits = VisibleMeshBits(g_meshBaseBits,hideHead,hideRoll,hideCrouch,ledgeArms);
 }
 
 bool IsCrouchState(const uint8_t* item) {
@@ -1328,7 +1337,10 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         VR().RecenterFirstPersonHead();
     }
     g_previousBody = body;
-    if (!CanTurnBody(item)) {
+    if (!CanTurnBody(item) && !Cfg().firstPersonMovementStabilization) {
+        // Legacy animated-camera compensation only. With a stable/raw-tracked
+        // view, consuming neck-corrected displacement while hanging invents a
+        // head offset and carries it into the next standing frame.
         Vec pending; VR().HeadFloorOffset(pending.x, pending.z);
         VR().ConsumeHeadFloorOffset(pending.x, pending.z);
     }
@@ -1502,7 +1514,12 @@ bool Anchor(PHD_3DPOS& pose) {
         pose.x_pos=int32_t(std::lround(eye.x));
         pose.y_pos=int32_t(std::lround(eye.y));
         pose.z_pos=int32_t(std::lround(eye.z));
-    } else g_groundEye.Reset();
+    } else if (!Cfg().firstPersonMovementStabilization) g_groundEye.Reset();
+    // Non-ground states USE the native animated eye, but retain the standing
+    // reference. On vault/pull-up completion the cached skeleton can still be
+    // from the climb while Lara's root has moved onto the crate. Recapturing
+    // then locks that transient high/sideways offset into every standing frame.
+    // Real relocation, item changes, FP exit and cutscenes reset it separately.
     ClampRenderedHeadToCollision(item, pose);
     TraceForwardCamera(item, body, head, frac, GetTickCount64(), &pose);
     pose.z_rot = 0;
@@ -1544,7 +1561,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         const GameDllLayout& dll = *g_boundDll;
         lara = item == *Ptr<uint8_t*>(dll.laraItem);
     }
-    if (lara && (Cfg().firstPersonHideHead || MotionReady()) &&
+    if (lara && (Cfg().firstPersonHideHead || g_ledgeArmsOnly || MotionReady()) &&
         DrawingLaraHead(item)) {
         ++g_faceSkips;
         return;
@@ -1576,14 +1593,15 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
     }
     const int previousArm = g_renderArm;
     g_renderArm = -1;
-    if (lara && Cfg().firstPersonHideHead) {
+    if (lara && (Cfg().firstPersonHideHead || g_ledgeArmsOnly)) {
         auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
         const uint32_t savedBits = bits;
         // Native HD body passes use useMeshBits=0: their effective mask is ALL
         // joints, even if the item's persistent mask is zero/stale at startup.
         // Only remove the head from that effective mask, for this draw alone.
         // Already-masked weapon passes must retain their native restrictions.
-        bits = (useMeshBits ? savedBits : UINT32_MAX) & ~kHeadMeshBit;
+        bits = (useMeshBits ? savedBits : UINT32_MAX) &
+            (g_ledgeArmsOnly ? kArmMeshBits : ~kHeadMeshBit);
         g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item, 1, renderPass);
         bits = savedBits;
     } else {
@@ -1593,7 +1611,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
 }
 
 void __cdecl Detour_DrawHair(int32_t argument) {
-    if (g_active && (g_headHidden || g_rollHidden || g_crouchHidden || MotionReady())) {
+    if (g_active && (g_headHidden || g_rollHidden || g_crouchHidden || g_ledgeArmsOnly || MotionReady())) {
         ++g_hairSkips;
         return;
     }
@@ -1629,7 +1647,9 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
     SetMeshVisibility(g_active && Cfg().firstPersonHideHead,
                       g_active && IsRollState(item),
-                      g_active && IsCrouchState(item));
+                      g_active && IsCrouchState(item),
+                      g_active && item && locomotion::IsLedgeHangState(
+                          *reinterpret_cast<const int16_t*>(item+off::item_anim_state)));
 }
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {
