@@ -94,6 +94,18 @@ hook::InlineHook g_hSetGunFlash;
 hook::InlineHook g_hGetTargetOnLOS;
 hook::InlineHook g_hLaraAboveWater;
 hook::InlineHook g_hAnimateLara;
+hook::InlineHook g_hDrawActionIndicators;
+struct ActionIconDll {
+    uint32_t timestamp, draw, points, count, matrix, perspective, centerX, centerY, nearZ, farZ;
+};
+constexpr ActionIconDll kActionIconDlls[] = {
+    {0x696B4999,0xD3390,0x52CCC0,0x6601BC,0x494800,0x4947E4,0x4947DC,0x4947E0,0x494748,0x494740},
+    {0x696B499C,0xCAA10,0x529F40,0x65AC9C,0x4EF900,0x4EF8E0,0x4EF8D8,0x4EF8DC,0x4EF880,0x4EE934},
+    {0x68C12FDA,0xD3EA0,0x52DC00,0x6610FC,0x495740,0x495724,0x49571C,0x495720,0x495688,0x495680},
+    {0x68C12FE9,0xCAC70,0x529E80,0x65ABDC,0x4EF840,0x4EF820,0x4EF818,0x4EF81C,0x4EF7C0,0x4EE874},
+};
+const ActionIconDll* g_actionIconDll = nullptr;
+bool g_loggedActionIcon = false;
 const GameDllLayout* g_boundDll = nullptr;
 uint64_t g_boundBase = 0;
 uint64_t g_failedBase = 0;
@@ -308,6 +320,76 @@ void RestoreHeadMesh() {
     g_meshOverride = false;
     g_meshItem = nullptr;
     g_headHidden = g_rollHidden = g_crouchHidden = g_ledgeArmsOnly = false;
+}
+
+// Native icons are world points projected into a flat HUD, not Lara meshes.
+// At head height a nearby floor/switch marker can be below that panel or just
+// behind the eye. Keep these existing, native-approved prompts readable. Do
+// not create interactions, bypass LOS, or reveal distant/behind-player markers.
+bool PlaceActionIcon(PHD_VECTOR& point, const float* matrix, float perspective,
+                     float centerX, float centerY, float nearZ, float farZ) {
+    if (!std::isfinite(perspective) || perspective <= 0 ||
+        !std::isfinite(centerX) || !std::isfinite(centerY) || centerX <= 0 || centerY <= 0 ||
+        !std::isfinite(nearZ) || !std::isfinite(farZ) || nearZ < 0 || farZ <= nearZ + 64)
+        return false;
+    for (int i=0;i<12;++i) if (!std::isfinite(matrix[i])) return false;
+    // fw2v_matrix stores unit rotation rows and the camera WORLD position in
+    // its fourth column (not the usual affine translation).
+    for (int row=0;row<3;++row) for (int other=0;other<=row;++other) {
+        float dot=0;
+        for (int j=0;j<3;++j) dot+=matrix[row*4+j]*matrix[other*4+j];
+        if (std::fabs(dot-(row==other ? 1.0f : 0.0f))>0.002f) return false;
+    }
+    const float delta[3]={float(point.x)-matrix[3],float(point.y)-matrix[7],float(point.z)-matrix[11]};
+    if (delta[0]*delta[0]+delta[1]*delta[1]+delta[2]*delta[2]>1024.0f*1024.0f) return false;
+    float view[3]={};
+    for (int i=0;i<3;++i) for (int j=0;j<3;++j) view[i]+=matrix[i*4+j]*delta[j];
+    if (view[2]<-256 || view[2]>=farZ) return false;
+    const float depth=std::max(256.0f,nearZ+32.0f);
+    if (depth>=farZ) return false;
+    const float maxX=0.70f*centerX/perspective, maxY=0.70f*centerY/perspective;
+    const float denominator=std::max(depth,view[2]);
+    const float x=std::clamp(view[0]/denominator,-maxX,maxX);
+    const float y=std::clamp(view[1]/denominator,-maxY,maxY);
+    if (view[2]>=depth && x==view[0]/denominator && y==view[1]/denominator) return false;
+    const float adjusted[3]={x*denominator,y*denominator,denominator};
+    int32_t result[3];
+    for (int j=0;j<3;++j) {
+        double world=matrix[j*4+3];
+        for (int i=0;i<3;++i) world+=matrix[i*4+j]*adjusted[i];
+        if (!std::isfinite(world) || world<double(INT32_MIN)+1 || world>double(INT32_MAX)-1) return false;
+        result[j]=int32_t(std::lround(world));
+    }
+    point={result[0],result[1],result[2]};
+    return true;
+}
+
+void __cdecl Detour_DrawActionIndicators() {
+    using Fn = void (__cdecl*)();
+    const auto original=g_hDrawActionIndicators.Original<Fn>();
+    if (!g_active || !g_boundBase || !g_actionIconDll || !VR().poseValid()) {
+        original(); return;
+    }
+    const auto& d=*g_actionIconDll;
+    const int count=*Ptr<int32_t>(d.count);
+    if (count<=0 || count>20) { original(); return; }
+    auto* points=Ptr<PHD_VECTOR>(d.points);
+    PHD_VECTOR saved[20];
+    std::memcpy(saved,points,count*sizeof(PHD_VECTOR));
+    bool changed=false;
+    for (int i=0;i<count;++i)
+        changed=PlaceActionIcon(points[i],Ptr<float>(d.matrix),float(*Ptr<int32_t>(d.perspective)),
+            float(*Ptr<int32_t>(d.centerX)),float(*Ptr<int32_t>(d.centerY)),
+            *Ptr<float>(d.nearZ),*Ptr<float>(d.farZ)) || changed;
+    // Original keeps the player's Action Indicators setting, menu gates,
+    // native icon artwork and HUD/stereo rendering. Restore before any logic
+    // or subsequent eye/frame can observe our draw-local placement.
+    original();
+    std::memcpy(points,saved,count*sizeof(PHD_VECTOR));
+    if (changed && !g_loggedActionIcon) {
+        g_loggedActionIcon=true;
+        Log("firstperson: nearby Action icon placement corrected on HUD");
+    }
 }
 
 uint32_t VisibleMeshBits(uint32_t base, bool head, bool roll, bool crouch, bool ledge) {
@@ -1387,7 +1469,11 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     int32_t eye[3] = {int32_t(eyeX), pose.y_pos, int32_t(eyeZ)};
 
     const int16_t room = *reinterpret_cast<const int16_t*>(item + off::item_room);
-    const bool airborne = !ground && state != 15;
+    // AS_SPLAT (12) is the grounded run-into-wall reaction, not a fall.
+    // Native lara_col_splat uses +/-384 in both TR4 and TR5. Giving it
+    // airborne +/-4096 also skipped raised-floor rejection, letting the eye
+    // enter a crate just for the impact animation. Keep body-turn gating as-is.
+    const bool airborne = !ground && state != 15 && state != 12;
     firstperson::ClampEyeToWall(body, eye,
         [&](int32_t x, int32_t z, int32_t clearX, int32_t clearZ) {
             RoomCollision coll{};
@@ -1811,6 +1897,15 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             kGenerateW2VPrologue, sizeof(kGenerateW2VPrologue),
             "phd_GenerateW2V"))
         return false;
+    for (const auto& entry:kActionIconDlls) if (entry.timestamp==d.timestamp) {
+        static constexpr uint8_t prologue[]={0x4c,0x8b,0xdc,0x41,0x56};
+        if (g_hDrawActionIndicators.Install(reinterpret_cast<void*>(base+entry.draw),
+                reinterpret_cast<void*>(&Detour_DrawActionIndicators),sizeof(prologue),
+                prologue,sizeof(prologue),"DrawActionIndicators")) {
+            g_actionIconDll=&entry;
+            Log("firstperson: nearby Action icon HUD placement hook ready");
+        } else Log("firstperson: Action icon hook unavailable; native prompts preserved");
+    }
     if (d.drawCreatureHD) {
         const bool retail4 = d.timestamp == 0x68C12FDA;
         const bool retail5 = d.timestamp == 0x68C12FE9;
@@ -1854,6 +1949,9 @@ bool Install(const GameDllLayout& d, uint64_t base) {
 }
 
 void Remove() {
+    g_hDrawActionIndicators.Remove();
+    g_actionIconDll=nullptr;
+    g_loggedActionIcon=false;
     ResetMovementStabilization();
     RemoveLongGunHooks();
     g_gunTriggers.Reset();

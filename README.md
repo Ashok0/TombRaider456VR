@@ -4684,13 +4684,35 @@ left a grounded state. Returning from a crate mount or ledge pull-up could then
 capture a still-high or sideways climb skeleton relative to the newly moved root,
 making that temporary offset persist while standing. The standing reference now
 survives non-ground animation and is reused on return. During the climb itself,
-the native interpolated head still supplies the eye position; this does not put
+the native interpolated head still supplies the requested eye position; this does not put
 a standing-height camera above a climbing root. FP exit, scripted-camera
 suspension, item changes and large relocations still reset the reference.
 Stabilized non-ground tracking no longer repeatedly changes the physical neutral.
 Alternate hangs/turns and gymnast pull-ups also use the retracted interaction
 anchor. These corrections have synthetic transition coverage; the reported
 crate/ledge cases still need confirmation in headset.
+
+The experimental climb-only eye-height clearance change was rolled back after
+headset testing showed no improvement. The reported clipping occurs while
+running into crates, not while pulling up. The earlier standing-eye cache,
+interaction anchor retraction and centering fixes remain intact.
+
+Running into crates exposed a different error: the camera classified the native
+wall-impact reaction `AS_SPLAT` (state 12) as airborne, changing its collision
+limits from +/-384 to +/-4096 and skipping raised-floor rejection. The recent
+live log contains state-12 impacts; both PDB builds' `lara_col_run` enter state
+12 on wall impact and `lara_col_splat` uses the ground-style +/-384 limits.
+The camera now keeps those ground limits during the impact animation. This is
+a camera-only classification change; body-turn eligibility, native movement,
+head tracking, aiming and actual airborne clearance remain unchanged.
+
+A new run -> impact -> stop regression fails under the previous classification
+and passes with the correction. It covers both games, multiple headings/render
+fractions, physical forward lean and a raised crate floor reported without an
+X/Z collision shift, checking unchanged root positions, eye height and tracking
+neutral. The replacement DLL is deployed; running into the user's affected
+crate still needs an in-headset retest. Synthetic checks do not establish that
+every instance of crate clipping has this cause.
 
 The FP motion-gun handler previously replaced RT with a queued-shot signal even
 when Lara's guns were holstered or her hands were busy. With no shot queued,
@@ -5103,6 +5125,38 @@ fix has been deployed. Input/render timing must be measured before changing
 this path; a change also needs body-alignment, aiming, room-scale and camera
 handoff regression coverage.
 
+### First-person Action icon placement
+
+TR4/TR5's native Action indicators are world-positioned markers projected onto
+the flat HUD, not part of Lara's mesh. The native drawer rejects markers behind
+its near plane; floor/pickup and switch markers can also project outside the
+HUD when the camera moves from chase distance to head height. This is a
+code-confirmed clipping path consistent with the missing-icon report; the
+reported scene has not yet been reproduced in headset.
+
+The first-person-only `DrawActionIndicators` hook now keeps nearby, already
+eligible markers within a readable HUD rectangle and in front of the native
+near plane. It only adjusts markers within one native block (1024 units) of
+the camera, allowing at most 256 units behind the eye for close interactions.
+Already-readable, distant and farther-behind markers retain native placement.
+This is a HUD placement fallback, not an exact world-space target marker or a
+new interaction detector. It uses the existing HUD tracking/depth settings.
+
+The original drawer still owns the Action Indicators option, artwork and menu
+gates. Native interaction eligibility and line-of-sight checks are unchanged;
+the hook cannot create a prompt the game did not enqueue. All marker positions
+are restored immediately after drawing. Third person, cutscene suspension,
+Lara/body/camera transforms, movement and gun aiming are unchanged. Unsupported
+hook prologues retain native prompts without disabling working first person.
+
+No new INI setting is required. The log records `nearby Action icon HUD
+placement hook ready` at installation and `nearby Action icon placement
+corrected on HUD` on the first correction. Headset confirmation is still needed
+at an affected pickup/switch in both games, including looking around, both
+graphics modes, disabling the native icon option and toggling back to third
+person. If a prompt remains absent, preserve the log after that session: this
+placement fix does not bypass native prompt-generation or visibility gates.
+
 ### Implementation and validation
 
 The port lives in `src/FirstPerson.cpp`, `src/FirstPerson.h`,
@@ -5128,8 +5182,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest one-second LT run (2026-09-27) passed **132,525 checks**. These are
-synthetic checks, including parameter sweeps, not 132,525 in-game scenarios or
+The latest crate-impact run (2026-09-27) passed **139,950 checks**. The rejected
+climb-only implementation and its tests were removed. These are synthetic
+checks, including parameter sweeps, not 139,950 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5164,7 +5219,15 @@ camera-relative settings. They cover missing cameras, title screens, invalid
 tracking, delayed neutral capture, camera yaw/pitch/translation, stereo IPD,
 real leaning, manual recentering and teleports. This does not establish Lara's
 exact on-screen framing in a live game or replace a headset check.
-The Release x64 build also succeeded. Native address/prologue/layout checks
+Action icon tests cover both games and 24 headings, floor/switch/near-plane
+placement, readable/distant/behind-player passthrough, native-data restoration,
+full 20-marker capacity, invalid counts/projections, non-rigid camera effects,
+tracking loss and third-person passthrough. `python tools/verify_action_icons.py`
+verifies the hook prologue, native projection/array references and option gates
+in all four supported PDB/retail DLLs.
+The Release x64 build also succeeded.
+
+Native address/prologue/layout checks
 were extended in `tools/verify_addresses.py`; the latest recorded run against
 the available PDB/retail binaries passed **806 checks**. To include an installed
 game directory in binary discovery:
@@ -5180,12 +5243,14 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 999/1000 ms boundary. The deployed one-second LT DLL
-(including startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
+tests, including the LT 999/1000 ms boundary. The deployed crate-impact DLL
+(including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`AAFA2C40B88A774C7E7AF7609B54FCE91ECBA618C456736DBD6E6ECFC5F66047`.
+`14339F71EB89E14FBD892685342513232632F00BA8302CF75A11DD0BEC269523`.
 The prior installed DLL and INI were backed up under
-`build/before-lt-one-second-20260927-180120/`.
+`build/before-crate-impact-20260927-233854/` (the rejected climb-clearance build).
+The pre-climb Action-icon build is still available under
+`build/before-climb-clearance-20260927-232221/`.
 The previous all-weapon DLL remains as `TombRaiderVR.dll.x` in the game folder.
 Deployment verified the active DLL's hash and left the INI/calibration
 unchanged; saves were not edited.

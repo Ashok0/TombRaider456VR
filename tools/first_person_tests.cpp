@@ -37,7 +37,15 @@ int16_t seenAnalog[4]{}, seenYaw = 0, seenMove = 0, seenTurn = 0;
 int animationTicks = 0, simulationTicks = 0;
 int collisionMode = 0, collisionCalls = 0, floorCalls = 0, roomChanges = 0;
 int cameraCollisionCalls = 0;
+float impactNormalX=0,impactNormalZ=1;
 int cutseq = 0, floorToken = 0, draws = 0, hairs = 0;
+tr::PHD_VECTOR iconPoints[20]{}, seenIconPoints[20]{};
+int iconCount=0, iconDraws=0, iconPerspective=1000, iconCenterX=960, iconCenterY=540;
+float iconMatrix[12]{}, iconNear=16, iconFar=32768;
+void __cdecl FakeActionIcons() {
+    ++iconDraws;
+    std::memcpy(seenIconPoints,iconPoints,sizeof(iconPoints));
+}
 int cutseqNumber=0, cutseqTransition=0, spotCamera=0;
 uint8_t vonCroyScene=0;
 bool nativeMoves = true, jointFollowsBody = false;
@@ -252,6 +260,8 @@ void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z
         Check(room == *reinterpret_cast<int16_t*>(itemMemory + tr::off::item_room),
               "camera sweep starts in Lara's room");
         c->floorSamples[0] = collisionMode == 12 ? 1000 : 0;
+        if (collisionMode==14 && x*impactNormalX+z*impactNormalZ>=100)
+            c->floorSamples[0]=-768; // raised crate, no synthetic shift needed
         c->floorSamples[1] = -1024;
         if (collisionMode == 11 && x >= 100) c->shift[0] = 99 - x;
         if (collisionMode == 13) c->type = 8;
@@ -376,6 +386,71 @@ int main() {
     auto& state = *reinterpret_cast<int16_t*>(itemMemory + off::item_anim_state);
     *reinterpret_cast<int16_t*>(itemMemory + off::item_hit_points) = 1000;
     state = 2;
+
+    {
+        ActionIconDll icons{};
+        icons.points=rva(iconPoints); icons.count=rva(&iconCount); icons.matrix=rva(iconMatrix);
+        icons.perspective=rva(&iconPerspective); icons.centerX=rva(&iconCenterX);
+        icons.centerY=rva(&iconCenterY); icons.nearZ=rva(&iconNear); icons.farZ=rva(&iconFar);
+        g_actionIconDll=&icons;
+        g_hDrawActionIndicators.m_trampoline=reinterpret_cast<void*>(&FakeActionIcons);
+        for (int which:{0,1}) for (int degrees=0;degrees<360;degrees+=15) {
+            dll.game=which;
+            const float yaw=degrees*kPi/180;
+            const float m[]={std::cos(yaw),0,-std::sin(yaw),12000,
+                             0,1,0,-4000,std::sin(yaw),0,std::cos(yaw),28000};
+            std::memcpy(iconMatrix,m,sizeof(m));
+            auto world=[&](float x,float y,float z) {
+                return PHD_VECTOR{int32_t(std::lround(m[3]+m[0]*x+m[8]*z)),
+                                  int32_t(std::lround(m[7]+y)),
+                                  int32_t(std::lround(m[11]+m[2]*x+m[10]*z))};
+            };
+            for (auto local:{PHD_VECTOR{0,750,80},PHD_VECTOR{500,100,100},PHD_VECTOR{0,0,0},
+                             PHD_VECTOR{0,700,-144},PHD_VECTOR{0,-700,140}}) {
+                iconPoints[0]=world(float(local.x),float(local.y),float(local.z));
+                const auto saved=iconPoints[0]; iconCount=1;
+                for (int guard=0;guard<3;++guard) {
+                    g_active=guard!=1; VR().m_poseValid=guard!=2;
+                    Detour_DrawActionIndicators();
+                    Check(!std::memcmp(iconPoints,&saved,sizeof(saved)),"Action icon world data restored after draw");
+                    if (guard) Check(!std::memcmp(seenIconPoints,&saved,sizeof(saved)),
+                        "third person and invalid tracking preserve native Action prompt");
+                    else {
+                        const auto& p=seenIconPoints[0];
+                        const float dx=p.x-m[3],dy=p.y-m[7],dz=p.z-m[11];
+                        const float vx=m[0]*dx+m[2]*dz,vz=m[8]*dx+m[10]*dz;
+                        Check(vz>iconNear && vz<iconFar,"nearby FP Action prompt clears native depth clipping");
+                        Check(std::fabs(vx/vz*iconPerspective)<=iconCenterX*.705f &&
+                              std::fabs(dy/vz*iconPerspective)<=iconCenterY*.705f,
+                              "floor/switch prompt stays inside HUD safe rectangle at every heading");
+                    }
+                }
+            }
+            for (auto local:{PHD_VECTOR{0,0,600},PHD_VECTOR{0,0,-500},PHD_VECTOR{0,2000,100}}) {
+                auto p=world(float(local.x),float(local.y),float(local.z)); const auto saved=p;
+                Check(!PlaceActionIcon(p,m,1000,960,540,16,32768) && !std::memcmp(&p,&saved,sizeof(p)),
+                      "visible, distant and behind-player prompts are not moved");
+            }
+        }
+        std::fill(std::begin(iconMatrix),std::end(iconMatrix),0.0f);
+        iconMatrix[0]=iconMatrix[5]=iconMatrix[10]=1;
+        for (int n:{0,1,20,21,-1}) {
+            iconCount=n; g_active=true; VR().m_poseValid=true;
+            for (auto& p:iconPoints) p={0,700,0};
+            const int before=iconDraws; Detour_DrawActionIndicators();
+            Check(iconDraws==before+1,"native Action icon drawer invoked exactly once");
+            Check(iconPoints[0].y==700 && iconPoints[19].z==0,"all prompt data restored including full-capacity list");
+            Check((seenIconPoints[0].z>0)==(n>0 && n<=20),"empty/corrupt prompt counts never generate icons");
+        }
+        PHD_VECTOR p{0,700,0};
+        Check(!PlaceActionIcon(p,iconMatrix,0,960,540,16,32768),"uninitialized prompt projection is not divided by zero");
+        Check(!PlaceActionIcon(p,iconMatrix,1000,960,540,400,420),"invalid prompt clipping interval preserves native path");
+        iconMatrix[0]=2;
+        Check(!PlaceActionIcon(p,iconMatrix,1000,960,540,16,32768),"non-rigid native camera effects preserve original prompt");
+        iconMatrix[0]=NAN;
+        Check(!PlaceActionIcon(p,iconMatrix,1000,960,540,16,32768),"nonfinite prompt matrix cannot corrupt native data");
+        g_actionIconDll=nullptr; g_active=false; dll.game=0;
+    }
 
     {
         MotionDll motion{};
@@ -1629,6 +1704,37 @@ int main() {
         g_runtimeEnabled=false; UpdateSceneCamera(camera);
         Check(!g_groundEye.valid,"FP exit still discards the saved standing reference");
         config.firstPersonBodyFollowsHead=true;
+    }
+    // Run -> wall impact (AS_SPLAT=12) -> stop. Raised crate floors must
+    // remain blocking throughout, even when a query returns no X/Z shift.
+    for (int which:{0,1}) for (float heading:{0.f,.8f,-1.9f}) {
+        game=dll.game=which; resetRoomscale(); collisionMode=14;
+        config.firstPersonMovementStabilization=true;
+        g_headingBase=heading;
+        impactNormalX=std::sin(heading); impactNormalZ=std::cos(heading);
+        Head(0); VR().RecenterFirstPersonHead();
+        float neutral[3]; std::copy(VR().m_firstPersonNeutral,VR().m_firstPersonNeutral+3,neutral);
+        pos={}; prev={}; pos.y_rot=prev.y_rot=Angle(heading);
+        const auto moved=locomotion::Rotate({0,20},heading);
+        pos.x_pos=int32_t(std::lround(moved.x)); pos.z_pos=int32_t(std::lround(moved.z));
+        const auto savedPos=pos,savedPrev=prev;
+        for (int s:{1,12,12,2}) for (int f:{0,64,128,192,256}) for (float lean:{0.f,.08f}) {
+            state=int16_t(s); fraction=f;
+            Head(.6f,.2f); VR().m_rawHeadPose.m[2][3]=neutral[2]-lean;
+            const auto wanted=locomotion::Rotate({0,200+20*f/256.f},heading);
+            PHD_3DPOS p{int32_t(std::lround(wanted.x)),-700,int32_t(std::lround(wanted.z)),0,0,0,0};
+            ClampRenderedHeadToCollision(itemMemory,p);
+            const auto physical=locomotion::Rotate({0,lean*1000},heading);
+            const float rendered=(p.x_pos+physical.x)*impactNormalX+(p.z_pos+physical.z)*impactNormalZ;
+            Check(rendered<101.5f,"run/wall-impact/stop camera consistently stops before raised crate");
+            Check(p.y_pos==-700,"wall-impact correction preserves camera height");
+            Check(!std::memcmp(&pos,&savedPos,sizeof(pos)) && !std::memcmp(&prev,&savedPrev,sizeof(prev)),
+                  "wall-impact camera never changes Lara's current or interpolated root");
+            Check(!std::memcmp(neutral,VR().m_firstPersonNeutral,sizeof(neutral)),
+                  "wall-impact correction does not shift tracking neutral");
+        }
+        collisionMode=0; impactNormalX=0; impactNormalZ=1;
+        resetRoomscale();
     }
     // World stability: vary HMD orientation and real translation independently.
     // Test both render-only and native room-scale simulation/interpolation;
