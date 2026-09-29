@@ -43,6 +43,7 @@
 #include "Overlay.h"
 #include "VRSystem.h"
 #include "FirstPerson.h"
+#include "HKScope.h"
 
 #include <cstring>
 #include <intrin.h>
@@ -774,6 +775,19 @@ void __cdecl Detour_vid_setPass(int shader, float* params, int cull, int blend) 
 // validate_draw -- per-eye matrix injection
 // ---------------------------------------------------------------------------
 void __cdecl Detour_validate_draw() {
+    if (HKScopeCapturing()) {
+        auto& state=VidState();
+        if (state.proj) {
+            const mat4 saved=*state.proj;
+            HKScopeProjection(*state.proj,SkyInfinity());
+            state.consts|=kProj|kView;
+            g_hValidateDraw.Original<Fn_validate_draw>()();
+            *state.proj=saved;
+            state.consts|=kProj|kView;
+        }
+        HKScopeCaptureViewport();
+        return;
+    }
     // Mono redirects no targets and resizes no viewport, so it can and should
     // inject on every world-space pass -- including ones the engine renders
     // offscreen before compositing. Restricting mono to backbuffer-targeted
@@ -1561,6 +1575,15 @@ void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
     }
     g_currentEye = 0;
     g_inDuplicate = false;
+    // Render-only third view. Never replay simulation, native optics, HUD,
+    // shadow/offscreen targets, or Lara's controller-driven hands.
+    if (IsWorldPass() && VidState().proj && !IsOrthoProjection(*VidState().proj) &&
+        !IsBypassPass() && HKScopeBeginCapture()) {
+        g_inDuplicate=true;
+        h.Original<Fn>()(args...);
+        g_inDuplicate=false;
+        HKScopeEndCapture();
+    }
 }
 
 void __cdecl Detour_ogl_draw(void* vb, unsigned firstIndex, unsigned count, int strip) {
@@ -2315,6 +2338,8 @@ bool BringUpVR() {
 }
 
 void __cdecl Detour_ogl_present() {
+    // Composite using this frame's poses before polling/advancing any state.
+    HKScopePresent();
     ++g_frameIndex;
 
     // Frame-graph trace bookkeeping, around the frame boundary.
@@ -2667,6 +2692,7 @@ bool InstallHooks() {
 }
 
 void RemoveHooks() {
+    HKScopeShutdown();
     GamepadShutdown();
     FirstPersonShutdown();
     OverlayShutdown();

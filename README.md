@@ -16,6 +16,7 @@ regression fixes and diagnostics. That work is documented in
 for in-headset validation, and the remaining motion issues are listed there.
 
 ## VR Mod Features
+
 * Native stereo with 6DOF (TR4/5/6)
 * Culling fixes for VR
 * Camera fixes for tight collision areas
@@ -37,6 +38,10 @@ for in-headset validation, and the remaining motion issues are listed there.
   The new non-dual weapons still need headset validation.
 * Automatic first-person suspension during cutscenes/flybys, with native Lara
   visibility and automatic return to the selected view after gameplay resumes.
+* Working 3x VR scope for the TR5 HK in first-person HD motion-gun mode:
+  raise the original gun scope to either eye for a magnified world view inside
+  its mesh-aligned lens, while the surrounding headset view stays unzoomed.
+  Includes close-eye near-clipping protection without displacing the lens.
 * Automatic TR4/5 third-person startup centering, FP-to-third-person recentering,
   and a world-space ceiling clamp; native chase-camera wall handling is preserved.
 
@@ -4570,6 +4575,7 @@ stereo and third-person paths are unchanged by this feature.
 | Camera/gun separation | Hand aiming no longer drives the camera through Lara's head/torso aim; wrist rotation uses the recovered grip pivot rather than orbiting the hands |
 | Gun targeting | Tracked muzzle origins, native hit processing and bounded hitscan aim assistance; all-weapon extension preserves shotgun pellets and launcher physics |
 | Gun presentation and fit | Hands and guns only when motion-ready; position/angle calibration retains the grip pivot and supports live function-key adjustment |
+| HK VR scope (TR5) | Working 3x world magnification inside the original scope; eye-aligned activation, mesh-attached lens and depth-only close-eye protection; surrounding VR view stays unzoomed |
 | Trigger handling | Independent pistol/Uzi taps; RT for single weapons; native held RT grab/Action preserved when guns are not ready; 0.5-second LT equip gesture |
 | Cutscenes | Native presentation during cutsequences, transitions, flybys and TR4 tutorial scenes; restore the player's FP preference afterward and cancel queued shots |
 | Culling versus wall clearance | Portal traversal starts in the effective FP eye's room; a separate swept eye-clearance path limits wall clipping |
@@ -5027,6 +5033,115 @@ new defaults, and the all-weapon/cutscene deployments preserved them unchanged.
 The grip pivot remains fixed; use Ctrl+Shift+F3/F4 to fine-tune pitch and
 Ctrl+F7 to save. No extra one-inch-forward adjustment was reapplied.
 
+#### Working HK VR scope (TR5, added 2026-09-29)
+
+The TR5 HK now has a working physical VR scope with **3x world magnification**
+at the reference eye distance. Magnification has been confirmed in-game; it
+zooms the world inside the lens rather than enlarging the gun or scope model.
+The latest alignment fix retains the original mesh attachment and handles
+close-eye clipping without shifting the lens away from the scope.
+
+With the HK armed in first-person HD motion-gun mode, raise its scope to either
+eye. Do **not** press R3: the physical lens activates by eye alignment, separately
+from the existing full-screen native zoom. RT still fires. The circular lens
+shows a separately rendered narrow-angle view and reticle; the surrounding
+headset view is unchanged. Only an aligned eye gets the lens image. Eye relief
+extends from 1 mm to 35 cm, with a 2.5 cm lateral alignment tolerance.
+The previous 4 cm minimum caused close-eye dropout. The first close-eye fix
+moved the rendered lens away from the eye, causing off-axis misalignment with
+the scope mesh. That displacement is now removed: lens screen position, size
+and perspective remain exactly those of its physical mesh attachment. Only
+clip depth is adjusted when the lens meets the native near plane; normal-distance
+world occlusion is unchanged. Crossing the eyepiece, or tilting any lens-quad
+corner to within 0.5 mm of/behind the eye, disables it instead of displaying a
+floating overlay. Gun placement, firing, the scope
+capture camera and the normal headset/world projections are unchanged.
+The user confirmed that world magnification works in the binding-lifecycle
+build, but bringing the lens too close hid it. At their request the new
+projection targets **3x**, reduced from 4x, at the 12 cm reference eye relief
+(apparent angular magnification varies with eye distance). This changes the
+world view inside the lens, not the scope model or lens size. The earlier 8x
+attempt was reverted before that confirmation.
+The follow-up attachment fix uses the measured rear aperture of the shipped
+HK hand mesh, transformed through the same wrist inverse bind and calibrated
+wrist frame as the gun. Its size follows the mesh, not a guessed 3 cm circle.
+The circle sits just eye-side of the rear lip; normal-distance depth testing
+is retained. An aligned lens shows the center dot, crosshair and magnified world.
+That first attachment build also failed the user's retest: its log contained
+no scope activation/composite entries. A subsequent lifecycle regression
+reproduced the failure: native DrawLaraHD overwrites the shared object geometry
+with body, hand and finally face descriptors. Looking up wrist joint 10 outside
+the HK draw can therefore find face-only data and reject the lens entirely.
+The correction copies the immutable wrist inverse bind inside the production
+right-HK GetJoints hook. It does not cache a controller/world pose: the lens
+still uses the current pose every frame. The binding is cleared when motion
+guns cease being ready, the selected weapon changes or hooks are removed, and
+cannot be reused for another Lara item. The failing face-replacement regression
+now passes, including immediate controller movement and stale-item rejection.
+The user confirmed in-game magnification and the reduced 3x zoom, then reported
+the close-eye lens misalignment. The depth-only alignment correction needs a
+headset retest.
+
+The 512x512 scope target replays eligible world **draws**, not simulation or
+the native camera update. It shares the main view's submitted/cull-visible
+geometry; it is not an independent full scene/portal traversal. The scope view
+uses the calibrated muzzle and barrel axis. Scoped aim disables the mod's
+enemy-directed shot assistance, retaining native spread/ammo/firing behavior.
+Hands, HUD, offscreen/shadow passes and other weapons are excluded. Holstering,
+tracking loss, swimming, cutscenes, menus, third person and native optics disable
+the lens. TR4/TR6 and classic graphics retain their existing behavior.
+
+Defaults apply to existing INIs without rewriting them. Optional `[VR]` settings:
+
+```ini
+FirstPersonHKScope=1
+FirstPersonHKScopeMeshFit=1
+FirstPersonHKScopeForwardMetres=0.18
+FirstPersonHKScopeUpMetres=0.24
+```
+
+MeshFit defaults on even in existing INIs. The last two values are now used only
+with `FirstPersonHKScopeMeshFit=0`, restoring the old manual wrist-relative
+fit and 3 cm radius. Neither path moves hands or guns. Restart after
+editing. Set `FirstPersonHKScope=0` to disable it. The lens requires normal
+per-draw stereo, `EyeOffsetMode=3`, `PerEyeView=1`, `PerEyeProjection=1` and
+motion guns. Unsupported diagnostic rendering modes leave it off.
+
+**Remaining headset validation:** close-eye mesh alignment, small-reticle readability,
+doorway/near-wall culling and performance. The extra draw pass runs only with an
+eye in the alignment box, but can still cost frame time. The working scope is
+not a claim of finished optical realism or exhaustive level coverage. The runtime logs
+`HK scope: eye-box=...` includes eye relief and lateral miss distance while
+eligible. `HK scope: composite draws=...` confirms a lens draw was submitted and
+reports its clip depth; it is not proof that pixels survived depth testing.
+
+The OpenGL 3.2 hidden-window test compiles the actual shaders and checks lens
+pixels, image orientation, reticle visibility, unaffected surrounding/other-eye
+pixels, target/viewport/scissor/depth/blend/cull/texture-unit restoration, mode
+reentry and cleanup. The alignment-correction build passed **76 checks** on NVIDIA's
+OpenGL driver, including actual rendered geometry at 1x/3x/6x: widths were
+40/122/246 pixels with identical lens-placement matrices. Close-eye pixels
+remain visible at 3.9 cm, 2 cm and 1.1 mm at both 423 and 1000 units/metre;
+the unaligned eye remains unaffected. Zero/negative relief now disables the
+lens. A separate off-axis regression reproduces the prior drift and verifies
+the exact physical mesh X/Y/W projection is retained with asymmetric eye FOV.
+This isolates the
+scope renderer and does **not** execute the native game draw hook or prove
+in-headset visibility/magnification. The earlier 29-check test only checked
+projection values and colored texture compositing, missing that integration gap.
+The attachment build additionally checks tube/glass behind the lens and nearer
+world geometry occluding it. `tools/verify_hk_scope_mesh.py <game-directory>`
+reads the BARE/GLOVES/XRAY assets and verifies the measured rear aperture and
+its full joint-10 weighting. Wrist tests cover nonidentity inverse binds,
+yaw/pitch/roll, aperture-dependent magnification and the user's 423 units/metre.
+Run from
+an x64 Visual Studio developer prompt:
+
+```bat
+cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_party\openvr\headers /Isrc tools\hk_scope_gl_tests.cpp src\GL.cpp src\StereoRenderer.cpp /Febuild\hk_scope_gl_tests.exe /Fobuild\ /link /OPT:REF user32.lib gdi32.lib opengl32.lib
+build\hk_scope_gl_tests.exe
+```
+
 #### Independent motion-gun triggers
 
 In first-person remastered/HD motion-gun mode:
@@ -5261,9 +5376,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest grapple-animation run (2026-09-29) passed **322,884 checks**. The rejected
+The latest HK-scope lens-alignment run (2026-09-29) passed **325,304 checks**. The rejected
 climb-only implementation and its tests were removed. These are synthetic
-checks, including parameter sweeps, not 322,884 in-game scenarios or
+checks, including parameter sweeps, not 325,304 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5314,6 +5429,11 @@ Aim-hook tests now check native grapple lock preservation in both aim modes,
 retained controller pitch and unchanged forced aim lock for the other weapons.
 The separate installed-level animation test reproduces the non-firing lockout
 that the earlier trigger-only fixtures missed.
+HK scope tests cover barrel-ray alignment across wrist rotations/distances,
+eye relief, weapon/game isolation, controller pose loss, native-zoom/classic
+exclusion, state-preserving pose queries and suppressing aim assistance only
+when physically aligned with the lens. Configuration tests cover the off switch
+and lens fit settings. The actual GL test is separate from these synthetic checks.
 Startup-centering tests
 now require a zero initial eye-center offset in both TR4/5, with world-locked and
 camera-relative settings. They cover missing cameras, title screens, invalid
@@ -5344,11 +5464,35 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 499/500 ms boundary. The deployed grapple-animation DLL
+tests, including the LT 499/500 ms boundary. The deployed HK lens-alignment/3x test DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`FD85B939BA79AABAB657617BA544BC4A84F9296A62DB0F9E9F7133115F8A5804`.
-The prior installed DLL, INI and failing runtime log were backed up under
+`485598889F0197EF208DEDB4E5D0CD80155A86D02081A38AB7144165B6F1886B`.
+The previous close-eye build with the reported off-center lens, personal INI
+and runtime log are backed up under
+`build/before-hk-lens-alignment-20260929-162342/`; the INI remains unchanged.
+The user-confirmed working 4x DLL, unchanged personal INI and runtime log are
+backed up under `build/before-hk-close-eye-20260929-161221/`.
+The failed mesh-attachment DLL, unchanged INI and runtime log are backed up
+under `build/before-hk-bind-lifecycle-20260929-160009/`.
+The previous DLL and personal INI were backed up under
+`build/before-hk-mesh-lens-20260929-100937/`; deployment preserved the INI.
+This build passed 76 OpenGL checks and 325,304 first-person checks, including
+the new off-axis mesh projection regression; configuration self-tests also passed.
+The lower counts reflect removal of obsolete expectations that the lens stays
+visible after passing through it. All four supported motion-gun address tables
+and all three HK mesh variants passed on the preceding build and are unchanged.
+The new alignment correction needs headset verification; the user confirmed
+actual magnification and the reduced 3x zoom on preceding builds.
+The original scope DLL had been restored from
+`build/before-hk-scope-8x-20260929-094201/` after the user
+reported that the 8x attempt enlarged the scope without noticeable world zoom.
+Personal INI settings were left unchanged. The rejected 8x build passed the
+previous 29 scope checks and 324,289 first-person checks, demonstrating that
+those tests did not cover the reported in-game optical failure.
+The prior installed grapple-animation DLL and INI were backed up under
+`build/before-hk-scope-20260929-013134/`.
+The earlier DLL, INI and failing runtime log remain backed up under
 `build/before-grapple-lock-20260929-003402/` (the unsuccessful equip-state fix).
 The swimming-camera build remains backed up under
 `build/before-grapple-equip-20260929-001819/`.

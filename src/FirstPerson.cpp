@@ -1,4 +1,5 @@
 #include "FirstPerson.h"
+#include "HKScopeMath.h"
 #include "Config.h"
 #include "Engine.h"
 #include "GameDll.h"
@@ -204,6 +205,11 @@ bool g_motionHooksReady = false;
 bool g_scenePoseValid = false;
 PHD_3DPOS g_scenePose{};
 int g_renderArm = -1; // 0=left, 1=right
+// DrawLaraHD overwrites objects[item].geom for each body/hand/face pass.
+// Only the right-HK GetJoints scope owns the correct immutable wrist binding.
+// Cache that binding, never a world/controller pose (which would add lag).
+motiongun::Frame g_hkScopeInverseBind{};
+const uint8_t* g_hkScopeBindItem=nullptr;
 motiongun::TriggerInput g_gunTriggers;
 motiongun::EquipInput g_gunEquip;
 bool g_handFired[2]{};
@@ -845,6 +851,12 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
         Add(wrist.origin, Sub(gun.trackedHand, gun.nativeHand))};
     if (!motiongun::PaletteCorrection(palette, inverseBind, desired, correction))
         return count;
+    if (g_renderArm==1 && g_boundDll->game==1 && CurrentMotionWeapon()==5) {
+        if (g_hkScopeBindItem!=item)
+            Log("HK scope: captured wrist binding from right-hand HK draw");
+        g_hkScopeInverseBind=inverseBind;
+        g_hkScopeBindItem=item;
+    }
     // MaskJoints runs after us. Move the whole palette, including HD helper
     // bones, so weighted hand/gun vertices receive the same rigid transform.
     for (int joint=0; joint<count; ++joint) {
@@ -885,6 +897,8 @@ void __cdecl Detour_SetGunFlash(int32_t weapon, int32_t left) {
 }
 
 bool AssistGunShot(const GunPose& gun, void* target, motiongun::Vec& direction) {
+    // A magnified reticle must not silently steer onto an enemy off-axis.
+    if (FirstPersonHKScopeAiming()) return false;
     if (!target || !g_headingItem || !g_motionDll ||
         *reinterpret_cast<const int16_t*>(static_cast<uint8_t*>(target)+off::item_hit_points)<=0)
         return false;
@@ -2061,6 +2075,7 @@ void Remove() {
     RestoreHeadMesh();
     g_motionHooksReady = false;
     g_firingHand = g_renderArm = -1;
+    g_hkScopeBindItem=nullptr;
     g_scenePoseValid = false;
     g_motionArmDraws[0] = g_motionArmDraws[1] = 0;
     g_motionShots[0] = g_motionShots[1] = 0;
@@ -2135,7 +2150,57 @@ void FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed) {
     UpdateGunTriggers(left,right,enabled,GetTickCount64());
 }
 
+bool FirstPersonDrawingTrackedHands() { return g_renderArm>=0; }
+
+bool FirstPersonHKScopePose(motiongun::Frame& lens, motiongun::Frame& camera,float* radiusMetres) {
+    if (!Cfg().firstPersonHKScope || !g_boundDll || g_boundDll->game!=1 ||
+        CurrentMotionWeapon()!=5 || !MotionReady() || IsOpticsZoomed() ||
+        Cfg().monoTracking || !Cfg().duplicateDraws || Cfg().eyeOffsetMode!=3 ||
+        !Cfg().perEyeView || Cfg().perEyeProjection!=1) return false;
+    GunPose gun{};
+    if (!BuildGunPose(1,gun)) return false;
+    const float scale=LiveWorldUnitsPerMetre();
+    lens={gun.desired,Add(gun.trackedHand,Transform(gun.desired,
+        {0,Cfg().firstPersonHKScopeForwardMetres*scale,Cfg().firstPersonHKScopeUpMetres*scale}))};
+    float radius=.03f;
+    if (Cfg().firstPersonHKScopeMeshFit) {
+        // The live object geometry may now be Lara's face. Use the binding
+        // copied inside the actual HK draw, with THIS frame's controller pose.
+        const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+        if (!item || g_hkScopeBindItem!=item) {
+            static uint64_t lastWait=0;
+            const auto now=GetTickCount64();
+            if (now-lastWait>=5000) {
+                Log("HK scope: waiting for right-hand HK mesh binding");
+                lastWait=now;
+            }
+            return false;
+        }
+        float radiusUnits=0;
+        if (!hkscope::MeshLens({gun.desired,gun.trackedHand},g_hkScopeInverseBind,lens,radiusUnits)) return false;
+        radius=radiusUnits/scale;
+        if (!std::isfinite(radius) || radius<.001f || radius>.15f) return false;
+    }
+    if (radiusMetres) *radiusMetres=radius;
+    // Optical axis uses the same calibrated barrel frame and muzzle as shots.
+    camera={gun.desired,gun.muzzle};
+    return true;
+}
+
+bool FirstPersonHKScopeAiming() {
+    motiongun::Frame lens{},camera{};
+    float rot[3][3]{},pos[3]{};
+    if (!FirstPersonHKScopePose(lens,camera) || !CameraViewFrame(rot,pos)) return false;
+    const auto world=hkscope::WorldView(rot,pos);
+    for (int eye=0;eye<2;++eye) {
+        const auto eyeWorld=InvertRigid(Mul(VR().EyeView(Eye(eye)),world));
+        if (hkscope::EyeBox(lens,{eyeWorld.r[0][3],eyeWorld.r[1][3],eyeWorld.r[2][3]},LiveWorldUnitsPerMetre())) return true;
+    }
+    return false;
+}
+
 void FirstPersonUpdate() {
+    if (!MotionReady() || CurrentMotionWeapon()!=5) g_hkScopeBindItem=nullptr;
     if (g_gunTriggers.active && !MotionTriggerMode()) {
         g_gunTriggers.Reset();
         g_gunEquip.Reset();

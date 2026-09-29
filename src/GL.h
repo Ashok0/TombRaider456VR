@@ -101,6 +101,7 @@ extern void   (APIENTRY* VertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, 
 extern void   (APIENTRY* EnableVertexAttribArray)(GLuint);
 extern GLint  (APIENTRY* GetAttribLocation)(GLuint, const char*);
 extern void   (APIENTRY* ActiveTexture)(GLenum);
+extern void   (APIENTRY* BindSampler)(GLuint, GLuint); // optional ARB_sampler_objects
 
 // True once the shader/buffer set above resolved. VideoPanel needs all of it.
 bool LoadedShaderApi();

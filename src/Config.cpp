@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cwchar>
+#include <algorithm>
 
 namespace tr {
 namespace {
@@ -344,6 +345,10 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.firstPersonMotionGunYawDegrees=GetFloat(L"FirstPersonMotionGunYawDegrees",0,ini);
     g_cfg.firstPersonMotionGunRollDegrees=GetFloat(L"FirstPersonMotionGunRollDegrees",0,ini);
     g_cfg.firstPersonMotionGunHotkeys=GetBool(L"FirstPersonMotionGunHotkeys",true,ini);
+    g_cfg.firstPersonHKScope=GetBool(L"FirstPersonHKScope",true,ini);
+    g_cfg.firstPersonHKScopeMeshFit=GetBool(L"FirstPersonHKScopeMeshFit",true,ini);
+    g_cfg.firstPersonHKScopeForwardMetres=std::clamp(GetFloat(L"FirstPersonHKScopeForwardMetres",0.18f,ini),-0.5f,0.8f);
+    g_cfg.firstPersonHKScopeUpMetres=std::clamp(GetFloat(L"FirstPersonHKScopeUpMetres",0.24f,ini),-0.5f,0.8f);
     g_liveGun={g_cfg.firstPersonMotionGunRightMetres,g_cfg.firstPersonMotionGunRaiseMetres,
         g_cfg.firstPersonMotionGunGripForwardMetres,g_cfg.firstPersonMotionGunPitchDegrees,
         g_cfg.firstPersonMotionGunYawDegrees,g_cfg.firstPersonMotionGunRollDegrees};

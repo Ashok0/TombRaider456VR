@@ -717,6 +717,10 @@ struct Config {
     float firstPersonMotionGunYawDegrees = 0;
     float firstPersonMotionGunRollDegrees = 0;
     bool firstPersonMotionGunHotkeys = true;
+    bool firstPersonHKScope = true;
+    bool firstPersonHKScopeMeshFit = true;
+    float firstPersonHKScopeForwardMetres = 0.18f;
+    float firstPersonHKScopeUpMetres = 0.24f;
     float firstPersonTurnDegreesPerSecond = 120.0f;
     float firstPersonTurnDeadzone = 0.25f;
 

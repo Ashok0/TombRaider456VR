@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 56193 bytes, 1125 lines.
+// Source: TombRaiderVR.ini, 58802 bytes, 1171 lines.
 #pragma once
 
 namespace tr {
@@ -494,11 +494,11 @@ DecoupledPitch=1
 ; KNOW WHAT RB IS HERE. Touch has no physical shoulder buttons: the RIGHT GRIP
 ; synthesises XB_X for Walk. This pitch chord recognizes that Walk bit as the
 ; physical RB signal, so it is still right grip + right trigger and reads as
-; "walk and shoot". Set this to 0 if you would rather walk-and-shoot leave pitch
+)INI"
+           R"INI(; "walk and shoot". Set this to 0 if you would rather walk-and-shoot leave pitch
 ; alone.
 ;
-)INI"
-           R"INI(; The chord only ever ADDS the suppression. Shoot and Walk still do their jobs
+; The chord only ever ADDS the suppression. Shoot and Walk still do their jobs
 ; while it is held; nothing is taken away to pay for it.
 DecoupledPitchChord=1
 
@@ -650,11 +650,11 @@ GamepadMenuUsesBack=1
 
 ; --- reverse engineering ----------------------------------------------------
 
-; Log the DLL-side return address of each distinct call into vid_setPass and
+)INI"
+           R"INI(; Log the DLL-side return address of each distinct call into vid_setPass and
 ; ogl_drawVB, as "module+RVA".
 ;
-)INI"
-           R"INI(; The game DLLs ship without PDBs, so this is how we find their render code
+; The game DLLs ship without PDBs, so this is how we find their render code
 ; without searching ~1800 unnamed functions: the DLL must call across into the
 ; engine to draw, and the return address at our hook is a code address inside
 ; the DLL. One gameplay frame gives exact RVAs to open in Ghidra.
@@ -812,7 +812,8 @@ FirstPersonInteractionAnchorZ=16
 FirstPersonHeadTranslation=1
 
 ; Stabilize standing/walk/side/back eye position and horizontal root motion.
-; Uses raw HMD tracking without a second physical-yaw orbit. 0 restores legacy.
+)INI"
+           R"INI(; Uses raw HMD tracking without a second physical-yaw orbit. 0 restores legacy.
 FirstPersonMovementStabilization=1
 
 ; Neck-to-head distance for room-scale BODY movement. With stabilization off
@@ -822,8 +823,7 @@ FirstPersonRoomscaleNeckMetres=0.15
 
 ; Physical steps move Lara through native wall/ledge collision checks, without
 ; synthesizing stick input. Only movement actually rendered consumes tracking.
-)INI"
-           R"INI(FirstPersonRoomscaleMove=1
+FirstPersonRoomscaleMove=1
 ; Keep a small lean allowance before Lara follows (metres), matching TR1-3.
 FirstPersonRoomscaleDeadzoneMetres=0.02
 ; End: recapture the neutral position without changing your viewing heading.
@@ -848,8 +848,7 @@ FirstPersonBodyTurnDegreesPerFrame=4
 
 ; Both gun arms and firing direction follow headset yaw/pitch in first person.
 FirstPersonHeadAim=1
-; Experimental dual pistols/Uzis: controller-tracked arms and muzzle shots.
-; Other weapons retain FirstPersonHeadAim. Requires both Touch controllers.
+; Experimental dual pistols/Uzis controller tracking. Leave off for normal play.
 FirstPersonMotionGuns=0
 ; Mesh grip calibration: positive pulls the gun back along its barrel axis.
 ; This local grip point stays on the controller as the gun rotates.
@@ -869,6 +868,20 @@ FirstPersonMotionGunRollDegrees=0
 ; Ctrl+Shift+F7 restores the last loaded/saved fit. Tap keys (no auto-repeat).
 ; Ctrl is reserved while calibration is available, preventing native Action/Fire.
 FirstPersonMotionGunHotkeys=1
+
+; TR5 HK-only physical lens (HD first person + motion guns required).
+; Target 3x at 12 cm reference eye relief, 512px capture.
+; Lens-only depth correction prevents near clipping without shifting its mesh fit.
+; Crossing the eyepiece disables the lens; no floating close-eye overlay.
+; Raise the rifle to either eye; no R3/native full-screen zoom is needed.
+; MeshFit attaches to the measured HK rear aperture using its wrist inverse bind.
+; Forward/Up offsets and the old 3 cm radius are manual fallback only (MeshFit=0).
+; Other guns, grip calibration and third person are unchanged.
+; Requires normal per-draw stereo, EyeOffsetMode=3, PerEyeProjection=1.
+FirstPersonHKScope=1
+FirstPersonHKScopeMeshFit=1
+FirstPersonHKScopeForwardMetres=0.18
+FirstPersonHKScopeUpMetres=0.24
 ; Wrist pivot is recovered from the mesh bind pose. Old GripBack/GripUp
 ; experimental compensation keys are ignored; no draw-time offset is latched.
 
@@ -955,7 +968,8 @@ DynamicBonesDamping=9.5
 DynamicBonesGravity=5400
 
 ; How much of the parent joint's acceleration the bone feels. 1.0 is the
-; physical answer; lower tames the noise that comes from differentiating a
+)INI"
+           R"INI(; physical answer; lower tames the noise that comes from differentiating a
 ; joint matrix twice.
 DynamicBonesDriveScale=1.0
 
@@ -1009,8 +1023,7 @@ DynamicBonesLandImpulse=0.2
 ; this filter easily; single-frame noise does not.
 DynamicBonesDriveSmoothing=0.25
 
-)INI"
-           R"INI(; Hard ceiling on drive acceleration, world units per second squared.
+; Hard ceiling on drive acceleration, world units per second squared.
 ;
 ; 20000 is not arbitrary. One frame at the ceiling gives dv = a*dt, and a
 ; spring of this stiffness answers with a peak of dv/sqrt(k) -- so the
@@ -1119,7 +1132,8 @@ DynamicBonesSeparation=12
 DynamicBonesMaxDisplace=40
 
 ; Anchor movement in one frame beyond which the solver snaps instead of
-; integrating -- what SpringSystem::teleport does in TR6. A level load or a
+)INI"
+           R"INI(; integrating -- what SpringSystem::teleport does in TR6. A level load or a
 ; cutscene cut is not an acceleration.
 DynamicBonesTeleport=900
 
@@ -1173,8 +1187,7 @@ CullWatchRooms=
 ; were -R*p produces an error that scales with world coordinates, so it behaves
 ; on a small level and fails on a large one.
 
-)INI"
-           R"INI(; Per-draw state dump: which matrix carries the difference between one drawn
+; Per-draw state dump: which matrix carries the difference between one drawn
 ; element and the next -- projection, view, or model. Get the screen in
 ; question up, then press DumpKey. One line per draw, logged before any of our
 ; substitutions, so what appears is what the ENGINE set. 0 = disabled.

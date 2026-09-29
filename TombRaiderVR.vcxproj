@@ -128,6 +128,7 @@
     <ClCompile Include="src\InlineHook.cpp" />
     <ClCompile Include="src\Log.cpp" />
     <ClCompile Include="src\StereoRenderer.cpp" />
+    <ClCompile Include="src\HKScope.cpp" />
     <ClCompile Include="src\Callsite.cpp" />
     <ClCompile Include="src\GameDll.cpp" />
     <ClCompile Include="src\PortalCull.cpp" />

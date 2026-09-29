@@ -45,6 +45,7 @@ void   (APIENTRY* VertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei
 void   (APIENTRY* EnableVertexAttribArray)(GLuint) = nullptr;
 GLint  (APIENTRY* GetAttribLocation)(GLuint, const char*) = nullptr;
 void   (APIENTRY* ActiveTexture)(GLenum) = nullptr;
+void   (APIENTRY* BindSampler)(GLuint, GLuint) = nullptr;
 
 void (APIENTRY* Uniform4fv)(GLint, GLsizei, const GLfloat*) = nullptr;
 void (APIENTRY* GetVertexAttribiv)(GLuint, GLenum, GLint*) = nullptr;
@@ -133,6 +134,7 @@ bool Load() {
     sh &= Grab(GetAttribLocation,       "glGetAttribLocation");
     sh &= Grab(ActiveTexture,           "glActiveTexture");
     g_shaderApi = sh;
+    BindSampler=reinterpret_cast<decltype(BindSampler)>(wglGetProcAddress("glBindSampler"));
 
     // Dynamic-bone skinning set (BoneSkin.cpp). Needs the shader set as well,
     // for the test compile that guards every patched shader.

@@ -49,7 +49,7 @@ void __cdecl FakeActionIcons() {
 int cutseqNumber=0, cutseqTransition=0, spotCamera=0;
 uint8_t vonCroyScene=0;
 bool nativeMoves = true, jointFollowsBody = false;
-bool worldCameraValid = false;
+bool worldCameraValid = false, opticsZoomed=false;
 float worldCameraRot[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
 float worldCameraPos[3] = {};
 uint8_t* laraItem = itemMemory;
@@ -195,6 +195,11 @@ void __cdecl FakeJoint(uint8_t* item, tr::PHD_VECTOR* v, int joint, int frac) {
     jointCalled = true;
 }
 int16_t nativeAimLock=0;
+int32_t __cdecl FakeSkinJoints(uint8_t*,float* joints,int32_t) {
+    std::memset(joints,0,15*12*sizeof(float));
+    for (int i=0;i<15;++i) joints[i*12]=joints[i*12+5]=joints[i*12+10]=1.f;
+    return 15;
+}
 void __cdecl FakeAim(void*, uint8_t* arm) {
     *reinterpret_cast<int16_t*>(arm + 12) = nativeAimLock;
     *reinterpret_cast<int16_t*>(arm + 14) = 123;
@@ -362,7 +367,7 @@ uint64_t Base() { return reinterpret_cast<uint64_t>(appMemory); }
 const Layout& L() { return layout; }
 int CurrentGame() { return game; }
 void* XInputGetStateSlot() { return nullptr; }
-bool IsOpticsZoomed() { return false; }
+bool IsOpticsZoomed() { return opticsZoomed; }
 bool CameraHeadroom(float&) { return false; }
 bool CameraViewFrame(float rot[3][3], float pos[3]) {
     if (!worldCameraValid) return false;
@@ -377,6 +382,90 @@ uint64_t GameDllBase() { return g_boundBase; }
 
 int main() {
     using namespace tr;
+    // Optical axis follows gun yaw/pitch/roll, not the headset; projected
+    // barrel-ray points remain under the reticle at every distance.
+    for (int yaw=-180;yaw<=180;yaw+=30) for (int pitch=-60;pitch<=60;pitch+=30)
+    for (int roll:{-45,0,45}) {
+        motiongun::Calibration c{};c.yawDegrees=float(yaw);c.pitchDegrees=float(pitch);c.rollDegrees=float(roll);
+        const motiongun::Basis identity{{{1,0,0},{0,1,0},{0,0,1}}};
+        const auto basis=motiongun::GunBasis(motiongun::CalibratedController(identity,c));
+        const motiongun::Frame optic{basis,{100,-200,300}};
+        // Use a translated, rotated and scaled inverse bind: identity-only
+        // fixtures conceal the original mesh-space vs wrist-space mistake.
+        auto inv=motiongun::Frame{motiongun::CalibratedController(identity,c),{-63,20,-10}};
+        for (auto& row:inv.basis.r) for (float& v:row) v*=2.f;
+        motiongun::Frame attached{};float radius=0;
+        Check(hkscope::MeshLens(optic,inv,attached,radius),"mesh eyepiece attachment is valid across wrist rotations");
+        const auto expected=motiongun::Transform(motiongun::Multiply(optic,inv),{63.45f,39.8f,80.5f});
+        const auto error=motiongun::Sub(attached.origin,expected);
+        Check(motiongun::Dot(error,error)<.0001f && std::fabs(radius-10.8f)<.001f,
+              "lens follows the same full bind and wrist transform as the HK aperture");
+        const auto lensEye=motiongun::Sub(attached.origin,motiongun::Transform(attached.basis,{0,50.76f,0}));
+        Check(hkscope::EyeBox(attached,lensEye,423),"eye aligned with actual mesh activates lens at user's world scale");
+        const auto lensProjection=hkscope::Projection(1,32768,radius/423.f);
+        Check(std::fabs(lensProjection.m[0]*radius/423.f/.12f-3.f)<.001f,
+              "scope magnification stays 3x when measured aperture size changes");
+        const auto view=hkscope::View(optic);
+        for (float distance:{100.f,1000.f,20000.f}) {
+            const auto point=motiongun::Add(optic.origin,motiongun::Transform(basis,{0,distance,0}));
+            const float p[]={point.x,point.y,point.z};float v[3]{};
+            for (int r=0;r<3;++r) {v[r]=view.r[r][3];for(int i=0;i<3;++i)v[r]+=view.r[r][i]*p[i];}
+            Check(std::fabs(v[0])<0.01f && std::fabs(v[1])<0.01f && std::fabs(v[2]+distance)<0.01f,
+                  "scope camera centers the muzzle ray across wrist rotations and distances");
+        }
+        auto eye=motiongun::Sub(optic.origin,motiongun::Transform(basis,{0,120,0}));
+        Check(hkscope::EyeBox(optic,eye,1000),"scope accepts aligned eye behind lens");
+        eye=motiongun::Add(eye,motiongun::Transform(basis,{30,0,0}));
+        Check(!hkscope::EyeBox(optic,eye,1000),"scope rejects eye outside lateral eye box");
+        Check(!hkscope::EyeBox(optic,motiongun::Add(optic.origin,motiongun::Transform(basis,{0,120,0})),1000),
+              "scope rejects looking through objective from wrong side");
+        Check(!hkscope::EyeBox(optic,motiongun::Sub(optic.origin,motiongun::Transform(basis,{0,400,0})),1000),
+              "scope rejects rifle held beyond eye relief");
+    }
+    // Off-axis close-eye placement must match the physical aperture exactly.
+    for (float scale:{423.f,1000.f}) {
+        const motiongun::Basis identity{{{1,0,0},{0,1,0},{0,0,1}}};
+        const motiongun::Frame lens{motiongun::GunBasis(identity),{.005f*scale,-.003f*scale,.02f*scale}};
+        const float rot[3][3]={{1,0,0},{0,1,0},{0,0,1}},pos[3]={};
+        const auto view=hkscope::WorldView(rot,pos);
+        const auto model=hkscope::LensModel(lens,scale,.013f);
+        mat4 projection{};BuildEyeProjection(projection,-.9f,1.1f,-1.1f,.9f,16,32768,true);
+        const auto physical=Mul4(projection,Mul4(AffineToMat4(view),model));
+        mat4 display{};
+        Check(hkscope::LensProjection(projection,view,model,scale,16,display),"off-axis close-eye projection succeeds");
+        for(int col=0;col<4;++col) for(int row:{0,1,3})
+            Check(display.m[col*4+row]==physical.m[col*4+row],
+                  "close-eye lens preserves physical mesh screen position, size and perspective");
+    }
+    // Close-eye comfort must remain local to the lens at both real-world scales.
+    for (float scale:{423.f,1000.f}) for (float relief:{.12f,.039f,.02f,.0011f}) {
+        const motiongun::Basis identity{{{1,0,0},{0,1,0},{0,0,1}}};
+        const motiongun::Frame lens{motiongun::GunBasis(identity),{0,0,relief*scale}};
+        const float rot[3][3]={{1,0,0},{0,1,0},{0,0,1}},pos[3]={};
+        const auto view=hkscope::WorldView(rot,pos);
+        const auto model=hkscope::LensModel(lens,scale,.013f);
+        mat4 projection{};BuildEyeProjection(projection,-1,1,-1,1,16,32768,true);
+        const auto savedProjection=projection,savedModel=model;
+        mat4 result{};
+        Check(hkscope::EyeBox(lens,{0,0,0},scale),"close eye remains aligned while in front of lens");
+        Check(hkscope::LensProjection(projection,view,model,scale,16,result),"close lens projection is valid");
+        Check(!std::memcmp(&projection,&savedProjection,sizeof(projection)) &&
+              !std::memcmp(&model,&savedModel,sizeof(model)),"comfort does not mutate world projection or physical lens");
+        for (float value:result.m) Check(std::isfinite(value),"close-eye lens matrix remains finite");
+        for (float x:{-1.f,1.f}) for (float y:{-1.f,1.f}) {
+            const float z=result.m[2]*x+result.m[6]*y+result.m[14];
+            const float w=result.m[3]*x+result.m[7]*y+result.m[15];
+            Check(w>0 && z>=-w && z<=w,"lens corners survive near clipping at close positive relief");
+        }
+        if (relief==.12f) {
+            const auto native=Mul4(projection,Mul4(AffineToMat4(view),model));
+            Check(!std::memcmp(&native,&result,sizeof(result)),"normal-distance lens transform and depth are unchanged");
+        } else {
+            auto reversed=view;for(int col=0;col<3;++col) reversed.r[2][col]*=-1;
+            Check(!hkscope::LensProjection(projection,reversed,model,scale,16,result),
+                  "close-eye comfort does not display lens when looking away");
+        }
+    }
     config.enabled = config.firstPerson = true;
     // Original behavior remains explicitly covered with the opt-out, then
     // new stabilized fixtures below exercise the enabled default separately.
@@ -781,6 +870,104 @@ int main() {
         const auto savedFloor=dll.getFloor;
         dll.getFloor=rva(reinterpret_cast<void*>(&FakeProjectileFloor));
         const int savedGame=dll.game;
+        {
+            const auto settings=config;
+            config.firstPersonHKScope=true;config.eyeOffsetMode=3;
+            alignas(16) static uint8_t scopeObject[off::object_stride]{};
+            const auto oldObjects=dll.objects;
+            const auto oldObject=*reinterpret_cast<int16_t*>(itemMemory+off::item_object);
+            dll.objects=rva(scopeObject);*reinterpret_cast<int16_t*>(itemMemory+off::item_object)=0;
+            auto* scopeBind=reinterpret_cast<float*>(scopeObject+1676)+10*16;
+            scopeBind[0]=scopeBind[5]=scopeBind[10]=scopeBind[15]=1.f;
+            config.perEyeView=true;config.perEyeProjection=1;config.duplicateDraws=true;
+            motiongun::Frame lens{},optic{};
+            const auto savedLara=std::string(reinterpret_cast<const char*>(laraMemory),sizeof(laraMemory));
+            dll.game=1;gun=5;
+            g_hkScopeBindItem=nullptr;
+            Check(!FirstPersonHKScopePose(lens,optic),"scope waits for a real HK wrist binding instead of reading unrelated live geometry");
+            const auto oldGetJoints=g_hGetJoints.m_trampoline;
+            g_hGetJoints.m_trampoline=reinterpret_cast<void*>(&FakeSkinJoints);
+            float hkPalette[15*12]{};
+            g_renderArm=1;
+            Check(Detour_GetJoints(itemMemory,hkPalette,0)==15,"scope sees the production right-hand gun draw");
+            g_renderArm=-1;g_hGetJoints.m_trampoline=oldGetJoints;
+            for (int which:{0,1,2}) for (int weapon=1;weapon<=6;++weapon) {
+                dll.game=which;gun=int16_t(weapon);
+                Check(FirstPersonHKScopePose(lens,optic)==(which==1 && weapon==5),
+                      "physical scope available only for TR5 HK");
+            }
+            dll.game=1;gun=5;
+            GunPose gunPose{};Check(BuildGunPose(1,gunPose),"scope fixture has controller barrel pose");
+            Check(FirstPersonHKScopePose(lens,optic),"HK exposes scope pose without native zoom");
+            const auto boundLens=lens;
+            // DrawLaraHD copies each body/hand/face geometry into objects[item].
+            // Outside that draw the final face descriptor has no joint 10.
+            int32_t headOnlyMapping=14;float headOnlyPose[12]{};
+            auto* liveGeom=scopeObject+off::object_geom;
+            *reinterpret_cast<int32_t*>(liveGeom+28)=1;
+            *reinterpret_cast<int32_t**>(liveGeom+48)=&headOnlyMapping;
+            *reinterpret_cast<float**>(liveGeom+72)=headOnlyPose;
+            Check(FirstPersonHKScopePose(lens,optic),"scope survives native replacement of gun descriptor with face-only geometry");
+            Check(std::memcmp(&lens,&boundLens,sizeof(lens))==0,"face geometry cannot move or disable the HK lens");
+            const auto savedController=VR().m_rawControllerPose[1];
+            VR().m_rawControllerPose[1].m[0][3]+=.05f;
+            Check(FirstPersonHKScopePose(lens,optic),"cached binding accepts a new controller pose");
+            const auto trackedDelta=motiongun::Sub(lens.origin,boundLens.origin);
+            Check(std::fabs(std::sqrt(motiongun::Dot(trackedDelta,trackedDelta))-50.f)<.02f,
+                  "scope follows controller translation immediately, not the prior draw pose");
+            VR().m_rawControllerPose[1]=savedController;
+            g_hkScopeBindItem=laraMemory;
+            Check(!FirstPersonHKScopePose(lens,optic),"binding from another Lara item cannot be reused");
+            g_hkScopeBindItem=itemMemory;
+            Check(FirstPersonHKScopePose(lens,optic),"matching Lara binding restores the lens");
+            config.firstPersonHKScopeForwardMetres=.8f;config.firstPersonHKScopeUpMetres=-.5f;
+            Check(FirstPersonHKScopePose(lens,optic) &&
+                  motiongun::Dot(motiongun::Sub(lens.origin,boundLens.origin),motiongun::Sub(lens.origin,boundLens.origin))<.0001f,
+                  "mesh attachment does not use obsolete guessed wrist offsets");
+            config.firstPersonHKScopeForwardMetres=settings.firstPersonHKScopeForwardMetres;
+            config.firstPersonHKScopeUpMetres=settings.firstPersonHKScopeUpMetres;
+            const auto muzzleDelta=motiongun::Sub(optic.origin,gunPose.muzzle);
+            Check(motiongun::Dot(muzzleDelta,muzzleDelta)<0.0001f,
+                  "scope optical camera uses actual muzzle origin");
+            const bool cameraWasValid=worldCameraValid;
+            float savedCameraRot[3][3],savedCameraPos[3];
+            std::memcpy(savedCameraRot,worldCameraRot,sizeof(savedCameraRot));
+            std::memcpy(savedCameraPos,worldCameraPos,sizeof(savedCameraPos));
+            std::memset(worldCameraRot,0,sizeof(worldCameraRot));
+            worldCameraRot[0][0]=worldCameraRot[1][1]=worldCameraRot[2][2]=1;
+            const auto desiredEye=motiongun::Sub(lens.origin,motiongun::Transform(lens.basis,{0,120,0}));
+            const auto eyeOffset=InvertRigid(VR().EyeView(Eye::Left));
+            worldCameraPos[0]=desiredEye.x-eyeOffset.r[0][3];
+            worldCameraPos[1]=desiredEye.y-eyeOffset.r[1][3];
+            worldCameraPos[2]=desiredEye.z+eyeOffset.r[2][3];worldCameraValid=true;
+            Check(FirstPersonHKScopeAiming(),"aligned physical eye activates scoped precision aiming");
+            auto shotDirection=gunPose.direction;
+            Check(!AssistGunShot(gunPose,itemMemory,shotDirection) &&
+                  shotDirection.x==gunPose.direction.x && shotDirection.y==gunPose.direction.y && shotDirection.z==gunPose.direction.z,
+                  "scoped HK shot cannot be pulled away from reticle by aim assist");
+            worldCameraPos[0]+=1000;
+            Check(!FirstPersonHKScopeAiming(),"moving away from scope releases precision-aim gate");
+            worldCameraValid=cameraWasValid;
+            std::memcpy(worldCameraRot,savedCameraRot,sizeof(savedCameraRot));
+            std::memcpy(worldCameraPos,savedCameraPos,sizeof(savedCameraPos));
+            opticsZoomed=true;Check(!FirstPersonHKScopePose(lens,optic),"native full-screen zoom and physical lens are mutually exclusive");opticsZoomed=false;
+            appMemory[0x9e4]=0;Check(!FirstPersonHKScopePose(lens,optic),"classic graphics retain original optics");appMemory[0x9e4]=1;
+            const auto snapshot=std::string(reinterpret_cast<const char*>(laraMemory),sizeof(laraMemory));
+            FirstPersonHKScopePose(lens,optic);
+            Check(snapshot==std::string(reinterpret_cast<const char*>(laraMemory),sizeof(laraMemory)),
+                  "scope pose query cannot change native weapon or animation state");
+            status=3;Check(!FirstPersonHKScopePose(lens,optic),"holstering immediately removes scope");status=4;
+            water=1;Check(!FirstPersonHKScopePose(lens,optic),"swimming cannot retain scope");water=0;
+            config.firstPersonHKScope=false;Check(!FirstPersonHKScopePose(lens,optic),"scope INI opt-out works");config.firstPersonHKScope=true;
+            config.firstPersonMotionGuns=false;Check(!FirstPersonHKScopePose(lens,optic),"head-aim-only mode cannot enable physical scope");config.firstPersonMotionGuns=true;
+            VR().m_controllerPoseValid[1]=false;Check(!FirstPersonHKScopePose(lens,optic),"tracking loss removes scope");VR().m_controllerPoseValid[1]=true;
+            const bool wasActive=g_active;g_active=false;
+            Check(!FirstPersonHKScopePose(lens,optic),"third person never enables scope");g_active=wasActive;
+            dll.objects=oldObjects;*reinterpret_cast<int16_t*>(itemMemory+off::item_object)=oldObject;
+            g_hkScopeBindItem=nullptr;
+            config=settings;dll.game=savedGame;
+            std::memcpy(laraMemory,savedLara.data(),sizeof(laraMemory));
+        }
         // RICH3's grapple raised animation loops with no state-change exits.
         // Forcing arm.lock sends native AnimateShotgun there without firing.
         // Both tracked and head-aim paths must preserve its native lock.
