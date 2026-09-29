@@ -769,10 +769,10 @@ static void TestMotionGunTriggers() {
     Check(t.Consume(0) && t.Consume(1),"simultaneous LT release and RT press fire independently");
     t.Update(true,true,false,false,600);
     t.Update(true,true,true,false,1000);
-    t.Update(true,true,true,false,1999);
-    Check(!t.Equip(1999) && !t.WantsShot(),"LT at 999 ms neither toggles nor fires");
-    t.Update(true,true,true,false,2000);
-    Check(t.Equip(2000) && !t.WantsShot(),"LT at 1000 ms emits equip only");
+    t.Update(true,true,true,false,1499);
+    Check(!t.Equip(1499) && !t.WantsShot(),"LT at 499 ms neither toggles nor fires");
+    t.Update(true,true,true,false,1500);
+    Check(t.Equip(1500) && !t.WantsShot(),"LT at 500 ms emits equip only");
     t.Update(true,true,true,false,8000);
     Check(!t.Equip(8000) && !t.WantsShot(),"long hold toggles once only");
     t.Update(true,true,false,false,8010);

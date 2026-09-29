@@ -33,7 +33,7 @@ for in-headset validation, and the remaining motion issues are listed there.
   under investigation; TR6 first person is not implemented.
 * Opt-in Quest Touch motion controls for all TR4/5 guns in remastered graphics:
   tracked hands/muzzles, corrected grip pivots, aim assistance, independent dual
-  triggers, 1.0-second equip gestures and live position/angle calibration.
+  triggers, 0.5-second equip gestures and live position/angle calibration.
   The new non-dual weapons still need headset validation.
 * Automatic first-person suspension during cutscenes/flybys, with native Lara
   visibility and automatic return to the selected view after gameplay resumes.
@@ -101,7 +101,7 @@ R3's D-pad shift remains available. See [Phase 23](#phase-23-tr45-first-person)
 for settings, gameplay exceptions and the current motion limitations.
 
 With `FirstPersonMotionGuns=1` in first-person remastered/HD gameplay, the
-weapon controls above are overridden: **hold LT for 1.0 second** to toggle
+weapon controls above are overridden: **hold LT for 0.5 seconds** to toggle
 draw/holster, **tap LT** to fire the left pistol/Uzi on release, and **tap RT**
 to fire the right pistol/Uzi or selected single weapon. Single weapons aim with
 the right controller. Holding RT does not auto-repeat. TR5 grappling still
@@ -4569,7 +4569,7 @@ stereo and third-person paths are unchanged by this feature.
 | Camera/gun separation | Hand aiming no longer drives the camera through Lara's head/torso aim; wrist rotation uses the recovered grip pivot rather than orbiting the hands |
 | Gun targeting | Tracked muzzle origins, native hit processing and bounded hitscan aim assistance; all-weapon extension preserves shotgun pellets and launcher physics |
 | Gun presentation and fit | Hands and guns only when motion-ready; position/angle calibration retains the grip pivot and supports live function-key adjustment |
-| Trigger handling | Independent pistol/Uzi taps; RT for single weapons; native held RT grab/Action preserved when guns are not ready; 1.0-second LT equip gesture |
+| Trigger handling | Independent pistol/Uzi taps; RT for single weapons; native held RT grab/Action preserved when guns are not ready; 0.5-second LT equip gesture |
 | Cutscenes | Native presentation during cutsequences, transitions, flybys and TR4 tutorial scenes; restore the player's FP preference afterward and cancel queued shots |
 | Culling versus wall clearance | Portal traversal starts in the effective FP eye's room; a separate swept eye-clearance path limits wall clipping |
 | Third-person centering | Cold startup now captures a gameplay positional neutral automatically; FP handoff still clears translation immediately |
@@ -5025,7 +5025,7 @@ In first-person remastered/HD motion-gun mode:
 
 - Short LT squeeze: fire the left pistol/Uzi on release; no shot for single weapons.
 - RT press: fire the right pistol/Uzi or the selected single weapon.
-- Hold LT for 1.0 second: draw/holster once; release before toggling again.
+- Hold LT for 0.5 seconds: draw/holster once; release before toggling again.
 
 Each tap requests one native shot (one full volley for the shotgun), including
 with Uzis and HK; holding RT does not
@@ -5218,9 +5218,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest hard-stop run (2026-09-28) passed **262,830 checks**. The rejected
+The latest hard-stop/shorter-LT run (2026-09-28) passed **262,832 checks**. The rejected
 climb-only implementation and its tests were removed. These are synthetic
-checks, including parameter sweeps, not 262,830 in-game scenarios or
+checks, including parameter sweeps, not 262,832 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5289,14 +5289,15 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 999/1000 ms boundary. The deployed hard-stop DLL
+tests, including the LT 499/500 ms boundary. The deployed hard-stop/shorter-LT DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`2C20D19E03EB59ED5DDEE9ADC106BB8619736692F50C608D334E25EB48828717`.
+`6F0B6E81D6ABD36B355E351B62EC3032BABF50E5F6F575EC17A13BFEE352B116`.
 The prior installed DLL and INI were backed up under
-`build/before-hard-stop-20260928-193548/`. The installed DLL at backup time was
-the surface-roomscale build; this new release is built from the user's reverted
-source and excludes those swimming changes.
+`build/before-lt-half-second-20260928-230233/` (the hard-stop build with a
+one-second LT hold). This release retains the hard stop and excludes the reverted
+swimming changes. The older surface-roomscale build remains backed up under
+`build/before-hard-stop-20260928-193548/`.
 The previous crate-impact build remains under
 `build/before-underwater-jump-20260928-003824/`.
 The pre-climb Action-icon build is still available under

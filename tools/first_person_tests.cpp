@@ -920,8 +920,10 @@ int main() {
             g_gunTriggers.Reset(); g_gunEquip.Reset();
             lt=rt=0; UpdateGunTriggers(lt,rt,true,0);
             lt=255; rt=200; UpdateGunTriggers(lt,rt,true,10);
-            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,1010);
-            Check(lt==255 && rt==200,"1.0-second equip gesture coexists with native held RT in either draw style");
+            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,509);
+            Check(lt==0 && rt==200,"499 ms hold does not equip or interfere with native held RT");
+            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,510);
+            Check(lt==255 && rt==200,"0.5-second equip gesture coexists with native held RT in either draw style");
         }
         lt=180; rt=210; UpdateGunTriggers(lt,rt,false,2000);
         Check(lt==180 && rt==210 && !g_gunTriggers.active,
