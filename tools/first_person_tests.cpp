@@ -1378,27 +1378,48 @@ int main() {
             Check(g_crouchHidden && bits==0,"returning from cutscene restores crouch hiding");
             state=2; UpdateSceneCamera(camera);
         }
-        for (bool hideHead:{false,true}) for (int swim:{13,17,18,35}) {
+        for (bool hideHead:{false,true}) for (int swim:{13,17,18,35,33,34,47,48,49}) {
             RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
-            water=1; state=int16_t(swim); UpdateSceneCamera(camera);
-            Check(g_underwaterHidden && bits==0,"submerged classic body hidden independently of head setting and swim animation");
-            const int beforeDraw=draws,beforeHair=hairs;
-            for (int pass:{0,1,2}) Detour_DrawCreatureHD(itemMemory,0,pass);
-            Detour_DrawHair(0);
-            Check(draws==beforeDraw && hairs==beforeHair,"submerged HD body/head and hair hidden on all passes");
-            for (int otherWater:{2,4,0,3,-1}) {
-                water=otherWater; UpdateSceneCamera(camera);
-                Check(!g_underwaterHidden && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
-                      "surface/wade/dry/fly/unknown water states restore pre-submerged body mask");
+            water=0; state=2; UpdateSceneCamera(camera);
+            for (int swimming:{1,2,1,2}) {
+                water=swimming; state=int16_t(swim);
+                Check(!Gate(),"water status immediately gates FP regardless of current swimming animation");
+                g_gunTriggers.active=true; g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
+                g_gunEquip.initialized=true; g_renderTurn.Sample(1,TurnTime());
+                PHD_3DPOS nativeCamera{123,456,789,10,20,30,0}; camera=nativeCamera;
+                UpdateSceneCamera(camera);
+                Check(!g_active && !g_scenePoseValid && !g_haveHeading && g_runtimeEnabled &&
+                      !std::memcmp(&camera,&nativeCamera,sizeof(camera)),
+                      "surface and underwater use untouched native third-person camera while retaining FP preference");
+                Check(!g_underwaterHidden && !g_headHidden && bits==baseBits,
+                      "swimming restores full native classic Lara visibility");
+                Check(!g_renderTurn.valid && !g_gunTriggers.WantsShot() && !g_gunEquip.initialized,
+                      "water entry cancels pending FP turn/fire/equip state");
+                float x=.4f,z=.6f,r=.8f; FirstPersonInput(x,z,r,false);
+                Check(x==.4f && z==.6f && r==.8f && !g_haveManualInput,
+                      "native swimming stick input is not rewritten by first person");
+                uint8_t lt=180,rt=210; UpdateGunTriggers(lt,rt,MotionTriggerMode(),100);
+                Check(lt==180 && rt==210,"native swimming triggers remain untouched");
+                const int beforeDraw=draws,beforeHair=hairs;
+                for (int pass:{0,1,2}) Detour_DrawCreatureHD(itemMemory,0,pass);
+                Detour_DrawHair(0);
+                Check(draws==beforeDraw+3 && hairs==beforeHair+1,"swimming draws native HD body and braid");
+            }
+            for (int otherWater:{4,0,3,-1}) {
+                water=otherWater; state=2; pos.y_rot=Angle(-1.1f); UpdateSceneCamera(camera);
+                Check(g_active && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits) &&
+                      Near(g_lastHeadWorld,-1.1f),
+                      "wade/dry/fly/unknown status resumes FP aligned with current Lara facing");
                 water=1; UpdateSceneCamera(camera);
             }
-            spotCamera=1; UpdateSceneCamera(camera);
-            Check(!g_underwaterHidden && bits==baseBits,"underwater cutscene restores native body");
-            spotCamera=0; UpdateSceneCamera(camera);
-            Check(g_underwaterHidden && bits==0,"resuming underwater first person hides body again");
-            g_runtimeEnabled=false; UpdateSceneCamera(camera);
-            Check(!g_underwaterHidden && bits==baseBits,"third person underwater keeps native body visible");
-            g_runtimeEnabled=true; water=0; state=2; UpdateSceneCamera(camera);
+            spotCamera=1; water=0; UpdateSceneCamera(camera);
+            Check(!g_active,"leaving water during a cutscene cannot override scripted-camera suspension");
+            spotCamera=0; UpdateSceneCamera(camera); Check(g_active,"FP resumes after water and scripted camera end");
+            water=2; g_runtimeEnabled=false; UpdateSceneCamera(camera);
+            water=0; UpdateSceneCamera(camera);
+            Check(!g_active && !g_runtimeEnabled && bits==baseBits,
+                  "leaving water cannot force FP on when the user selected third person");
+            g_runtimeEnabled=true; state=2; UpdateSceneCamera(camera);
         }
         for (bool hideHead:{false,true}) for (int hanging:{10,30,31,75,82,83,139}) {
             RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;

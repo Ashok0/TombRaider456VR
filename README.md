@@ -4640,6 +4640,15 @@ the legacy controller-chord behavior.
   water, cutscenes, death, TR4 vehicles, shifted controls and other active
   directional input do not receive this brake. This build does not restore the
   reverted surface-swimming changes. In-headset stopping still needs validation.
+- **Automatic third person while swimming (TR4/5):** native `UNDERWATER` (`1`)
+  and `SURFACE` (`2`) water states suspend first person, restoring the native
+  third-person camera, Lara visibility, and swimming controls. Wading (`4`) is
+  unchanged. On leaving swimming, first person resumes automatically if it was
+  enabled, aligned with Lara's current facing rather than the pre-swim heading.
+  Selecting third person while swimming keeps third person afterward. Cutscenes
+  still take precedence. Pending first-person turns, shots and equip gestures
+  are cleared on suspension. No new INI setting is required; this does not
+  restore the reverted swimming body-follow/room-scale changes.
 - **Head/body alignment:** ordinary ground movement follows physical headset
   yaw plus artificial stick yaw. Body following is time-scaled using a 60 Hz
   reference. Native interactions, climbing, swimming, death and TR4 vehicles
@@ -4675,12 +4684,10 @@ the legacy controller-chord behavior.
   guns remain visible. Standing restores the body. Menus, cutscenes and third
   person restore native visibility. This is visibility-only, not a restoration
   of the reverted crouch/prone room-scale movement changes.
-  Native `UNDERWATER` status (`1`) now also hides the first-person body, head
-  and braid in classic and HD rendering. Surface swimming, wading, dry land,
-  fly-cheat and unknown water status do not activate this rule. Surfacing,
-  cutscenes and third person restore the previous native mask; any motion-ready
-  tracked hand/gun passes remain unchanged. This does not alter swim controls,
-  camera anchoring or body movement, and needs no new INI setting.
+  The earlier underwater-only first-person body-hiding behavior is superseded
+  by automatic third person for both surface and underwater swimming. Both now
+  restore native classic/HD body, head and braid visibility. Wading, dry land,
+  fly-cheat and unknown water status do not trigger swimming suspension.
   Ledge hanging, shimmying and hang turns instead retain both upper arms,
   forearms and hands while hiding the torso, legs, head and braid. This mask
   works independently of the head-hiding setting and restores on leaving the
@@ -4749,7 +4756,7 @@ body facing or tracking neutral. The rejected climb-only guard remains absent.
 The expanded walk/impact/jump/fall regression failed before this correction
 and passes afterward. Real-height cases cover clearing the top, front-radius
 contact, physical lean, tracking/optic gates and both games. These are synthetic
-tests; the specific crate and underwater swimming still need headset testing.
+tests; the specific crate and swimming camera transitions still need headset testing.
 
 The FP motion-gun handler previously replaced RT with a queued-shot signal even
 when Lara's guns were holstered or her hands were busy. With no shot queued,
@@ -5231,9 +5238,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest render-turn run (2026-09-28) passed **317,728 checks**. The rejected
+The latest swimming-camera run (2026-09-29) passed **322,372 checks**. The rejected
 climb-only implementation and its tests were removed. These are synthetic
-checks, including parameter sweeps, not 317,728 in-game scenarios or
+checks, including parameter sweeps, not 322,372 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5257,9 +5264,12 @@ animation/goal/gravity transitions, large relocations, input/session guards and
 tick-local brake reset. The earlier release test only checked smoothing-history
 reset after native movement had already been set to zero; it did not catch
 native stopping-animation coasting.
-Visibility tests cover both games' underwater entry/exit, surface/wading/dry
-restoration, submerged classic/HD body and hair suppression, tracked-hand pass
-preservation, cutscene and third-person restoration, plus crouch/crawl/turn states, head hiding on/off,
+Swimming tests cover both games' surface/underwater transitions across swim
+animation states, untouched native camera/stick/trigger input, restored classic/HD
+body and hair, canceled FP turn/fire/equip state, facing-aligned land/wading
+resumption, cutscene precedence and keeping the user's third-person preference.
+Visibility tests also retain low-level tracked-hand pass coverage, cutscene and
+third-person restoration, plus crouch/crawl/turn states, head hiding on/off,
 standing and cutscene restoration, tracked hands while crouched, and rolls.
 Startup tests use zero, partial and full mesh masks across HD render passes;
 they verify draw-local head hiding, preservation of masked passes and persistent
@@ -5302,14 +5312,14 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 499/500 ms boundary. The deployed render-turn DLL
+tests, including the LT 499/500 ms boundary. The deployed swimming-camera DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`486BEF1A48387C0B9D4FAB7D33EF33527AA67C48FC9153885877F719F4AFDC85`.
+`85BC8ECF6212DE3651C9ED6FD2A5B1B08832477833AC3A7D2ADD728A6810E645`.
 The prior installed DLL and INI were backed up under
-`build/before-render-turn-20260928-232340/` (the hard-stop/half-second-LT build).
+`build/before-swim-third-person-20260929-000013/` (the render-rate turning build).
 This release retains both the hard stop and half-second LT hold, and excludes
-the reverted swimming changes. The older surface-roomscale build remains backed up under
+the reverted swimming body-follow changes. The older surface-roomscale build remains backed up under
 `build/before-hard-stop-20260928-193548/`.
 The previous crate-impact build remains under
 `build/before-underwater-jump-20260928-003824/`.

@@ -337,6 +337,10 @@ bool Gate() {
     if (ScriptedCameraActive()) return false;
     const GameDllLayout& dll = *g_boundDll;
     if (!*Ptr<uint8_t*>(dll.laraItem)) return false;
+    const int water=LaraWaterStatus();
+    // Suspend the whole FP path, not just its camera or body mask. Wading
+    // remains eligible; native surface/underwater swimming uses third person.
+    if (water==1 || water==2) return false;
     const int32_t type = *Ptr<int32_t>(g_boundDll->camera + off::camera_type);
     return type != kCamFixed && type < kCamCinematic;
 }
@@ -1799,11 +1803,17 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         g_scenePoseValid = false;
         g_haveHeading = false;
         // Suspend, don't toggle the user's preference. No queued shot or
-        // equip gesture may leak out of a cutscene/menu into resumed play.
+        // equip gesture may leak out of swimming/cutscenes/menus into resumed play.
         g_gunTriggers.Reset();
         g_gunEquip.Reset();
         // Keep item identity and last viewing heading across UI/cameras.
         g_haveManualInput = false;
+        const int water=LaraWaterStatus();
+        if (water==1 || water==2) {
+            // Native swimming can change facing while FP is suspended. On
+            // leaving water, anchor to Lara rather than the pre-swim heading.
+            g_headingItem=nullptr;
+        }
         g_directionalRootScale = 1;
         ResetMovementStabilization();
         g_bodyTime = {};
