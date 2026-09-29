@@ -208,6 +208,9 @@ void __cdecl FakeAnimate(uint8_t* item) {
 tr::locomotion::Vec unstableStep{};
 int unstableHeight=0, nativeCollisionPasses=0;
 bool blockStableMotion=false, startAirborne=false;
+int animationNextState=-1, animationNextGoal=-1;
+bool animationStartsGravity=false;
+tr::locomotion::Vec collisionPush{};
 tr::locomotion::Vec beforeNativeCollision{};
 tr::PHD_VECTOR gaitSway{};
 void __cdecl FakeUnstableAnimate(uint8_t* item) {
@@ -217,6 +220,9 @@ void __cdecl FakeUnstableAnimate(uint8_t* item) {
     p.y_pos+=unstableHeight;
     *reinterpret_cast<int16_t*>(item+tr::off::item_speed)=int16_t(tr::locomotion::Length(unstableStep));
     if (startAirborne) *reinterpret_cast<int16_t*>(item+tr::off::item_anim_state)=3;
+    if (animationNextState>=0) *reinterpret_cast<int16_t*>(item+tr::off::item_anim_state)=int16_t(animationNextState);
+    if (animationNextGoal>=0) *reinterpret_cast<int16_t*>(item+tr::off::item_goal_state)=int16_t(animationNextGoal);
+    if (animationStartsGravity) *reinterpret_cast<uint32_t*>(item+0x1820)|=8;
 }
 void __cdecl FakeUnstableAboveWater(uint8_t* item,void*) {
     ++simulationTicks;
@@ -226,6 +232,7 @@ void __cdecl FakeUnstableAboveWater(uint8_t* item,void*) {
     beforeNativeCollision={float(p.x_pos-previous.x_pos),float(p.z_pos-previous.z_pos)};
     ++nativeCollisionPasses;
     if (blockStableMotion) { p.x_pos=previous.x_pos; p.z_pos=previous.z_pos; }
+    p.x_pos+=int32_t(collisionPush.x); p.z_pos+=int32_t(collisionPush.z);
 }
 void __cdecl FakeGaitJoint(uint8_t* item,tr::PHD_VECTOR* v,int joint,int frac) {
     Check(joint==14,"stabilized eye still queries native head joint");
@@ -1811,6 +1818,93 @@ int main() {
         }
         VR().SetHeadAtCamera(false); config.positionalTracking=config.firstPersonHeadTranslation=true;
         collisionMode=0; impactNormalX=0; impactNormalZ=1; resetRoomscale();
+    }
+    // Hard stop: keep native animation displacement NONZERO after release.
+    // The old release test cleared unstableStep first, masking native coasting.
+    for (int which:{0,1}) for (int modern:{0,1}) for (bool smoothing:{false,true}) {
+        game=dll.game=which;
+        auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+        const auto setupStop=[&]() {
+            resetRoomscale(); Head(0); FirstPersonRecenter(); ResetMovementStabilization();
+            config.firstPersonRoomscaleMove=false;
+            config.firstPersonMovementStabilization=smoothing;
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern ? 2 : 0;
+            flags=0; goal=2; actionInput=0;
+            animationNextState=animationNextGoal=-1; animationStartsGravity=false;
+            startAirborne=blockStableMotion=false; collisionPush={};
+            unstableStep={3,5}; unstableHeight=1;
+            g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAnimate);
+            g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAboveWater);
+        };
+        for (const auto& d:dirs) {
+            setupStop(); state=d.z<0 ? 16 : d.x<-.5f ? 22 : d.x>.5f ? 21 : 1;
+            float x=d.x,z=d.z,r=0; FirstPersonInput(x,z,r,false);
+            actionInput=d.action; Detour_LaraAboveWater(itemMemory,nullptr);
+            const auto released=pos;
+            x=z=r=0; FirstPersonInput(x,z,r,false); actionInput=0;
+            for (int tick=0;tick<60;++tick) {
+                const int animationCount=animationTicks, collisionCount=nativeCollisionPasses;
+                Detour_LaraAboveWater(itemMemory,nullptr);
+                Check(pos.x_pos==released.x_pos && pos.z_pos==released.z_pos &&
+                      *reinterpret_cast<int16_t*>(itemMemory+off::item_speed)==0,
+                      "release immediately cancels native forward/side/back coasting with smoothing on or off");
+                Check(pos.y_pos==released.y_pos+tick+1 && animationTicks==animationCount+1 &&
+                      nativeCollisionPasses==collisionCount+1 && !g_rootMotion.valid && !g_hardStopRoot,
+                      "hard stop preserves vertical animation, one native animation/collision pass and tick-local state");
+            }
+            x=d.x; z=d.z; FirstPersonInput(x,z,r,false); actionInput=d.action;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(pos.x_pos!=released.x_pos || pos.z_pos!=released.z_pos,
+                  "stick re-engagement resumes movement immediately without a latched brake");
+        }
+        setupStop();
+        float x=.1f,z=0,r=0; FirstPersonInput(x,z,r,false); Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(pos.x_pos==0 && pos.z_pos==0,"stick inside existing deadzone hard-stops without a new threshold");
+        config.firstPersonRoomscaleMove=true; VR().m_rawHeadPose.m[0][3]+=.2f;
+        const auto beforeStep=pos; Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(pos.x_pos>beforeStep.x_pos && pos.z_pos==beforeStep.z_pos && g_dragCurrent.x>0,
+              "hard stop cancels animation drift but keeps collision-checked physical room-scale steps");
+        setupStop(); x=z=r=0; FirstPersonInput(x,z,r,false);
+        collisionPush={11,-9}; Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(pos.x_pos==11 && pos.z_pos==-9 && beforeNativeCollision.x==0 && beforeNativeCollision.z==0,
+              "hard stop occurs before native collision and cannot undo its corrective displacement");
+        for (int excluded=0;excluded<16;++excluded) {
+            setupStop(); x=z=r=0; FirstPersonInput(x,z,r,false);
+            if (excluded==0) g_active=false;
+            if (excluded==1) cutseq=1;
+            if (excluded==2) water=1;
+            if (excluded==3) state=3;
+            if (excluded==4) state=10;
+            if (excluded==5) state=36;
+            if (excluded==6) goal=15;
+            if (excluded==7) goal=56;
+            if (excluded==8) flags=8;
+            if (excluded==9) g_jumpPressed=true;
+            if (excluded==10) g_shifted=true;
+            if (excluded==11) actionInput=locomotion::Forward;
+            if (excluded==12) actionInput=0x10;
+            if (excluded==13) actionInput=0x100;
+            if (excluded==14) hp=0;
+            if (excluded==15) g_haveManualInput=false;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(pos.x_pos==3 && pos.z_pos==5,
+                  "hard stop excludes third person, cutscenes, water, airborne/interactions, jump/roll, other input and death");
+        }
+        for (int transition=0;transition<4;++transition) {
+            setupStop(); x=z=r=0; FirstPersonInput(x,z,r,false);
+            if (transition==0) animationNextState=3;
+            if (transition==1) animationNextGoal=56;
+            if (transition==2) animationStartsGravity=true;
+            if (transition==3) unstableStep={600,5};
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(pos.x_pos==int32_t(unstableStep.x) && pos.z_pos==5,
+                  "animation-triggered airborne/interaction/gravity/teleport movement bypasses braking");
+        }
+        setupStop(); g_hardStopRoot=true; ResetMovementStabilization();
+        Check(!g_hardStopRoot,"camera/session reset clears any pending hard stop");
+        goal=0; flags=0; resetRoomscale(); ResetMovementStabilization();
+        config.firstPersonMovementStabilization=true;
     }
     // World stability: vary HMD orientation and real translation independently.
     // Test both render-only and native room-scale simulation/interpolation;

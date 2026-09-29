@@ -39,6 +39,7 @@ constexpr uint32_t item_floor       = 0;
 constexpr uint32_t item_floor_prev  = 4;
 constexpr uint32_t item_object      = 16;
 constexpr uint32_t item_anim_state  = 18;
+constexpr uint32_t item_goal_state  = 20;
 constexpr uint32_t item_speed       = 34;
 constexpr uint32_t item_hit_points  = 38;
 constexpr uint32_t item_room        = 28;
@@ -127,6 +128,7 @@ bool g_shifted = false;
 bool g_jumpPressed = false;
 int g_directionalRootScale = 1;
 bool g_stabilizeRoot=false;
+bool g_hardStopRoot=false; // Scoped to one ordinary above-water simulation tick.
 uint64_t g_stabilizeAction=0;
 locomotion::Vec g_stabilizeDirection{};
 stabilization::RootMotion g_rootMotion;
@@ -134,6 +136,7 @@ stabilization::GroundEye g_groundEye;
 
 void ResetMovementStabilization() {
     g_stabilizeRoot=false;
+    g_hardStopRoot=false;
     g_rootMotion.Reset();
     g_groundEye.Reset();
 }
@@ -469,6 +472,18 @@ bool CanTurnBody(const uint8_t* item) {
     // Same ground states as TR1-3. Ladders, pickups, jumps and scripted
     // interactions own their facing and must not be rotated out of alignment.
     switch (*reinterpret_cast<const int16_t*>(item + off::item_anim_state)) {
+    case 0: case 1: case 2: case 5: case 6: case 7:
+    case 16: case 20: case 21: case 22: return true;
+    default: return false;
+    }
+}
+
+bool CanHardStop(const uint8_t* item) {
+    if (!CanTurnBody(item) || (*reinterpret_cast<const uint32_t*>(item+0x1820)&8))
+        return false;
+    // A requested jump/interaction must keep its animation displacement even
+    // before current_anim_state has caught up with goal_anim_state.
+    switch (*reinterpret_cast<const int16_t*>(item+off::item_goal_state)) {
     case 0: case 1: case 2: case 5: case 6: case 7:
     case 16: case 20: case 21: case 22: return true;
     default: return false;
@@ -1286,13 +1301,24 @@ void __cdecl Detour_AnimateLara(uint8_t* item) {
     const int scale = item && item == g_headingItem
         ? std::clamp(g_directionalRootScale, 1, 3) : 1;
     const bool stabilize=g_stabilizeRoot && item && item==g_headingItem && CanTurnBody(item);
-    if (scale == 1 && !stabilize) {
+    const bool hardStop=g_hardStopRoot && item && item==g_headingItem && CanHardStop(item);
+    if (scale == 1 && !stabilize && !hardStop) {
         original(item);
         return;
     }
     auto& pos = *reinterpret_cast<PHD_3DPOS*>(item + off::item_pos);
     const int32_t oldX = pos.x_pos, oldZ = pos.z_pos;
     original(item);
+    if (hardStop && CanHardStop(item) &&
+        std::hypot(double(pos.x_pos)-oldX,double(pos.z_pos)-oldZ)<=256) {
+        // Keep the stopping animation, Y/gravity and subsequent collision.
+        // Room-scale drag already happened BEFORE this snapshot, so only the
+        // animation's residual horizontal movement is canceled, not real steps.
+        pos.x_pos=oldX; pos.z_pos=oldZ;
+        *reinterpret_cast<int16_t*>(item+off::item_speed)=0;
+        g_rootMotion.Reset();
+        return;
+    }
     pos.x_pos = oldX + (pos.x_pos - oldX) * scale;
     pos.z_pos = oldZ + (pos.z_pos - oldZ) * scale;
     auto& speed = *reinterpret_cast<int16_t*>(item + off::item_speed);
@@ -1316,6 +1342,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     g_dragPrevious = g_dragCurrent;
     g_directionalRootScale = 1;
     g_stabilizeRoot=false;
+    g_hardStopRoot=false;
     if (item && item == g_headingItem && g_active && g_haveHeading && Gate()) {
         const int state = *reinterpret_cast<int16_t*>(item + off::item_anim_state);
         const bool ground = CanTurnBody(item);
@@ -1325,6 +1352,10 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
             const float head = Wrap(g_headingBase + VR().HeadYawRadians());
             auto* analog = Ptr<int16_t>(g_boundDll->analogInput);
             auto& input = *Ptr<uint64_t>(g_boundDll->input);
+            // The LS deadzone has already produced zero manual input. Don't
+            // brake keyboard/D-pad movement, shifted controls, jumps or rolls.
+            g_hardStopRoot=ground && CanHardStop(item) && !g_shifted && !g_jumpPressed &&
+                Length(g_manualLocal)<=0.0001f && !(input & (Directions | 0x10 | 0x100));
             // Runs after native input conversion. All subsequent rotation,
             // animation and collision now agree on a single HMD/world heading.
             analog[2] = analog[3] = Angle(head);
@@ -1387,6 +1418,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
     g_directionalRootScale = 1;
     g_stabilizeRoot=false;
+    g_hardStopRoot=false;
 }
 
 void UpdateLocomotion(PHD_3DPOS& pose) {

@@ -4627,6 +4627,18 @@ the legacy controller-chord behavior.
   residual native turn rate is cleared. Side/back horizontal animation movement
   uses the TR1–3 three-times scale once per animation tick; forward movement and
   jump motion are not multiplied.
+- **Immediate LS-release stop (TR4/5 first person):** returning LS to its existing
+  deadzone cancels leftover horizontal movement from ordinary grounded stopping
+  animations on the next simulation tick. The animation continues in place;
+  movement resumes immediately when the stick is re-engaged. This works with
+  movement stabilization enabled or disabled. It does not freeze Lara's whole
+  position: real room-scale steps, vertical animation and subsequent native
+  collision corrections remain intact. Current and requested animation states
+  are checked before and after animation so jumps, falls, rolls, climbing,
+  interactions and large animation relocations remain native. Third person,
+  water, cutscenes, death, TR4 vehicles, shifted controls and other active
+  directional input do not receive this brake. This build does not restore the
+  reverted surface-swimming changes. In-headset stopping still needs validation.
 - **Head/body alignment:** ordinary ground movement follows physical headset
   yaw plus artificial stick yaw. Body following is time-scaled using a 60 Hz
   reference. Native interactions, climbing, swimming, death and TR4 vehicles
@@ -5206,9 +5218,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest underwater/jump run (2026-09-28) passed **257,442 checks**. The rejected
+The latest hard-stop run (2026-09-28) passed **262,830 checks**. The rejected
 climb-only implementation and its tests were removed. These are synthetic
-checks, including parameter sweeps, not 257,442 in-game scenarios or
+checks, including parameter sweeps, not 262,830 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5224,6 +5236,14 @@ motion, jump transitions, interpolation fractions and the legacy opt-out.
 Physical yaw/pitch and lean sweeps check world-space eye and stationary-controller
 positions, with room-scale body movement both enabled and disabled. Crouch stays
 on its native movement path; third-person tracking remains unchanged.
+Hard-stop coverage keeps native animation displacement nonzero after stick
+release, exercising forward/side/back movement, both games/control schemes and
+stabilization on/off. It checks 60 stopped ticks, immediate restart, deadzone,
+physical room-scale movement, post-animation collision corrections, native
+animation/goal/gravity transitions, large relocations, input/session guards and
+tick-local brake reset. The earlier release test only checked smoothing-history
+reset after native movement had already been set to zero; it did not catch
+native stopping-animation coasting.
 Visibility tests cover both games' underwater entry/exit, surface/wading/dry
 restoration, submerged classic/HD body and hair suppression, tracked-hand pass
 preservation, cutscene and third-person restoration, plus crouch/crawl/turn states, head hiding on/off,
@@ -5269,12 +5289,16 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 999/1000 ms boundary. The deployed underwater/jump DLL
+tests, including the LT 999/1000 ms boundary. The deployed hard-stop DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`489DEDFDBDDD45673A3C953DDE7B0DFD2E6CE54AB3993B1E4EA9974F8C11664A`.
+`2C20D19E03EB59ED5DDEE9ADC106BB8619736692F50C608D334E25EB48828717`.
 The prior installed DLL and INI were backed up under
-`build/before-underwater-jump-20260928-003824/` (the previous crate-impact build).
+`build/before-hard-stop-20260928-193548/`. The installed DLL at backup time was
+the surface-roomscale build; this new release is built from the user's reverted
+source and excludes those swimming changes.
+The previous crate-impact build remains under
+`build/before-underwater-jump-20260928-003824/`.
 The pre-climb Action-icon build is still available under
 `build/before-climb-clearance-20260927-232221/`.
 The previous all-weapon DLL remains as `TombRaiderVR.dll.x` in the game folder.
