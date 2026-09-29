@@ -4551,8 +4551,9 @@ The reference is the first-person implementation in `TombRaider123VR`; this is
 not a claim of identical in-headset smoothness. New ground-motion and head-tracking
 stabilization targets forward/side/back wobble and world swim; the user reports
 movement now feels great, while head-motion and broader level coverage still need
-validation. Subtle stick-turn judder and visible vertical tilt in the
-**head-aim fallback** remain open; the latter is separate from motion-gun aiming.
+validation. Render-rate stick turning now targets the subtle judder report but
+still needs headset confirmation. Visible vertical tilt in the **head-aim
+fallback** remains open; it is separate from motion-gun aiming.
 TR6 uses a different engine and has **no first-person port**; its existing
 stereo and third-person paths are unchanged by this feature.
 
@@ -5151,15 +5152,27 @@ right-stick input, then quit. Preserve `TombRaiderVR.log` before another launch
 overwrites it. Return `FirstPersonDriftLog` to `0` after collecting diagnostics;
 the shipped template leaves it off.
 
-**Subtle stick-turn judder is also unresolved.** Artificial yaw currently
-advances at controller polls using elapsed time; it has not been moved to an
-independent render-frame integrator or given an added smoothing filter. Recent
-local logs reported approximately 59–60 rendered FPS. Poll/render cadence and
-headset refresh/reprojection behavior are candidate explanations for the
-difference from physical turning, not a measured root cause. No stick-judder
-fix has been deployed. Input/render timing must be measured before changing
-this path; a change also needs body-alignment, aiming, room-scale and camera
-handoff regression coverage.
+**Render-rate stick turning (headset validation pending).** Previously,
+artificial yaw advanced only at controller polls. Input now latches the requested
+turn velocity; each first-person scene-camera update integrates it using elapsed
+render time. Turn speed and deadzone settings are unchanged. There is no added
+easing filter or release momentum: centering the stick stops artificial yaw.
+Camera/body following, culling, stereo eyes and tracked guns use the same heading,
+and the physical tracking offset is pivoted once per applied turn. Cutscenes,
+mode changes, recentering and relocations clear pending timing; stale input stops
+after 100 ms and a render interval contributes at most 50 ms of rotation.
+
+Automated tests sweep 15–240 Hz input against 30–144 Hz rendering, including
+jittered polls, release/reversal, stalls and duplicate timestamps. Existing
+body-follow, head-aim/motion-gun and partial-room-scale-pivot checks still pass;
+camera-path tests check intervening render frames, stereo centering and cutscene
+handoff. This addresses a code-level cadence issue, not a measured guarantee that
+all headset judder is removed. Recent local logs show roughly 57–58 rendered FPS;
+headset refresh mismatch/reprojection and frame pacing can still make artificial
+turning look less smooth than physical head rotation. With
+`FirstPersonDriftLog=1`, new `fp-turn:` lines report input polls, view updates,
+turning updates and maximum angular step per roughly one-second window. Compare
+those counters during a steady stick turn when evaluating the new build.
 
 ### First-person Action icon placement
 
@@ -5218,9 +5231,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest hard-stop/shorter-LT run (2026-09-28) passed **262,832 checks**. The rejected
+The latest render-turn run (2026-09-28) passed **317,728 checks**. The rejected
 climb-only implementation and its tests were removed. These are synthetic
-checks, including parameter sweeps, not 262,832 in-game scenarios or
+checks, including parameter sweeps, not 317,728 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5289,14 +5302,14 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 499/500 ms boundary. The deployed hard-stop/shorter-LT DLL
+tests, including the LT 499/500 ms boundary. The deployed render-turn DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`6F0B6E81D6ABD36B355E351B62EC3032BABF50E5F6F575EC17A13BFEE352B116`.
+`486BEF1A48387C0B9D4FAB7D33EF33527AA67C48FC9153885877F719F4AFDC85`.
 The prior installed DLL and INI were backed up under
-`build/before-lt-half-second-20260928-230233/` (the hard-stop build with a
-one-second LT hold). This release retains the hard stop and excludes the reverted
-swimming changes. The older surface-roomscale build remains backed up under
+`build/before-render-turn-20260928-232340/` (the hard-stop/half-second-LT build).
+This release retains both the hard stop and half-second LT hold, and excludes
+the reverted swimming changes. The older surface-roomscale build remains backed up under
 `build/before-hard-stop-20260928-193548/`.
 The previous crate-impact build remains under
 `build/before-underwater-jump-20260928-003824/`.
@@ -5325,7 +5338,8 @@ These are honest gaps, not oversights.
 
 - **TR4/5 first-person motion is still being refined.** Ground-motion/head-tracking
   stabilization has automated coverage but still needs headset confirmation.
-  Subtle stick-turn judder remains under investigation. Horizontal
+  The render-rate stick-turn update needs headset confirmation; it does not
+  raise game FPS or eliminate headset reprojection. Horizontal
   head aiming works, but its fallback visible guns do not tilt vertically with
   gaze; this is distinct from controller-driven motion guns. The
   reported disappearing-room culling case is fixed, though broader headset

@@ -2,6 +2,30 @@
 #include "LocomotionMath.h"
 
 namespace tr::stabilization {
+// Input polls latch a velocity; only rendered views integrate it. No yaw EMA,
+// catch-up motion or release tail. Times are monotonic seconds supplied by the
+// caller so mismatched input/render cadence can be tested deterministically.
+struct RenderTurn {
+    double sampleTime=0, frameTime=0;
+    float rate=0;
+    bool valid=false;
+    void Reset() { *this={}; }
+    void Sample(float next,double now) {
+        if (!std::isfinite(next) || !std::isfinite(now)) { Reset(); return; }
+        if (!valid || rate==0 || rate*next<0 || now<sampleTime || now-sampleTime>0.1)
+            frameTime=now; // Never charge time before a press/reversal/resume.
+        rate=next; sampleTime=now; valid=true;
+    }
+    float Step(double now) {
+        if (!valid) return 0;
+        if (!std::isfinite(now) || now<frameTime) { Reset(); return 0; }
+        const double dt=std::clamp(now-frameTime,0.0,0.05);
+        frameTime=now;
+        if (now-sampleTime>0.1) return 0; // Lost polling must not leave a latched turn.
+        return rate*float(dt);
+    }
+};
+
 // Simulation-step filter, never a render/headset pose filter. New gaits and
 // direction reversals start at native speed; zero motion stops immediately.
 struct RootMotion {

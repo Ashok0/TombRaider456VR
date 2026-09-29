@@ -632,13 +632,18 @@ int main() {
     TurnBodyToHead(itemMemory, 1.0f / 60);
     Check(Near(Wrap(Radians(pos.y_rot) + 179 * kPi / 180), 0), "body turns short way across yaw wrap");
     Head(0); pos.y_rot = 0; g_headingBase = 0;
-    LARGE_INTEGER freq{}; QueryPerformanceFrequency(&freq); QueryPerformanceCounter(&g_inputTime);
-    g_inputTime.QuadPart -= freq.QuadPart / 60;
+    const auto renderStickFrame=[]() {
+        g_renderTurn.frameTime=TurnTime()-1.0/60;
+        AdvanceStickTurn(TurnTime());
+    };
     float lx = 0, ly = 0, rx = 1;
     FirstPersonInput(lx, ly, rx, false);
-    Check(rx == 0 && g_headingBase > 0, "stick updates FP heading and consumes native camera orbit");
+    Check(rx==0 && g_headingBase==0,"input latches turn intent without stepping the camera at poll rate");
+    renderStickFrame();
+    Check(g_headingBase>0,"render update advances shared first-person heading");
     TurnBodyToHead(itemMemory, 1.0f / 60);
     Check(pos.y_rot > 0, "body follows stick heading");
+    g_renderTurn.Reset();
 
     // Test the real AimWeapon detour with a native stub that first writes
     // different values. Both arm paths must receive relative HMD yaw/pitch.
@@ -1056,14 +1061,14 @@ int main() {
     physicalPose(0.4f); VR().RecenterFirstPersonHead();
     physicalPose(1.1f, 0.08f, 0.12f);
     g_headingBase = 0.3f;
-    QueryPerformanceCounter(&g_inputTime);
-    g_inputTime.QuadPart -= freq.QuadPart / 60;
     lx = ly = 0; rx = 1;
     FirstPersonInput(lx, ly, rx, false);
+    renderStickFrame();
     const float turn = Wrap(g_headingBase - 0.3f);
-    Check(turn > 0 && rx == 0, "real input applies artificial turn");
+    Check(turn > 0 && rx == 0, "real input plus render update applies artificial turn");
     checkViews(std::cos(turn) * 0.08f - std::sin(turn) * 0.12f,
                std::sin(turn) * 0.08f + std::cos(turn) * 0.12f, 0);
+    g_renderTurn.Reset();
     config.firstPersonRoomscaleNeckMetres = 0;
     physicalPose(0); VR().RecenterFirstPersonHead(); physicalPose(kPi / 2);
     checkViews(0.15f, -0.15f, 0);
@@ -1136,12 +1141,13 @@ int main() {
             Check(pos.x_pos == 3*d.scale && pos.z_pos == 5*d.scale && pos.y_pos == 7,
                   "directional root scaling remains intact in both games");
             const float oldBase = g_headingBase;
-            QueryPerformanceCounter(&g_inputTime); g_inputTime.QuadPart -= freq.QuadPart / 60;
             x=z=0; r=1; FirstPersonInput(x, z, r, false);
+            renderStickFrame();
             Check(r == 0 && g_headingBase > oldBase,
                   "stick turn consumes native camera orbit in both games");
             TurnBodyToHead(itemMemory, 1.0f / 60);
             Check(Radians(pos.y_rot) > 1.0f, "body follows stick turn in both games");
+            g_renderTurn.Reset();
         }
         nativeMoves = false;
         for (collisionMode = 0; collisionMode <= 10; ++collisionMode) {
@@ -1248,8 +1254,8 @@ int main() {
                   "interpolation consumes accepted drag in tracking coordinates");
             const int callsBeforeTurn = collisionCalls;
             float x=0, z=0, r=1;
-            QueryPerformanceCounter(&g_inputTime); g_inputTime.QuadPart -= freq.QuadPart / 60;
             FirstPersonInput(x, z, r, false);
+            renderStickFrame();
             Detour_LaraAboveWater(itemMemory, nullptr);
             Check(collisionCalls == callsBeforeTurn,
                   "stick turn with partly displayed room-scale drag cannot repeat the physical step");
@@ -1907,6 +1913,84 @@ int main() {
         Check(!g_hardStopRoot,"camera/session reset clears any pending hard stop");
         goal=0; flags=0; resetRoomscale(); ResetMovementStabilization();
         config.firstPersonMovementStabilization=true;
+    }
+    // Artificial yaw must advance at view cadence, not controller-poll cadence.
+    for (int pollHz:{15,30,60,120,240}) for (int viewHz:{30,60,72,80,90,120,144})
+        for (float rate:{.25f,1.5f,-2.f}) {
+            stabilization::RenderTurn turn;
+            turn.Sample(rate,0);
+            int sample=1; double total=0;
+            for (int frame=1;frame<=viewHz*3;++frame) {
+                const double now=double(frame)/viewHz;
+                double next=double(sample)/pollHz+(sample%2 ? .001 : -.001);
+                while (next<=now) {
+                    turn.Sample(rate,next); ++sample;
+                    next=double(sample)/pollHz+(sample%2 ? .001 : -.001);
+                }
+                const float step=turn.Step(now); total+=step;
+                Check(std::fabs(step-rate/viewHz)<.00001,
+                      "held stick produces an equal yaw step every view despite slower/faster/jittered controller polls");
+                Check(turn.Step(now)==0,"duplicate view timestamp cannot double-integrate turn");
+            }
+            Check(std::fabs(total-rate*3)<.0001,"turn speed is independent of controller/render cadence");
+            turn.Sample(0,3.001);
+            Check(turn.Step(3.01)==0 && turn.Step(3.03)==0,"stick release stops immediately without yaw smoothing tail");
+            turn.Sample(-rate,3.04);
+            Check(std::fabs(turn.Step(3.05)+rate*.01f)<.00001,"reversal uses only time after the new direction was sampled");
+            Check(turn.Step(4)==0,"missing input polls cannot leave a stale stick turn latched");
+            turn.Sample(rate,10);
+            Check(std::fabs(turn.Step(10.01)-rate*.01f)<.00001,"fresh input after a stall has no accumulated catch-up spin");
+            turn.Reset(); Check(turn.Step(11)==0,"mode reset discards both turn velocity and clock");
+        }
+    {
+        stabilization::RenderTurn turn;
+        turn.Sample(1,1); turn.Sample(1,1.09);
+        Check(Near(turn.Step(1.09),.05f),"long render interval caps yaw rather than making a large view jump");
+        Check(turn.Step(.5)==0 && !turn.valid,"backward clock fails closed");
+        turn.Sample(std::numeric_limits<float>::quiet_NaN(),1);
+        Check(!turn.valid,"invalid stick velocity cannot poison heading");
+    }
+    for (int which:{0,1}) {
+        game=dll.game=which; resetRoomscale(); Head(0); FirstPersonRecenter();
+        ResetMovementStabilization(); config.firstPersonMovementStabilization=true;
+        config.firstPersonRoomscaleMove=false; collisionMode=0; fraction=256; gaitSway={};
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+        UpdateSceneCamera(camera);
+        VR().m_rawHeadPose.m[0][3]+=.12f;
+        VR().m_rawHeadPose.m[2][3]-=.08f;
+        float x=0,z=0,r=1;
+        const float before=g_headingBase;
+        for (int poll=0;poll<5;++poll) { r=1; FirstPersonInput(x,z,r,false); }
+        Check(g_headingBase==before && r==0,"multiple controller polls latch intent without stepping yaw");
+        for (int view=0;view<3;++view) {
+            const float previous=g_headingBase;
+            g_renderTurn.frameTime=TurnTime()-1.0/90;
+            UpdateSceneCamera(camera);
+            Check(g_headingBase>previous && camera.y_rot==Angle(g_headingBase) &&
+                  g_scenePose.y_rot==camera.y_rot && pos.y_rot>=0,
+                  "render frames between input polls advance one heading shared by camera, scene and body following");
+            float right,forward; VR().FirstPersonViewOffset(right,forward);
+            const auto world=locomotion::Rotate({right,forward},g_headingBase);
+            Check(std::fabs(world.x-.12f)<.0001f && std::fabs(world.z-.08f)<.0001f,
+                  "each render-rate turn pivots physical lean once without moving its world offset");
+            const auto head=InvertRigid(VR().HeadView());
+            const auto left=InvertRigid(VR().EyeView(Eye::Left));
+            const auto rightEye=InvertRigid(VR().EyeView(Eye::Right));
+            for (int axis=0;axis<3;++axis)
+                Check(Near((left.r[axis][3]+rightEye.r[axis][3])*.5f,head.r[axis][3]),
+                      "render-rate stick turning keeps stereo eyes centred on the same tracked head");
+        }
+        r=0; FirstPersonInput(x,z,r,false); const float released=g_headingBase;
+        g_renderTurn.frameTime=TurnTime()-1.0/90; UpdateSceneCamera(camera);
+        Check(g_headingBase==released,"production camera does not coast after stick release");
+        r=1; FirstPersonInput(x,z,r,false); cutseq=1; UpdateSceneCamera(camera);
+        Check(!g_active && !g_renderTurn.valid,"cutscene suspension clears pending artificial yaw");
+        cutseq=0; UpdateSceneCamera(camera); const float resumed=g_headingBase;
+        g_renderTurn.frameTime=TurnTime()-1.0/60; UpdateSceneCamera(camera);
+        Check(g_headingBase==resumed,"return from cutscene cannot replay old turn input");
+        r=1; FirstPersonInput(x,z,r,false); FirstPersonRecenter();
+        Check(!g_renderTurn.valid,"recenter preserves heading but drops pending turn timing");
+        resetRoomscale(); ResetMovementStabilization();
     }
     // World stability: vary HMD orientation and real translation independently.
     // Test both render-only and native room-scale simulation/interpolation;

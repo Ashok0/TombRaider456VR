@@ -117,7 +117,9 @@ bool g_active = false;
 bool g_haveHeading = false;
 float g_headingBase = 0.0f;
 float g_lastHeadWorld = 0.0f;
-LARGE_INTEGER g_inputTime{};
+stabilization::RenderTurn g_renderTurn;
+struct TurnTrace { double start=0; unsigned polls=0,views=0,moved=0; float maxStep=0; };
+TurnTrace g_turnTrace;
 LARGE_INTEGER g_bodyTime{};
 uint8_t* g_headingItem = nullptr;
 locomotion::Vec g_previousBody{};
@@ -135,6 +137,8 @@ stabilization::RootMotion g_rootMotion;
 stabilization::GroundEye g_groundEye;
 
 void ResetMovementStabilization() {
+    g_renderTurn.Reset();
+    g_turnTrace={};
     g_stabilizeRoot=false;
     g_hardStopRoot=false;
     g_rootMotion.Reset();
@@ -279,6 +283,31 @@ float Elapsed(LARGE_INTEGER& last) {
         : 0.0f;
     last = now;
     return std::clamp(seconds, 0.0f, 0.05f);
+}
+
+double TurnTime() {
+    LARGE_INTEGER now{},freq{};
+    QueryPerformanceCounter(&now); QueryPerformanceFrequency(&freq);
+    return freq.QuadPart ? double(now.QuadPart)/double(freq.QuadPart) : 0;
+}
+
+void AdvanceStickTurn(double now) {
+    const float turn=g_renderTurn.Step(now);
+    if (turn!=0) {
+        g_headingBase=Wrap(g_headingBase+turn);
+        VR().PivotHeadFloorOffset(turn);
+    }
+    if (!Cfg().firstPersonDriftLog) { g_turnTrace={}; return; }
+    auto& trace=g_turnTrace;
+    if (!trace.start) trace.start=now;
+    ++trace.views;
+    if (turn!=0) ++trace.moved;
+    trace.maxStep=std::max(trace.maxStep,std::fabs(turn)*180/kPi);
+    if (now-trace.start>=1) {
+        if (trace.moved) LogF("fp-turn: %.2fs polls=%u views=%u turned=%u max-step=%.3fdeg",
+            now-trace.start,trace.polls,trace.views,trace.moved,trace.maxStep);
+        trace={}; trace.start=now;
+    }
 }
 
 bool IsSceneCall(const void* returnAddress) {
@@ -1449,10 +1478,13 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         g_headingItem = item;
         g_haveManualInput = false;
         g_dragPrevious = g_dragCurrent = g_dragShown = {};
-        g_inputTime = g_bodyTime = {};
+        g_bodyTime = {};
         VR().RecenterFirstPersonHead();
     }
     g_previousBody = body;
+    // One shared heading for this rendered camera, body following, culling,
+    // eyes and tracked guns. Controller polling never advances it separately.
+    AdvanceStickTurn(TurnTime());
     if (!CanTurnBody(item) && !Cfg().firstPersonMovementStabilization) {
         // Legacy animated-camera compensation only. With a stable/raw-tracked
         // view, consuming neck-corrected displacement while hanging invents a
@@ -1774,7 +1806,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         g_haveManualInput = false;
         g_directionalRootScale = 1;
         ResetMovementStabilization();
-        g_inputTime = g_bodyTime = {};
+        g_bodyTime = {};
         g_dragPrevious = g_dragCurrent = g_dragShown = {};
         ++g_skipped;
         g_cameraMotionTrace = {};
@@ -2038,7 +2070,7 @@ void Remove() {
     g_dragPrevious = g_dragCurrent = g_dragShown = {};
     g_haveManualInput = false;
     g_directionalRootScale = 1;
-    g_inputTime = g_bodyTime = {};
+    g_bodyTime = {};
     g_boundDll = nullptr;
     g_boundBase = 0;
 }
@@ -2122,6 +2154,8 @@ void FirstPersonUpdate() {
 }
 
 void FirstPersonRecenter() {
+    g_renderTurn.Reset();
+    g_turnTrace={};
     g_rootMotion.Reset();
     g_cameraMotionTrace = {};
     VR().RecenterFirstPersonHead();
@@ -2144,7 +2178,7 @@ void FirstPersonToggle() {
     g_headingItem = nullptr;
     g_dragPrevious = g_dragCurrent = g_dragShown = {};
     g_shifted = g_jumpPressed = false;
-    g_inputTime = g_bodyTime = {};
+    g_bodyTime = {};
     g_loggedFirst = false;
     g_haveManualInput = false;
     g_directionalRootScale = 1;
@@ -2192,24 +2226,23 @@ void FirstPersonInput(float& leftX, float& leftY, float& rightX, bool shifted,
     g_shifted = shifted;
     g_jumpPressed = jumpPressed;
     if (!g_active || !g_haveHeading || !Gate()) {
-        g_inputTime = {};
+        g_renderTurn.Reset();
         return;
     }
     auto* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
-    if (!item || item != g_headingItem) return;
+    if (!item || item != g_headingItem) { g_renderTurn.Reset(); return; }
     const float dead =
         std::clamp(Cfg().firstPersonTurnDeadzone, 0.0f, 0.95f);
     const float magnitude = std::min(1.0f, std::fabs(rightX));
+    float turnRate=0;
     if (magnitude > dead) {
         const float strength = (magnitude - dead) / (1.0f - dead);
-        const float turn = std::copysign(strength, rightX) *
+        turnRate = std::copysign(strength, rightX) *
             std::clamp(Cfg().firstPersonTurnDegreesPerSecond, 0.0f, 720.0f) *
-            (kPi / 180.0f) * Elapsed(g_inputTime);
-        g_headingBase = Wrap(g_headingBase + turn);
-        VR().PivotHeadFloorOffset(turn);
-    } else {
-        Elapsed(g_inputTime);
+            (kPi / 180.0f);
     }
+    g_renderTurn.Sample(turnRate,TurnTime());
+    if (Cfg().firstPersonDriftLog) ++g_turnTrace.polls;
     g_lastHeadWorld = Wrap(g_headingBase + VR().HeadYawRadians());
     const int state = *reinterpret_cast<int16_t*>(item + off::item_anim_state);
     const bool jump = IsJumpSteeringState(state) && LaraWaterStatus() == 0 &&
