@@ -1205,6 +1205,11 @@ void __cdecl Detour_AimWeapon(void* weapon, uint8_t* arm) {
     if (item != g_headingItem) return;
     uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
     if (arm != lara + off::lara_left_arm && arm != lara + off::lara_right_arm) return;
+    // TR5 RICH3 grapple animation state 2 is a terminal raised loop with no
+    // holster transition. AnimateShotgun enters it when arm.lock is forced,
+    // even with no fire input. Preserve the engine's lock for this weapon;
+    // controller rendering/optic shots do not require a persistent aim lock.
+    const bool preserveNativeLock=g_boundDll->game==1 && CurrentMotionWeapon()==6;
     // Native rifles use left_arm as their shared aim state; the actual grip
     // and trigger belong to the right controller, including the revolver.
     const int hand = !motiongun::DualWeapon(CurrentMotionWeapon()) ? 1 :
@@ -1212,7 +1217,7 @@ void __cdecl Detour_AimWeapon(void* weapon, uint8_t* arm) {
     GunPose gun{};
     if (BuildGunPose(hand, gun)) {
         const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
-        *reinterpret_cast<int16_t*>(arm + off::arm_lock) = 1;
+        if (!preserveNativeLock) *reinterpret_cast<int16_t*>(arm + off::arm_lock) = 1;
         *reinterpret_cast<int16_t*>(arm + off::arm_y_rot) =
             Angle(Radians(gun.yaw) - Radians(pos.y_rot));
         *reinterpret_cast<int16_t*>(arm + off::arm_x_rot) = gun.pitch;
@@ -1231,7 +1236,7 @@ void __cdecl Detour_AimWeapon(void* weapon, uint8_t* arm) {
     // Set both arms: the revolver path aims the left arm but fires the right.
     for (const uint32_t offset : { off::lara_left_arm, off::lara_right_arm }) {
         uint8_t* a = lara + offset;
-        *reinterpret_cast<int16_t*>(a + off::arm_lock) = 1;
+        if (!preserveNativeLock) *reinterpret_cast<int16_t*>(a + off::arm_lock) = 1;
         *reinterpret_cast<int16_t*>(a + off::arm_y_rot) = yaw;
         *reinterpret_cast<int16_t*>(a + off::arm_x_rot) = pitch;
         *reinterpret_cast<int16_t*>(a + off::arm_z_rot) = 0;
@@ -2089,7 +2094,16 @@ void UpdateGunTriggers(uint8_t& left, uint8_t& right, bool enabled, uint64_t now
     int weapon=enabled ? CurrentMotionWeapon() : 0;
     if (enabled && !weapon) weapon=*Ptr<int16_t>(g_boundDll->lara+8);
     if (weapon!=g_triggerWeapon) {
-        g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=weapon;
+        if (enabled && MotionWeaponSupported(g_triggerWeapon) && MotionWeaponSupported(weapon)) {
+            // Native drawing/inventory may change the selected gun during an
+            // LT gesture. Retain draw intent and timing, but never transfer a
+            // queued shot or a release-to-fire tap to the newly selected gun.
+            g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=false;
+            g_gunTriggers.leftCanTap=false;
+        } else {
+            g_gunTriggers.Reset(); g_gunEquip.Reset();
+        }
+        g_triggerWeapon=weapon;
     }
     g_gunTriggers.Update(enabled,enabled && MotionReady(),left>30,right>30,now);
     if (!motiongun::DualWeapon(weapon)) g_gunTriggers.pending[0]=false;
@@ -2101,8 +2115,10 @@ void UpdateGunTriggers(uint8_t& left, uint8_t& right, bool enabled, uint64_t now
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool equipRequest=g_gunTriggers.Equip(now);
     if (equipRequest && !g_gunEquip.requestHeld)
-        LogF("firstperson: Touch equip gesture native=%s status=%d",
-            holdMode ? "hold" : "toggle",status);
+        LogF("firstperson: Touch equip gesture native=%s status=%d gun=%d requested=%d last=%d intent=%d",
+            holdMode ? "hold" : "toggle",status,CurrentMotionWeapon(),
+            *Ptr<int16_t>(g_boundDll->lara+6),*Ptr<int16_t>(g_boundDll->lara+8),
+            int(g_gunEquip.desiredArmed));
     left=g_gunEquip.Update(holdMode,status,equipRequest) ? 255 : 0;
     // RT also owns native grab/Action while the guns are away or Lara's hands
     // are busy. Keep its analog value AND hold duration in those states. LT's

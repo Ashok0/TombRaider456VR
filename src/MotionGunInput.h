@@ -67,7 +67,10 @@ struct EquipInput {
             desiredArmed=gunStatus==2 || gunStatus==4; // drawing / ready
         }
         if (request && !requestHeld) {
-            desiredArmed=!desiredArmed;
+            // Inventory/native weapon transitions can leave the cached intent
+            // out of sync. A fresh gesture follows settled native state; keep
+            // toggling intent only while a draw/holster/action is in progress.
+            desiredArmed=gunStatus==0 ? true : gunStatus==4 ? false : !desiredArmed;
             requestStatus=gunStatus;
             acknowledged=false;
         }

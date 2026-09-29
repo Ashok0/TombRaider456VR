@@ -472,7 +472,7 @@ void GamepadUpdate() {
                  : "",
              Cfg().gamepadMenuUsesBack ? "BACK" : "START",
              Cfg().dpadShift ? " dpad=R3+Lstick" : "");
-        Log("pad: FP motion pistols/Uzis: tap LT=left shot on release, tap RT=right shot; hold LT 1.0s=draw/holster once");
+        Log("pad: FP motion guns: tap LT=left pistol/Uzi on release, tap RT=right/single shot; hold LT 0.5s=draw/holster once");
     }
 }
 

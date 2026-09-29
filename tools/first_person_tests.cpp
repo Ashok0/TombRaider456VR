@@ -194,8 +194,9 @@ void __cdecl FakeJoint(uint8_t* item, tr::PHD_VECTOR* v, int joint, int frac) {
     }
     jointCalled = true;
 }
+int16_t nativeAimLock=0;
 void __cdecl FakeAim(void*, uint8_t* arm) {
-    *reinterpret_cast<int16_t*>(arm + 12) = 0;
+    *reinterpret_cast<int16_t*>(arm + 12) = nativeAimLock;
     *reinterpret_cast<int16_t*>(arm + 14) = 123;
     *reinterpret_cast<int16_t*>(arm + 16) = 456;
 }
@@ -780,6 +781,28 @@ int main() {
         const auto savedFloor=dll.getFloor;
         dll.getFloor=rva(reinterpret_cast<void*>(&FakeProjectileFloor));
         const int savedGame=dll.game;
+        // RICH3's grapple raised animation loops with no state-change exits.
+        // Forcing arm.lock sends native AnimateShotgun there without firing.
+        // Both tracked and head-aim paths must preserve its native lock.
+        for (int which:{0,1}) for (int weapon=1;weapon<=6;++weapon)
+        for (bool tracked:{false,true}) for (int16_t lock:{int16_t(0),int16_t(1)}) {
+            dll.game=which; gun=int16_t(weapon); nativeAimLock=lock;
+            config.firstPersonMotionGuns=tracked; config.firstPersonHeadAim=true;
+            *reinterpret_cast<int16_t*>(laraMemory+off::lara_right_arm+off::arm_lock)=lock;
+            GunPose controller{};
+            if (tracked) Check(BuildGunPose(1,controller),"lock regression retains a valid tracked gun pose");
+            Detour_AimWeapon(nullptr,laraMemory+off::lara_left_arm);
+            Check(*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+off::arm_lock)==
+                  (which==1 && weapon==6 ? lock : 1),
+                  "TR5 grapple keeps native lock; all other guns retain forced FP aim lock");
+            if (!tracked && which==1 && weapon==6)
+                Check(*reinterpret_cast<int16_t*>(laraMemory+off::lara_right_arm+off::arm_lock)==lock,
+                      "grapple head-aim fallback cannot force the other arm lock");
+            if (tracked && weapon>=4)
+                Check(*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+off::arm_x_rot)==controller.pitch,
+                      "preserving native lock does not revert rifle/grapple controller pitch to head aim");
+        }
+        nativeAimLock=0; dll.game=savedGame; config.firstPersonMotionGuns=true;
         // Exercise the production caller dispatcher, not just FireWeaponForHand.
         // All four native binaries use ID 2 for revolver/Desert Eagle, 3 for Uzis.
         for (const auto& native:kMotionDlls) {
@@ -930,6 +953,75 @@ int main() {
             lt=255; rt=200; UpdateGunTriggers(lt,rt,true,510);
             Check(lt==255 && rt==200,"0.5-second equip gesture coexists with native held RT in either draw style");
         }
+        // A supported gun-ID handoff during drawing must not cancel the LT
+        // gesture/latch. In particular, reproduce grapple -> holstered -> gun.
+        auto& lastGun=*reinterpret_cast<int16_t*>(laraMemory+8);
+        const auto savedLastGun=lastGun;
+        for (int which:{0,1}) for (int target=1;target<=6;++target)
+        for (uint8_t style:{uint8_t(0),uint8_t(1)}) {
+            dll.game=which; appMemory[0x9e4]=1; appMemory[0x9ec]=style;
+            gun=lastGun=6; status=0;
+            g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=6;
+            lt=rt=0; UpdateGunTriggers(lt,rt,true,0);
+            lt=255; rt=0; UpdateGunTriggers(lt,rt,true,10);
+            lt=255; rt=0; UpdateGunTriggers(lt,rt,true,510);
+            Check(lt==255,"grapple holstered state accepts a fresh half-second equip request");
+            gun=lastGun=int16_t(target);
+            g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
+            lt=255; rt=0; UpdateGunTriggers(lt,rt,true,520);
+            Check(lt==255,"supported weapon handoff before draw acknowledgment must retain native LT request");
+            Check(!g_gunTriggers.WantsShot(),"equip handoff never carries queued shots to the new gun");
+            status=2; lt=255; rt=0; UpdateGunTriggers(lt,rt,true,530);
+            Check(lt==(style==0 ? 255 : 0),"hold style stays armed and toggle style ends its acknowledged pulse");
+            status=4; lt=rt=0; UpdateGunTriggers(lt,rt,true,800);
+            Check(lt==(style==0 ? 255 : 0) && !g_gunTriggers.WantsShot(),
+                  "releasing draw gesture after grapple handoff cannot immediately holster or fire");
+        }
+        lastGun=savedLastGun;
+        // Full equip -> holster -> re-equip cycle without firing, including
+        // a temporarily empty current ID and either native control scheme.
+        for (int which:{0,1}) for (int scheme:{0,1})
+        for (uint8_t style:{uint8_t(0),uint8_t(1)}) {
+            dll.game=which; appMemory[0x9e4]=uint8_t(1 | (scheme<<1));
+            appMemory[0x9ec+scheme]=style;
+            gun=lastGun=6; status=0;
+            g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=6;
+            auto poll=[&](uint64_t now,bool held) {
+                lt=held ? 255 : 0; rt=0;
+                Check(MotionTriggerMode(),"grapple equip cycle retains FP trigger routing");
+                UpdateGunTriggers(lt,rt,MotionTriggerMode(),now);
+                Check(!g_gunTriggers.WantsShot(),"grapple equip cycle never needs or queues a shot");
+            };
+            poll(0,false); poll(10,true); poll(510,true);
+            Check(lt==255,"first grapple draw gesture reaches native input");
+            status=2; poll(530,true);
+            status=4; poll(800,false);
+            Check(lt==(style==0 ? 255 : 0),"grapple stays drawn after release");
+            poll(1000,true); poll(1500,true);
+            Check(lt==(style==0 ? 0 : 255),"next grapple gesture requests holster");
+            status=3; poll(1520,true);
+            status=0; gun=0; poll(1800,false);
+            Check(lt==0,"completed grapple holster stays holstered");
+            poll(2000,true); poll(2500,true);
+            Check(lt==255,"LT re-equips after grapple holster without firing");
+            gun=6; status=2; poll(2520,true);
+            status=4; poll(2800,false);
+            Check(lt==(style==0 ? 255 : 0),"redrawn grapple stays armed after trigger release");
+        }
+        // A ready-weapon handoff clears old shots and a pending LT tap without
+        // resetting held edges (which would otherwise create an RT shot).
+        gun=6; status=4; appMemory[0x9e4]=1; appMemory[0x9ec]=0;
+        g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=6;
+        lt=rt=0; UpdateGunTriggers(lt,rt,true,3000);
+        lt=rt=255; UpdateGunTriggers(lt,rt,true,3010);
+        g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
+        gun=1; lt=rt=255; UpdateGunTriggers(lt,rt,true,3020);
+        Check(lt==255 && rt==0 && !g_gunTriggers.WantsShot(),
+              "ready gun handoff maintains equip without inheriting either shot");
+        lt=rt=0; UpdateGunTriggers(lt,rt,true,3030);
+        Check(!g_gunTriggers.WantsShot(),"old LT tap cannot fire new weapon on release");
+        lastGun=savedLastGun;
+        appMemory[0x9ed]=0;
         lt=180; rt=210; UpdateGunTriggers(lt,rt,false,2000);
         Check(lt==180 && rt==210 && !g_gunTriggers.active,
               "third-person/disabled/chord-owned trigger input is untouched");

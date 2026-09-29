@@ -849,6 +849,11 @@ static void TestMotionGunEquipStyles() {
     Check(toggle.Update(false,0,true),"toggle style begins draw request");
     Check(!toggle.Update(false,2,true),"toggle request ends as native draw starts");
     Check(!toggle.Update(false,0,true),"acknowledged request never repeats if native status changes back");
+    EquipInput stale;
+    Check(stale.Update(true,4,false),"fixture begins with armed hold latch");
+    Check(stale.Update(true,0,true),"fresh LT hold draws from native holstered status even if armed latch is stale");
+    stale.Reset(); stale.Update(true,0,false);
+    Check(!stale.Update(true,4,true),"fresh LT hold holsters native ready guns even if holstered latch is stale");
 }
 
 static void TestMotionGunEnemyAim() {

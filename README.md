@@ -5045,6 +5045,29 @@ gesture; in **toggle-to-draw**, it sends a pulse that ends when the native
 weapon state acknowledges it. This fixes guns immediately holstering after
 the earlier 150 ms pulse ended in hold mode, without changing game settings.
 Both control schemes (classic/modern) use their own native draw setting.
+The grapple-equip input correction (2026-09-29) preserves the LT gesture and
+draw/holster intent when native selection changes between supported guns,
+while clearing queued shots and release-to-fire taps from the old weapon.
+A fresh long hold uses Lara's settled native holstered/ready state instead of
+blindly inverting a potentially stale armed flag. These address two reproduced
+input-state failures, but the user's retest confirmed they did NOT fix the
+grapple lockout. Firing the grapple
+is not required by the new equip-cycle tests. The 0.5-second threshold, aim,
+ammo/ownership and third-person controls are unchanged. Equip diagnostics now
+record current/requested/last weapon IDs and the pre-gesture armed intent.
+The subsequent grapple animation correction (2026-09-29) addresses the observed
+failure: the log showed weapon 6 stuck in native holstering status 3 while
+LT input and requests for other guns continued to arrive. In `RICH3.PDP`
+(Red Alert), grapple animation 476/state 2 loops with no state-change exits.
+The FP aim hook forced `arm.lock=1`, causing native `AnimateShotgun` to enter
+that raised state without firing. The TR5 grapple now preserves native aim
+lock in both controller and head-aim paths; other guns retain their existing
+lock behavior. Controller pose/pitch, muzzle/optic shots and calibration remain
+unchanged. `tools/verify_grapple_animation.py <game-directory>` reads the actual
+installed animation tables: forced lock reproduces the trap, while native
+unlocked aiming permits holster completion. This is an offline reproduction;
+headset confirmation is still required. Restart and test from before the stuck
+grapple state; the fix prevents entry, not repairs to already-stuck saves.
 Requests wait for the native firing cycle and are canceled
 on loss of readiness, switching weapons or leaving the mode. Native ammo, spread, damage and firing
 effects remain in use, with unrequested hands blocked before native firing.
@@ -5238,9 +5261,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest swimming-camera run (2026-09-29) passed **322,372 checks**. The rejected
+The latest grapple-animation run (2026-09-29) passed **322,884 checks**. The rejected
 climb-only implementation and its tests were removed. These are synthetic
-checks, including parameter sweeps, not 322,372 in-game scenarios or
+checks, including parameter sweeps, not 322,884 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5282,7 +5305,16 @@ an exaggerated high/sideways pull-up pose. Native interaction height, physical
 neutral, constrained body transforms and FP-exit resets are checked separately.
 Trigger tests cover both games/all six weapons, non-ready gun states, jump/hang/
 climb states, initial RT press, analog holds/releases, ready/busy transitions,
-independent taps and LT equip in both native draw styles. Startup-centering tests
+independent taps and LT equip in both native draw styles. Grapple coverage adds
+non-firing equip/holster/re-equip cycles in both games/control schemes/draw
+styles, current-ID-zero fallback, all six supported weapon handoffs during a
+draw request, and clearing old shots/taps without losing held trigger edges.
+The general self-tests reproduce and guard against stale armed/holstered intent.
+Aim-hook tests now check native grapple lock preservation in both aim modes,
+retained controller pitch and unchanged forced aim lock for the other weapons.
+The separate installed-level animation test reproduces the non-firing lockout
+that the earlier trigger-only fixtures missed.
+Startup-centering tests
 now require a zero initial eye-center offset in both TR4/5, with world-locked and
 camera-relative settings. They cover missing cameras, title screens, invalid
 tracking, delayed neutral capture, camera yaw/pitch/translation, stereo IPD,
@@ -5312,13 +5344,18 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 499/500 ms boundary. The deployed swimming-camera DLL
+tests, including the LT 499/500 ms boundary. The deployed grapple-animation DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`85BC8ECF6212DE3651C9ED6FD2A5B1B08832477833AC3A7D2ADD728A6810E645`.
-The prior installed DLL and INI were backed up under
-`build/before-swim-third-person-20260929-000013/` (the render-rate turning build).
-This release retains both the hard stop and half-second LT hold, and excludes
+`FD85B939BA79AABAB657617BA544BC4A84F9296A62DB0F9E9F7133115F8A5804`.
+The prior installed DLL, INI and failing runtime log were backed up under
+`build/before-grapple-lock-20260929-003402/` (the unsuccessful equip-state fix).
+The swimming-camera build remains backed up under
+`build/before-grapple-equip-20260929-001819/`.
+The earlier render-rate turning build is backed up under
+`build/before-swim-third-person-20260929-000013/`.
+This release retains swimming's third-person fallback, render-rate turning,
+the hard stop and half-second LT hold, and excludes
 the reverted swimming body-follow changes. The older surface-roomscale build remains backed up under
 `build/before-hard-stop-20260928-193548/`.
 The previous crate-impact build remains under
