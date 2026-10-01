@@ -1,0 +1,261 @@
+TombRaiderVR: starting
+config: mode=stereo tracking=rotation+position origin=seated units/m=423.0 ss=1.00 flipProjY=1 flipViewY=1 dup=1 flatHud=1
+config: culling=head frustum margin=8.0deg depth<=16 portals<=4096 far=0 widen=1 objects=1  sky=infinity
+config: first person TR4/TR5 joint=14 anchor=(0,-32,144), translation=on head=hidden move-with-head=on turn=120deg/s stabilization=on
+config: first person body-follow=1 deadzone=0.0 turn=4.0deg/60Hz head-aim=1; Y+LT=view, Y+RT=graphics (including menus)
+config: dynamic-bone measurement ON (torso joint 7, report every 900 frames) -- TR4/TR5 only
+config: dynamic-bone DEBUG DISPLACEMENT ON at 1.0x -- joint 7 is TORSO, so the whole upper body moves, not just the chest. This is a debug view, not the feature.
+engine: bound to 00007FF618A90000 (reference base 0000000140000000, slide +140689583702016)
+engine: build identified as retail / community HD pack v1.0.2 (2025-09-10)
+hook[vid_setPass]: 00007FF618A9C770 -> 00007FFC353875A0 (stole 10, tramp 00007FF62748000E)
+hook[validate_draw]: 00007FF618AA1FF0 -> 00007FFC35387640 (stole 6, tramp 00007FF62749000E)
+hook[ogl_draw]: 00007FF618AA2EF0 -> 00007FFC3538A180 (stole 5, tramp 00007FF6274A000E)
+hook[ogl_drawVB]: 00007FF618AA3010 -> 00007FFC3538A1A0 (stole 5, tramp 00007FF6274B000E)
+hook[ogl_present]: 00007FF618AA2920 -> 00007FFC3538C7D0 (stole 6, tramp 00007FF6274C000E)
+hook[fmvShow]: 00007FF618AA1680 -> 00007FFC3538C460 (stole 7, tramp 00007FF6274D000E)
+hooks: all six installed
+hook[shader_init]: 00007FF618AA1B50 -> 00007FFC35398B80 (stole 7, tramp 00007FF6274E000E)
+TombRaiderVR: hooks installed; OpenVR will be brought up on the first frame
+gl: loader ready (shader api ready)
+boneskin: 15 skin program(s) matched, 15 patched, 0 fell back to the original
+pad: Touch controllers presented as an Xbox pad (_XInputGetState 00007FF6191249F8 -> 00007FFC3539CB10, real 00007FFC5DBD4EE0)
+pad: move=Lstick look=Rstick(yaw only; hold RT+RB for pitch) jump=A(R lower) roll=B(R upper) action=Y(L upper)/LB+RB(both grips) system=BACK(L lower) walk=LS+RB(R grip) sneak=RB+Y duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=L3+R3 dpad=R3+Lstick
+pad: FP motion guns: tap LT=left pistol/Uzi on release, tap RT=right/single shot; hold LT 0.5s=draw/holster once
+gamedll: bound to tomb5.dll (Tomb Raider V (retail), build 0x68C12FE9, game=1) at 00007FFB9B2E0000
+gun calibration: Ctrl+F1..F6 position, Ctrl+Shift+F1..F6 angles; F7 save/restore
+firstperson: startup is third person; Y+LT switches views
+hook[LaraAboveWater]: 00007FFB9B32B2F0 -> 00007FFC353A6C00 (stole 5, tramp 00007FFB9BB4000E)
+hook[AnimateLara]: 00007FFB9B33F9B0 -> 00007FFC353A6900 (stole 6, tramp 00007FFB9BB5000E)
+hook[AimWeapon]: 00007FFB9B33C430 -> 00007FFC353A5E00 (stole 5, tramp 00007FFB9BB6000E)
+hook[GetJoints]: 00007FFB9B395A00 -> 00007FFC353A3AB0 (stole 5, tramp 00007FFB9BB7000E)
+hook[FireWeapon]: 00007FFB9B33C4E0 -> 00007FFC353A5800 (stole 5, tramp 00007FFB9BB8000E)
+hook[PistolHandler]: 00007FFB9B3383F0 -> 00007FFC353A5D10 (stole 5, tramp 00007FFB9BB9000E)
+hook[GetTargetOnLOS]: 00007FFB9B2F33A0 -> 00007FFC353A5CE0 (stole 6, tramp 00007FFB9BBA000E)
+hook[SetGunFlash]: 00007FFB9B36DAA0 -> 00007FFC353A4550 (stole 7, tramp 00007FFB9BBB000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+hook[phd_GenerateW2V]: 00007FFB9B3814D0 -> 00007FFC353A97F0 (stole 5, tramp 00007FFB9BBC000E)
+hook[DrawActionIndicators]: 00007FFB9B3AAC70 -> 00007FFC353A1D60 (stole 5, tramp 00007FFB9BBD000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FFB9B396510 -> 00007FFC353A91A0 (stole 5, tramp 00007FFB9BBE000E)
+hook[DrawHair]: 00007FFB9B3CE760 -> 00007FFC353A9430 (stole 5, tramp 00007FFB9BBF000E)
+hook[MotionRifleHandler]: 00007FFB9B335A70 -> 00007FFC353A57C0 (stole 6, tramp 00007FFB9BC0000E)
+hook[MotionFireShotgun]: 00007FFB9B335E80 -> 00007FFC353A4F80 (stole 5, tramp 00007FFB9BC1000E)
+hook[MotionFireSpecial]: 00007FFB9B3364C0 -> 00007FFC353A5320 (stole 8, tramp 00007FFB9BC2000E)
+hook[MotionFireCrossbow]: 00007FFB9B3365E0 -> 00007FFC353A5500 (stole 5, tramp 00007FFB9BC3000E)
+hook[MotionGunJoint]: 00007FFB9B37CD30 -> 00007FFC353A5560 (stole 5, tramp 00007FFB9BC4000E)
+hook[MotionInitialiseProjectile]: 00007FFB9B326160 -> 00007FFC353A5680 (stole 5, tramp 00007FFB9BC5000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+firstperson: Tomb Raider V (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+hook[PrintRoomsList]: 00007FFB9B39A040 -> 00007FFC35395070 (stole 5, tramp 00007FFB9BC6000E)
+hook[S_GetObjectBounds]: 00007FFB9B38BD20 -> 00007FFC35395710 (stole 5, tramp 00007FFB9BC7000E)
+cull: hooked tomb5.dll (Tomb Raider V (retail))
+hook[DrawSkyHD]: 00007FFB9B399B50 -> 00007FFC35396410 (stole 5, tramp 00007FFB9BC8000E)
+sky: hooked tomb5.dll (Tomb Raider V (retail)) -- sky draws use rotation-only eye transform (optical infinity) and far-plane depth
+overlay: 5 optic overlay draw(s) stubbed in tomb5.dll (Tomb Raider V (retail)) -- binocular=1 scope=1 tint=1. The laser dot is a separate sprite and is untouched.
+hook[DrawLaraHD]: 00007FFB9B398FB0 -> 00007FFC35396430 (stole 8, tramp 00007FFB9BC9000E)
+dynbones: hooked tomb5.dll (Tomb Raider V (retail)) -- measuring only, nothing is drawn differently
+vr: initialisation attempt 1 at frame 1
+vr: using C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\openvr_api.dll
+vr: runtime installed=yes, IsHmdPresent=yes
+vr: initialised as a Scene app
+vr: eye 0 raw tangents l=-1.3764 r=0.8391 t=-1.4281 b=0.9657
+vr: eye 0 eyeToHead offset = (-0.0311, +0.0000, +0.0000) m
+vr: eye 1 raw tangents l=-0.8391 r=1.3764 t=-1.4281 b=0.9657
+vr: eye 1 eyeToHead offset = (+0.0311, +0.0000, +0.0000) m
+vr: ready, per-eye target 1728x1824
+vr: up and running
+stereo: created 3456x1824 double-wide target (fbo 2, tex 39)
+present: redirected FBO_default 0 -> 2
+stereo: mono scratch ready (2560x1440, fbo 3, tex 40)
+video: offscreen panel ready (2560x1440, fbo 4, tex 41, prog 609)
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+gamedll: no level loaded yet -- ceiling clamp stands down until there is one (this is normal at the title screen)
+vr: head pose ACQUIRED
+present: first stereo frame submitted
+pad: water_status=0 (above water) -- stick pitch decoupled
+pad: optics zoom left -- stick pitch decoupled
+inject: eye=0 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=-0.2425 proj[9]=-0.1932
+inject: eye=0 eyeView translation = (+6.7, +9.4, -5.8) world units
+inject: eye=0 final view translation = (76208.5, -10936.4, 42632.3)
+inject: eye=0 packed view translation IN MEMORY = (79360.0, -7040.0, 37376.0) [floats 3,7,11 at 00007FF626FAECD0]
+inject: eye=0 uid[1] (uViewMatrix location) = 39, shader=26
+inject: eye=1 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=0.2425 proj[9]=-0.1932
+inject: eye=1 eyeView translation = (-19.6, +9.4, -5.8) world units
+inject: eye=1 final view translation = (76182.2, -10936.4, 42632.3)
+inject: eye=1 packed view translation IN MEMORY = (79360.0, -7040.0, 37376.0) [floats 3,7,11 at 00007FF626FAECD0]
+inject: eye=1 uid[1] (uViewMatrix location) = 39, shader=26
+inject: SEPARATION between eyes = 26.30 world units (dx=26.30 dy=0.00 dz=0.00)
+gamedll: bound to tomb4.dll (Tomb Raider IV (retail), build 0x68C12FDA, game=0) at 00007FFBACE50000
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[FireWeapon]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[AnimateLara]: removed
+hook[LaraAboveWater]: 00007FFBACE9B9D0 -> 00007FFC353A6C00 (stole 5, tramp 00007FFBAD6B000E)
+hook[AnimateLara]: 00007FFBACEB2200 -> 00007FFC353A6900 (stole 11, tramp 00007FFBAD6C000E)
+hook[AimWeapon]: 00007FFBACEAE100 -> 00007FFC353A5E00 (stole 5, tramp 00007FFBAD6D000E)
+hook[GetJoints]: 00007FFBACF11440 -> 00007FFC353A3AB0 (stole 5, tramp 00007FFBAD6E000E)
+hook[FireWeapon]: 00007FFBACEAE1B0 -> 00007FFC353A5800 (stole 5, tramp 00007FFBAD6F000E)
+hook[PistolHandler]: 00007FFBACEA9F70 -> 00007FFC353A5D10 (stole 5, tramp 00007FFBAD70000E)
+hook[GetTargetOnLOS]: 00007FFBACE65440 -> 00007FFC353A5CE0 (stole 6, tramp 00007FFBAD71000E)
+hook[SetGunFlash]: 00007FFBACEDF7E0 -> 00007FFC353A4550 (stole 10, tramp 00007FFBAD72000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+hook[phd_GenerateW2V]: 00007FFBACF25BD0 -> 00007FFC353A97F0 (stole 5, tramp 00007FFBAD73000E)
+hook[DrawActionIndicators]: 00007FFBACF23EA0 -> 00007FFC353A1D60 (stole 5, tramp 00007FFBAD74000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FFBACF11F50 -> 00007FFC353A91A0 (stole 5, tramp 00007FFBAD75000E)
+hook[DrawHair]: 00007FFBACF410D0 -> 00007FFC353A9430 (stole 5, tramp 00007FFBAD76000E)
+hook[MotionRifleHandler]: 00007FFBACEA5BE0 -> 00007FFC353A57C0 (stole 10, tramp 00007FFBAD77000E)
+hook[MotionFireShotgun]: 00007FFBACEA6130 -> 00007FFC353A4F80 (stole 5, tramp 00007FFBAD78000E)
+hook[MotionFireSpecial]: 00007FFBACEA6770 -> 00007FFC353A5150 (stole 9, tramp 00007FFBAD79000E)
+hook[MotionFireCrossbow]: 00007FFBACEA7A20 -> 00007FFC353A5500 (stole 6, tramp 00007FFBAD7A000E)
+hook[MotionGunJoint]: 00007FFBACEF4360 -> 00007FFC353A5560 (stole 5, tramp 00007FFBAD7B000E)
+hook[MotionInitialiseProjectile]: 00007FFBACE90300 -> 00007FFC353A5680 (stole 5, tramp 00007FFBAD7C000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+firstperson: Tomb Raider IV (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+cull: unhooking tomb5.dll
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+hook[PrintRoomsList]: 00007FFBACF15DC0 -> 00007FFC35395070 (stole 5, tramp 00007FFBAD7D000E)
+hook[S_GetObjectBounds]: 00007FFBACF08C90 -> 00007FFC35395710 (stole 5, tramp 00007FFBAD7E000E)
+cull: hooked tomb4.dll (Tomb Raider IV (retail))
+sky: unhooking tomb5.dll
+hook[DrawSkyHD]: removed
+hook[DrawSkyHD]: 00007FFBACF158D0 -> 00007FFC35396410 (stole 5, tramp 00007FFBAD7F000E)
+sky: hooked tomb4.dll (Tomb Raider IV (retail))
+dynbones: unhooking tomb5.dll
+hook[DrawLaraHD]: removed
+hook[DrawLaraHD]: 00007FFBACF14D20 -> 00007FFC35396430 (stole 8, tramp 00007FFBAD80000E)
+cull: head-frustum portal traversal live on Tomb Raider IV (retail) -- frustum 124.0 x 126.0 degrees, depth<=16, 4096 portals/frame budget
+gamedll: bound to tomb5.dll (Tomb Raider V (retail), build 0x68C12FE9, game=1) at 00007FFB9B2E0000
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[FireWeapon]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[AnimateLara]: removed
+hook[LaraAboveWater]: 00007FFB9B32B2F0 -> 00007FFC353A6C00 (stole 5, tramp 00007FFB9BB4000E)
+hook[AnimateLara]: 00007FFB9B33F9B0 -> 00007FFC353A6900 (stole 6, tramp 00007FFB9BB5000E)
+hook[AimWeapon]: 00007FFB9B33C430 -> 00007FFC353A5E00 (stole 5, tramp 00007FFB9BB6000E)
+hook[GetJoints]: 00007FFB9B395A00 -> 00007FFC353A3AB0 (stole 5, tramp 00007FFB9BB7000E)
+hook[FireWeapon]: 00007FFB9B33C4E0 -> 00007FFC353A5800 (stole 5, tramp 00007FFB9BB8000E)
+hook[PistolHandler]: 00007FFB9B3383F0 -> 00007FFC353A5D10 (stole 5, tramp 00007FFB9BB9000E)
+hook[GetTargetOnLOS]: 00007FFB9B2F33A0 -> 00007FFC353A5CE0 (stole 6, tramp 00007FFB9BBA000E)
+hook[SetGunFlash]: 00007FFB9B36DAA0 -> 00007FFC353A4550 (stole 7, tramp 00007FFB9BBB000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+hook[phd_GenerateW2V]: 00007FFB9B3814D0 -> 00007FFC353A97F0 (stole 5, tramp 00007FFB9BBC000E)
+hook[DrawActionIndicators]: 00007FFB9B3AAC70 -> 00007FFC353A1D60 (stole 5, tramp 00007FFB9BBD000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FFB9B396510 -> 00007FFC353A91A0 (stole 5, tramp 00007FFB9BBE000E)
+hook[DrawHair]: 00007FFB9B3CE760 -> 00007FFC353A9430 (stole 5, tramp 00007FFB9BBF000E)
+hook[MotionRifleHandler]: 00007FFB9B335A70 -> 00007FFC353A57C0 (stole 6, tramp 00007FFB9BC0000E)
+hook[MotionFireShotgun]: 00007FFB9B335E80 -> 00007FFC353A4F80 (stole 5, tramp 00007FFB9BC1000E)
+hook[MotionFireSpecial]: 00007FFB9B3364C0 -> 00007FFC353A5320 (stole 8, tramp 00007FFB9BC2000E)
+hook[MotionFireCrossbow]: 00007FFB9B3365E0 -> 00007FFC353A5500 (stole 5, tramp 00007FFB9BC3000E)
+hook[MotionGunJoint]: 00007FFB9B37CD30 -> 00007FFC353A5560 (stole 5, tramp 00007FFB9BC4000E)
+hook[MotionInitialiseProjectile]: 00007FFB9B326160 -> 00007FFC353A5680 (stole 5, tramp 00007FFB9BC5000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+firstperson: Tomb Raider V (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+cull: unhooking tomb4.dll
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+hook[PrintRoomsList]: 00007FFB9B39A040 -> 00007FFC35395070 (stole 5, tramp 00007FFB9BC6000E)
+hook[S_GetObjectBounds]: 00007FFB9B38BD20 -> 00007FFC35395710 (stole 5, tramp 00007FFB9BC7000E)
+cull: hooked tomb5.dll (Tomb Raider V (retail))
+sky: unhooking tomb4.dll
+hook[DrawSkyHD]: removed
+hook[DrawSkyHD]: 00007FFB9B399B50 -> 00007FFC35396410 (stole 5, tramp 00007FFB9BC8000E)
+sky: hooked tomb5.dll (Tomb Raider V (retail))
+dynbones: unhooking tomb4.dll
+hook[DrawLaraHD]: removed
+hook[DrawLaraHD]: 00007FFB9B398FB0 -> 00007FFC35396430 (stole 8, tramp 00007FFB9BC9000E)
+sky: first DrawSkyHD draw (shader 1) -- rotation-only eye transform, far-plane depth
+bypass: shader 199 (0xC7) has no uProjMatrix -- writes clip space directly. Shifting its viewport per eye.
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[FireWeapon]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[AnimateLara]: removed
+tr6: bound to tomb6.dll retail (2025-09-10) (build 0x68C12FE6)
+hook[TR6 SYS_DRAW_CRP::Calculate]: 00007FFB88267290 -> 00007FFC3538B710 (stole 5, tramp 00007FFB8D70000E)
+hook[TR6 ClippedOBB_CPP]: 00007FFB882647B0 -> 00007FFC3538B3E0 (stole 7, tramp 00007FFB8D71000E)
+hook[TR6 final-object AABB clip]: 00007FFB88264A40 -> 00007FFC3538B260 (stole 8, tramp 00007FFB8D72000E)
+tr6 cull: render-only visibility hooks installed (Calculate +0x1A7290, OBB +0x1A47B0, object AABB +0x1A4A40)
+hook[TR6 fxCamDist]: relocated rip disp32 at +8 (2051700 -> -87505786)
+hook[TR6 fxCamDist]: 00007FFB881C7620 -> 00007FFC3538A210 (stole 12, tramp 00007FFB8D73000E)
+hook[TR6 mathIsBoundsClipped (FX light)]: relocated rip disp32 at +7 (971669 -> -88027097)
+hook[TR6 mathIsBoundsClipped (FX light)]: 00007FFB8825FCA0 -> 00007FFC3538A3F0 (stole 11, tramp 00007FFB8D74000E)
+hook[TR6 mathIsBoundsClippedAlt (FX nodes)]: relocated rip disp32 at +7 (971333 -> -88092633)
+hook[TR6 mathIsBoundsClippedAlt (FX nodes)]: 00007FFB8825FDF0 -> 00007FFC3538A4F0 (stole 11, tramp 00007FFB8D75000E)
+hook[TR6 App_DrawChar_DrawProjectedShadows]: 00007FFB88278920 -> 00007FFC3538AAC0 (stole 7, tramp 00007FFB8D76000E)
+hook[TR6 App_DrawEffects_UpdateRenderData]: 00007FFB88262CC0 -> 00007FFC3538A5F0 (stole 5, tramp 00007FFB8D77000E)
+hook[TR6 App_Render_Scene]: 00007FFB88272330 -> 00007FFC3538ABC0 (stole 7, tramp 00007FFB8D78000E)
+tr6: native scene/shadow/effects hooks installed (scene +0x1B2330, projected shadows +0x1B8920, effects +0x1A2CC0, FX range +0x107620, FX bounds +0x19FCA0, FX-node bounds +0x19FDF0)
+cull: unhooking tomb5.dll
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+sky: unhooking tomb5.dll
+hook[DrawSkyHD]: removed
+dynbones: unhooking tomb5.dll
+hook[DrawLaraHD]: removed
+tr6 camera: stereo tracking space set to seated as configured
+tr6 camera: world frame bound at tomb6.dll+0x29CCD0; world-space head offset and ceiling clamp active
+pad: water_status=-1 (unknown) -- stick pitch decoupled
+vr: head pose LOST
+vr: head pose ACQUIRED
+pad: _XInputGetState restored
+hook[shader_init]: removed
+hook[TR6 App_Render_Scene]: removed
+hook[TR6 App_DrawEffects_UpdateRenderData]: removed
+hook[TR6 App_DrawChar_DrawProjectedShadows]: removed
+hook[TR6 mathIsBoundsClippedAlt (FX nodes)]: removed
+hook[TR6 mathIsBoundsClipped (FX light)]: removed
+hook[TR6 fxCamDist]: removed
+hook[TR6 final-object AABB clip]: removed
+hook[TR6 ClippedOBB_CPP]: removed
+hook[TR6 SYS_DRAW_CRP::Calculate]: removed
+hook[fmvShow]: removed
+hook[ogl_present]: removed
+hook[ogl_drawVB]: removed
+hook[ogl_draw]: removed
+hook[validate_draw]: removed
+hook[vid_setPass]: removed

@@ -168,6 +168,7 @@
     <ClInclude Include="src\FirstPersonStabilization.h" />
     <ClInclude Include="src\LocomotionMath.h" />
     <ClInclude Include="src\MotionGunInput.h" />
+    <ClInclude Include="src\MotionHandSkin.h" />
   </ItemGroup>
 
   <ItemGroup>

@@ -64,6 +64,11 @@
 // it at 0, which reads as "not available here".
 #pragma once
 
+// Also patches tracked-hand skinning independently of chest-physics settings.
+// Mixed hand/forearm vertices use the corrected wrist rigidly during that hand's
+// draw; the fragment shader trims the hidden forearm at the blend seam. The
+// default/off uniform retains native rendering for all other draws.
+
 namespace tr {
 
 // Hook shader_init. Called from InstallHooks after the core hooks are in, and

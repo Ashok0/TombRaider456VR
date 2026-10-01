@@ -12,6 +12,8 @@ bool FirstPersonActive();
 // Render-only HK optic pose; no native zoom, weapon or camera state mutations.
 bool FirstPersonHKScopePose(motiongun::Frame& lens, motiongun::Frame& camera,float* radiusMetres=nullptr);
 bool FirstPersonDrawingTrackedHands();
+// Palette index only while a successfully corrected tracked-hand draw is active.
+int FirstPersonTrackedHandJoint();
 bool FirstPersonHKScopeAiming();
 bool FirstPersonCalibrationKeyReserved(int virtualKey);
 // Called after view/graphics chords and physical-pad merge.

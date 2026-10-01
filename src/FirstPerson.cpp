@@ -205,6 +205,7 @@ bool g_motionHooksReady = false;
 bool g_scenePoseValid = false;
 PHD_3DPOS g_scenePose{};
 int g_renderArm = -1; // 0=left, 1=right
+int g_renderHandJoint = -1;
 // DrawLaraHD overwrites objects[item].geom for each body/hand/face pass.
 // Only the right-HK GetJoints scope owns the correct immutable wrist binding.
 // Cache that binding, never a world/controller pose (which would add lag).
@@ -809,6 +810,7 @@ bool BuildGunPose(int hand, GunPose& out) {
 }
 
 int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
+    g_renderHandJoint = -1;
     const int32_t count = g_hGetJoints.Original<Fn_GetJoints>()(item, joints, pass);
     if (g_renderArm < 0 || count < 15 || !joints || !MotionReady() ||
         item != *Ptr<uint8_t*>(g_boundDll->laraItem)) return count;
@@ -865,6 +867,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
             motiongun::ReadRows(bone)), bone);
     }
     ++g_motionArmDraws[g_renderArm];
+    g_renderHandJoint = pivot;
     return count;
 }
 
@@ -1771,16 +1774,18 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         if (!handMask) return;
         const uint32_t savedMotionBits=bits;
         const int previousArm=g_renderArm;
+        const int previousHandJoint=g_renderHandJoint;
         // Long guns can put both hands in one native mesh pass. Split it
         // before applying the two independent wrist transforms.
         for (int hand=0;hand<2;++hand) {
             const uint32_t mask=hand ? 0x400 : 0x2000;
             vr::HmdMatrix34_t pose{};
             if (!(handMask&mask) || !VR().ControllerPose(hand,pose)) continue;
-            bits=mask; g_renderArm=hand;
+            bits=mask; g_renderArm=hand; g_renderHandJoint=-1;
             g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
         }
         bits=savedMotionBits; g_renderArm=previousArm;
+        g_renderHandJoint=previousHandJoint;
         return;
     }
     const int previousArm = g_renderArm;
@@ -2074,7 +2079,7 @@ void Remove() {
     if (g_active) VR().RecenterThirdPersonHead();
     RestoreHeadMesh();
     g_motionHooksReady = false;
-    g_firingHand = g_renderArm = -1;
+    g_firingHand = g_renderArm = g_renderHandJoint = -1;
     g_hkScopeBindItem=nullptr;
     g_scenePoseValid = false;
     g_motionArmDraws[0] = g_motionArmDraws[1] = 0;
@@ -2151,6 +2156,9 @@ void FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed) {
 }
 
 bool FirstPersonDrawingTrackedHands() { return g_renderArm>=0; }
+int FirstPersonTrackedHandJoint() {
+    return g_renderArm>=0 && g_renderHandJoint>=0 && g_renderHandJoint<72 ? g_renderHandJoint : -1;
+}
 
 bool FirstPersonHKScopePose(motiongun::Frame& lens, motiongun::Frame& camera,float* radiusMetres) {
     if (!Cfg().firstPersonHKScope || !g_boundDll || g_boundDll->game!=1 ||

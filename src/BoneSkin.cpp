@@ -5,6 +5,8 @@
 #include "Config.h"
 #include "InlineHook.h"
 #include "Log.h"
+#include "FirstPerson.h"
+#include "MotionHandSkin.h"
 
 #include <windows.h>
 #include <cmath>
@@ -48,6 +50,7 @@ int  g_matched  = 0;   // recognised as the index+weight skinning family
 int  g_patched  = 0;   // patched and passed the test compile
 int  g_rejected = 0;   // patched but failed to compile -- original sent instead
 bool g_summaryLogged = false;
+int g_handPatched = 0;
 
 // --- the patch ---------------------------------------------------------------
 //
@@ -171,6 +174,28 @@ bool CompilesOk(const std::string& src, std::string& err) {
 
 void InvalidateProgram(uint32_t program);   // with the per-program table below
 
+bool HandPairLinks(const std::string& vertex,const std::string& fragment) {
+    GLuint shaders[2]={gl::CreateShader(GL_VERTEX_SHADER),gl::CreateShader(GL_FRAGMENT_SHADER)};
+    const char* sources[2]={vertex.c_str(),fragment.c_str()};
+    bool ok=true;
+    for(int i=0;i<2;++i) {
+        if (!shaders[i]) { ok=false; continue; }
+        gl::ShaderSource(shaders[i],1,&sources[i],nullptr);gl::CompileShader(shaders[i]);
+        GLint compiled=0;gl::GetShaderiv(shaders[i],GL_COMPILE_STATUS,&compiled);ok=ok && compiled!=0;
+    }
+    GLuint program=0;
+    if(ok) {
+        program=gl::CreateProgram();ok=program!=0;
+        if(program) {
+            for(auto shader:shaders) gl::AttachShader(program,shader);
+            gl::LinkProgram(program);GLint linked=0;gl::GetProgramiv(program,GL_LINK_STATUS,&linked);ok=linked!=0;
+        }
+    }
+    if(program) gl::DeleteProgram(program);
+    for(auto shader:shaders) if(shader) gl::DeleteShader(shader);
+    return ok;
+}
+
 void __fastcall Detour_shader_init(Shader* shader, int fvf,
                                    const char* vs, const char* fs) {
     const auto original = g_hShaderInit.Original<Fn_shader_init>();
@@ -208,7 +233,21 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
         }
     }
 
-    original(shader, fvf, useVs, fs);
+    // Independent of chest physics settings: hand repair is a render-only
+    // feature with a zero/off uniform for every other draw and game.
+    std::string handVs,handFs;
+    const char* useFs=fs;
+    if(c.enabled && useVs && fs) {
+        handVs=useVs;handFs=fs;
+        if(motionhandskin::Patch(handVs,handFs)) {
+            gl::Load();
+            if(gl::LoadedShaderApi() && HandPairLinks(handVs,handFs)) {
+                useVs=handVs.c_str();useFs=handFs.c_str();
+                if(++g_handPatched==1) Log("motion hands: rigid wrist skinning and forearm seam trim ready");
+            } else Log("motion hands: shader pair rejected; retaining original hand rendering");
+        }
+    }
+    original(shader, fvf, useVs, useFs);
 
     // shader_init just gave this Shader a fresh program. If the name is being
     // reused -- a context reset rebuilds the programs -- any uniform locations
@@ -223,6 +262,8 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
 constexpr uint32_t kMaxProgram = 4096;
 
 struct ProgramState {
+    GLint locHand = -2;
+    int handJoint = -1;
     GLint locBone   = -2;     // -2 = not looked up yet, -1 = not one of ours
     GLint locRegion = -2;
     bool  live      = false;  // uDynBone.w currently uploaded as 1
@@ -697,7 +738,7 @@ void BoneSkinAfterValidate() {
              g_matched == 0 ? " -- none matched, so the whole-torso view stays "
                               "in use" : "");
     }
-    if (!PathPossible()) return;
+    if (!gl::LoadedSkinApi()) return;
 
     const RenderState& vs = VidState();
     if (vs.shader < 0 || vs.shader > 201) return;
@@ -705,6 +746,15 @@ void BoneSkinAfterValidate() {
     if (prog == 0 || prog >= kMaxProgram) return;
 
     ProgramState& ps = g_prog[prog];
+    if(ps.locHand==-2) ps.locHand=gl::GetUniformLocation(prog,"uTrackedHandJoint");
+    if(ps.locHand>=0) {
+        const int joint=FirstPersonTrackedHandJoint();
+        if(joint!=ps.handJoint) {
+            gl::Uniform1i(ps.locHand,joint+1);
+            ps.handJoint=joint;
+        }
+    }
+    if (!PathPossible()) return;
     if (ps.locBone == -2) {
         ps.locBone   = gl::GetUniformLocation(prog, "uDynBone");
         ps.locRegion = gl::GetUniformLocation(prog, "uDynRegion");

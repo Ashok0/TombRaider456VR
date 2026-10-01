@@ -146,6 +146,7 @@ int32_t __cdecl FakeOptic(tr::PHD_VECTOR* start,tr::PHD_VECTOR* end,int32_t,int3
     return 42;
 }
 void __cdecl FakeHandDraw(uint8_t* item,int32_t useBits,int32_t) {
+    Check(tr::FirstPersonTrackedHandJoint()==-1,"each hand draw starts without a stale wrist shader index");
     ++handDrawCalls;
     handDrawMask=*reinterpret_cast<uint32_t*>(item+tr::off::item_mesh_bits);
     Check(useBits==1 && ((tr::g_renderArm==1 && handDrawMask==0x400) ||
@@ -890,6 +891,17 @@ int main() {
             float hkPalette[15*12]{};
             g_renderArm=1;
             Check(Detour_GetJoints(itemMemory,hkPalette,0)==15,"scope sees the production right-hand gun draw");
+            Check(FirstPersonTrackedHandJoint()==10,"corrected right wrist enables hand-only shader repair");
+            g_renderArm=0;
+            auto* leftBind=reinterpret_cast<float*>(scopeObject+1676)+13*16;
+            leftBind[0]=leftBind[5]=leftBind[10]=leftBind[15]=1.f;
+            Check(Detour_GetJoints(itemMemory,hkPalette,0)==15 && FirstPersonTrackedHandJoint()==13,
+                  "left hand uses its own corrected wrist palette index");
+            g_renderArm=-1;
+            Check(FirstPersonTrackedHandJoint()==-1,"non-hand draws cannot inherit wrist shader repair");
+            g_renderArm=1;
+            Detour_GetJoints(laraMemory,hkPalette,0);
+            Check(FirstPersonTrackedHandJoint()==-1,"rejected non-Lara palette clears stale wrist shader index");
             g_renderArm=-1;g_hGetJoints.m_trampoline=oldGetJoints;
             for (int which:{0,1,2}) for (int weapon=1;weapon<=6;++weapon) {
                 dll.game=which;gun=int16_t(weapon);

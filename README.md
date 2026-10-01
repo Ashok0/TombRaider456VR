@@ -4574,7 +4574,7 @@ stereo and third-person paths are unchanged by this feature.
 | Ground controls | Forward, native sidestep and backpedal replace camera-relative sideways/backward running; TR5 no longer uses TR4's vehicle sentinel |
 | Camera/gun separation | Hand aiming no longer drives the camera through Lara's head/torso aim; wrist rotation uses the recovered grip pivot rather than orbiting the hands |
 | Gun targeting | Tracked muzzle origins, native hit processing and bounded hitscan aim assistance; all-weapon extension preserves shotgun pellets and launcher physics |
-| Gun presentation and fit | Hands and guns only when motion-ready; position/angle calibration retains the grip pivot and supports live function-key adjustment |
+| Gun presentation and fit | Hands and guns only when motion-ready; wrist skinning correction prevents hidden forearm weights from warping the hand; position/angle calibration retains the grip pivot |
 | HK VR scope (TR5) | Working 3x world magnification inside the original scope; eye-aligned activation, mesh-attached lens and depth-only close-eye protection; surrounding VR view stays unzoomed |
 | Trigger handling | Independent pistol/Uzi taps; RT for single weapons; native held RT grab/Action preserved when guns are not ready; 0.5-second LT equip gesture |
 | Cutscenes | Native presentation during cutsequences, transitions, flybys and TR4 tutorial scenes; restore the player's FP preference afterward and cancel queued shots |
@@ -4942,6 +4942,33 @@ pose before placing each arm. The palette translation alone is not the wrist:
 using it as a pivot caused the hand and attached gun to orbit with wrist
 rotation. Both native and HD mapped-bone paths now apply the correction to
 the entire masked palette, including helper bones and blended vertices.
+
+**Tracked-hand wrist repair (2026-10-01):** the native renderer zeroes masked
+forearm matrices, but its shader still blends wrist vertices against those
+zeroes. This shrinks/stretches the wrist toward the render origin. The tracked
+hand shader now uses the existing corrected wrist matrix rigidly and trims the
+forearm side at the 50% hand-weight seam, rather than collapsing it into the
+hand. Both hands are handled independently, including long-gun support hands.
+Fully wrist-weighted gun/scope vertices, grip calibration, muzzle positions,
+aiming and the camera transforms are unchanged. The repair is enabled only
+after a tracked-hand palette correction succeeds; other draws use the original
+skinning, with the per-program switch cleared before reuse. It does not require
+chest physics to be enabled. Shader pairs are compile/link-tested before use;
+unsupported shaders retain native rendering. No game assets or INI settings
+are modified. In-headset appearance still needs user verification.
+
+`tools/motion_hand_gl_tests.cpp` passed **2,941 checks** on the real OpenGL
+driver, including 480 compatible shader pairs from the installed engine's five
+weighted-skin vertex variants. Pixel tests reproduce the original wrist
+deformation, verify rigid left/right wrists through rotation, retain full-weight
+gun vertices, hide the forearm side and reproduce native pixels when disabled.
+Build/run from an x64 Visual Studio developer prompt:
+
+```bat
+cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_party\openvr\headers /Isrc tools\motion_hand_gl_tests.cpp src\GL.cpp /Febuild\motion_hand_gl_tests.exe /Fobuild\ /link /OPT:REF user32.lib gdi32.lib opengl32.lib
+build\motion_hand_gl_tests.exe "C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\tomb456.exe"
+```
+
 The barrel's local +Y axis follows controller forward; the separate native HD
 muzzle offset supplies shot position without tilting the barrel toward the
 wrist-to-tip vector. Lara's native muzzle-flash generation uses the same
@@ -5376,9 +5403,9 @@ cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Ithird_par
 build\first_person_tests.exe
 ```
 
-The latest HK-scope lens-alignment run (2026-09-29) passed **325,304 checks**. The rejected
+The latest tracked-wrist repair run (2026-10-01) passed **325,317 checks**. The rejected
 climb-only implementation and its tests were removed. These are synthetic
-checks, including parameter sweeps, not 325,304 in-game scenarios or
+checks, including parameter sweeps, not 325,317 in-game scenarios or
 proof of headset smoothness. They include all-weapon firing scopes, six-pellet
 volleys, projectile initialization/room handling, laser/grapple request gating,
 combined hand masks, and cutscene transitions/flybys/tutorial suspension and
@@ -5464,10 +5491,16 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 499/500 ms boundary. The deployed HK lens-alignment/3x test DLL
+tests, including the LT 499/500 ms boundary. The deployed tracked-wrist repair DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
-`485598889F0197EF208DEDB4E5D0CD80155A86D02081A38AB7144165B6F1886B`.
+`C2077B57E27FF12D1F8E310F0E30CBD950D1715206DC977A6D566D823FDAE077`.
+The previous working 3x scope/alignment DLL, personal INI and runtime log are
+backed up under `build/before-hand-wrist-repair-20261001-041514/`.
+The personal INI was preserved byte-for-byte. The wrist-repair build passed
+2,941 hand-skinning OpenGL checks, 76 HK scope OpenGL checks, 325,317 first-person
+checks, configuration self-tests and all four motion-gun address tables.
+Wrist appearance still needs a headset retest.
 The previous close-eye build with the reported off-center lens, personal INI
 and runtime log are backed up under
 `build/before-hk-lens-alignment-20260929-162342/`; the INI remains unchanged.
@@ -5477,7 +5510,7 @@ The failed mesh-attachment DLL, unchanged INI and runtime log are backed up
 under `build/before-hk-bind-lifecycle-20260929-160009/`.
 The previous DLL and personal INI were backed up under
 `build/before-hk-mesh-lens-20260929-100937/`; deployment preserved the INI.
-This build passed 76 OpenGL checks and 325,304 first-person checks, including
+The preceding scope-alignment build passed 76 OpenGL checks and 325,304 first-person checks, including
 the new off-axis mesh projection regression; configuration self-tests also passed.
 The lower counts reflect removal of obsolete expectations that the lens stays
 visible after passing through it. All four supported motion-gun address tables
