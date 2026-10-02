@@ -45,6 +45,55 @@ for in-headset validation, and the remaining motion issues are listed there.
 * Automatic TR4/5 third-person startup centering, FP-to-third-person recentering,
   and a world-space ceiling clamp; native chase-camera wall handling is preserved.
 
+### TR1–3 first-person fixes ported on 2026-10-02
+
+These changes apply to **TR4/5**. TR6 has no equivalent first-person/controller
+weapon path and keeps its native stereo camera behavior.
+
+- Bullet weapons acquire living targets per controller muzzle without Lara's
+  native lock. Direct hit spheres take priority, then the existing 12-degree
+  assist; the HK scope stays unassisted. Projectiles keep their native rules.
+- Pistol animation can continue firing after native arm lock is lost. LT+RT
+  sustains dual fire without holstering, and held RT resumes after tracking loss.
+- Fixed/scripted camera handoffs preserve standing-eye calibration and rebase
+  it for scripted body turns. Different Lara/level identities invalidate it.
+- The rendered torso is fitted beneath the final collision-adjusted camera at
+  intermediate physical-turn angles, without changing Lara's collision root.
+- Zero health immediately selects the native death camera and restores body
+  visibility; loading a living Lara restores first-person eligibility.
+- HD body draws retain hidden bone transforms and trim fragments by visible
+  skin weight. Shared shoulder/torso vertices no longer collapse at ledges.
+  The shader supports TR4/5's 33-slot palettes and clears its mask for later draws.
+- Eye clearance permits looking over empty crate/ledge drops while still
+  rejecting walls and ceilings. Body dragging retains native ledge safety;
+  collision pushback cannot accumulate as false roomscale travel.
+- Saved personal hand height is `-0.06985 m`, **3.75 inches below the original
+  `0.0254 m` setting**. Other calibration values and factory defaults are retained.
+
+Automated validation: 325,669 production first-person regression checks; the
+self-test suite including two-minute dual fire, camera handoffs, physical turns
+at five-degree intervals and repeated ledge pushback; and 3,226 OpenGL checks
+against 480 compatible shader pairs from the installed `tomb456.exe`.
+The native motion-gun audit passes on both PDB and retail TR4/5 DLLs, including
+new `AnimatePistols`, world-space `GetSpheres` and active-item dependencies.
+These are offline/hidden-context checks, not an in-headset gameplay validation.
+
+Headset checks still required: shoot moving bats without a body lock, sustain
+LT+RT beyond 0.5 seconds, interrupt/recover tracking with RT held, return from
+fixed/scripted cameras, turn physically through partial and full circles,
+die/reload, and repeat crate-edge hangs, releases and jump-offs. Check that
+body centering recovers and no shoulder/torso seam stretches.
+
+Installed the Release/x64 DLL in
+`C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\`.
+Installed and built DLL SHA-256 match:
+`0679C4D797D1BCBA992A66B49BF0226360A297BF3E7C6F39407CC453EC61AFB5`.
+The previous DLL, personal INI and log are backed up in
+`build/before-tr123-fixes-20261002-042031/`. The installed INI matches the staged
+profile in `build/tr123-fixes-deploy/`; only hand height changed.
+The full address audit also passed 806 checks (one unavailable older
+`tomb456.exe` build, timestamp `0x68639C21`, was skipped).
+
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
 
@@ -107,9 +156,10 @@ for settings, gameplay exceptions and the current motion limitations.
 
 With `FirstPersonMotionGuns=1` in first-person remastered/HD gameplay, the
 weapon controls above are overridden: **hold LT for 0.5 seconds** to toggle
-draw/holster, **tap LT** to fire the left pistol/Uzi on release, and **tap RT**
-to fire the right pistol/Uzi or selected single weapon. Single weapons aim with
-the right controller. Holding RT does not auto-repeat. TR5 grappling still
+draw/holster with LT alone, **tap LT** to fire the left pistol/Uzi on release,
+and **hold RT** to fire the right pistol/Uzi or selected single weapon at its
+native rate. Hold LT+RT to sustain both dual guns; this cannot become a
+holster gesture until LT is released. Single weapons aim with the right controller. TR5 grappling still
 requires native laser targeting and a valid attachment point. For calibration
 keys and readiness/fallback rules, see
 [Touch motion guns](#experimental-touch-motion-guns-tr4tr5).
@@ -4576,7 +4626,7 @@ stereo and third-person paths are unchanged by this feature.
 | Gun targeting | Tracked muzzle origins, native hit processing and bounded hitscan aim assistance; all-weapon extension preserves shotgun pellets and launcher physics |
 | Gun presentation and fit | Hands and guns only when motion-ready; wrist skinning correction prevents hidden forearm weights from warping the hand; position/angle calibration retains the grip pivot |
 | HK VR scope (TR5) | Working 3x world magnification inside the original scope; eye-aligned activation, mesh-attached lens and depth-only close-eye protection; surrounding VR view stays unzoomed |
-| Trigger handling | Independent pistol/Uzi taps; RT for single weapons; native held RT grab/Action preserved when guns are not ready; 0.5-second LT equip gesture |
+| Trigger handling | Independent pistol/Uzi taps and sustained LT+RT; RT for single weapons; native held RT grab/Action preserved when guns are not ready; 0.5-second LT equip gesture |
 | Cutscenes | Native presentation during cutsequences, transitions, flybys and TR4 tutorial scenes; restore the player's FP preference afterward and cancel queued shots |
 | Culling versus wall clearance | Portal traversal starts in the effective FP eye's room; a separate swept eye-clearance path limits wall clipping |
 | Third-person centering | Cold startup now captures a gameplay positional neutral automatically; FP handoff still clears translation immediately |
@@ -4768,7 +4818,7 @@ The FP motion-gun handler previously replaced RT with a queued-shot signal even
 when Lara's guns were holstered or her hands were busy. With no shot queued,
 that erased native RT grab/Action input, including ledge catches. RT now retains
 its original analog value and held duration whenever gun status is not ready
-(`4`). Ready guns retain independent tap firing and tracking-loss protection;
+(`4`). Ready guns retain independent firing and resume held RT after tracking recovery;
 the LT hold-to-equip gesture remains active. Held grab input cannot turn into
 a shot simply because the guns become ready. This changes input ownership only,
 not movement stabilization, aiming or camera behavior. Live ledge testing remains
@@ -4977,12 +5027,13 @@ tracked muzzle along the spread-adjusted controller ray.
 Confirmed enemy-sphere hits retain the native short LOS segment instead of
 extending it to wall-impact range; extending that segment could bypass the
 native `HitTarget` path. Motion guns also apply up to 12 degrees of per-hand
-aim assistance to the game's already-selected living enemy, within 8192 game
-units and only when native LOS from that muzzle is clear. This includes
-vertical aim. It does not select enemies behind the controller or replace
+aim assistance to a living enemy selected independently for that controller,
+within 8192 game units and only when native LOS from that muzzle is clear.
+Direct hit spheres take priority; Lara's native target lock is not required.
+This includes vertical aim. The HK scope retains unassisted barrel aiming. It does not select enemies behind the controller or replace
 hand aiming with head aiming. The assisted shot still starts at the tracked
-muzzle; native spread and damage rules remain intact. Logs include the native
-selected target, assist status, sphere-hit branch and target HP before/after.
+muzzle; native spread and damage rules remain intact. The first 100 tracked shots per hand log the
+controller-selected target, assist status and target HP before/after.
 If motion guns fall back to head aiming, the log now reports the blocking
 readiness condition (graphics, weapon/state, controller tracking, scene camera,
 or configuration), per-hand pose-build failures and fallback counts. These
@@ -5039,12 +5090,12 @@ to move the guns forward and increase raise to move them up; one inch is
 Angle calibration rotates around the adjusted grip anchor and updates both
 the rendered barrel and shot direction; muzzle flash and shot origin remain
 on the same calibrated frame. With angles zero the previous fit is preserved.
-The installed Quest 3/Touch fit checked on 2026-09-26 is:
+The saved Quest 3/Touch fit updated on 2026-10-02 is:
 
 ```ini
 FirstPersonMotionGuns=1
 FirstPersonMotionGunGripForwardMetres=0.2032
-FirstPersonMotionGunRaiseMetres=-0.0254
+FirstPersonMotionGunRaiseMetres=-0.06985
 FirstPersonMotionGunRightMetres=0
 FirstPersonMotionGunPitchDegrees=-30
 FirstPersonMotionGunYawDegrees=0
@@ -5052,11 +5103,14 @@ FirstPersonMotionGunRollDegrees=0
 FirstPersonMotionGunHotkeys=1
 ```
 
-That is an 8-inch local grip-back calibration, 1 inch down and 30 degrees
-downward pitch, with no lateral/yaw/roll adjustment. These are empirical
+That is an 8-inch local grip-back calibration, 2.75 inches below zero and
+30 degrees downward pitch, with no lateral/yaw/roll adjustment. The height is
+**3.75 inches below the original `0.0254 m` setting**: `0.0254 - 3.75 * 0.0254
+= -0.06985 m`, matching the final TR1–3 profile. These are empirical
 mesh-fit values, not a desired physical hand-to-controller separation.
 The earlier -20-degree fit is historical. These are personal settings, not
-new defaults, and the all-weapon/cutscene deployments preserved them unchanged.
+new defaults. This port updates only the installed hand-height key; the other
+personal calibration values are preserved.
 The grip pivot remains fixed; use Ctrl+Shift+F3/F4 to fine-tune pitch and
 Ctrl+F7 to save. No extra one-inch-forward adjustment was reapplied.
 
@@ -5174,14 +5228,15 @@ build\hk_scope_gl_tests.exe
 In first-person remastered/HD motion-gun mode:
 
 - Short LT squeeze: fire the left pistol/Uzi on release; no shot for single weapons.
-- RT press: fire the right pistol/Uzi or the selected single weapon.
-- Hold LT for 0.5 seconds: draw/holster once; release before toggling again.
+- Hold RT: sustain the right pistol/Uzi or selected single weapon at its native rate.
+- Hold LT+RT: sustain both dual guns; releasing RT first keeps LT in firing mode.
+- Hold LT alone for 0.5 seconds: draw/holster once; release before toggling again.
 
-Each tap requests one native shot (one full volley for the shotgun), including
-with Uzis and HK; holding RT does not
-auto-repeat. A short LT tap waits for release to distinguish it from the long
-equip gesture, which never also fires the left gun. Both hands can have one
-shot queued at once. The long gesture supports both native draw settings:
+Each native firing operation consumes one request (one full volley for the
+shotgun). Held triggers renew that request while native animation owns cadence,
+ammo and effects. A short LT tap waits for release to distinguish it from the
+long equip gesture. A dual-fire hold cannot become a holster gesture until LT
+is released. Both hands can have one shot queued at once. The long gesture supports both native draw settings:
 in **hold-to-draw**, the mod maintains the equip input until the next long
 gesture; in **toggle-to-draw**, it sends a pulse that ends when the native
 weapon state acknowledges it. This fixes guns immediately holstering after
@@ -5228,8 +5283,11 @@ retain their matching shots and flashes. This correction does not change hand
 calibration, wrist pivots, muzzle offsets, camera behavior or third-person firing.
 
 Y+LT (view), Y+RT (graphics), menus, third person, classic graphics, flares/torches
-and TR6 keep their existing controls. Entering the mode with a trigger
-already held requires release before the new controls activate. Trigger timing,
+and TR6 keep their existing controls. Held RT resumes when tracking/readiness
+returns. An inherited LT alone must be released before it can start an equip
+gesture. During requested controller fire, `AnimatePistols` temporarily clears
+the native target and restores it on return, avoiding the selected-target but
+lost-arm-lock stall reported during bat attacks. Trigger timing,
 per-hand requests and hand-only masks have automated coverage; actual controller
 feel and rendering still require in-headset testing.
 
@@ -5491,7 +5549,7 @@ checks native ammo dispatch to prove the Uzi/revolver IDs, the revolver's skippe
 right-arm call, and the shared-call flash branches. The complete
 `tests/build_selftest.cmd` suite passed with zero failures, including
 calibration/pivot, trigger, stabilization defaults/opt-out and INI save/restore
-tests, including the LT 499/500 ms boundary. The deployed tracked-wrist repair DLL
+tests, including the LT 499/500 ms boundary. The preceding tracked-wrist repair DLL
 (including Action icons, startup-neutral, ledge/pull-up, RT-grab, visibility, stabilization and prior all-weapon,
 Uzi/Desert Eagle and cutscene fixes) has SHA-256
 `C2077B57E27FF12D1F8E310F0E30CBD950D1715206DC977A6D566D823FDAE077`.

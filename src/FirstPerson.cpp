@@ -8,6 +8,7 @@
 #include "VRSystem.h"
 #include "LocomotionMath.h"
 #include "FirstPersonClearance.h"
+#include "FirstPersonVisibility.h"
 #include "FirstPersonStabilization.h"
 #include "MotionGunMath.h"
 #include "MotionGunInput.h"
@@ -18,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 
 namespace tr {
 namespace {
@@ -35,6 +37,9 @@ static_assert(sizeof(PHD_3DPOS) == 20);
 static_assert(sizeof(PHD_VECTOR) == 12);
 
 namespace off {
+constexpr uint32_t item_stride = 9416;
+constexpr uint32_t item_next_active = 32;
+constexpr uint32_t lara_target = 208;
 constexpr uint32_t item_mesh_bits   = 12;
 constexpr uint32_t item_floor       = 0;
 constexpr uint32_t item_floor_prev  = 4;
@@ -92,6 +97,7 @@ hook::InlineHook g_hAimWeapon;
 hook::InlineHook g_hGetJoints;
 hook::InlineHook g_hFireWeapon;
 hook::InlineHook g_hPistolHandler;
+hook::InlineHook g_hAnimatePistols;
 hook::InlineHook g_hSetGunFlash;
 hook::InlineHook g_hGetTargetOnLOS;
 hook::InlineHook g_hLaraAboveWater;
@@ -136,6 +142,13 @@ uint64_t g_stabilizeAction=0;
 locomotion::Vec g_stabilizeDirection{};
 stabilization::RootMotion g_rootMotion;
 stabilization::GroundEye g_groundEye;
+locomotion::Vec g_bodyVisualOffset{};
+float g_lastBodyYaw=0;
+int g_headingLevel=-1;
+bool g_bodySkinScope=false, g_bodySkinReady=false;
+float g_bodySkinPalette[33*12]{};
+uint64_t g_bodySkinMask=0;
+int g_bodySkinCount=0;
 
 void ResetMovementStabilization() {
     g_renderTurn.Reset();
@@ -144,6 +157,7 @@ void ResetMovementStabilization() {
     g_hardStopRoot=false;
     g_rootMotion.Reset();
     g_groundEye.Reset();
+    g_bodyVisualOffset={};
 }
 
 bool g_meshOverride = false;
@@ -169,16 +183,17 @@ struct MotionDll {
     uint32_t getTargetOnLOS, hitLosReturn, missLosReturn;
     uint32_t setGunFlash, floatMatrixPtr, rightFlashReturn, leftFlashReturn;
     uint32_t findTargetPoint, lineOfSight;
+    uint32_t animatePistols, getSpheres, nextItemActive, items;
 };
 constexpr MotionDll kMotionDlls[] = {
     {0x696B4999, 0xC09E0, 0x5E4B0, 0x5E5C4, 0x5A97F, 0x5AC2A, 0x663F08, 0x5A270,
-     0x15860, 0x5E701, 0x5E79B, 0x8EDD0, 0x1B6D18, 0x2F763, 0x2F819, 0x5E2F0, 0x149F0},
+     0x15860, 0x5E701, 0x5E79B, 0x8EDD0, 0x1B6D18, 0x2F763, 0x2F819, 0x5E2F0, 0x149F0, 0x5A680, 0xA3C30, 0x63DAB0, 0x699CA0},
     {0x696B499C, 0xB5880, 0x5B790, 0x5B8A4, 0x57CBF, 0x57F6A, 0x66D1A0, 0x576A0,
-     0x132F0, 0x5BA0C, 0x5BAA3, 0x8D790, 0x1B2AC8, 0x306A3, 0x30756, 0x5B5D0, 0x12450},
+     0x132F0, 0x5BA0C, 0x5BAA3, 0x8D790, 0x1B2AC8, 0x306A3, 0x30756, 0x5B5D0, 0x12450, 0x579C0, 0x9CF90, 0x65AC92, 0x66D1A8},
     {0x68C12FDA, 0xC1440, 0x5E1B0, 0x5E2C6, 0x5A67F, 0x5A92A, 0x664E48, 0x59F70,
-     0x15440, 0x5E401, 0x5E49B, 0x8F7E0, 0x1B7D18, 0x2F5D3, 0x2F689, 0x5DFF0, 0x145D0},
+     0x15440, 0x5E401, 0x5E49B, 0x8F7E0, 0x1B7D18, 0x2F5D3, 0x2F689, 0x5DFF0, 0x145D0, 0x5A380, 0xA47D0, 0x63E9F0, 0x69ABE0},
     {0x68C12FE9, 0xB5A00, 0x5C4E0, 0x5C5F6, 0x58A0F, 0x58CBA, 0x66D0E0, 0x583F0,
-     0x133A0, 0x5C759, 0x5C7F0, 0x8DAA0, 0x1B2AC8, 0x30B23, 0x30BD6, 0x5C320, 0x12500},
+     0x133A0, 0x5C759, 0x5C7F0, 0x8DAA0, 0x1B2AC8, 0x30B23, 0x30BD6, 0x5C320, 0x12500, 0x58710, 0x9D300, 0x65ABD2, 0x66D0E8},
 };
 const MotionDll* g_motionDll = nullptr;
 // Separate, optional extension: a mismatch must not disable working dual guns.
@@ -247,6 +262,7 @@ const uint8_t kSetGunFlashTR4[] = {0x4C,0x8B,0xDC,0x48,0x81,0xEC,0x98,0,0,0};
 const uint8_t kSetGunFlashTR5[] = {0x48,0x81,0xEC,0xA8,0,0,0};
 const uint8_t kGetJointsPrologue[] = { 0x44, 0x89, 0x44, 0x24, 0x18 };
 const uint8_t kFireWeaponPrologue[] = { 0x4C, 0x89, 0x44, 0x24, 0x18 };
+const uint8_t kAnimatePistols[] = {0x48,0x89,0x5C,0x24,0x10};
 const uint8_t kPistolHandlerTR4[] = { 0x48, 0x89, 0x5C, 0x24, 0x18 };
 const uint8_t kPistolHandlerTR5[] = { 0x48, 0x89, 0x5C, 0x24, 0x10 };
 const uint8_t kGetTargetOnLOSTR4[] = { 0x40, 0x55, 0x56, 0x57, 0x41, 0x56 };
@@ -343,7 +359,9 @@ bool Gate() {
     if (InInventory() || InFMV() || InTitle()) return false;
     if (ScriptedCameraActive()) return false;
     const GameDllLayout& dll = *g_boundDll;
-    if (!*Ptr<uint8_t*>(dll.laraItem)) return false;
+    const auto* item=*Ptr<uint8_t*>(dll.laraItem);
+    if (!item || !firstperson::UseHeadCamera(
+        *reinterpret_cast<const int16_t*>(item+off::item_hit_points))) return false;
     const int water=LaraWaterStatus();
     // Suspend the whole FP path, not just its camera or body mask. Wading
     // remains eligible; native surface/underwater swimming uses third person.
@@ -811,7 +829,26 @@ bool BuildGunPose(int hand, GunPose& out) {
 
 int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     g_renderHandJoint = -1;
+    g_bodySkinReady=false;
     const int32_t count = g_hGetJoints.Original<Fn_GetJoints>()(item, joints, pass);
+    if (g_renderArm<0 && joints && count>0 && count<=33 && g_active &&
+        g_boundDll && item && item==g_headingItem &&
+        item==*Ptr<uint8_t*>(g_boundDll->laraItem)) {
+        if (g_scenePoseValid && CanTurnBody(item))
+            stabilization::OffsetBodyPalette(joints,count,g_bodyVisualOffset);
+        const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
+        if (g_bodySkinScope && object>=0) {
+            const auto* geom=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride+off::object_geom;
+            const int bones=*reinterpret_cast<const int32_t*>(geom+28);
+            const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+            if (bones<=0 || (bones==count && mapping)) {
+                g_bodySkinMask=firstperson::SkinJointMask(
+                    *reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits),mapping,count);
+                std::memcpy(g_bodySkinPalette,joints,count*12*sizeof(float));
+                g_bodySkinCount=count; g_bodySkinReady=true;
+            }
+        }
+    }
     if (g_renderArm < 0 || count < 15 || !joints || !MotionReady() ||
         item != *Ptr<uint8_t*>(g_boundDll->laraItem)) return count;
     GunPose gun{};
@@ -924,6 +961,88 @@ bool AssistGunShot(const GunPose& gun, void* target, motiongun::Vec& direction) 
     return true;
 }
 
+uint8_t* SelectGunTarget(const GunPose& gun, motiongun::Vec& ray) {
+    using namespace motiongun;
+    if (!g_motionDll) return nullptr;
+    const auto& d=*g_motionDll;
+    if (!d.nextItemActive || !d.getSpheres || !d.findTargetPoint || !d.lineOfSight) return nullptr;
+    auto* items=*Ptr<uint8_t*>(d.items);
+    auto* lara=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if (!items || !lara) return nullptr;
+    struct Sphere { int32_t x,y,z,r; };
+    using Fn_Spheres=int32_t (__cdecl*)(uint8_t*,Sphere*,int32_t);
+    using Fn_TargetPoint=void (__cdecl*)(uint8_t*,ShotVector*);
+    using Fn_LOS=int32_t (__cdecl*)(ShotVector*,ShotVector*);
+    using Fn_Floor=void* (__cdecl*)(int32_t,int32_t,int32_t,int16_t*);
+    ShotVector source{int32_t(std::lround(gun.muzzle.x)),
+                      int32_t(std::lround(gun.muzzle.y)),
+                      int32_t(std::lround(gun.muzzle.z)),
+                      *reinterpret_cast<int16_t*>(lara+off::item_room),0};
+    reinterpret_cast<Fn_Floor>(g_boundBase+g_boundDll->getFloor)(source.x,source.y,source.z,&source.room);
+    auto visible=[&](Vec point,int16_t room) {
+        ShotVector start=source;
+        ShotVector end{int32_t(std::lround(point.x)),int32_t(std::lround(point.y)),
+                       int32_t(std::lround(point.z)),room,0};
+        return reinterpret_cast<Fn_LOS>(g_boundBase+d.lineOfSight)(&start,&end)!=0;
+    };
+    uint8_t* direct=nullptr;
+    uint8_t* assisted=nullptr;
+    Vec assistRay{};
+    float nearest=20480.f, bestCos=-1.f, bestDistance=8192.f*8192.f;
+    const bool allowAssist=!FirstPersonHKScopeAiming();
+    int index=*Ptr<int16_t>(d.nextItemActive);
+    for (int visited=0; index>=0 && index<4096 && visited<4096; ++visited) {
+        auto* item=items+index*off::item_stride;
+        index=*reinterpret_cast<int16_t*>(item+off::item_next_active);
+        if (item==lara || *reinterpret_cast<int16_t*>(item+off::item_hit_points)<=0) continue;
+        const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+        const Vec delta=Sub({float(pos.x_pos),float(pos.y_pos),float(pos.z_pos)},gun.muzzle);
+        if (Dot(delta,delta)>20480.f*20480.f) continue;
+        const int object=*reinterpret_cast<int16_t*>(item+off::item_object);
+        if (object<0) continue;
+        const int meshes=*reinterpret_cast<int16_t*>(Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride);
+        Sphere spheres[256]{};
+        if (meshes<=0 || meshes>256) continue;
+        const int count=reinterpret_cast<Fn_Spheres>(g_boundBase+d.getSpheres)(item,spheres,1);
+        if (count<=0 || count>256) continue;
+        ShotVector targetPoint{};
+        reinterpret_cast<Fn_TargetPoint>(g_boundBase+d.findTargetPoint)(item,&targetPoint);
+        const Vec nativePoint{float(targetPoint.x),float(targetPoint.y),float(targetPoint.z)};
+        Vec bodyPoint{};
+        float bodyDistance=std::numeric_limits<float>::max();
+        for (int i=0;i<count;++i) {
+            const auto& sphere=spheres[i];
+            if (sphere.r<=0) continue;
+            const Vec centre{float(sphere.x),float(sphere.y),float(sphere.z)};
+            float distance=0;
+            if (ShotSphere(gun.muzzle,gun.direction,centre,float(sphere.r),distance) &&
+                distance<nearest && visible(Add(gun.muzzle,Scale(gun.direction,distance)),targetPoint.room)) {
+                direct=item;
+                nearest=distance;
+            }
+            // Pick a real hit sphere near the native animated body target,
+            // rather than an arbitrary height above the creature's origin.
+            const Vec offset=Sub(centre,nativePoint);
+            const float distance2=Dot(offset,offset);
+            if (distance2<bodyDistance) { bodyDistance=distance2; bodyPoint=centre; }
+        }
+        Vec candidate{};
+        if (!allowAssist || bodyDistance==std::numeric_limits<float>::max() ||
+            !AssistedDirection(gun.muzzle,gun.direction,bodyPoint,candidate)) continue;
+        const float cosine=Dot(candidate,gun.direction);
+        const Vec offset=Sub(bodyPoint,gun.muzzle);
+        const float distance2=Dot(offset,offset);
+        if ((cosine>bestCos || (cosine==bestCos && distance2<bestDistance)) &&
+            visible(bodyPoint,targetPoint.room)) {
+            bestCos=cosine; bestDistance=distance2;
+            assisted=item; assistRay=candidate;
+        }
+    }
+    if (direct) return direct; // Direct barrel hits take priority over assistance.
+    if (assisted) ray=assistRay;
+    return assisted;
+}
+
 int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
                          const int16_t* aim) {
     const bool longShot=g_longShot && g_longShot->weapon==weapon && hand==1;
@@ -938,11 +1057,13 @@ int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
     if (hand >= 0 && aim && (longShot ? (gun=g_longShot->gun,true) : BuildGunPose(hand, gun))) {
         if (separateTriggers) g_gunTriggers.Consume(hand);
         tracked=true;
+        g_firingDirection=gun.direction;
+        target=SelectGunTarget(gun,g_firingDirection);
         if (target) hpBefore=*reinterpret_cast<const int16_t*>(
             static_cast<uint8_t*>(target)+off::item_hit_points);
         g_firingHand = hand;
-        g_firingDirection = gun.direction;
-        assisted=AssistGunShot(gun,target,g_firingDirection);
+        assisted=motiongun::Dot(motiongun::Sub(g_firingDirection,gun.direction),
+            motiongun::Sub(g_firingDirection,gun.direction))>1e-8f;
         // Shotgun randomises each pellet BEFORE FireWeapon. Subtract the
         // pre-volley aim, not that pellet's aim, to retain all native spread.
         g_firingAim[0] = longShot ? g_longShot->baseAim[0] : aim[0];
@@ -972,7 +1093,7 @@ int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
     const int32_t result = g_hFireWeapon.Original<Fn_FireWeapon>()(
         weapon, target, extra, aim);
     if (tracked && result) g_handFired[hand]=true;
-    if (tracked && g_motionShots[hand]==1)
+    if (tracked && g_motionShots[hand]<=100)
         LogF("firstperson: Touch %s shot target=%p assist=%d hp=%d->%d native=%d",
             hand ? "right" : "left",target,int(assisted),hpBefore,
             target ? int(*reinterpret_cast<const int16_t*>(
@@ -1184,6 +1305,27 @@ int32_t __cdecl Detour_GetTargetOnLOS(PHD_VECTOR* source,PHD_VECTOR* dest,
         source,dest,flags,mode);
 }
 
+void __cdecl Detour_AnimatePistols(int32_t weapon) {
+    const auto original=g_hAnimatePistols.Original<void (__cdecl*)(int32_t)>();
+    if (!MotionReady() || !g_gunTriggers.WantsShot() ||
+        weapon!=*Ptr<int16_t>(g_boundDll->lara+4)) {
+        original(weapon); return;
+    }
+    auto& target=*Ptr<void*>(g_boundDll->lara+off::lara_target);
+    static uint64_t nextLog=0;
+    if (target && GetTickCount64()>=nextLog) {
+        const int left=*Ptr<int16_t>(g_boundDll->lara+off::lara_left_arm+off::arm_lock);
+        const int right=*Ptr<int16_t>(g_boundDll->lara+off::lara_right_arm+off::arm_lock);
+        if (!left || !right) {
+            LogF("firstperson: controller free fire bypasses native target lock=%d/%d pending=%d/%d",
+                 left,right,int(g_gunTriggers.pending[0]),int(g_gunTriggers.pending[1]));
+            nextLog=GetTickCount64()+5000;
+        }
+    }
+    motiongun::ScopedControllerAim aim(target,true);
+    original(weapon);
+}
+
 void __cdecl Detour_PistolHandler(int32_t weapon) {
     const bool separate=g_gunTriggers.active && MotionTriggerMode() && MotionReady();
     auto* lara=separate ? Ptr<uint8_t>(g_boundDll->lara) : nullptr;
@@ -1339,7 +1481,8 @@ locomotion::Vec DragBody(uint8_t* item) {
             break;
         const int acceptedX = x + coll.shift[0] - pos.x_pos;
         const int acceptedZ = z + coll.shift[2] - pos.z_pos;
-        if (Length(Vec{float(acceptedX), float(acceptedZ)}) > 64) break;
+        if (!AcceptCollisionDragStep({float(dx),float(dz)},
+            {float(acceptedX),float(acceptedZ)})) break;
         pos.x_pos += acceptedX; pos.z_pos += acceptedZ;
         UpdateLaraRoom(item);
         if (!acceptedX && !acceptedZ) break;
@@ -1486,7 +1629,9 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
                    prev.z_pos + (pos.z_pos - prev.z_pos) * t};
     const bool relocated = Length(body - g_previousBody) >
         std::max(1024.0f, LiveWorldUnitsPerMetre() * 2);
-    if (g_haveHeading && g_headingItem == item && !relocated) {
+    const int level=AppState(drva::app_off::level);
+    const bool sameBody=g_headingItem==item && g_headingLevel==level;
+    if (g_haveHeading && sameBody && !relocated) {
         // Consume only body drag actually visible at this render fraction.
         // Stick/animation movement must never cancel genuine physical leaning.
         const Vec shown = g_dragPrevious + (g_dragCurrent - g_dragPrevious) * t;
@@ -1494,11 +1639,15 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         VR().ConsumeHeadFloorOffset(used.x, used.z);
         g_dragShown = shown;
     }
-    if (!g_haveHeading || g_headingItem != item || relocated) {
-        ResetMovementStabilization();
-        const float facing = g_headingItem == item && !relocated
-            ? g_lastHeadWorld : Radians(pos.y_rot);
+    if (!g_haveHeading || !sameBody || relocated) {
+        g_renderTurn.Reset(); g_turnTrace={}; g_rootMotion.Reset();
+        const float oldBase=g_headingBase;
+        const float bodyTurn=sameBody ? Wrap(Radians(pos.y_rot)-g_lastBodyYaw) : 0;
+        const float facing = sameBody && !relocated
+            ? Wrap(g_lastHeadWorld+bodyTurn) : Radians(pos.y_rot);
         g_headingBase = Wrap(facing - VR().HeadYawRadians());
+        g_groundEye.Resume(sameBody,oldBase,g_headingBase,bodyTurn);
+        g_headingLevel=level;
         g_cameraMotionTrace = {};
         g_haveHeading = true;
         g_headingItem = item;
@@ -1519,6 +1668,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         VR().ConsumeHeadFloorOffset(pending.x, pending.z);
     }
     TurnBodyToHead(item, Elapsed(g_bodyTime));
+    g_lastBodyYaw=Radians(pos.y_rot);
     pose.y_rot = Angle(g_headingBase);
     g_lastHeadWorld = Wrap(g_headingBase + VR().HeadYawRadians());
 }
@@ -1561,43 +1711,23 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     int32_t eye[3] = {int32_t(eyeX), pose.y_pos, int32_t(eyeZ)};
 
     const int16_t room = *reinterpret_cast<const int16_t*>(item + off::item_room);
-    // AS_SPLAT (12) is the grounded run-into-wall reaction, not a fall.
-    // Native lara_col_splat uses +/-384 in both TR4 and TR5. Giving it
-    // airborne +/-4096 also skipped raised-floor rejection, letting the eye
-    // enter a crate just for the impact animation. Keep body-turn gating as-is.
-    const bool airborne = !ground && state != 15 && state != 12;
     double eyeY=pose.y_pos;
-    if (airborne && Cfg().positionalTracking && Cfg().firstPersonHeadTranslation && !VR().headAtCamera())
+    if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation && !VR().headAtCamera())
         eyeY+=VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre();
     if (!std::isfinite(eyeY) || std::fabs(eyeY-pose.y_pos)>4096) return;
     firstperson::ClampEyeToWall(body, eye,
         [&](int32_t x, int32_t z, int32_t clearX, int32_t clearZ) {
             RoomCollision coll{};
             coll.radius = 64;
-            coll.badPos = airborne ? 4096 : 384;
-            coll.badNeg = airborne ? -4096 : -384;
+            coll.badPos = 4096;
+            coll.badNeg = -4096;
             coll.badCeiling = 0;
-            coll.flags = airborne ? 0 : 5; // airborne eyes need geometry, not walkable slope/pit rules
+            coll.flags = 0; // Eye clearance permits empty space beyond a ledge.
             coll.old[0] = clearX; coll.old[1] = body[1]; coll.old[2] = clearZ;
             coll.facing = Angle(std::atan2(float(x - clearX), float(z - clearZ)));
             reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase + g_boundDll->getCollisionInfo)(
                 &coll, x, body[1], z, room, 762);
-            if (airborne) {
-                // Allow open space below a jump, not a raised floor at eye
-                // height. Native samples are relative to capsule bottom/top.
-                // Check centre/front/sides at the existing 64-unit radius so
-                // stereo eyes and the near plane stay outside the obstacle.
-                for (int sample=0;sample<18;sample+=3) {
-                    const int floor=coll.floorSamples[sample], ceiling=coll.floorSamples[sample+1];
-                    if (floor==-32512 || ceiling==-32512 ||
-                        double(body[1])+floor<=eyeY+64 ||
-                        double(body[1])-762+ceiling>=eyeY-64) return true;
-                }
-                if (coll.hitStatic) return true;
-            }
-            return (!airborne && (coll.floorSamples[0] < -384 ||
-                                  coll.floorSamples[0] > 384 ||
-                                  coll.floorSamples[1] >= 0)) ||
+            return firstperson::EyeBlocked(coll.floorSamples,body[1],eyeY,coll.hitStatic!=0) ||
                 coll.type == 8 || coll.type == 16 || coll.type == 32 ||
                 coll.shift[0] || coll.shift[2];
         });
@@ -1659,6 +1789,31 @@ void TraceForwardCamera(const uint8_t* item, const float body[3],
     }
 }
 
+void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose) {
+    using namespace locomotion;
+    g_bodyVisualOffset={};
+    if (!CanTurnBody(item)) return;
+    const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const auto& prev=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
+    const int frac=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256);
+    Vec view{},floor{};
+    if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation && !VR().headAtCamera()) {
+        VR().FirstPersonViewOffset(view.x,view.z);
+        VR().HeadFloorOffset(floor.x,floor.z);
+    }
+    const float bodyYaw=Radians(prev.y_rot)+Wrap(Radians(pos.y_rot)-Radians(prev.y_rot))*(frac/256.f);
+    const Vec eyeFromRoot{float(pose.x_pos-int32_t(prev.x_pos+(int64_t(pos.x_pos)-prev.x_pos)*frac/256)),
+                          float(pose.z_pos-int32_t(prev.z_pos+(int64_t(pos.z_pos)-prev.z_pos)*frac/256))};
+    g_bodyVisualOffset=g_groundEye.BodyOffsetAtEye(g_headingBase,bodyYaw,
+        view,floor,LiveWorldUnitsPerMetre(),eyeFromRoot);
+    static uint64_t nextFitLog=0;
+    if (Cfg().firstPersonDriftLog && GetTickCount64()>=nextFitLog) {
+        nextFitLog=GetTickCount64()+5000;
+        LogF("firstperson: resolved body fit yaw=%.1f base=%.1f offset=(%.1f,%.1f) pending=(%.3f,%.3f)m",
+             bodyYaw*180/kPi,g_headingBase*180/kPi,g_bodyVisualOffset.x,g_bodyVisualOffset.z,floor.x,floor.z);
+    }
+}
+
 bool Anchor(PHD_3DPOS& pose) {
     uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
     if (!item) return false;
@@ -1705,7 +1860,8 @@ bool Anchor(PHD_3DPOS& pose) {
         // artificial yaw changes this reference frame; HMD pose is applied
         // separately, identically for both eyes, culling and tracked guns.
         const auto eye=g_groundEye.Apply({body[0],body[1],body[2]},g_headingBase,
-            {float(head.x),float(head.y),float(head.z)});
+            {float(head.x),float(head.y),float(head.z)},
+            Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t);
         pose.x_pos=int32_t(std::lround(eye.x));
         pose.y_pos=int32_t(std::lround(eye.y));
         pose.z_pos=int32_t(std::lround(eye.z));
@@ -1714,8 +1870,9 @@ bool Anchor(PHD_3DPOS& pose) {
     // reference. On vault/pull-up completion the cached skeleton can still be
     // from the climb while Lara's root has moved onto the crate. Recapturing
     // then locks that transient high/sideways offset into every standing frame.
-    // Real relocation, item changes, FP exit and cutscenes reset it separately.
+    // Item/level changes and explicit view toggles discard this calibration.
     ClampRenderedHeadToCollision(item, pose);
+    FitBodyToRenderedEye(item,pose);
     TraceForwardCamera(item, body, head, frac, GetTickCount64(), &pose);
     pose.z_rot = 0;
     if (!g_loggedFirst) {
@@ -1799,7 +1956,9 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         // Already-masked weapon passes must retain their native restrictions.
         bits = (useMeshBits ? savedBits : UINT32_MAX) &
             (g_ledgeArmsOnly ? kArmMeshBits : ~kHeadMeshBit);
+        g_bodySkinScope=true; g_bodySkinReady=false;
         g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item, 1, renderPass);
+        g_bodySkinScope=g_bodySkinReady=false;
         bits = savedBits;
     } else {
         g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item, useMeshBits, renderPass);
@@ -1839,7 +1998,9 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
             g_headingItem=nullptr;
         }
         g_directionalRootScale = 1;
-        ResetMovementStabilization();
+        g_renderTurn.Reset(); g_turnTrace={}; g_rootMotion.Reset();
+        if (!g_runtimeEnabled || !Cfg().firstPerson) g_groundEye.Reset();
+        g_bodyVisualOffset={};
         g_bodyTime = {};
         g_dragPrevious = g_dragCurrent = g_dragShown = {};
         ++g_skipped;
@@ -1964,18 +2125,26 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             reinterpret_cast<void*>(&Detour_AimWeapon), 5,
             kAimWeaponPrologue, sizeof(kAimWeaponPrologue), "AimWeapon"))
         return false;
+    for (const auto& entry : kMotionDlls)
+        if (entry.timestamp == d.timestamp) g_motionDll = &entry;
+    if (g_motionDll && !g_hGetJoints.Install(
+            reinterpret_cast<void*>(base+g_motionDll->getJoints),
+            reinterpret_cast<void*>(&Detour_GetJoints),5,
+            kGetJointsPrologue,sizeof(kGetJointsPrologue),"GetJoints"))
+        Log("firstperson: body palette correction unavailable; native masking retained");
     if (Cfg().firstPersonMotionGuns) {
-        for (const auto& entry : kMotionDlls)
-            if (entry.timestamp == d.timestamp) g_motionDll = &entry;
         if (g_motionDll &&
+            !std::memcmp(reinterpret_cast<const void*>(base+g_motionDll->getSpheres),
+                kGetJointsPrologue,sizeof(kGetJointsPrologue)) &&
             !std::memcmp(reinterpret_cast<const void*>(base+g_motionDll->findTargetPoint),
                 kGetFloor,sizeof(kGetFloor)) &&
             !std::memcmp(reinterpret_cast<const void*>(base+g_motionDll->lineOfSight),
                 kGetFloor,sizeof(kGetFloor)) &&
-            g_hGetJoints.Install(
-                reinterpret_cast<void*>(base + g_motionDll->getJoints),
-                reinterpret_cast<void*>(&Detour_GetJoints), 5,
-                kGetJointsPrologue, sizeof(kGetJointsPrologue), "GetJoints") &&
+            g_hGetJoints.installed() &&
+            g_hAnimatePistols.Install(
+                reinterpret_cast<void*>(base+g_motionDll->animatePistols),
+                reinterpret_cast<void*>(&Detour_AnimatePistols),5,
+                kAnimatePistols,sizeof(kAnimatePistols),"AnimatePistols") &&
             g_hFireWeapon.Install(
                 reinterpret_cast<void*>(base + g_motionDll->fireWeapon),
                 reinterpret_cast<void*>(&Detour_FireWeapon), 5,
@@ -2003,8 +2172,8 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             g_hSetGunFlash.Remove();
             g_hGetTargetOnLOS.Remove();
             g_hPistolHandler.Remove();
+            g_hAnimatePistols.Remove();
             g_hFireWeapon.Remove();
-            g_hGetJoints.Remove();
             g_motionDll = nullptr;
             Log("firstperson: Touch dual-gun hooks unavailable; head aim preserved");
         }
@@ -2049,8 +2218,8 @@ bool Install(const GameDllLayout& d, uint64_t base) {
         g_hSetGunFlash.Remove();
         g_hGetTargetOnLOS.Remove();
         g_hPistolHandler.Remove();
+        g_hAnimatePistols.Remove();
         g_hFireWeapon.Remove();
-        g_hGetJoints.Remove();
         g_motionDll = nullptr;
         Log("firstperson: Touch dual-gun mode disabled; body/hair hooks unavailable");
     }
@@ -2090,6 +2259,7 @@ void Remove() {
     g_hSetGunFlash.Remove();
     g_hGetTargetOnLOS.Remove();
     g_hPistolHandler.Remove();
+    g_hAnimatePistols.Remove();
     g_hFireWeapon.Remove();
     g_hGetJoints.Remove();
     g_motionDll = nullptr;
@@ -2312,6 +2482,11 @@ bool FirstPersonCalibrationKeyReserved(int key) {
     if (g_calibrationKeys.captured[key-VK_F1]) return true;
     return g_calibrationActive && CalibrationFocused() &&
         (GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
+}
+
+const float* FirstPersonBodyPalette(uint64_t& mask,int& count) {
+    mask=g_bodySkinMask; count=g_bodySkinCount;
+    return g_bodySkinScope && g_bodySkinReady && g_renderArm<0 ? g_bodySkinPalette : nullptr;
 }
 
 bool FirstPersonActive() {

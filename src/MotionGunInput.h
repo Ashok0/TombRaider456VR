@@ -3,46 +3,77 @@
 
 namespace tr::motiongun {
 
+// AnimatePistols refuses free fire when a native target remains but its arm
+// lock has been lost. Controller aim chooses its own target in FireWeapon.
+// Hide only this obsolete lock dependency for the duration of animation;
+// preserve native target selection for the next normal simulation tick.
+struct ScopedControllerAim {
+    void*& target;
+    void* saved;
+    bool active;
+    ScopedControllerAim(void*& nativeTarget,bool enabled)
+        : target(nativeTarget),saved(nativeTarget),active(enabled) {
+        if (active) target=nullptr;
+    }
+    ~ScopedControllerAim() { if (active) target=saved; }
+    ScopedControllerAim(const ScopedControllerAim&)=delete;
+    ScopedControllerAim& operator=(const ScopedControllerAim&)=delete;
+};
+
 // Native TR4/5 gun IDs, verified against get_current_ammo_pointer and lara_inv.
 // Revolver includes TR5's Desert Eagle; the Uzi ID is 3, not 2.
 enum Weapon { Pistols=1, Revolver=2, Uzis=3 };
 inline bool DualWeapon(int weapon) { return weapon==Pistols || weapon==Uzis; }
 inline bool SupportedWeapon(int weapon) { return weapon>=1 && weapon<=6; }
 
-// One queued shot per hand, consumed by the native FireWeapon hook rather
-// than by XInput polling. LT fires on release to distinguish draw/holster.
+// LT queues a shot on release to distinguish draw/holster. RT sustains its
+// request while held; native LaraGun still controls the weapon's fire rate.
 struct TriggerInput {
     bool active=false, waitRelease=false, leftHeld=false, rightHeld=false;
-    bool leftCanTap=false, longFired=false, pending[2]={};
+    bool leftWaitRelease=false, rightWaitRelease=false;
+    bool leftCanTap=false, leftGesture=false, longFired=false, pending[2]={};
+    bool dualFireGesture=false;
     uint64_t leftSince=0, equipUntil=0;
 
     void Reset() { *this={}; }
     void Update(bool enabled, bool ready, bool left, bool right, uint64_t now) {
         if (!enabled) { Reset(); return; }
         if (!active) {
-            active=true; waitRelease=left || right;
+            active=true;
+            leftWaitRelease=left; rightWaitRelease=false;
         }
-        if (waitRelease) {
-            waitRelease=left || right;
-            return; // Never inherit a held menu/view-chord trigger.
-        }
+        // A hit animation or temporary loss of tracking can re-enable this
+        // adapter while a trigger is still held. LT must not become a holster
+        // gesture on recovery; held RT is a continuous fire request and resumes.
+        if (!left) leftWaitRelease=false;
+        if (!right) rightWaitRelease=false;
+        waitRelease=leftWaitRelease || rightWaitRelease;
         if (!ready) pending[0]=pending[1]=false;
-        if (left && !leftHeld) {
-            leftSince=now; leftCanTap=ready; longFired=false;
+        if (!leftWaitRelease && left && !leftHeld) {
+            leftSince=now; leftCanTap=ready; leftGesture=true; longFired=false;
+        }
+        if (left && right && ready) {
+            // Holding both triggers means fire both guns, never holster. Keep
+            // that interpretation until LT releases, even if RT releases first.
+            dualFireGesture=true; leftCanTap=false; leftGesture=false;
+            longFired=false; equipUntil=0;
         }
         // Use elapsed wall-clock time, including a release poll which may
         // arrive after the threshold without any intervening held poll.
-        if ((left || leftHeld) && !longFired && now-leftSince>=500) {
+        if (leftGesture && !dualFireGesture && (!right || !ready) && (left || leftHeld) && !longFired &&
+            now-leftSince>=500) {
             longFired=true; leftCanTap=false;
             pending[0]=pending[1]=false;
             equipUntil=now+150;
         }
-        if (!left && leftHeld && !longFired && leftCanTap && ready)
+        if (!leftWaitRelease && !left && leftHeld && !longFired &&
+            leftCanTap && ready)
             pending[0]=true;
-        if (right && !rightHeld && ready && !longFired && now>=equipUntil)
+        if (dualFireGesture && left && ready) pending[0]=true;
+        if (right && ready && now>=equipUntil)
             pending[1]=true;
         leftHeld=left; rightHeld=right;
-        if (!left) { longFired=false; leftCanTap=false; }
+        if (!left) { longFired=false; leftCanTap=false; leftGesture=false; dualFireGesture=false; }
     }
     bool Equip(uint64_t now) const { return active && now<equipUntil; }
     bool WantsShot() const { return active && (pending[0] || pending[1]); }

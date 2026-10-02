@@ -162,6 +162,26 @@ void __cdecl FakeUziHandler(int32_t weapon) {
         *reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_left_arm+20)=3;
 }
 bool shotVisible=true;
+alignas(16) uint8_t targetItems[3][9416]{};
+uint8_t* targetItemsPtr=targetItems[0];
+int16_t activeTarget=0;
+uint8_t targetObjects[3792]{};
+struct TestSphere { int32_t x,y,z,r; };
+int __cdecl FakeTargetSpheres(uint8_t* item,TestSphere* out,int flags) {
+    Check(flags==1,"controller selection requests world-space hit spheres");
+    const auto& pos=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    out[0]={pos.x_pos,pos.y_pos,pos.z_pos,80}; return 1;
+}
+void __cdecl FakeCandidatePoint(uint8_t* item,tr::ShotVector* out) {
+    const auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    *out={p.x_pos,p.y_pos,p.z_pos,1,0};
+}
+void* __cdecl FakeCandidateFloor(int32_t,int32_t,int32_t,int16_t*) { return nullptr; }
+int __cdecl FakeCandidateLOS(tr::ShotVector*,tr::ShotVector* end) { return end->y>-500; }
+void* seenAnimationTarget=nullptr;
+void __cdecl FakePistolAnimation(int32_t) {
+    seenAnimationTarget=*reinterpret_cast<void**>(laraMemory+tr::off::lara_target);
+}
 int shotSightCalls=0, shotTargetCalls=0;
 tr::ShotVector shotTarget{100,100,1300,9,0};
 void __cdecl FakeShotTarget(void*, tr::ShotVector* end) {
@@ -589,6 +609,37 @@ int main() {
         g_motionDll=nullptr; g_headingItem=nullptr; dll.getFloor=0;
     }
 
+    {
+        MotionDll motion{};
+        motion.getSpheres=rva(reinterpret_cast<void*>(&FakeTargetSpheres));
+        motion.findTargetPoint=rva(reinterpret_cast<void*>(&FakeCandidatePoint));
+        motion.lineOfSight=rva(reinterpret_cast<void*>(&FakeCandidateLOS));
+        motion.items=rva(&targetItemsPtr); motion.nextItemActive=rva(&activeTarget);
+        g_motionDll=&motion;
+        const auto savedObjects=dll.objects,savedFloor=dll.getFloor;
+        dll.objects=rva(targetObjects); dll.getFloor=rva(reinterpret_cast<void*>(&FakeCandidateFloor));
+        *reinterpret_cast<int16_t*>(targetObjects)=1;
+        for (int i=0;i<3;++i) {
+            *reinterpret_cast<int16_t*>(targetItems[i]+off::item_next_active)=i==2 ? -1 : int16_t(i+1);
+            *reinterpret_cast<int16_t*>(targetItems[i]+off::item_hit_points)=100;
+            *reinterpret_cast<PHD_3DPOS*>(targetItems[i]+off::item_pos)={i==1 ? 1000 : 0,0,i==2 ? 2000 : 1000};
+        }
+        GunPose gun{}; gun.direction={0,0,1}; motiongun::Vec ray=gun.direction;
+        Check(SelectGunTarget(gun,ray)==targetItems[0],"barrel picks nearest direct living target without native lock");
+        gun.muzzle.x=1000; ray=gun.direction;
+        Check(SelectGunTarget(gun,ray)==targetItems[1],"other controller independently picks another enemy");
+        gun.muzzle.x=0; *reinterpret_cast<int16_t*>(targetItems[0]+off::item_hit_points)=0;
+        Check(SelectGunTarget(gun,ray)==targetItems[2],"dead near enemy cannot steal direct target");
+        auto& farTarget=*reinterpret_cast<PHD_3DPOS*>(targetItems[2]+off::item_pos);
+        farTarget.x_pos=200; ray=gun.direction;
+        Check(SelectGunTarget(gun,ray)==targetItems[2] && ray.x>0,"off-axis living sphere receives bounded assist");
+        farTarget={0,-999,1000}; ray={0,-.70675f,.70746f}; gun.direction=ray;
+        Check(!SelectGunTarget(gun,ray),"occluded sphere is not acquired");
+        activeTarget=-1; gun.direction={0,0,1}; ray=gun.direction;
+        Check(!SelectGunTarget(gun,ray) && ray.z==1,"empty active list leaves unassisted shot intact");
+        activeTarget=0; dll.objects=savedObjects; dll.getFloor=savedFloor; g_motionDll=nullptr;
+    }
+
     // Menu state cannot change the meaning of either chord. Repeated polls
     // must not turn a held view chord into repeated toggles or native START.
     for (int which : {-1, 0, 1}) for (int menu : {0, 1, 2}) {
@@ -762,6 +813,16 @@ int main() {
         status=4; gun=1;
         VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
         Check(MotionReady(),"motion readiness accepts HD pistols and both controller poses");
+        g_hAnimatePistols.m_trampoline=reinterpret_cast<void*>(&FakePistolAnimation);
+        auto& nativeTarget=*reinterpret_cast<void**>(laraMemory+off::lara_target);
+        nativeTarget=targetItems[0];
+        g_gunTriggers.active=true; g_gunTriggers.pending[1]=true;
+        Detour_AnimatePistols(1);
+        Check(!seenAnimationTarget && nativeTarget==targetItems[0],"controller animation bypasses obsolete arm lock and restores target");
+        g_gunTriggers.Reset(); Detour_AnimatePistols(1);
+        Check(seenAnimationTarget==targetItems[0],"non-firing animation preserves native target");
+        nativeTarget=nullptr;
+
         auto blocked=[](const char* expected) {
             const char* reason=MotionBlockedReason();
             Check(reason && !std::strcmp(reason,expected),"motion fallback diagnostic identifies failing gate");
@@ -1132,11 +1193,11 @@ int main() {
         lt=0; rt=255; UpdateGunTriggers(lt,rt,true,10);
         Check(rt==255 && g_gunTriggers.Consume(1),"ready RT still queues exactly one right-hand shot");
         lt=0; rt=255; UpdateGunTriggers(lt,rt,true,20);
-        Check(rt==0 && !g_gunTriggers.WantsShot(),"holding ready RT cannot turn into repeated native fire");
+        Check(rt==255 && g_gunTriggers.Consume(1),"holding ready RT sustains native fire");
         status=1; lt=0; rt=255; UpdateGunTriggers(lt,rt,true,30);
         Check(rt==255 && !g_gunTriggers.WantsShot(),"ready-to-hands-busy transition immediately restores held grab");
         status=4; lt=0; rt=255; UpdateGunTriggers(lt,rt,true,40);
-        Check(rt==0 && !g_gunTriggers.WantsShot(),"held grab cannot become a shot when guns become ready");
+        Check(rt==255 && g_gunTriggers.Consume(1),"held RT resumes when guns become ready");
         lt=0; rt=0; UpdateGunTriggers(lt,rt,true,50);
         lt=255; rt=0; UpdateGunTriggers(lt,rt,true,60);
         lt=0; rt=0; UpdateGunTriggers(lt,rt,true,70);
@@ -1215,8 +1276,8 @@ int main() {
         lt=rt=255; UpdateGunTriggers(lt,rt,true,3010);
         g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
         gun=1; lt=rt=255; UpdateGunTriggers(lt,rt,true,3020);
-        Check(lt==255 && rt==0 && !g_gunTriggers.WantsShot(),
-              "ready gun handoff maintains equip without inheriting either shot");
+        Check(lt==255 && rt==255 && g_gunTriggers.Consume(0) && g_gunTriggers.Consume(1),
+              "ready gun handoff sustains held dual firing without an equip gesture");
         lt=rt=0; UpdateGunTriggers(lt,rt,true,3030);
         Check(!g_gunTriggers.WantsShot(),"old LT tap cannot fire new weapon on release");
         lastGun=savedLastGun;
@@ -1408,6 +1469,15 @@ int main() {
     };
     for (int which : {0, 1}) {
         game = dll.game = which;
+        resetRoomscale();
+        UpdateSceneCamera(camera); hp=0;
+        const PHD_3DPOS deathCamera{300,-100,400,20,30,40,0}; camera=deathCamera;
+        UpdateSceneCamera(camera);
+        Check(!g_active && !g_scenePoseValid && g_runtimeEnabled &&
+              !std::memcmp(&camera,&deathCamera,sizeof(camera)),"death immediately retains native camera and selected view preference");
+        Check(!g_headHidden && !g_ledgeArmsOnly,"death restores native body visibility");
+        hp=1000; UpdateSceneCamera(camera);
+        Check(g_active && Gate(),"loading a living Lara restores first-person eligibility");
         // Reproduce normal engine initialization per game, then exercise the
         // actual input -> simulation -> animation path for every ground gait.
         // Previously these tests forced TR4's -1 sentinel even for TR5.
@@ -1480,7 +1550,7 @@ int main() {
               "wall stops rendered eye with stereo clearance during ground movement");
         collisionMode = 12; state = 2;
         UpdateSceneCamera(camera);
-        Check(camera.z_pos < 100, "ground floor discontinuity blocks camera sweep");
+        Check(camera.z_pos == 144, "grounded camera permits looking beyond a ledge");
         state = 3; UpdateSceneCamera(camera);
         Check(camera.z_pos == 144,
               "airborne floor drop does not retract jump camera");
@@ -1598,9 +1668,10 @@ int main() {
             std::memset(appMemory, 0, sizeof(appMemory)); cutseq = 0;
             cutseqNumber=cutseqTransition=spotCamera=0; vonCroyScene=0;
             *reinterpret_cast<int32_t*>(cameraMemory + off::camera_type) = 0;
+            const float resumeHeading=Wrap(g_lastHeadWorld+Wrap(-1.2f-g_lastBodyYaw));
             physicalPose(-0.4f); pos.y_rot = Angle(-1.2f);
             UpdateSceneCamera(camera);
-            Check(g_active && Near(g_lastHeadWorld, savedHeading), "resuming FP preserves viewing heading");
+            Check(g_active && std::fabs(Wrap(g_lastHeadWorld-resumeHeading))<0.002f, "resuming FP includes scripted body turn in preserved heading");
         }
         cutseqTransition=4; cutseqNumber=0;
         Check(!ScriptedCameraActive() && Gate(),"stale cutscene transition without an ID does not lock FP off");
@@ -1765,6 +1836,21 @@ int main() {
         *reinterpret_cast<void**>(objectInfo+off::object_geom+off::geom_mesh)=objectInfo;
         *reinterpret_cast<void**>(heads+off::geom_mesh)=objectInfo;
         Check(DrawingLaraHead(itemMemory),"loaded matching face geometry is still hidden");
+        g_hGetJoints.m_trampoline=reinterpret_cast<void*>(&FakeSkinJoints);
+        state=2; g_active=g_scenePoseValid=true; g_headingItem=itemMemory;
+        g_renderArm=-1; g_bodySkinScope=true; g_bodyVisualOffset={35,-60};
+        float palette[15*12]{}; bits=kArmMeshBits;
+        Check(Detour_GetJoints(itemMemory,palette,0)==15,"native body joint count retained");
+        uint64_t visible=0; int count=0;
+        const float* full=FirstPersonBodyPalette(visible,count);
+        Check(full && count==15 && visible==kArmMeshBits && full[3]==35 && full[11]==-60,
+              "body draw captures full palette with final camera fit before masking");
+        std::memset(palette,0,sizeof(palette));
+        Check(full[0]==1 && full[7*12]==1 && full[14*12]==1,
+              "native masking cannot destroy captured hidden torso/head transforms");
+        g_bodySkinScope=false;
+        Check(!FirstPersonBodyPalette(visible,count),"NPC and later native draws cannot inherit body palette");
+        g_bodyVisualOffset={};
         object=oldObject; dll.objects=oldObjects; dll.gLaraHeads=oldHeads;
         RestoreHeadMesh(); bits=baseBits;
         state = 45; UpdateSceneCamera(camera); FirstPersonToggle();
@@ -2017,8 +2103,11 @@ int main() {
               "reverted crouch behavior stays native and never receives grounded-eye stabilization");
         state=2; gaitSway={}; Anchor(camera);
         pos.x_pos+=10000; prev=pos; gaitSway={10,20,30};
+        Check(Anchor(camera) && camera.x_pos==pos.x_pos && camera.y_pos==pos.y_pos-700,
+              "same-body relocation preserves standing calibration through transient animation");
+        ++*reinterpret_cast<int32_t*>(appMemory+drva::app_off::level);
         Check(Anchor(camera) && camera.x_pos==pos.x_pos+10 && camera.y_pos==pos.y_pos-680,
-              "teleport recaptures the eye reference instead of retaining stale camera offsets");
+              "different level invalidates old standing calibration even if Lara address is reused");
         state=2; g_runtimeEnabled=false; UpdateSceneCamera(camera);
         Check(!g_groundEye.valid && !g_rootMotion.valid,"leaving first person clears stabilization state");
     }

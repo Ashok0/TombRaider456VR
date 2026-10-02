@@ -8,6 +8,7 @@
 #include <iterator>
 #include <vector>
 #include <cstdarg>
+#include <cstdint>
 #include "../src/GL.h"
 #include "../src/MotionHandSkin.h"
 
@@ -87,11 +88,18 @@ int main(int argc,char** argv) {
     Check(gl::CheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE,"pixel target complete");
     gl::GenVertexArrays(1,&vao);gl::BindVertexArray(vao);gl::GenBuffers(1,&vbo);gl::BindBuffer(GL_ARRAY_BUFFER,vbo);
     glViewport(0,0,128,128);glDisable(GL_DEPTH_TEST);glDisable(GL_CULL_FACE);glDisable(GL_BLEND);
-    auto render=[&](GLuint program,int hand,float weight,bool enabled,float angle) {
+    auto render=[&](GLuint program,int hand,float weight,bool enabled,float angle,bool body=false,bool full=false) {
         gl::UseProgram(program);const GLint uniform=gl::GetUniformLocation(program,"uTrackedHandJoint");
         if(uniform>=0) gl::Uniform1i(uniform,enabled ? hand+1 : 0);
+        const GLint bodyUniform=gl::GetUniformLocation(program,"uVisibleBody");
+        if (bodyUniform>=0) {
+            const uint64_t bits=uint64_t(1)<<hand;
+            const float mask[4]={float(bits&0xffff),float((bits>>16)&0xffff),float(bits>>32),body ? 1.f : 0.f};
+            gl::Uniform4fv(bodyUniform,1,mask);
+        }
         float palette[72*12]{};float* wrist=palette+hand*12;
         wrist[0]=wrist[5]=std::cos(angle);wrist[1]=-std::sin(angle);wrist[4]=std::sin(angle);wrist[10]=1;
+        if (full) { std::memcpy(palette+(hand-1)*12,wrist,12*sizeof(float)); palette[(hand-1)*12+3]=.1f; }
         gl::Uniform4fv(gl::GetUniformLocation(program,"uJoints"),72*3,palette);
         const float xy[6][2]={{.3f,-.2f},{.8f,-.2f},{.3f,.2f},{.8f,-.2f},{.8f,.2f},{.3f,.2f}};
         float data[6][15]{};
@@ -116,6 +124,17 @@ int main(int argc,char** argv) {
             const auto pixels=render(fixed,hand,hidden,true,angle);bool blank=true;
             for(size_t i=1;i<pixels.size();i+=4) if(pixels[i]) blank=false;
             Check(blank,"forearm and opposite-hand side remain hidden without stretched geometry");
+        }
+    }
+    for (int joint:{7,10,13,14,32}) for (float angle:{0.f,.7f,-1.4f}) {
+        const auto expected=render(native,joint,.75f,false,angle,false,true);
+        Check(render(native,joint,.75f,false,angle)!=expected,"zeroed hidden bones reproduce shared-vertex collapse");
+        for (int frame=0;frame<6;++frame) {
+            Check(render(fixed,joint,.75f,false,angle,true,true)==expected,"visible body seam keeps full animated palette");
+            const auto hidden=render(fixed,joint,.25f,false,angle,true,true);
+            bool blank=true; for(size_t i=1;i<hidden.size();i+=4) if(hidden[i]) blank=false;
+            Check(blank,"hidden torso/head fragments trimmed by original skin weights");
+            Check(render(fixed,joint,.75f,false,angle,false,true)==expected,"subsequent NPC or third-person draw clears visibility");
         }
     }
     gl::UseProgram(0);gl::BindVertexArray(0);gl::DeleteBuffers(1,&vbo);gl::DeleteVertexArrays(1,&vao);gl::BindFramebuffer(GL_FRAMEBUFFER,0);gl::DeleteFramebuffers(1,&fbo);glDeleteTextures(1,&tex);

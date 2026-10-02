@@ -23,6 +23,8 @@
 #include "MotionGunMath.h"
 #include "MotionGunInput.h"
 #include "Config.h"
+#include "FirstPersonClearance.h"
+#include "FirstPersonStabilization.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -776,7 +778,7 @@ static void TestMotionGunTriggers() {
     t.Update(true,true,false,true,200);
     Check(t.pending[1] && !t.pending[0] && t.Consume(1),"RT press fires only right");
     t.Update(true,true,false,true,300);
-    Check(!t.WantsShot(),"held RT does not repeat a tap");
+    Check(t.Consume(1),"held RT sustains native cadence");
     t.Update(true,true,true,false,400);
     t.Update(true,true,false,true,500);
     Check(t.Consume(0) && t.Consume(1),"simultaneous LT release and RT press fire independently");
@@ -799,12 +801,65 @@ static void TestMotionGunTriggers() {
     Check(!t.active && !t.WantsShot(),"menu or mode change discards pending shots");
     t.Update(true,true,true,true,12203);
     t.Update(true,true,true,true,18000);
-    Check(!t.WantsShot() && !t.Equip(18000),"held triggers entering mode require release");
+    Check(t.Consume(0) && t.Consume(1) && !t.Equip(18000),"held dual triggers recover firing without holstering");
     t.Update(true,true,false,false,18001);
     t.Update(true,true,false,true,18002);
     Check(t.pending[1],"fresh press after reentry works");
     t.Update(true,false,false,true,18003);
     Check(!t.WantsShot(),"lost readiness cancels queued fire");
+    TriggerInput sustainedRight;
+    sustainedRight.Update(true,true,false,false,0);
+    sustainedRight.Update(true,true,false,true,20);
+    Check(sustainedRight.Consume(1),"RT requests an initial native shot");
+    sustainedRight.Update(true,true,false,true,100);
+    Check(sustainedRight.Consume(1),"held RT remains able to fire after a shot");
+    sustainedRight.Update(true,false,false,true,120);
+    sustainedRight.Update(true,true,false,true,180);
+    Check(sustainedRight.Consume(1),"held RT resumes after a hit interruption");
+    TriggerInput both;
+    both.Update(true,true,false,false,0);
+    for (uint64_t t=10;t<3000;t+=100) {
+        both.Update(true,true,true,true,t);
+        Check(both.Consume(0) && both.Consume(1) && !both.Equip(t),
+              "both triggers keep firing beyond holster threshold while guns stay armed");
+    }
+    both.Update(true,true,true,false,3200);
+    Check(both.Consume(0) && !both.Equip(3200),
+          "releasing RT first cannot turn a dual fire hold into holstering");
+    both.Update(true,true,false,false,3300);
+    both.Update(true,true,true,false,3400);
+    both.Update(true,true,true,false,4000);
+    Check(both.Equip(4000),"fresh solo LT hold still holsters after dual firing");
+    both.Update(true,true,true,true,4300);
+    Check(both.Consume(0) && both.Consume(1) && !both.Equip(4300),
+          "RT clears an already latched LT hold when guns are still ready");
+    int bat=1;
+    void* nativeTarget=&bat;
+    TriggerInput attackingBat;
+    attackingBat.Update(true,true,false,false,0);
+    unsigned shots=0;
+    // Native AnimatePistols raises/fires with an arm lock OR with fire input
+    // and a null native target. A bat can remain targeted after both arm
+    // locks are lost. Exercise sustained triggers through that transition.
+    for (uint64_t t=20;t<=120000;t+=20) {
+        attackingBat.Update(true,true,true,true,t);
+        const bool locked=t<2000;
+        const bool fire=attackingBat.WantsShot();
+        if (t==2000) Check(fire && !(locked || (fire && !nativeTarget)),
+            "reproduce drawn guns blocked by an unlocked native bat target");
+        {
+            ScopedControllerAim scope(nativeTarget,fire);
+            if ((locked || (fire && !nativeTarget)) && t%200==0) {
+                shots+=attackingBat.Consume(0);
+                shots+=attackingBat.Consume(1);
+            }
+        }
+        if (nativeTarget!=&bat || attackingBat.Equip(t)) break;
+    }
+    Check(shots==1200 && nativeTarget==&bat,
+          "two-minute dual-trigger hold keeps native cadence after arm-lock loss and restores targeting");
+    { ScopedControllerAim scope(nativeTarget,false);
+      Check(nativeTarget==&bat,"third-person/non-firing target remains untouched"); }
     Check(HandOnlyMask(0x600)==(1u<<10) && HandOnlyMask(0x3000)==(1u<<13),
           "native gun passes retain only right/left hand meshes");
     Check(HandOnlyMask(0x3600)==0x2400,"combined rifle hand pass excludes both forearms");
@@ -902,6 +957,145 @@ static void TestMotionGunEnemyAim() {
     CheckNear(grip.z,muzzle.z,"20 degree tilt keeps grip Z");
 }
 
+static void TestPhysicalBodyCentering() {
+    using namespace tr::locomotion;
+    using tr::stabilization::GroundEye;
+    printf("\nphysical body centering with the stabilized camera and skin palette\n");
+    constexpr float Pi=3.14159265358979323846f;
+    const float units=423,neutralYaw=.37f,neck=.15f;
+    const Vec nativeEye{17,155};
+    bool centered=true,stableWorld=true,realLean=true,paddingClear=true;
+    float previousBugPeak=0;
+    for (float base : {0.f,.7f,-Pi/2,Pi}) for (bool stabilized : {false,true}) {
+        GroundEye fit;
+        const Vec initial=Rotate(nativeEye,base+neutralYaw);
+        fit.Apply({0,0,0},base,{initial.x,-710,initial.z},base+neutralYaw);
+        for (int degrees=-720;degrees<=720;degrees+=5) {
+            const float headYaw=neutralYaw+degrees*Pi/180;
+            const Vec arc=NeckToHead(headYaw,neck)-NeckToHead(neutralYaw,neck);
+            for (Vec step : {Vec{},Vec{.3f,-.2f}}) {
+                // Same tracking functions as VRSystem: neck displacement for
+                // collision drag, raw eye displacement for the stable view.
+                const Vec raw=arc+step;
+                const Vec view=(stabilized ? raw : NeckFloorOffset(raw,arc));
+                const Vec floor=NeckFloorOffset(raw,arc);
+                const float bodyYaw=base+headYaw;
+                const Vec animated=Rotate(nativeEye,bodyYaw);
+                const auto eye=fit.Apply({0,0,0},base,
+                    {animated.x,-710,animated.z},bodyYaw);
+                const Vec camera=Vec{eye.x,eye.z}+Rotate(view,base)*units;
+                previousBugPeak=std::max(previousBugPeak,Length(camera-animated));
+                const Vec shift=fit.BodyOffset(base,bodyYaw,view,floor,units);
+                float palette[24]{};
+                palette[0]=palette[5]=palette[10]=1;
+                palette[3]=animated.x; palette[7]=-710; palette[11]=animated.z;
+                tr::stabilization::OffsetBodyPalette(palette,2,shift);
+                const Vec renderedEye{palette[3],palette[11]};
+                centered &= Length(camera-renderedEye-Rotate(floor,base)*units)<.001f;
+                stableWorld &= Length(camera-initial-Rotate(view,base)*units)<.001f;
+                realLean &= Length(camera-renderedEye-Rotate(step,base)*units)<.001f;
+                const float stick=Pi/3;
+                const Vec pivoted=stabilized ? Rotate(raw,-stick) : PivotFloorOffset(raw,arc,stick);
+                const Vec turnedView=(stabilized ? pivoted : NeckFloorOffset(pivoted,arc));
+                const Vec turnedFloor=NeckFloorOffset(pivoted,arc);
+                const auto turned=fit.Apply({0,0,0},base+stick,{0,-710,0},bodyYaw+stick);
+                const Vec turnedShift=fit.BodyOffset(base+stick,bodyYaw+stick,turnedView,turnedFloor,units);
+                centered &= Length(Vec{turned.x,turned.z}+Rotate(turnedView,base+stick)*units-
+                    Rotate(nativeEye,bodyYaw+stick)-turnedShift-Rotate(turnedFloor,base+stick)*units)<.001f;
+                if (stabilized) stableWorld &= Length(Rotate(turnedView,base+stick)-Rotate(view,base))<.0001f;
+                for (int i=12;i<24;++i) paddingClear &= palette[i]==0;
+                paddingClear &= palette[0]==1 && palette[5]==1 && palette[10]==1 && palette[7]==-710;
+            }
+        }
+        // A fixed camera changes the tracking basis. Subsequent physical
+        // rotation must still use the original body-space calibration.
+        const float nextBase=base+.9f;
+        fit.Resume(true,base,nextBase,Pi/2);
+        const float yaw=nextBase+1.1f;
+        const Vec view{.08f,-.12f},floor{.03f,.04f};
+        const auto eye=fit.Apply({0,0,0},nextBase,{300,-650,200},yaw);
+        const Vec shift=fit.BodyOffset(nextBase,yaw,view,floor,units);
+        centered &= Length(Vec{eye.x,eye.z}+Rotate(view,nextBase)*units-
+            (Rotate(nativeEye,yaw)+shift)-Rotate(floor,nextBase)*units)<.001f;
+    }
+    Check(previousBugPeak>200,"reproduce the old intermediate-angle camera/mesh mismatch");
+    Check(centered,"rendered mesh stays centered throughout two full physical turns in both directions and after camera handoff");
+    Check(stableWorld,"physical body correction does not move the stable camera or world");
+    Check(realLean,"body centering preserves genuine roomscale translation and leaning");
+    Check(paddingClear,"body palette fit preserves rotations, height and hidden/padding matrices");
+
+    // The grounded camera may look beyond a crate edge without requiring a
+    // walkable floor there. Walls, ceilings and invalid rooms still block it.
+    int32_t samples[18]{};
+    for (int i=0;i<18;i+=3) { samples[i]=8192; samples[i+1]=-1000; }
+    Check(!tr::firstperson::EyeBlocked(samples,0,-710,false),
+          "grounded eye looks over deep ledge without camera retraction");
+    samples[3]=-700;
+    Check(tr::firstperson::EyeBlocked(samples,0,-710,false),"eye-height crate wall still blocks camera");
+    samples[3]=8192; samples[4]=0;
+    Check(tr::firstperson::EyeBlocked(samples,0,-710,false),"near ceiling still blocks camera at an edge");
+    samples[4]=-32512;
+    Check(tr::firstperson::EyeBlocked(samples,0,-710,false),"missing room is not treated as an open ledge");
+
+    Check(AcceptCollisionDragStep({20,20},{0,20}) &&
+          AcceptCollisionDragStep({0,32},{0,5}) &&
+          !AcceptCollisionDragStep({0,5},{0,-30}) &&
+          !AcceptCollisionDragStep({0,5},{0,30}) &&
+          !AcceptCollisionDragStep({0,5},{30,0}) &&
+          !AcceptCollisionDragStep({0,5},{0,0}),
+          "roomscale accepts shortened/sliding travel but rejects collision pushback and overshoot");
+    // Same feedback as DragBody -> interpolated ConsumeHeadFloorOffset. A
+    // near-edge native pushback used to move the neutral the wrong way each
+    // tick, eventually hitting the two-metre guard and persisting after jumps.
+    bool noDrift=true,releases=true;
+    float oldPending=.03f;
+    for (int tick=0;tick<40;++tick) {
+        if (Length(DragRequest({0,oldPending},.02f))<=2.f) oldPending+=30.f/units;
+    }
+    Check(oldPending>2.f,"reproduce accumulated ledge pushback reaching the persistent roomscale guard");
+    for (int degrees=0;degrees<360;degrees+=15) {
+        const float yaw=degrees*Pi/180;
+        Vec pending{0,.03f};
+        for (int tick=0;tick<300;++tick) {
+            const Vec request=Rotate(DragRequest(pending,.02f),yaw)*units;
+            const Vec pushback=Rotate({0,-30},yaw);
+            if (AcceptCollisionDragStep(request,pushback)) pending=pending-Rotate(pushback,-yaw)*(1/units);
+        }
+        noDrift &= Length(pending-Vec{0,.03f})<.0001f;
+        // Airborne frames consume nothing; landing on clear ground can then
+        // accept the small remaining physical step without a view toggle.
+        const Vec clear=Rotate(DragRequest(pending,.02f),yaw)*units;
+        if (AcceptCollisionDragStep(clear,clear)) pending=pending-Rotate(clear,-yaw)*(1/units);
+        releases &= Length(pending)<=.02001f;
+    }
+    Check(noDrift,"five seconds of ledge pushback at every heading cannot corrupt the tracking neutral");
+    Check(releases,"jump and landing recover the remaining roomscale step without toggling views");
+
+    GroundEye edgeFit;
+    edgeFit.Apply({0,0,0},0,{17,-710,155},0);
+    bool finalEyeCentered=true,calibrationStable=true;
+    for (int frame=0;frame<120;++frame) {
+        const float yaw=frame*Pi/30;
+        const Vec native=Rotate(nativeEye,yaw);
+        const Vec root{float(frame*20),float(frame*-10)};
+        const auto eye=edgeFit.Apply({root.x,-768,root.z},0,
+            {root.x+native.x,-1478,root.z+native.z},yaw);
+        // Alternate free edge views and real wall retractions, including
+        // leaving the obstacle. Only the current resolved eye is fitted.
+        const Vec collision=(frame%3)==0 ? Vec{-40,-90} : Vec{};
+        const Vec finalAnchor=Vec{eye.x,eye.z}+collision;
+        const Vec view{.04f,.03f},floor{.01f,.02f};
+        const Vec shift=edgeFit.BodyOffsetAtEye(0,yaw,view,floor,units,finalAnchor-root);
+        float palette[12]={1,0,0,root.x+native.x,0,1,0,-1478,0,0,1,root.z+native.z};
+        tr::stabilization::OffsetBodyPalette(palette,1,shift);
+        finalEyeCentered &= Length(finalAnchor+view*units-
+            Vec{palette[3],palette[11]}-floor*units)<.002f;
+        calibrationStable &= edgeFit.local.x==17 && edgeFit.local.z==155;
+    }
+    Check(finalEyeCentered,"rendered torso follows final collision-resolved eye through repeated edges and turns");
+    Check(calibrationStable,"edge and wall camera retractions never become permanent standing offsets");
+}
+
 int main() {
     printf("TombRaiderVR self-test\n======================\n");
 
@@ -917,6 +1111,7 @@ int main() {
     TestMotionGunMath();
     TestMotionGunEnemyAim();
     TestMotionGunTriggers();
+    TestPhysicalBodyCentering();
     TestMotionGunEquipStyles();
     TestGunCalibration();
     TestGunCalibrationPersistence();

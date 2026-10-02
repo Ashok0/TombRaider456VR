@@ -165,6 +165,7 @@ constexpr uint32_t gTargetHeight   = 0x00698678;
 constexpr uint32_t gTargetWidth    = 0x03298680;
 
 namespace app_off {
+constexpr uint32_t level           = 1264;
 constexpr uint32_t InventoryActive = 2148;
 constexpr uint32_t InFMV           = 2152;
 constexpr uint32_t InTitle         = 2156;

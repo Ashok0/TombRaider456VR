@@ -193,3 +193,34 @@ for build, row in zip(builds, rows):
                for i in decoder.disasm(data[crossbow:crossbow+(682 if tr4 else 333)],crossbow)), (
                    path, "projectile item table")
     print(f"{path}: all-weapon hooks, six pellets, launchers and optic calls OK")
+# Controller acquisition and animation dependencies, independently checked in
+# each shipped image. RVAs must also match the production MotionDll row.
+source = (root / 'src/FirstPerson.cpp').read_text()
+for path, stamp, joints, fire, view_ret, right_ret, left_ret, w2v, pistol, *_ in builds:
+    data = pefile.PE(str(root / path)).get_memory_mapped_image()
+    table = source.split('constexpr MotionDll kMotionDlls[] = {', 1)[1].split('\n};', 1)[0]
+    row = next(re.findall(r'0x[0-9A-Fa-f]+', r) for r in re.findall(r'\{([^{}]+)\}', table)
+               if int(re.findall(r'0x[0-9A-Fa-f]+', r)[0],16) == stamp)
+    values = [int(v,16) for v in row]
+    animate, spheres, active, items = values[-4:]
+    assert data[animate:animate+5] == bytes.fromhex('48 89 5c 24 10'), path
+    assert data[spheres:spheres+5] == bytes.fromhex('44 89 44 24 18'), path
+    firing = list(decoder.disasm(data[fire:fire+450], fire))
+    assert any(i.mnemonic == 'call' and i.operands[0].imm == spheres for i in firing), (path, 'native sphere helper')
+    animation = list(decoder.disasm(data[animate:animate+1884], animate))
+    lara_match = re.search(rf'0x{stamp:08X}, L"tomb[45]\.dll", "[^"]+",\s*'
+                          r'/\* lara\s*\*/\s*(0x[0-9A-F]+)', game_source)
+    lara = int(lara_match[1],16)
+    assert any('rip' in i.op_str and i.address+i.size+i.disp == lara+208 for i in animation), (path,'native target field')
+    handler = list(decoder.disasm(data[pistol:pistol+1100],pistol))
+    assert any(i.mnemonic == 'call' and i.operands[0].imm == animate for i in handler), (path,'native pistol animation')
+    # Expected symbols/mapped data, verified from PDB and independent structural
+    # mapping (TR4 active-list 22 votes, TR5 18; GetSpheres exact function match).
+    expected = {
+        0x696B4999:(0x5A680,0xA3C30,0x63DAB0,0x699CA0),
+        0x696B499C:(0x579C0,0x9CF90,0x65AC92,0x66D1A8),
+        0x68C12FDA:(0x5A380,0xA47D0,0x63E9F0,0x69ABE0),
+        0x68C12FE9:(0x58710,0x9D300,0x65ABD2,0x66D0E8),
+    }
+    assert (animate,spheres,active,items) == expected[stamp], path
+    print(f'{path}: controller target acquisition and AnimatePistols verified')

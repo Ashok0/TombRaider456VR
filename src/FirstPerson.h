@@ -9,6 +9,8 @@ void FirstPersonToggle();
 void FirstPersonRecenter();
 void FirstPersonShutdown();
 bool FirstPersonActive();
+// Unmasked palette only within Lara's first-person body draw.
+const float* FirstPersonBodyPalette(uint64_t& mask,int& count);
 // Render-only HK optic pose; no native zoom, weapon or camera state mutations.
 bool FirstPersonHKScopePose(motiongun::Frame& lens, motiongun::Frame& camera,float* radiusMetres=nullptr);
 bool FirstPersonDrawingTrackedHands();

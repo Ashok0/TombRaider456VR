@@ -72,7 +72,7 @@ inline Vec Cross(Vec a, Vec b) {
     return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x};
 }
 // Small per-hand assist, never a head/body-aim override. The caller supplies
-// only the native selected, living, unobstructed target.
+// a living, unobstructed candidate selected for this controller.
 inline bool AssistedDirection(Vec muzzle, Vec barrel, Vec target, Vec& result) {
     const Vec delta=Sub(target,muzzle);
     const float length2=Dot(delta,delta), barrel2=Dot(barrel,barrel);
@@ -84,6 +84,20 @@ inline bool AssistedDirection(Vec muzzle, Vec barrel, Vec target, Vec& result) {
     result=direction;
     return true;
 }
+// Match FireWeapon's sphere test: centre in front by more than its radius,
+// and the ray passing inside the projected circle. The returned distance is
+// the same conservative near endpoint used by its native obstruction test.
+inline bool ShotSphere(Vec muzzle, Vec ray, Vec centre, float radius, float& distance) {
+    const Vec delta=Sub(centre,muzzle);
+    const float ray2=Dot(ray,ray);
+    if (!(radius>0) || !std::isfinite(ray2) || ray2<.0001f) return false;
+    const float along=Dot(delta,ray)/std::sqrt(ray2);
+    const float across2=Dot(delta,delta)-along*along;
+    if (!std::isfinite(along) || along<=radius || across2>=radius*radius) return false;
+    distance=along-radius;
+    return true;
+}
+
 inline Vec CollisionEndpoint(bool confirmedHit, Vec nativeEnd, Vec muzzle, Vec ray) {
     // A confirmed sphere hit uses a SHORT segment ending before the sphere.
     // Extending it changes GetTargetOnLOS's result and bypasses HitTarget.

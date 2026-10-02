@@ -262,6 +262,8 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
 constexpr uint32_t kMaxProgram = 4096;
 
 struct ProgramState {
+    GLint locBodyMask=-2, locJoints=-2;
+    bool bodyMaskLive=false;
     GLint locHand = -2;
     int handJoint = -1;
     GLint locBone   = -2;     // -2 = not looked up yet, -1 = not one of ours
@@ -752,6 +754,26 @@ void BoneSkinAfterValidate() {
         if(joint!=ps.handJoint) {
             gl::Uniform1i(ps.locHand,joint+1);
             ps.handJoint=joint;
+        }
+    }
+    if (ps.locBodyMask==-2) {
+        ps.locBodyMask=gl::GetUniformLocation(prog,"uVisibleBody");
+        ps.locJoints=gl::GetUniformLocation(prog,"uJoints");
+    }
+    if (ps.locBodyMask>=0) {
+        uint64_t mask=0; int count=0;
+        const float* palette=FirstPersonBodyPalette(mask,count);
+        const bool active=palette && ps.locJoints>=0;
+        if (active || ps.bodyMaskLive) {
+            const float visible[4]={float(mask&0xffffu),float((mask>>16)&0xffffu),
+                float(mask>>32),active ? 1.f : 0.f};
+            gl::Uniform4fv(ps.locBodyMask,1,visible);
+            ps.bodyMaskLive=active;
+        }
+        if (active) {
+            gl::Uniform4fv(ps.locJoints,count*3,palette);
+            // Force the engine to restore its own palette on the following draw.
+            VidState().consts|=kJoints;
         }
     }
     if (!PathPossible()) return;
