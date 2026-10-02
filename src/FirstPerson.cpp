@@ -1492,10 +1492,36 @@ locomotion::Vec DragBody(uint8_t* item) {
     return actual * (1 / scale);
 }
 
+// Catch the native turn180 animation command before input/body-follow can
+// pull Lara back toward the old VR heading. Native code already turns Lara;
+// rotate only the VR frame and pending movement, exactly once per half-turn.
+void AdvanceLaraAnimation(uint8_t* item) {
+    const bool observe=item && item==g_headingItem && g_active && g_haveHeading &&
+        Gate() && LaraWaterStatus()==0;
+    const int beforeState=observe ? *reinterpret_cast<const int16_t*>(item+off::item_anim_state) : -1;
+    const int16_t beforeYaw=observe ? reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot : 0;
+    g_hAnimateLara.Original<Fn_AnimateLara>()(item);
+    if (!observe || !Gate() || LaraWaterStatus()!=0) return;
+    const int afterState=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    const int16_t afterYaw=reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot;
+    const float turn=locomotion::GroundRollTurn(beforeState,afterState,beforeYaw,afterYaw);
+    if (turn==0) return;
+    g_headingBase=Wrap(g_headingBase+turn);
+    VR().PivotHeadFloorOffset(turn);
+    g_manualWorld=locomotion::Rotate(g_manualWorld,turn);
+    g_lastHeadWorld=Wrap(g_headingBase+VR().HeadYawRadians());
+    g_lastBodyYaw=Radians(afterYaw);
+    auto* analog=Ptr<int16_t>(g_boundDll->analogInput);
+    analog[2]=analog[3]=Angle(g_lastHeadWorld);
+    g_rootMotion.Reset();
+    g_renderTurn.Reset();
+    LogF("firstperson: native ground roll turned VR heading 180 degrees state=%d->%d",beforeState,afterState);
+}
+
 // Match TR1-3: one animation tick, scaling only horizontal root displacement.
 // Native collision still runs afterwards, and vertical/gravity motion is intact.
 void __cdecl Detour_AnimateLara(uint8_t* item) {
-    auto original = g_hAnimateLara.Original<Fn_AnimateLara>();
+    auto original = &AdvanceLaraAnimation;
     const int scale = item && item == g_headingItem
         ? std::clamp(g_directionalRootScale, 1, 3) : 1;
     const bool stabilize=g_stabilizeRoot && item && item==g_headingItem && CanTurnBody(item);
@@ -1677,13 +1703,15 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     if (!g_boundDll->getCollisionInfo) return;
     const bool ground = CanTurnBody(item);
     const int state = *reinterpret_cast<const int16_t*>(item + off::item_anim_state);
-    // Match TR1-3's ground, jump, fall and wall-impact coverage. Interactions
+    // Ground rolls also need a sweep around their stable eye. Interactions
     // use the retracted anchor instead, and third person never reaches here.
     const bool jump = LaraWaterStatus() == 0 &&
         *reinterpret_cast<const int16_t*>(item + off::item_hit_points) > 0 &&
         (state == 3 || state == 9 || state == 12 || state == 15 ||
          (state >= 25 && state <= 29));
-    if (!ground && !jump) return;
+    const bool roll=locomotion::IsGroundRollState(state) && LaraWaterStatus()==0 &&
+        *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0;
+    if (!ground && !jump && !roll) return;
 
     const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
     const auto& prev = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos_prev);
@@ -1735,6 +1763,28 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     // amount here so both rendered eyes remain on the clear side of the wall.
     pose.x_pos = eye[0] - offsetX;
     pose.z_pos = eye[2] - offsetZ;
+    if (roll) {
+        // The rendered headset can be lower than the scene anchor (ducking).
+        // Query the final horizontal eye, then keep that rendered centre clear
+        // of floor/ceiling without changing Lara, tracking neutral or calibration.
+        RoomCollision coll{};
+        coll.radius=64; coll.badPos=4096; coll.badNeg=-4096;
+        coll.old[0]=eye[0]; coll.old[1]=body[1]; coll.old[2]=eye[2];
+        coll.facing=Angle(g_lastHeadWorld);
+        reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase+g_boundDll->getCollisionInfo)(
+            &coll,eye[0],body[1],eye[2],room,762);
+        if (coll.floorSamples[0]!=-32512 && coll.floorSamples[1]!=-32512) {
+            const double floor=double(body[1])+coll.floorSamples[0];
+            const double ceiling=double(body[1])-762+coll.floorSamples[1];
+            if (floor>ceiling) {
+                const double margin=std::min(64.0,(floor-ceiling)*0.5);
+                const double corrected=std::clamp(eyeY,ceiling+margin,floor-margin);
+                const double anchor=pose.y_pos+corrected-eyeY;
+                if (anchor>=INT32_MIN && anchor<=INT32_MAX)
+                    pose.y_pos=int32_t(std::lround(anchor));
+            }
+        }
+    }
 }
 
 // Diagnostic only: distinguish animated lateral sway from actual root motion
@@ -1855,7 +1905,17 @@ bool Anchor(PHD_3DPOS& pose) {
     pose.z_pos = head.z;
     pose.x_rot = 0;
     UpdateLocomotion(pose);
-    if (Cfg().firstPersonMovementStabilization && CanTurnBody(item)) {
+    if (locomotion::IsGroundRollState(state) && LaraWaterStatus()==0) {
+        // Keep the horizontal anchor in the new facing direction, but retain
+        // the animated head height so the view drops with the roll. Clearance
+        // below limits the final tracked eye before it can enter the floor.
+        // Never capture a rolling joint into the standing calibration.
+        const auto local=g_groundEye.valid ? g_groundEye.local : stabilization::Point{
+            float(Cfg().firstPersonAnchorX),0,float(Cfg().firstPersonAnchorZ)};
+        const auto flat=locomotion::Rotate({local.x,local.z},g_headingBase);
+        pose.x_pos=int32_t(std::lround(body[0]+flat.x));
+        pose.z_pos=int32_t(std::lround(body[2]+flat.z));
+    } else if (Cfg().firstPersonMovementStabilization && CanTurnBody(item)) {
         // Physical head yaw rotates Lara, not the scene-camera origin. Only
         // artificial yaw changes this reference frame; HMD pose is applied
         // separately, identically for both eyes, culling and tracked guns.
@@ -1866,7 +1926,7 @@ bool Anchor(PHD_3DPOS& pose) {
         pose.y_pos=int32_t(std::lround(eye.y));
         pose.z_pos=int32_t(std::lround(eye.z));
     } else if (!Cfg().firstPersonMovementStabilization) g_groundEye.Reset();
-    // Non-ground states USE the native animated eye, but retain the standing
+    // Other non-ground states use the native animated eye, but retain the standing
     // reference. On vault/pull-up completion the cached skeleton can still be
     // from the climb while Lara's root has moved onto the crate. Recapturing
     // then locks that transient high/sideways offset into every standing frame.

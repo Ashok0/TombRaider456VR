@@ -1,0 +1,336 @@
+TombRaiderVR: starting
+config: mode=stereo tracking=rotation+position origin=seated units/m=423.0 ss=1.00 flipProjY=1 flipViewY=1 dup=1 flatHud=1
+config: culling=head frustum margin=8.0deg depth<=16 portals<=4096 far=0 widen=1 objects=1  sky=infinity
+config: first person TR4/TR5 joint=14 anchor=(0,-32,144), translation=on head=hidden move-with-head=on turn=120deg/s stabilization=on
+config: first person body-follow=1 deadzone=0.0 turn=4.0deg/60Hz head-aim=1; Y+LT=view, Y+RT=graphics (including menus)
+config: dynamic-bone measurement ON (torso joint 7, report every 900 frames) -- TR4/TR5 only
+config: dynamic-bone DEBUG DISPLACEMENT ON at 1.0x -- joint 7 is TORSO, so the whole upper body moves, not just the chest. This is a debug view, not the feature.
+engine: bound to 00007FF7D0C70000 (reference base 0000000140000000, slide +140696967643136)
+engine: build identified as retail / community HD pack v1.0.2 (2025-09-10)
+hook[vid_setPass]: 00007FF7D0C7C770 -> 00007FFE60EA7640 (stole 10, tramp 00007FF7DF66000E)
+hook[validate_draw]: 00007FF7D0C81FF0 -> 00007FFE60EA76E0 (stole 6, tramp 00007FF7DF67000E)
+hook[ogl_draw]: 00007FF7D0C82EF0 -> 00007FFE60EAA220 (stole 5, tramp 00007FF7DF68000E)
+hook[ogl_drawVB]: 00007FF7D0C83010 -> 00007FFE60EAA240 (stole 5, tramp 00007FF7DF69000E)
+hook[ogl_present]: 00007FF7D0C82920 -> 00007FFE60EAC870 (stole 6, tramp 00007FF7DF6A000E)
+hook[fmvShow]: 00007FF7D0C81680 -> 00007FFE60EAC500 (stole 7, tramp 00007FF7DF6B000E)
+hooks: all six installed
+hook[shader_init]: 00007FF7D0C81B50 -> 00007FFE60EB9B80 (stole 7, tramp 00007FF7DF6C000E)
+hook[TR4 ogl_texUpdate]: 00007FF7D0C84570 -> 00007FFE60EBE710 (stole 5, tramp 00007FF7DF6D000E)
+hook[TR4 vidLoadTexture]: 00007FF7D0C7B490 -> 00007FFE60EBE890 (stole 5, tramp 00007FF7DF6E000E)
+TR4 effects: native sunray/atlas upload enhancement ready (TR4 resources only)
+TombRaiderVR: hooks installed; OpenVR will be brought up on the first frame
+gl: loader ready (shader api ready)
+motion hands: rigid wrist skinning and forearm seam trim ready
+TR4 effects: TEX\EFFECT.DDS array 6 layer 1: 6 enhanced mips, load OK
+boneskin: 15 skin program(s) matched, 15 patched, 0 fell back to the original
+pad: Touch controllers presented as an Xbox pad (_XInputGetState 00007FF7D13049F8 -> 00007FFE60EBF190, real 00007FFE60D24EE0)
+pad: move=Lstick look=Rstick(yaw only; hold RT+RB for pitch) jump=A(R lower) roll=B(R upper) action=Y(L upper)/LB+RB(both grips) system=BACK(L lower) walk=LS+RB(R grip) sneak=RB+Y duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=L3+R3 dpad=R3+Lstick
+pad: FP motion guns: tap LT=left pistol/Uzi on release, tap RT=right/single shot; hold LT 0.5s=draw/holster once
+gamedll: bound to tomb5.dll (Tomb Raider V (retail), build 0x68C12FE9, game=1) at 00007FFD6E760000
+gun calibration: Ctrl+F1..F6 position, Ctrl+Shift+F1..F6 angles; F7 save/restore
+firstperson: startup is third person; Y+LT switches views
+hook[LaraAboveWater]: 00007FFD6E7AB2F0 -> 00007FFE60ECA210 (stole 5, tramp 00007FFD6EFC000E)
+hook[AnimateLara]: 00007FFD6E7BF9B0 -> 00007FFE60EC9F10 (stole 6, tramp 00007FFD6EFD000E)
+hook[AimWeapon]: 00007FFD6E7BC430 -> 00007FFE60EC93B0 (stole 5, tramp 00007FFD6EFE000E)
+hook[GetJoints]: 00007FFD6E815A00 -> 00007FFE60EC6680 (stole 5, tramp 00007FFD6EFF000E)
+hook[AnimatePistols]: 00007FFD6E7B8710 -> 00007FFE60EC9190 (stole 5, tramp 00007FFD6F00000E)
+hook[FireWeapon]: 00007FFD6E7BC4E0 -> 00007FFE60EC8C80 (stole 5, tramp 00007FFD6F01000E)
+hook[PistolHandler]: 00007FFD6E7B83F0 -> 00007FFE60EC92C0 (stole 5, tramp 00007FFD6F02000E)
+hook[GetTargetOnLOS]: 00007FFD6E7733A0 -> 00007FFE60EC9160 (stole 6, tramp 00007FFD6F03000E)
+hook[SetGunFlash]: 00007FFD6E7EDAA0 -> 00007FFE60EC72B0 (stole 7, tramp 00007FFD6F04000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+hook[phd_GenerateW2V]: 00007FFD6E8014D0 -> 00007FFE60ECD1C0 (stole 5, tramp 00007FFD6F05000E)
+hook[DrawActionIndicators]: 00007FFD6E82AC70 -> 00007FFE60EC4930 (stole 5, tramp 00007FFD6F06000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FFD6E816510 -> 00007FFE60ECCAE0 (stole 5, tramp 00007FFD6F07000E)
+hook[DrawHair]: 00007FFD6E84E760 -> 00007FFE60ECCDD0 (stole 5, tramp 00007FFD6F08000E)
+hook[MotionRifleHandler]: 00007FFD6E7B5A70 -> 00007FFE60EC8C40 (stole 6, tramp 00007FFD6F09000E)
+hook[MotionFireShotgun]: 00007FFD6E7B5E80 -> 00007FFE60EC8400 (stole 5, tramp 00007FFD6F0A000E)
+hook[MotionFireSpecial]: 00007FFD6E7B64C0 -> 00007FFE60EC87A0 (stole 8, tramp 00007FFD6F0B000E)
+hook[MotionFireCrossbow]: 00007FFD6E7B65E0 -> 00007FFE60EC8980 (stole 5, tramp 00007FFD6F0C000E)
+hook[MotionGunJoint]: 00007FFD6E7FCD30 -> 00007FFE60EC89E0 (stole 5, tramp 00007FFD6F0D000E)
+hook[MotionInitialiseProjectile]: 00007FFD6E7A6160 -> 00007FFE60EC8B00 (stole 5, tramp 00007FFD6F0E000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+firstperson: Tomb Raider V (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+hook[PrintRoomsList]: 00007FFD6E81A040 -> 00007FFE60EB52B0 (stole 5, tramp 00007FFD6F0F000E)
+hook[S_GetObjectBounds]: 00007FFD6E80BD20 -> 00007FFE60EB5950 (stole 5, tramp 00007FFD6F10000E)
+cull: hooked tomb5.dll (Tomb Raider V (retail))
+hook[DrawSkyHD]: 00007FFD6E819B50 -> 00007FFE60EB6C50 (stole 5, tramp 00007FFD6F11000E)
+sky: hooked tomb5.dll (Tomb Raider V (retail)) -- sky draws use rotation-only eye transform (optical infinity) and far-plane depth
+overlay: 5 optic overlay draw(s) stubbed in tomb5.dll (Tomb Raider V (retail)) -- binocular=1 scope=1 tint=1. The laser dot is a separate sprite and is untouched.
+hook[DrawLaraHD]: 00007FFD6E818FB0 -> 00007FFE60EB6C70 (stole 8, tramp 00007FFD6F12000E)
+dynbones: hooked tomb5.dll (Tomb Raider V (retail)) -- measuring only, nothing is drawn differently
+vr: initialisation attempt 1 at frame 1
+vr: using C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\openvr_api.dll
+vr: runtime installed=yes, IsHmdPresent=yes
+vr: initialised as a Scene app
+vr: eye 0 raw tangents l=-1.3764 r=0.8391 t=-1.4281 b=0.9657
+vr: eye 0 eyeToHead offset = (-0.0316, +0.0000, +0.0000) m
+vr: eye 1 raw tangents l=-0.8391 r=1.3764 t=-1.4281 b=0.9657
+vr: eye 1 eyeToHead offset = (+0.0316, +0.0000, +0.0000) m
+vr: ready, per-eye target 1728x1824
+vr: up and running
+stereo: created 3456x1824 double-wide target (fbo 2, tex 39)
+present: redirected FBO_default 0 -> 2
+stereo: mono scratch ready (2560x1440, fbo 3, tex 40)
+video: offscreen panel ready (2560x1440, fbo 4, tex 41, prog 609)
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+gamedll: no level loaded yet -- ceiling clamp stands down until there is one (this is normal at the title screen)
+vr: head pose ACQUIRED
+present: first stereo frame submitted
+pad: water_status=0 (above water) -- stick pitch decoupled
+pad: optics zoom left -- stick pitch decoupled
+cull: head-frustum portal traversal live on Tomb Raider V (retail) -- frustum 124.0 x 126.0 degrees, depth<=16, 4096 portals/frame budget
+sky: first DrawSkyHD draw (shader 1) -- rotation-only eye transform, far-plane depth
+inject: eye=0 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=-0.2425 proj[9]=-0.1932
+inject: eye=0 eyeView translation = (+22.1, +10.8, -12.9) world units
+inject: eye=0 final view translation = (56184.7, -2164.8, 18962.2)
+inject: eye=0 packed view translation IN MEMORY = (52739.0, 1792.0, 27136.0) [floats 3,7,11 at 00007FF7DF18ECD0]
+inject: eye=0 uid[1] (uViewMatrix location) = 3, shader=1
+inject: eye=1 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=0.2425 proj[9]=-0.1932
+inject: eye=1 eyeView translation = (-4.6, +10.8, -12.9) world units
+inject: eye=1 final view translation = (56184.7, -2164.8, 18962.2)
+inject: eye=1 packed view translation IN MEMORY = (52739.0, 1792.0, 27136.0) [floats 3,7,11 at 00007FF7DF18ECD0]
+inject: eye=1 uid[1] (uViewMatrix location) = 3, shader=1
+inject: SEPARATION between eyes = 0.00 world units (dx=0.00 dy=0.00 dz=0.00)
+inject: *** ZERO SEPARATION -- both eyes are rendering the SAME view. This is why depth is flat and why world scale changes nothing. ***
+vr: ceiling clamp active -- headroom 121 units, eye held -7 units above the camera
+stereo health @frame 1800: world draws=43714  duplicated=24734  injected eye0=21857 eye1=21857  (100% of world draws got per-eye matrices)  offscreen-skipped=0  classify-mismatch=0  ortho3D=0  sky=1792  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(23.1, -6.5, -51.1) prog=79 loc=26  eye1=(-7.3, -6.5, -51.1) prog=79 loc=26  separation=30.38
+halves: 20 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7DF18E8A0  mProj[1](persp)=00007FF7DF18E8E0
+  proj=00007FF7DF18E8A0  draws=5755     ortho/2D
+  proj=00007FF7DF18E8E0  draws=43714    perspective/world
+cull: 8.9 rooms/frame from the engine + 0.1 added by the head frustum, 0.4 items rescued/frame
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: locked to shader 20 (15 joints) -- the latch stays here so the drive stays continuous
+boneskin: measured buffer 16 -- 22306 vertices, 4556 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+boneskin: front of the torso is local -Z (30 samples, mean alignment -0.43 with Lara's facing)
+boneskin: torso shape, side view -- BACK on the left, FRONT on the right, top row is the neck end. x -62..61  y -249..-81  depth -71..81
+boneskin:   |           . ...        |
+boneskin:   |        .......         |
+boneskin:   |         .:-=--. .      |
+boneskin:   |       .==..:::+--...-:.|
+boneskin:   |      :--......:.......-|
+boneskin:   |    .:-:-.....:..=:-:-.=|
+boneskin:   | .*=...::::=......:=:.:@|
+boneskin:   |.-.. .....:-..::......-%|
+boneskin:   |-.... .....:..::....:..#|
+boneskin:   |:.. .. . ......-. ..:.::|
+boneskin:   |.:..... .... .......:.  |
+boneskin:   |  .. ... .....          |
+boneskin:   |  .. . .... .           |
+boneskin:   |   ... ..=..            |
+boneskin: front profile, neck to waist: 28 23 22 26 70 75 78 80 81 80 79 79 80 79 78 65 19 16 10 3
+boneskin: chest region (measured bust) -- height -224..-110 of -249..-81, depth from 35 forward (front 81, belly line 20), within 42 of centre. Selects 1090 torso vertices at full weight (y -212..-122) and 397 partly.
+boneskin: live -- Lara's body (shader 21) now deforms per vertex, and the whole-torso view has stood down
+perf: 58.5 fps rendered
+stereo health @frame 3600: world draws=67124  duplicated=35035  injected eye0=31378 eye1=31378  (93% of world draws got per-eye matrices)  offscreen-skipped=4368  classify-mismatch=0  ortho3D=0  sky=3600  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(3.4, -1.4, -75.8) prog=79 loc=26  eye1=(-15.0, -1.4, -75.8) prog=79 loc=26  separation=18.41
+halves: 18 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7DF18E8A0  mProj[1](persp)=00007FF7DF18E8E0
+  proj=00007FF7DF18E8A0  draws=13069    ortho/2D
+  proj=00007FF7DF18E8E0  draws=110838   perspective/world
+cull: 4.3 rooms/frame from the engine + 0.3 added by the head frustum, 1.0 items rescued/frame  *** A BUDGET WAS HIT -- raise CullMaxPortals/CullMaxDepth ***
+dynbones: joints=15 shader=20 lock=20  frames=900 dup=0% snaps=1  drive_peak=29934.7 accel_raw=932747 drive_used=0  disp_peak=40.00  L=(-0.01,5.45,6.62) R=(-0.01,5.45,6.62)
+dynbones: engine drive -- jumps=0 lands=0  last landing fallspeed=0 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+dynbones: displacement hit the 40.0-unit clamp during this window. Either the anchor joint is wrong or DynamicBonesDriveScale is too high for these units.
+dynbones: joints=15 shader=20 lock=20  frames=1800 dup=0% snaps=1  drive_peak=45.3 accel_raw=153222 drive_used=0  disp_peak=8.74  L=(-0.18,1.66,8.41) R=(-0.18,1.66,8.41)
+dynbones: engine drive -- jumps=0 lands=0  last landing fallspeed=0 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+TR4 effects: TEX\3115.DDS array 4 layer 86: 6 enhanced mips, load OK
+gamedll: bound to tomb4.dll (Tomb Raider IV (retail), build 0x68C12FDA, game=0) at 00007FFD96340000
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[AnimatePistols]: removed
+hook[FireWeapon]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[AnimateLara]: removed
+hook[LaraAboveWater]: 00007FFD9638B9D0 -> 00007FFE60ECA210 (stole 5, tramp 00007FFD96BA000E)
+hook[AnimateLara]: 00007FFD963A2200 -> 00007FFE60EC9F10 (stole 11, tramp 00007FFD96BB000E)
+hook[AimWeapon]: 00007FFD9639E100 -> 00007FFE60EC93B0 (stole 5, tramp 00007FFD96BC000E)
+hook[GetJoints]: 00007FFD96401440 -> 00007FFE60EC6680 (stole 5, tramp 00007FFD96BD000E)
+hook[AnimatePistols]: 00007FFD9639A380 -> 00007FFE60EC9190 (stole 5, tramp 00007FFD96BE000E)
+hook[FireWeapon]: 00007FFD9639E1B0 -> 00007FFE60EC8C80 (stole 5, tramp 00007FFD96BF000E)
+hook[PistolHandler]: 00007FFD96399F70 -> 00007FFE60EC92C0 (stole 5, tramp 00007FFD96C0000E)
+hook[GetTargetOnLOS]: 00007FFD96355440 -> 00007FFE60EC9160 (stole 6, tramp 00007FFD96C1000E)
+hook[SetGunFlash]: 00007FFD963CF7E0 -> 00007FFE60EC72B0 (stole 10, tramp 00007FFD96C2000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+hook[phd_GenerateW2V]: 00007FFD96415BD0 -> 00007FFE60ECD1C0 (stole 5, tramp 00007FFD96C3000E)
+hook[DrawActionIndicators]: 00007FFD96413EA0 -> 00007FFE60EC4930 (stole 5, tramp 00007FFD96C4000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FFD96401F50 -> 00007FFE60ECCAE0 (stole 5, tramp 00007FFD96C5000E)
+hook[DrawHair]: 00007FFD964310D0 -> 00007FFE60ECCDD0 (stole 5, tramp 00007FFD96C6000E)
+hook[MotionRifleHandler]: 00007FFD96395BE0 -> 00007FFE60EC8C40 (stole 10, tramp 00007FFD96C7000E)
+hook[MotionFireShotgun]: 00007FFD96396130 -> 00007FFE60EC8400 (stole 5, tramp 00007FFD96C8000E)
+hook[MotionFireSpecial]: 00007FFD96396770 -> 00007FFE60EC85D0 (stole 9, tramp 00007FFD96C9000E)
+hook[MotionFireCrossbow]: 00007FFD96397A20 -> 00007FFE60EC8980 (stole 6, tramp 00007FFD96CA000E)
+hook[MotionGunJoint]: 00007FFD963E4360 -> 00007FFE60EC89E0 (stole 5, tramp 00007FFD96CB000E)
+hook[MotionInitialiseProjectile]: 00007FFD96380300 -> 00007FFE60EC8B00 (stole 5, tramp 00007FFD96CC000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+firstperson: Tomb Raider IV (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+cull: unhooking tomb5.dll
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+hook[PrintRoomsList]: 00007FFD96405DC0 -> 00007FFE60EB52B0 (stole 5, tramp 00007FFD96CD000E)
+hook[S_GetObjectBounds]: 00007FFD963F8C90 -> 00007FFE60EB5950 (stole 5, tramp 00007FFD96CE000E)
+cull: hooked tomb4.dll (Tomb Raider IV (retail))
+sky: unhooking tomb5.dll
+hook[DrawSkyHD]: removed
+hook[DrawSkyHD]: 00007FFD964058D0 -> 00007FFE60EB6C50 (stole 5, tramp 00007FFD96CF000E)
+sky: hooked tomb4.dll (Tomb Raider IV (retail))
+dynbones: unhooking tomb5.dll
+hook[DrawLaraHD]: removed
+hook[DrawLaraHD]: 00007FFD96404D20 -> 00007FFE60EB6C70 (stole 8, tramp 00007FFD96D0000E)
+TR4 effects: TEX\3115.DDS array 4 layer 22: 6 enhanced mips, load OK
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: locked to shader 20 (15 joints) -- the latch stays here so the drive stays continuous
+perf: 51.8 fps rendered
+stereo health @frame 5400: world draws=70150  duplicated=34787  injected eye0=30893 eye1=30893  (88% of world draws got per-eye matrices)  offscreen-skipped=8364  classify-mismatch=0  ortho3D=0  sky=5532  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(13.9, -10.0, -62.5) prog=79 loc=26  eye1=(-11.0, -10.0, -62.5) prog=79 loc=26  separation=24.87
+halves: 20 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7DF18E8A0  mProj[1](persp)=00007FF7DF18E8E0
+  proj=00007FF7DF18E8A0  draws=20825    ortho/2D
+  proj=00007FF7DF18E8E0  draws=180988   perspective/world
+cull: 2.1 rooms/frame from the engine + 0.1 added by the head frustum, 1.1 items rescued/frame
+dynbones: TR4/TR5 Lara draws with 33 joints (renderer ceiling is 72), so 39 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 33 joints (renderer ceiling is 72), so 39 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 33 joints (renderer ceiling is 72), so 39 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 33 joints (renderer ceiling is 72), so 39 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 33 joints (renderer ceiling is 72), so 39 slots are free for synthesised bones
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: joints=15 shader=20 lock=20  frames=900 dup=6% snaps=4  drive_peak=6029.7 accel_raw=2293595 drive_used=0  disp_peak=13.30  L=(-0.03,7.95,-0.65) R=(-0.03,7.95,-0.65)
+dynbones: engine drive -- jumps=0 lands=0  last landing fallspeed=0 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+boneskin: measured buffer 8 -- 17240 vertices, 2000 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+boneskin: torso shape, side view -- BACK on the left, FRONT on the right, top row is the neck end. x -62..61  y -249..-67  depth -71..81
+boneskin:   |           .....        |
+boneskin:   |        ......:.        |
+boneskin:   |        .===#=*-... .   |
+boneskin:   |       :*+...::=::...-:.|
+boneskin:   |     .---.....:........:|
+boneskin:   |  -=:::.-:...:.:.=:*--.*|
+boneskin:   |.-=:....:.:+..........-@|
+boneskin:   |-+.... ....:..:-......:*|
+boneskin:   |-:.............:.......:|
+boneskin:   |.-..... .......:....:...|
+boneskin:   | .:.............        |
+boneskin:   | ..... .........        |
+boneskin:   | ......:.=.:...:        |
+boneskin:   |   :. .   ....          |
+boneskin: front profile, neck to waist: 28 23 27 41 70 78 80 81 81 79 78 80 79 78 65 26 26 27 27 14
+boneskin: chest region (measured bust) -- height -222..-107 of -249..-67, depth from 35 forward (front 81, belly line 23), within 42 of centre. Selects 1088 torso vertices at full weight (y -212..-122) and 399 partly.
+dynbones: joints=15 shader=20 lock=20  frames=1800 dup=3% snaps=5  drive_peak=4647.1 accel_raw=225973 drive_used=0  disp_peak=29.58  L=(-0.20,9.88,-0.27) R=(-0.20,9.88,-0.27)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+perf: 59.3 fps rendered
+stereo health @frame 7200: world draws=168181  duplicated=82620  injected eye0=77530 eye1=77530  (92% of world draws got per-eye matrices)  offscreen-skipped=13121  classify-mismatch=0  ortho3D=0  sky=18000  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(30.7, -10.5, -42.3) prog=79 loc=26  eye1=(-3.9, -10.5, -42.3) prog=79 loc=26  separation=34.66
+halves: 21 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7DF18E8A0  mProj[1](persp)=00007FF7DF18E8E0
+  proj=00007FF7DF18E8A0  draws=31005    ortho/2D
+  proj=00007FF7DF18E8E0  draws=349169   perspective/world
+cull: 3.4 rooms/frame from the engine + 0.8 added by the head frustum, 3.0 items rescued/frame
+dynbones: joints=15 shader=20 lock=20  frames=2700 dup=2% snaps=6  drive_peak=1091.8 accel_raw=169863 drive_used=0  disp_peak=13.03  L=(-0.03,8.53,-0.83) R=(-0.03,8.53,-0.83)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 3 DrawLaraHD scope(s), joints [33,33,33]
+dynbones: joints=15 shader=20 lock=20  frames=3600 dup=1% snaps=7  drive_peak=1255.9 accel_raw=370601 drive_used=0  disp_peak=13.25  L=(-0.04,8.55,-0.64) R=(-0.04,8.55,-0.64)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+perf: 59.3 fps rendered
+stereo health @frame 9000: world draws=156390  duplicated=79250  injected eye0=77242 eye1=77242  (98% of world draws got per-eye matrices)  offscreen-skipped=1906  classify-mismatch=0  ortho3D=0  sky=18000  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(22.2, -13.8, -40.0) prog=79 loc=26  eye1=(-13.6, -13.8, -40.0) prog=79 loc=26  separation=35.76
+halves: 21 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7DF18E8A0  mProj[1](persp)=00007FF7DF18E8E0
+  proj=00007FF7DF18E8A0  draws=35021    ortho/2D
+  proj=00007FF7DF18E8E0  draws=505559   perspective/world
+cull: 5.4 rooms/frame from the engine + 0.1 added by the head frustum, 1.8 items rescued/frame
+dynbones: joints=15 shader=20 lock=20  frames=4500 dup=1% snaps=7  drive_peak=206.7 accel_raw=461178 drive_used=0  disp_peak=8.60  L=(0.16,8.25,2.31) R=(0.16,8.25,2.31)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+projoffset: shader 13 carries vid_setPerspOffset shear (-0.6750, -0.6833) -- the engine is placing this draw through the projection. Re-applied as a camera-space skew (-0.7552, 0.4300).
+perf: 59.2 fps rendered
+stereo health @frame 10800: world draws=117645  duplicated=58418  injected eye0=56319 eye1=56319  (95% of world draws got per-eye matrices)  offscreen-skipped=5007  classify-mismatch=0  ortho3D=0  sky=10690  projoffset=8938
+verify: uProjMatrix translation column ON GPU  eye0=(10.3, -19.3, -112.4) prog=79 loc=26  eye1=(9.7, -19.3, -112.4) prog=79 loc=26  separation=0.65
+halves: 0 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7DF18E8A0  mProj[1](persp)=00007FF7DF18E8E0
+  proj=00007FF7DF18E8A0  draws=38488    ortho/2D
+  proj=00007FF7DF18E8E0  draws=623204   perspective/world
+cull: 7.5 rooms/frame from the engine + 0.8 added by the head frustum, 5.6 items rescued/frame  *** A BUDGET WAS HIT -- raise CullMaxPortals/CullMaxDepth ***
+dynbones: joints=15 shader=20 lock=20  frames=5400 dup=1% snaps=7  drive_peak=322.1 accel_raw=342489 drive_used=0  disp_peak=9.56  L=(0.28,8.26,2.27) R=(0.28,8.26,2.27)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+perf: 58.5 fps rendered
+stereo health @frame 12600: world draws=101415  duplicated=50614  injected eye0=48836 eye1=48836  (96% of world draws got per-eye matrices)  offscreen-skipped=3743  classify-mismatch=0  ortho3D=0  sky=10990  projoffset=5718
+verify: uProjMatrix translation column ON GPU  eye0=(0.2, -29.8, -33.5) prog=40 loc=246  eye1=(-38.7, -29.8, -33.5) prog=40 loc=246  separation=38.92
+halves: 0 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7DF18E8A0  mProj[1](persp)=00007FF7DF18E8E0
+  proj=00007FF7DF18E8A0  draws=41343    ortho/2D
+  proj=00007FF7DF18E8E0  draws=724619   perspective/world
+cull: 5.9 rooms/frame from the engine + 0.4 added by the head frustum, 6.2 items rescued/frame  *** A BUDGET WAS HIT -- raise CullMaxPortals/CullMaxDepth ***
+dynbones: joints=15 shader=20 lock=20  frames=6300 dup=0% snaps=7  drive_peak=244.3 accel_raw=842560 drive_used=0  disp_peak=8.80  L=(0.05,8.29,2.16) R=(0.05,8.29,2.16)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 3 DrawLaraHD scope(s), joints [33,33,33]
+dynbones: joints=15 shader=20 lock=20  frames=7200 dup=0% snaps=7  drive_peak=189.3 accel_raw=442396 drive_used=0  disp_peak=8.68  L=(-0.03,8.53,-0.87) R=(-0.03,8.53,-0.87)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+perf: 58.4 fps rendered
+stereo health @frame 14400: world draws=118059  duplicated=58370  injected eye0=57338 eye1=57338  (97% of world draws got per-eye matrices)  offscreen-skipped=3383  classify-mismatch=0  ortho3D=0  sky=12830  projoffset=396
+verify: uProjMatrix translation column ON GPU  eye0=(25.2, -17.7, -32.2) prog=40 loc=246  eye1=(-14.4, -17.7, -32.2) prog=40 loc=246  separation=39.56
+halves: 11 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7DF18E8A0  mProj[1](persp)=00007FF7DF18E8E0
+  proj=00007FF7DF18E8A0  draws=42891    ortho/2D
+  proj=00007FF7DF18E8E0  draws=842678   perspective/world
+cull: 5.6 rooms/frame from the engine + 0.5 added by the head frustum, 2.6 items rescued/frame
+hook[TR4 vidLoadTexture]: removed
+hook[TR4 ogl_texUpdate]: removed
+pad: _XInputGetState restored
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[AnimatePistols]: removed
+hook[FireWeapon]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[AnimateLara]: removed
+hook[DrawSkyHD]: removed
+hook[DrawLaraHD]: removed
+hook[shader_init]: removed
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+hook[fmvShow]: removed
+hook[ogl_present]: removed
+hook[ogl_drawVB]: removed
+hook[ogl_draw]: removed
+hook[validate_draw]: removed
+hook[vid_setPass]: removed

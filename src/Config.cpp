@@ -293,6 +293,9 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.cullWidenBounds     = GetBool (L"CullWidenBounds",    g_cfg.cullWidenBounds,    ini);
     g_cfg.cullObjects         = GetBool (L"CullObjects",        g_cfg.cullObjects,        ini);
     g_cfg.cullDumpKey         = GetIntAuto(L"CullDumpKey",      g_cfg.cullDumpKey,        ini);
+    g_cfg.tr4Effects = GetBool(L"TR4Effects",g_cfg.tr4Effects,ini);
+    g_cfg.tr4SunrayStrength = GetFloat(L"TR4SunrayStrength",g_cfg.tr4SunrayStrength,ini);
+    g_cfg.tr4EffectStrength = GetFloat(L"TR4EffectStrength",g_cfg.tr4EffectStrength,ini);
     g_cfg.skyAtInfinity       = GetBool (L"SkyAtInfinity",      g_cfg.skyAtInfinity,      ini);
     g_cfg.firstPerson         = GetBool (L"FirstPerson",        g_cfg.firstPerson,        ini);
     g_cfg.firstPersonJoint    = GetInt  (L"FirstPersonJoint",   g_cfg.firstPersonJoint,   ini);

@@ -25,6 +25,7 @@
 // matters: this build has 202 shader pairs and a GL 3.2 Core context, so
 // GL_OVR_multiview2 would mean editing 404 GLSL sources.
 #include "Hooks.h"
+#include "TR4Effects.h"
 #include "Engine.h"
 #include "StereoMath.h"
 #include "Config.h"
@@ -2688,10 +2689,12 @@ bool InstallHooks() {
     // failure here costs the per-vertex chest path, never stereo. It has to go
     // in now, before the game creates its context and runs shader_init.
     BoneSkinInstall();
+    TR4EffectsInstall();
     return true;
 }
 
 void RemoveHooks() {
+    TR4EffectsShutdown();
     HKScopeShutdown();
     GamepadShutdown();
     FirstPersonShutdown();

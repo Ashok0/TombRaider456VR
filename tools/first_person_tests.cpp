@@ -232,6 +232,15 @@ void __cdecl FakeAnimate(uint8_t* item) {
     pos.x_pos += 3; pos.y_pos += 7; pos.z_pos += 5;
     *reinterpret_cast<int16_t*>(item + tr::off::item_speed) = 10;
 }
+int rollNextState=23,rollYawDelta=32768;
+void __cdecl FakeRollAnimate(uint8_t* item) {
+    FakeAnimate(item);
+    auto& pos=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    pos.y_rot=int16_t(int(pos.y_rot)+rollYawDelta);
+    *reinterpret_cast<int16_t*>(item+tr::off::item_anim_state)=int16_t(rollNextState);
+    // turn180_effect's native analog transition fields must remain untouched.
+    analogMemory[4]=45;analogMemory[5]=pos.y_rot;
+}
 tr::locomotion::Vec unstableStep{};
 int unstableHeight=0, nativeCollisionPasses=0;
 bool blockStableMotion=false, startAirborne=false;
@@ -309,6 +318,12 @@ void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z
             }
             if (x*impactNormalX+z*impactNormalZ+64>=100)
                 c->floorSamples[3]=-768-y; // front radius sample hits crate before eye centre
+        }
+        if (collisionMode==16 || collisionMode==17 || collisionMode==18) {
+            for (int sample=0;sample<18;sample+=3) {
+                c->floorSamples[sample]=collisionMode==17 ? -32512 : int32_t(x/4)-y;
+                c->floorSamples[sample+1]=(collisionMode==18 ? -600 : -1600)-(y-height);
+            }
         }
         (void)y;
         return;
@@ -2461,6 +2476,148 @@ int main() {
         const auto native=VR().m_headFromTracking; g_active=false;
         const auto third=VR().TrackedHeadView();
         Check(std::memcmp(&native,&third,sizeof(native))==0,"third-person head tracking is unchanged");
+    }
+
+    // Native B-roll reversal: one animation command turns Lara; VR and pending
+    // movement follow it once, preserving physical head movement and calibration.
+    for (int which:{0,1}) for (bool stable:{false,true}) for (int degrees:{-170,0,90,170}) {
+        game=dll.game=which;resetRoomscale();
+        config.firstPersonMovementStabilization=stable;
+        config.firstPersonBodyFollowsHead=false;config.firstPersonRoomscaleMove=false;
+        config.firstPersonDriftLog=false;collisionMode=0;gaitSway={};
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+        g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeRollAnimate);
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeAboveWater);
+        pos.y_rot=Angle(degrees*kPi/180);prev=pos;fraction=256;
+        physicalPose(.4f);FirstPersonRecenter();UpdateSceneCamera(camera);
+        physicalPose(.7f,.025f,.015f,-.05f);
+        float x=0,z=1,r=0;FirstPersonInput(x,z,r,false);
+        const float initialBase=g_headingBase;
+        const auto calibration=g_groundEye;
+        for (int reversal=0;reversal<2;++reversal) {
+            state=45;rollNextState=23;rollYawDelta=32768;
+            const auto before=pos;const float oldBase=g_headingBase;
+            const auto oldMove=g_manualWorld;
+            locomotion::Vec oldOffset;VR().FirstPersonViewOffset(oldOffset.x,oldOffset.z);
+            oldOffset=locomotion::Rotate(oldOffset,oldBase);
+            const float neutralY=VR().m_firstPersonNeutral[1];
+            g_renderTurn.Sample(.8f,TurnTime());g_rootMotion.valid=true;
+            const int ticks=animationTicks;
+            Detour_AnimateLara(itemMemory);
+            Check(animationTicks==ticks+1 && pos.x_pos==before.x_pos+3 &&
+                pos.y_pos==before.y_pos+7 && pos.z_pos==before.z_pos+5,
+                "roll retains exactly one native animation update and root displacement");
+            Check(uint16_t(int(pos.y_rot)-int(before.y_rot))==32768 &&
+                std::fabs(std::fabs(Wrap(g_headingBase-oldBase))-kPi)<.0001f,
+                "native Lara half-turn rotates VR frame once");
+            Check(Near(g_manualWorld.x,-oldMove.x) && Near(g_manualWorld.z,-oldMove.z),
+                "pending forward movement rotates to new facing immediately");
+            Check(analogMemory[2]==Angle(g_lastHeadWorld) && analogMemory[3]==analogMemory[2] &&
+                analogMemory[4]==45 && analogMemory[5]==pos.y_rot,
+                "VR analog heading updates without erasing native roll transition");
+            locomotion::Vec offset;VR().FirstPersonViewOffset(offset.x,offset.z);
+            offset=locomotion::Rotate(offset,g_headingBase);
+            Check(Near(offset.x,oldOffset.x) && Near(offset.z,oldOffset.z) &&
+                VR().m_firstPersonNeutral[1]==neutralY,"roll pivot preserves world lean and duck calibration");
+            Check(!g_rootMotion.valid && !g_renderTurn.valid,"roll clears stale gait and turn integration");
+            const float newBase=g_headingBase;
+            gaitSway={90,350,-300}; // Native roll drops the head halfway toward the floor.
+            for (fraction=0;fraction<=256;fraction+=32) {
+                UpdateSceneCamera(camera);
+                const float rootY=prev.y_pos+(pos.y_pos-prev.y_pos)*(fraction/256.f);
+                Check(Near(g_headingBase,newBase) && camera.x_rot==0 && camera.z_rot==0,
+                    "repeated/interpolated views never reapply turn or somersault camera");
+                Check(std::fabs(camera.y_pos-(rootY-350))<1.1f,
+                    "ground roll camera follows the animated drop while above the floor");
+                const auto flat=locomotion::Rotate(stable ? locomotion::Vec{calibration.local.x,calibration.local.z} :
+                    locomotion::Vec{float(config.firstPersonAnchorX),float(config.firstPersonAnchorZ)},newBase);
+                Check(std::fabs(camera.x_pos-(prev.x_pos+(pos.x_pos-prev.x_pos)*(fraction/256.f)+flat.x))<1.1f &&
+                    std::fabs(camera.z_pos-(prev.z_pos+(pos.z_pos-prev.z_pos)*(fraction/256.f)+flat.z))<1.1f,
+                    "camera forward anchor follows reversed heading at every render fraction");
+            }
+            fraction=256;gaitSway={};prev=pos;state=2;rollNextState=2;rollYawDelta=0;
+            UpdateSceneCamera(camera);
+            actionInput=0;analogMemory[0]=0;analogMemory[1]=20000;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(seenYaw==Angle(g_lastHeadWorld) && seenAnalog[2]==seenYaw && (seenInput&locomotion::Forward),
+                "held forward after roll uses new head/body direction without another input poll");
+        }
+        Check(std::fabs(Wrap(g_headingBase-initialBase))<.0001f,"two rolls restore original VR forward direction");
+    }
+    // Clamp the final rendered headset centre against the actual sampled floor,
+    // including deep physical ducking, slopes, low ceilings, and entry mid-roll.
+    for (int which:{0,1}) for (bool calibrated:{false,true}) for (int mode:{0,16,17,18}) {
+        game=dll.game=which;resetRoomscale();config.firstPersonMovementStabilization=true;
+        config.firstPersonBodyFollowsHead=false;config.firstPersonRoomscaleMove=false;
+        collisionMode=0;gaitSway={};physicalPose(0);FirstPersonRecenter();
+        fraction=256;UpdateSceneCamera(camera);
+        if (!calibrated) g_groundEye.Reset();
+        const auto savedEye=g_groundEye;
+        state=45;gaitSway={120,1300,-350};collisionMode=mode;
+        physicalPose(0,.08f,.01f,-1.2f);
+        const float neutralY=VR().m_firstPersonNeutral[1];
+        const auto bodyBefore=pos;cameraCollisionCalls=0;
+        UpdateSceneCamera(camera);
+        const float eyeY=camera.y_pos+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre();
+        const auto tracked=InvertRigid(VR().HeadView());
+        const float eyeX=camera.x_pos+tracked.r[0][3];
+        const float floor=mode==0 ? 0.f : float(int(eyeX)/4);
+        if (mode!=17) Check(eyeY<=floor-63 && eyeY>=(mode==18?-600.f:-1786.f)+63,
+            "deep duck during roll stays clear of floor and ceiling at final eye position");
+        else Check(std::abs(camera.y_pos-600)<=1,"missing floor sample preserves animated height without inventing a floor");
+        Check(cameraCollisionCalls>0 && !std::memcmp(&pos,&bodyBefore,sizeof(pos)),
+            "roll clearance queries world without moving Lara's collision root");
+        Check(g_groundEye.valid==savedEye.valid && !std::memcmp(&g_groundEye.local,&savedEye.local,sizeof(savedEye.local)) &&
+            VR().m_firstPersonNeutral[1]==neutralY,"roll collision correction cannot contaminate standing or HMD calibration");
+        physicalPose(0);gaitSway={};collisionMode=0;state=2;UpdateSceneCamera(camera);
+        Check(camera.y_pos==-700,"leaving roll restores normal standing eye without residual pushback");
+    }
+    // A complete down/up roll height profile follows the interpolated head
+    // until floor clearance intervenes, then releases immediately on ascent.
+    for (int which:{0,1}) for (bool stable:{false,true}) for (bool tracked:{false,true}) {
+        game=dll.game=which;resetRoomscale();config.firstPersonMovementStabilization=stable;
+        config.firstPersonBodyFollowsHead=false;config.firstPersonRoomscaleMove=false;
+        config.firstPersonHeadTranslation=tracked;collisionMode=0;gaitSway={};
+        physicalPose(0);FirstPersonRecenter();fraction=256;UpdateSceneCamera(camera);
+        const auto savedEye=g_groundEye;
+        physicalPose(0,0,0,-.15f);
+        const float neutralY=VR().m_firstPersonNeutral[1];
+        for (int rollState:{45,23}) {
+            state=int16_t(rollState);
+            for (int animatedY:{-700,-500,-300,-180,-80,0,100,0,-80,-180,-300,-500,-700}) {
+                gaitSway={0,animatedY+700,0};UpdateSceneCamera(camera);
+                const float offset=tracked ? VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre() : 0;
+                const float expected=std::min(float(animatedY)+offset,-64.f);
+                Check(std::fabs(camera.y_pos+offset-expected)<1.1f,
+                    "roll descends and rises with native head, clamping only at floor clearance");
+                Check(g_groundEye.valid==savedEye.valid && VR().m_firstPersonNeutral[1]==neutralY,
+                    "animated roll drop never recaptures standing or physical height calibration");
+            }
+        }
+        state=2;gaitSway={};physicalPose(0);UpdateSceneCamera(camera);
+        Check(camera.y_pos==-700,"roll ascent leaves no floor-clamp offset behind");
+    }
+    // Native turns outside an eligible FP ground roll must stay native.
+    for (int guard=0;guard<11;++guard) {
+        resetRoomscale();config.firstPersonMovementStabilization=true;physicalPose(0);
+        FirstPersonRecenter();UpdateSceneCamera(camera);state=45;rollNextState=23;rollYawDelta=32768;
+        g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeRollAnimate);
+        if (guard==0) g_active=false;
+        if (guard==1) g_runtimeEnabled=false;
+        if (guard==2) *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=1;
+        if (guard==3) *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=kCamFixed;
+        if (guard==4) cutseq=1;
+        if (guard==5) hp=0;
+        if (guard==6) water=1;
+        if (guard==7) state=rollNextState=66;
+        if (guard==8) state=rollNextState=72;
+        if (guard==9) state=rollNextState=2;
+        if (guard==10) rollYawDelta=100;
+        const float base=g_headingBase;const auto before=pos;const int ticks=animationTicks;
+        Detour_AnimateLara(itemMemory);
+        Check(g_headingBase==base && animationTicks==ticks+1 &&
+            uint16_t(int(pos.y_rot)-int(before.y_rot))==uint16_t(rollYawDelta),
+            "third person, camera takeovers, death, water and unrelated turns remain native");
     }
     VR().m_system = nullptr;
     std::printf("OK: %d first-person regression checks passed.\n", checks);

@@ -14,6 +14,10 @@ namespace tr {
 
 struct Config {
     bool  enabled          = true;
+    // TR4 load-time enhancement of native sunray/effect textures, without DDS replacements.
+    bool  tr4Effects = true;
+    float tr4SunrayStrength = 1.0f;
+    float tr4EffectStrength = 1.0f;
 
     // Mono head-tracking bring-up mode.
     //

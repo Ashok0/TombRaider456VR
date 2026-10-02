@@ -40,6 +40,13 @@ inline Vec PivotFloorOffset(Vec rawEyeOffset, Vec neckArc, float yawDelta) {
     return Rotate(NeckFloorOffset(rawEyeOffset, neckArc), -yawDelta) + neckArc;
 }
 inline bool IsJumpSteeringState(int state) { return state == 15 || state == 3; }
+// Shared TR4/5 ground roll start/end. Observe the native animation's exact
+// half-turn, not the B button or repeated rendered frames (TR1-3 behavior).
+inline bool IsGroundRollState(int state) { return state==23 || state==45; }
+inline float GroundRollTurn(int beforeState,int afterState,int16_t beforeYaw,int16_t afterYaw) {
+    return (IsGroundRollState(beforeState) || IsGroundRollState(afterState)) &&
+        uint16_t(int(afterYaw)-int(beforeYaw))==0x8000u ? 3.14159265358979323846f : 0.f;
+}
 inline bool IsLedgeHangState(int state) {
     // Shared TR4/5 hang, shimmy, alternate hang/turn and stop-to-hang states.
     switch (state) {

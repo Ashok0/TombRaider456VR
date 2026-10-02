@@ -18,6 +18,7 @@ for in-headset validation, and the remaining motion issues are listed there.
 ## VR Mod Features
 
 * Native stereo with 6DOF (TR4/5/6)
+* Built-in TR4 HD sunray and selected smoke/fire/spray/splash enhancement, with no replacement DDS files
 * Culling fixes for VR
 * Camera fixes for tight collision areas
 * UI fixes
@@ -84,15 +85,117 @@ fixed/scripted cameras, turn physically through partial and full circles,
 die/reload, and repeat crate-edge hangs, releases and jump-offs. Check that
 body centering recovers and no shoulder/torso seam stretches.
 
-Installed the Release/x64 DLL in
+The preceding first-person Release/x64 DLL was installed in
 `C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\`.
-Installed and built DLL SHA-256 match:
+That preceding build had SHA-256:
 `0679C4D797D1BCBA992A66B49BF0226360A297BF3E7C6F39407CC453EC61AFB5`.
 The previous DLL, personal INI and log are backed up in
 `build/before-tr123-fixes-20261002-042031/`. The installed INI matches the staged
 profile in `build/tr123-fixes-deploy/`; only hand height changed.
 The full address audit also passed 806 checks (one unavailable older
 `tomb456.exe` build, timestamp `0x68639C21`, was skipped).
+
+### TR4 code-only effects added on 2026-10-02
+
+The plugin enhances the game's existing TR4 `3115.DDS` sunrays and selected
+`EFFECT.DDS` atlas cells in memory as the native loader uploads them. No DDS
+files are embedded, copied or changed, and the `NeweefectsTR45` folder is not
+needed at runtime. Sunrays use a brighter, slightly warm transfer curve;
+smoke, fire, spray and splash use localized brightness gains. Original sprite
+shapes remain, so this is an approximation of the supplied pack's appearance,
+not a pixel-identical reconstruction of its redrawn artwork.
+
+Settings in `[VR]`, requiring a game restart:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `TR4Effects` | `1` | Enable the built-in TR4 enhancement; `0` restores native uploads |
+| `TR4SunrayStrength` | `1.0` | Sunray strength, clamped to 0-2; 0 leaves sunrays original |
+| `TR4EffectStrength` | `1.0` | Selected atlas-cell strength, clamped to 0-2 |
+
+The native resource resolver gates this on the **game being loaded**, including
+switches between titles. The named texture's layer is processed independently
+inside shared arrays, across all six native mips. Original texture handles,
+sampler state and neighboring layers remain intact. The GPU decodes and
+recompresses BC7 in temporary textures during loading, with no per-frame effect
+processing. Unsupported uploads retain the native data. Driver compression is
+lossy: alpha changes are bounded to 2/255; blocks that exceed that bound, change
+fully transparent pixels, introduce light into additive black, or touch an
+unselected atlas cell retain their original compressed bytes.
+
+Validation completed:
+
+- Release/x64 build and existing self-test suite passed.
+- 202 tests exercise the production loader/update detours, including disabled
+  settings, exact filename matching, TR4/5/6 routing, nested loads and native
+  calls/results preserved when no GL context is available.
+- 14,657,711 hidden OpenGL-context checks on the installed original textures
+  passed across all six mips. They verify adjacent-layer and unselected-sprite
+  preservation, transparency bounds, additive black, repeated loads, strength
+  zero, dimension/layer guards, and restoration of bindings, PBOs and pixel-store
+  state. On this NVIDIA driver the total sunray RGB increased 2.088 times; the full
+  atlas increased 1.081 times because most cells are intentionally unchanged.
+- 25 native-path audit checks passed for stock `0x696B49A7` and installed retail
+  `0x68C12FEB`. The older `0x68639C21` executable was unavailable for revalidation;
+  its previously established shared code layout is retained with prologue guards.
+
+Commands: `tools/run_tr4_effects_hook_tests.cmd`,
+`tools/run_tr4_effects_gl_tests.cmd`, `python tools/verify_tr4_effects.py`, and
+`tests/build_selftest.cmd`. These do not launch the game or verify headset
+appearance. Still check bright/dark TR4 rooms, visible sunbeams, smoke/flames,
+water spray/splashes and a TR4 to TR5 to TR4 switch in the headset. If replacement
+textures are already installed and the combined result is too bright, disable
+`TR4Effects` for comparison.
+
+The preceding effects-only Release/x64 DLL had SHA-256:
+`EB6B1823D99D53F561E039D7FDE56B03EF30946CFE0D35B2EE57EEDA3E6371A2`.
+Deployment uses the existing Steam game folder above. Previous DLL, personal INI
+and log: `build/before-tr4-effects-20261002-090035/`. Staged files and asset hashes:
+`build/tr4-effects-deploy/manifest.json`. Only the three new effect settings were
+added to the personal INI; controller calibration, including hand height
+`-0.06985 m` (3.75 inches below the original setting), was preserved. Both original
+TR4 DDS hashes are unchanged after installation.
+
+### First-person B-roll reversal and floor clearance (2026-10-02)
+
+TR4/5 first-person ground rolls now preserve the native 180-degree turn. The
+existing `AnimateLara` hook observes the actual native half-turn while entering,
+playing or leaving ground-roll states 45/23, matching the TR1-3 implementation.
+Lara turns through her native animation; the plugin rotates the VR heading,
+pending movement and analog heading once. Held forward then follows the new
+view direction, and the camera's forward offset rotates into that direction.
+Physical head orientation and world-space leaning remain continuous relative
+to the new view; tracking is not recentered. Repeated render frames cannot
+trigger extra turns. Two consecutive rolls restore the original heading.
+
+The ground-roll camera follows the animated head height, so it drops and rises
+with Lara's roll. Its horizontal forward offset remains aligned with the new
+heading. Roll eye clearance includes a horizontal wall sweep, then floor/ceiling
+clearance at the final rendered head position, including physical ducking.
+The camera stops descending when it reaches floor clearance and resumes the
+animated height as Lara rises; no standing-height lock is applied during rolls.
+The 64-unit margin shrinks only when the vertical gap cannot accommodate both
+margins. Collision corrections do not move Lara or alter saved eye/HMD
+calibration. Other animation states, native third-person rolls, death and
+scripted cameras retain their existing behavior; this adds no TR6 first person.
+
+Validation: Release/x64 built successfully; **345,447** production first-person
+regression checks passed, including TR4 and TR5, both stabilization settings,
+wraparound headings, held-forward input without another input poll, consecutive
+rolls, render interpolation, complete drop/rise profiles, physical ducking, slopes, low ceilings,
+missing floor samples and camera/menu/death/water exclusions. Native symbol and
+disassembly checks confirm both games' roll state IDs and `turn180_effect` yaw
+update. The full address audit passed **806** checks (the unavailable older
+`0x68639C21` executable was skipped). These are automated checks; headset
+validation is still required for B-roll turns, walking forward immediately
+afterward, two consecutive rolls, and rolls near walls, slopes and low ceilings.
+
+Installed Release/x64 DLL SHA-256:
+`8572E3ABD78CE7523962220C0F33F5FB823B0CC4D65E7632E6B491BC08715433`.
+Previous DLL, personal INI and log: `build/before-fp-roll-drop-20261002-093737/`.
+Deployment manifest: `build/fp-roll-drop-deploy/manifest.json`. The installed INI is
+byte-for-byte unchanged, including the hand-height calibration and enabled
+TR4 code-only effects. No game textures were replaced.
 
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
@@ -103,9 +206,11 @@ Download `TombRaider456VR.zip` and extract its contents into your game folder:
 C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered
 ```
 
-**2. Install New Effects TR4-5 *(optional, highly recommended)***
-This significantly improves visuals in VR. Download it from NexusMods and extract into the same game folder:
-🔗 [New Effects TR4-5 — NexusMods](https://www.nexusmods.com/tombraidertrilogy2remastered/mods/141?tab=description)
+**2. TR4 effects are built in**
+TR4 HD sunrays and selected smoke, fire, spray and splash effects are enhanced
+by the plugin by default. No New Effects texture installation is needed for
+this TR4 enhancement. It retains the game's original artwork; it does not
+reproduce the texture pack's redrawn sprites. TR5 and TR6 textures are unchanged.
 
 **3. Launch the game**
 Start Tomb Raider IV-VI Remastered through Steam as normal.

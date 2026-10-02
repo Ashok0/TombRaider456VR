@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 58802 bytes, 1171 lines.
+// Source: TombRaiderVR.ini, 59222 bytes, 1180 lines.
 #pragma once
 
 namespace tr {
@@ -785,6 +785,15 @@ CullDumpKey=0x77
 ; stereo, for A/B.
 SkyAtInfinity=1
 
+; TR4 HD sunrays and selected smoke/fire/spray/splash cells are enhanced in
+; memory. No New Effects DDS installation is required; TR5/6 are unchanged.
+; Restart the game after changing these load-time settings. Disable this if
+; stacking with replacement effect textures is too bright.
+TR4Effects=1
+; Strength 0 = original, 1 = tuned enhancement, 2 = stronger. Range: 0..2.
+TR4SunrayStrength=1.0
+TR4EffectStrength=1.0
+
 ; --- first person (TR4/TR5) -----------------------------------------------
 ;
 ; Set this to 1 to enable the mode. Y + LT then switches between the original
@@ -803,7 +812,8 @@ FirstPersonAnchorZ=144
 
 ; Hanging, ledge pull-up, climbing and push/pull hold Lara against geometry.
 ; Retract only the forward eye offset in those states; never extend a custom
-; normal anchor farther into a wall.
+)INI"
+           R"INI(; normal anchor farther into a wall.
 FirstPersonInteractionAnchorZ=16
 
 ; Tracked rotation is always active. This controls physical leaning/ducking.
@@ -812,8 +822,7 @@ FirstPersonInteractionAnchorZ=16
 FirstPersonHeadTranslation=1
 
 ; Stabilize standing/walk/side/back eye position and horizontal root motion.
-)INI"
-           R"INI(; Uses raw HMD tracking without a second physical-yaw orbit. 0 restores legacy.
+; Uses raw HMD tracking without a second physical-yaw orbit. 0 restores legacy.
 FirstPersonMovementStabilization=1
 
 ; Neck-to-head distance for room-scale BODY movement. With stabilization off
@@ -958,7 +967,8 @@ DynamicBonesAnchorZ=45
 ; reported disp_peak pinned at exactly 18.00 and never settling. The solver
 ; is now driven by the parent joint's acceleration instead, so constant
 ; velocity produces no displacement at all, and these constants replace the
-; old ones rather than merely retuning them.
+)INI"
+           R"INI(; old ones rather than merely retuning them.
 DynamicBonesStiffness=630
 DynamicBonesDamping=9.5
 
@@ -968,8 +978,7 @@ DynamicBonesDamping=9.5
 DynamicBonesGravity=5400
 
 ; How much of the parent joint's acceleration the bone feels. 1.0 is the
-)INI"
-           R"INI(; physical answer; lower tames the noise that comes from differentiating a
+; physical answer; lower tames the noise that comes from differentiating a
 ; joint matrix twice.
 DynamicBonesDriveScale=1.0
 
@@ -1124,7 +1133,8 @@ DynamicBonesDebugScale=1
 ; are tens of units apart; padding slots differ by a fraction of one.
 DynamicBonesSeparation=12
 
-; Displacement clamp, world units. TR6 bounds its bones with authored
+)INI"
+           R"INI(; Displacement clamp, world units. TR6 bounds its bones with authored
 ; deflector volumes; a radius is the stand-in for assets that carry none.
 ; Sized to the stiffness: at 4 Hz a running jump reaches +28 and a long fall
 ; +34, so the old 18 would clip even a small hop. 40 leaves only extreme falls
@@ -1132,8 +1142,7 @@ DynamicBonesSeparation=12
 DynamicBonesMaxDisplace=40
 
 ; Anchor movement in one frame beyond which the solver snaps instead of
-)INI"
-           R"INI(; integrating -- what SpringSystem::teleport does in TR6. A level load or a
+; integrating -- what SpringSystem::teleport does in TR6. A level load or a
 ; cutscene cut is not an acceleration.
 DynamicBonesTeleport=900
 
