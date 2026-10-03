@@ -43,6 +43,11 @@ inline bool IsJumpSteeringState(int state) { return state == 15 || state == 3; }
 // Shared TR4/5 ground roll start/end. Observe the native animation's exact
 // half-turn, not the B button or repeated rendered frames (TR1-3 behavior).
 inline bool IsGroundRollState(int state) { return state==23 || state==45; }
+inline bool IsHardLanding(int state,int animation) {
+    // TR4/5 lara_col_fastfall uses stop (2), animation 24 after a survivable
+    // hard fall, just like TR1-3. Stop alone also includes idle and vault exits.
+    return state==2 && animation==24;
+}
 inline float GroundRollTurn(int beforeState,int afterState,int16_t beforeYaw,int16_t afterYaw) {
     return (IsGroundRollState(beforeState) || IsGroundRollState(afterState)) &&
         uint16_t(int(afterYaw)-int(beforeYaw))==0x8000u ? 3.14159265358979323846f : 0.f;

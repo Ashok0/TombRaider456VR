@@ -2639,6 +2639,59 @@ int main() {
         Check(locomotion::Length(transition.Correction(residual,-1600,3))==0,
               "camera/session reset discards stale mount correction");
     }
+    // Native hard landing is STOP + animation 24, not a dedicated state.
+    // Use the production camera path, including floor clearance and calibration.
+    for (int which:{0,1}) for (bool stable:{false,true}) for (bool calibrated:{false,true})
+    for (float heading:{0.f,.7f,-1.9f}) for (float duck:{0.f,-.2f}) {
+        game=dll.game=which;resetRoomscale();ResetMovementStabilization();
+        config.firstPersonMovementStabilization=stable;config.firstPersonHeadTranslation=true;
+        config.firstPersonBodyFollowsHead=false;config.firstPersonRoomscaleMove=false;
+        collisionMode=0;gaitSway={};physicalPose(0);FirstPersonRecenter();
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+        pos.y_rot=prev.y_rot=Angle(heading);fraction=256;
+        auto& animation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        animation=0;UpdateSceneCamera(camera);
+        if (!calibrated) g_groundEye.Reset();
+        const auto saved=g_groundEye;
+        physicalPose(0,0,0,duck);const float neutral=VR().m_firstPersonNeutral[1];
+        state=2;animation=24;
+        Check(UseHardLandingCamera(itemMemory),"TR4/5 live hard landing recognized by state and animation");
+        for (int height:{-700,-600,-400,-200,-80,50,-80,-200,-400,-600,-700}) {
+            gaitSway={30,height+700,-20};
+            for (int f:{0,64,128,192,256}) {
+                fraction=f;UpdateSceneCamera(camera);
+                const float tracking=VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre();
+                const float expected=std::min(float(height)+tracking,-64.f);
+                Check(std::fabs(camera.y_pos+tracking-expected)<1.1f,
+                      "impact kneel and recovery follow animated neck until final tracked eye reaches floor margin");
+                Check(g_groundEye.valid==saved.valid && g_groundEye.local.x==saved.local.x &&
+                      g_groundEye.local.y==saved.local.y && g_groundEye.local.z==saved.local.z,
+                      "landing never captures kneeling height or replaces standing calibration");
+                if (stable && calibrated && height+tracking < -65) {
+                    const auto flat=locomotion::Rotate({saved.local.x,saved.local.z},g_headingBase);
+                    Check(std::fabs(camera.x_pos-flat.x)<1.1f && std::fabs(camera.z_pos-flat.z)<1.1f,
+                          "landing preserves stable horizontal anchor despite animated sway");
+                }
+                Check(VR().m_firstPersonNeutral[1]==neutral && pos.y_pos==0 && camera.x_rot==0 && camera.z_rot==0,
+                      "landing preserves HMD neutral, collision root and head-controlled rotation");
+            }
+        }
+        animation=0;gaitSway={};physicalPose(0);fraction=256;UpdateSceneCamera(camera);
+        Check(camera.y_pos==-700 && (!stable || g_groundEye.valid),
+              "settled standing restores normal height even after entering FP mid-kneel");
+        for (int other:{0,11,27,42,50,51,103}) {
+            animation=int16_t(other);gaitSway={0,200,0};UpdateSceneCamera(camera);
+            Check(!UseHardLandingCamera(itemMemory) && (!stable || camera.y_pos==-700),
+                  "idle, ordinary landing and vault animations keep existing standing stabilization");
+        }
+        state=2;animation=24;hp=0;
+        const PHD_3DPOS native{400,500,600,20,30,40,0};camera=native;UpdateSceneCamera(camera);
+        Check(!g_active && !std::memcmp(&camera,&native,sizeof(native)),
+              "fatal landing still uses the native death camera");
+        hp=1000;animation=0;gaitSway={};
+    }
+    for (int other:{1,3,8,9,19,23,28,45,54})
+        Check(!locomotion::IsHardLanding(other,24),"landing exception does not include unrelated states");
     // Native turns outside an eligible FP ground roll must stay native.
     for (int guard=0;guard<11;++guard) {
         resetRoomscale();config.firstPersonMovementStabilization=true;physicalPose(0);

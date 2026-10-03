@@ -46,6 +46,7 @@ constexpr uint32_t item_floor_prev  = 4;
 constexpr uint32_t item_object      = 16;
 constexpr uint32_t item_anim_state  = 18;
 constexpr uint32_t item_goal_state  = 20;
+constexpr uint32_t item_anim_number = 24;
 constexpr uint32_t item_speed       = 34;
 constexpr uint32_t item_hit_points  = 38;
 constexpr uint32_t item_room        = 28;
@@ -536,6 +537,12 @@ bool CanTurnBody(const uint8_t* item) {
     case 16: case 20: case 21: case 22: return true;
     default: return false;
     }
+}
+
+bool UseHardLandingCamera(const uint8_t* item) {
+    return item && CanTurnBody(item) && locomotion::IsHardLanding(
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_state),
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
 }
 
 bool CanHardStop(const uint8_t* item) {
@@ -1766,7 +1773,7 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     // amount here so both rendered eyes remain on the clear side of the wall.
     pose.x_pos = eye[0] - offsetX;
     pose.z_pos = eye[2] - offsetZ;
-    if (roll) {
+    if (roll || UseHardLandingCamera(item)) {
         // The rendered headset can be lower than the scene anchor (ducking).
         // Query the final horizontal eye, then keep that rendered centre clear
         // of floor/ceiling without changing Lara, tracking neutral or calibration.
@@ -1938,7 +1945,8 @@ bool Anchor(PHD_3DPOS& pose) {
         // separately, identically for both eyes, culling and tracked guns.
         const auto eye=g_groundEye.Apply({body[0],body[1],body[2]},g_headingBase,
             {float(head.x),float(head.y),float(head.z)},
-            Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t);
+            Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t,
+            UseHardLandingCamera(item));
         pose.x_pos=int32_t(std::lround(eye.x));
         pose.y_pos=int32_t(std::lround(eye.y));
         pose.z_pos=int32_t(std::lround(eye.z));
