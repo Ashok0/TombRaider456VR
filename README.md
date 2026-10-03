@@ -1,50 +1,108 @@
 ## Tomb Raider IV-VI Remastered VR Mod
-VR mod for Tomb Raider IV-VI Remastered. Tomb Raider IV: The Last Revelation, Tomb Raider V: Chronicles, and Tomb Raider VI: Angel of Darkness work in native stereo with 6DOF. TR6 uses a separate full-scene replay path for its offscreen renderer; AER remains the automatic fallback. TR6 also has its own correctness-first geometry, effects and small-object visibility paths, documented in [Phase 17](#phase-17-tr6-culling), [Phase 19](#phase-19-tr6-effects-visibility) and [Phase 20](#phase-20-tr6-pickup-and-scene-object-retention).
+Native stereo 6DOF VR mod for Tomb Raider IV-VI Remastered. Tomb Raider I-V can be toggled between third and first preson.  First person mode supports 6DOF motion controls, working scopes, and Roomscale movement.  Tomb Raider VI runs off an updated version of Core Engine and currently works in third person only.  
 
 ## AI Usage
-Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions.   
-
-OpenAI Codex was used for Phases 16 through 19 to inspect the newly supplied `tomb6.pdb`
-and matching DLL, identify and verify the complete TR6 scene-render boundary,
-implement its guarded per-eye replay, trace TR6's separate room-culling pipeline,
-isolate projected-shadow cameras and trace its room-attached effects pipeline,
-build and deploy the mod, and document the results after in-headset validation.
-
-Codex also worked on the TR1–3 first-person port to TR4/5 and its subsequent
-regression fixes and diagnostics. That work is documented in
-[Phase 23](#phase-23-tr45-first-person); its automated tests are not a substitute
-for in-headset validation, and the remaining motion issues are listed there.
+Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions. OpenAI Codex was used for adding VR support to Angel of Darkness which runs off a modified version of Core Engine. 
 
 ## VR Mod Features
 
-* Native stereo with 6DOF (TR4/5/6)
-* Built-in TR4 HD sunray and selected smoke/fire/spray/splash enhancement, with no replacement DDS files
+* Native stereo with 6DOF (TR1-6)
+* First person mode for TR1-5.  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming and cutscenes dynamically toggle to third person.
 * Culling fixes for VR
-* Camera fixes for tight collision areas
+* Camera fixes for VR
 * UI fixes
 * FMV fixes
 * Gamepad and VR controller support
 * Dpad input support
 * Decoupled pitch
-* Sky fix — the HD sky dome sits at optical infinity instead of a few metres away
-* Chest physics for Lara in TR4/5, ported from TR6's dynamic bones
-* First person for TR4/5, ported from TR1–3: directional movement, headset-driven
-  arm aiming, body-follow rotation, collision-checked room-scale movement and
-  eye-room portal culling. Rendered-eye wall clearance is deployed but still needs
-  headset testing. Motion polish and vertical tilt in the head-aim fallback remain
-  under investigation; TR6 first person is not implemented.
-* Quest Touch motion controls enabled by default for TR4/5 guns in remastered graphics:
-  tracked hands/muzzles, corrected grip pivots, aim assistance, independent dual
-  triggers, 0.5-second equip gestures and live position/angle calibration.
-  The new non-dual weapons still need headset validation.
-* Automatic first-person suspension during cutscenes/flybys, with native Lara
-  visibility and automatic return to the selected view after gameplay resumes.
-* Working 3x VR scope for the TR5 HK in first-person HD motion-gun mode:
-  raise the original gun scope to either eye for a magnified world view inside
-  its mesh-aligned lens, while the surrounding headset view stays unzoomed.
-  Includes close-eye near-clipping protection without displacing the lens.
-* Automatic TR4/5 third-person startup centering, FP-to-third-person recentering,
-  and a world-space ceiling clamp; native chase-camera wall handling is preserved.
+* Sky dome fixes
+* Chest physics in TR1-5 ported from TR6's dynamic bones
+* Enhanced sunrays and smoke/fire/spray/splash FX
+
+## Installation
+## Tomb Raider IV-VI Remastered VR — Installation
+
+**1. Install the VR mod**
+Download `TombRaider456VR.zip` and extract its contents into your game folder:
+```
+C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered
+```
+
+**2. Launch the game**
+Start Tomb Raider IV-VI Remastered through Steam as normal.
+
+## Controls
+
+| Action | Control |
+|---|---|
+| Move | Left Stick (LS) |
+| Walk | RB + LS |
+| Dash | L3 |
+| Look | Right Stick (RS) |
+| Zoom | R3 |
+| Jump | A |
+| Action | Y or LB + RB |
+| Toggle Classic Graphics | Y + RT |
+| Toggle First Person (TR1-5 only) | Y + LT |
+| Equip Weapon (Third Person) | LT (Hold) |
+| Shoot (Third Person) | RT |
+| Toggle Weapon (First Person; TR1-5 only) | LT (Hold) |
+| Shoot (First Person; TR1-5 only) | LT and/or RT |
+| Roll | B |
+| Duck | LB |
+| Photo Mode | L3 + R3 |
+| Photo Mode Select | R3 (Dpad) + LS |
+| Ledge Grab | RT |
+| Ledge Drop | B |
+| Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
+| 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
+| Swan Dive | Jump (A) + Move (LS) + Roll (B) |
+| Recenter Camera | System (Hold) |
+| Adjust Camera Pitch | RT + RB + RS |
+| Menu | X |
+| Change Ammo  | X + Weapon equipped |
+| Sneak (TR6 only) | RB + Y |
+
+
+## Development Notes
+
+**A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a),
+driving an OpenVR runtime. It supports the retail Steam release, the HD
+Definitive Patch and the 2026-01-17 build every address here was read out of;
+see [Phase 22](#phase-22-retail-and-definitive-edition-builds).
+
+The mod loads into the game, reads the head pose from an OpenVR runtime, and
+composes it onto the game camera. Its development phases share one binary and
+one set of hooks; settings select optional paths at runtime.
+
+With `FirstPerson=1` (the new default), Y + LT selects first/third person in
+gameplay, inventory and title menus; it never doubles as the graphics toggle.
+Release and press the chord again to switch back. Selecting first person in a
+menu takes effect when normal gameplay resumes. Startup is still third person:
+the INI setting enables the feature, not an automatic first-person startup.
+TR6, or `FirstPerson=0`, retains the legacy Y + LT hold chord for graphics.
+
+In first person, LS up moves forward, LS left/right sidesteps, and LS down
+backpedals instead of turning Lara to run toward the camera. The dominant stick
+axis selects the directional gait. RS turns your view; physical head rotation
+also changes your view, and Lara follows during supported ground movement.
+R3's D-pad shift remains available. See [Phase 23](#phase-23-tr45-first-person)
+for settings, gameplay exceptions and the current motion limitations.
+
+With `FirstPersonMotionGuns=1` in first-person remastered/HD gameplay, the
+weapon controls above are overridden: **hold LT for 0.5 seconds** to toggle
+draw/holster with LT alone, **tap LT** to fire the left pistol/Uzi on release,
+and **hold RT** to fire the right pistol/Uzi or selected single weapon at its
+native rate. Hold LT+RT to sustain both dual guns; this cannot become a
+holster gesture until LT is released. Single weapons aim with the right controller. TR5 grappling still
+requires native laser targeting and a valid attachment point. For calibration
+keys and readiness/fallback rules, see
+[Touch motion guns](#experimental-touch-motion-guns-tr4tr5).
+
+TR4 HD sunrays and selected smoke, fire, spray and splash effects are enhanced
+by the plugin by default. No New Effects texture installation is needed for
+this TR4 enhancement. It retains the game's original artwork; it does not
+reproduce the texture pack's redrawn sprites. TR5 and TR6 textures are unchanged.
 
 ### TR1–3 first-person fixes ported on 2026-10-02
 
@@ -260,88 +318,7 @@ Previous DLL, personal INI and log: `build/before-mount-torso-20261002-235537/`.
 Deployment manifest: `build/mount-torso-deploy/manifest.json`. The active INI is
 unchanged, including `FirstPersonAnchorZ=144` and the known-good hand calibration.
 
-## Installation
-## Tomb Raider IV-VI Remastered VR — Installation
 
-**1. Install the VR mod**
-Download `TombRaider456VR.zip` and extract its contents into your game folder:
-```
-C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered
-```
-
-**2. TR4 effects are built in**
-TR4 HD sunrays and selected smoke, fire, spray and splash effects are enhanced
-by the plugin by default. No New Effects texture installation is needed for
-this TR4 enhancement. It retains the game's original artwork; it does not
-reproduce the texture pack's redrawn sprites. TR5 and TR6 textures are unchanged.
-
-**3. Launch the game**
-Start Tomb Raider IV-VI Remastered through Steam as normal.
-
-## Controls
-
-| Action | Control |
-|---|---|
-| Move | Left Stick (LS) |
-| Walk | RB + LS |
-| Sneak | RB + Y |
-| Dash | L3 |
-| Look | Right Stick (RS) |
-| Zoom | R3 |
-| Jump | A |
-| Action | Y or both grips (LB+RB) during gameplay |
-| Equip Weapon | LT (Hold) |
-| Shoot | RT |
-| Roll | B |
-| Duck | LB |
-| Photo Mode | L3 + R3 |
-| Photo Mode Select | R3 (Dpad) + LS |
-| Ledge Grab | RT |
-| Ledge Drop | B |
-| Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
-| 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
-| Swan Dive | Jump (A) + Move (LS) + Roll (B) |
-| Toggle First Person (TR4/5, `FirstPerson=1`) | Y + LT |
-| Toggle Classic Graphics (TR4/5, `FirstPerson=1`) | Y + RT |
-| Recenter First-Person Position | End; Numpad 5 also works by default |
-| Adjust Camera Pitch | RT + RB + RS |
-| Menu | X |
-| Sneak (TR6 only) | RB + Y |
-
-With `FirstPerson=1` (the new default), Y + LT selects first/third person in
-gameplay, inventory and title menus; it never doubles as the graphics toggle.
-Release and press the chord again to switch back. Selecting first person in a
-menu takes effect when normal gameplay resumes. Startup is still third person:
-the INI setting enables the feature, not an automatic first-person startup.
-TR6, or `FirstPerson=0`, retains the legacy Y + LT hold chord for graphics.
-
-In first person, LS up moves forward, LS left/right sidesteps, and LS down
-backpedals instead of turning Lara to run toward the camera. The dominant stick
-axis selects the directional gait. RS turns your view; physical head rotation
-also changes your view, and Lara follows during supported ground movement.
-R3's D-pad shift remains available. See [Phase 23](#phase-23-tr45-first-person)
-for settings, gameplay exceptions and the current motion limitations.
-
-With `FirstPersonMotionGuns=1` in first-person remastered/HD gameplay, the
-weapon controls above are overridden: **hold LT for 0.5 seconds** to toggle
-draw/holster with LT alone, **tap LT** to fire the left pistol/Uzi on release,
-and **hold RT** to fire the right pistol/Uzi or selected single weapon at its
-native rate. Hold LT+RT to sustain both dual guns; this cannot become a
-holster gesture until LT is released. Single weapons aim with the right controller. TR5 grappling still
-requires native laser targeting and a valid attachment point. For calibration
-keys and readiness/fallback rules, see
-[Touch motion guns](#experimental-touch-motion-guns-tr4tr5).
-
-## Development Notes
-
-**A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a),
-driving an OpenVR runtime. It supports the retail Steam release, the HD
-Definitive Patch and the 2026-01-17 build every address here was read out of;
-see [Phase 22](#phase-22-retail-and-definitive-edition-builds).
-
-The mod loads into the game, reads the head pose from an OpenVR runtime, and
-composes it onto the game camera. Its development phases share one binary and
-one set of hooks; settings select optional paths at runtime.
 
 | | | State |
 |---|---|---|
