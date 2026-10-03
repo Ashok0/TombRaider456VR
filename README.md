@@ -45,8 +45,8 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Toggle Classic Graphics | Y + RT |
 | Toggle First Person (TR1-5 only) | Y + LT |
 | Equip Weapon (Third Person) | LT (Hold) |
-| Shoot (Third Person) | RT |
 | Toggle Weapon (First Person; TR1-5 only) | LT (Hold) |
+| Shoot (Third Person) | RT |
 | Shoot (First Person; TR1-5 only) | LT and/or RT |
 | Roll | B |
 | Duck | LB |
