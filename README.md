@@ -6,8 +6,8 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 
 ## VR Mod Features
 
-* Native stereo with 6DOF (TR1-6)
-* First person mode for TR1-5.  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming and cutscenes dynamically toggle to third person.
+* Native stereo with 6DOF
+* First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming and cutscenes dynamically toggle to third person.
 * Culling fixes for VR
 * Camera fixes for VR
 * UI fixes
