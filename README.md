@@ -33,7 +33,7 @@ for in-headset validation, and the remaining motion issues are listed there.
   eye-room portal culling. Rendered-eye wall clearance is deployed but still needs
   headset testing. Motion polish and vertical tilt in the head-aim fallback remain
   under investigation; TR6 first person is not implemented.
-* Opt-in Quest Touch motion controls for all TR4/5 guns in remastered graphics:
+* Quest Touch motion controls enabled by default for TR4/5 guns in remastered graphics:
   tracked hands/muzzles, corrected grip pivots, aim assistance, independent dual
   triggers, 0.5-second equip gestures and live position/angle calibration.
   The new non-dual weapons still need headset validation.
@@ -196,6 +196,69 @@ Previous DLL, personal INI and log: `build/before-fp-roll-drop-20261002-093737/`
 Deployment manifest: `build/fp-roll-drop-deploy/manifest.json`. The installed INI is
 byte-for-byte unchanged, including the hand-height calibration and enabled
 TR4 code-only effects. No game textures were replaced.
+
+### Defaults synchronized with the known-good Steam INI (2026-10-02)
+
+`TombRaiderVR.ini.good` in the Steam game folder is the reference for defaults.
+All **139 reference settings** now match in the repository INI, embedded INI
+and repaired active Steam INI. Six newer settings absent from the reference
+(interaction anchor, movement stabilization and four HK-scope settings) are
+retained. The reference file itself is unchanged.
+
+The five corrected template/active-INI values are:
+
+```ini
+FirstPersonDriftLog=1
+FirstPersonMotionGuns=1
+FirstPersonMotionGunGripForwardMetres=0.2032
+FirstPersonMotionGunRaiseMetres=-0.06985
+FirstPersonMotionGunPitchDegrees=-30
+```
+
+C++ fallbacks now agree too, including positional tracking enabled,
+`EyeOffsetMode=3` and the first-person feature enabled (startup remains third
+person). All 136 numeric/bool fallback fields present in the reference were
+compared. Live gun calibration is initialized from those defaults even before
+an INI loads; missing pitch keys no longer silently select zero degrees.
+
+Validation: Release/x64 build, the self-test suite and 345,447 first-person
+regression checks passed. New self-tests cover startup, empty/missing INIs,
+freshly generated defaults, live calibration, explicit user overrides, and
+preserving existing INIs. The default-file writer still never overwrites an
+existing profile; this task explicitly repairs the active Steam INI.
+
+Installed DLL SHA-256: `ED8935300227B3F1A101173C84C72DA8A7CC9FF2AC64E27D55D83CA5E0D7B329`.
+Backup of the previous DLL, active INI, reference INI and log:
+`build/before-good-defaults-20261002-162012/`. Deployment hashes: `build/good-defaults-deploy/manifest.json`.
+Restart the game to load the corrected profile.
+
+### Crate/ledge mount torso transition (2026-10-02)
+
+First-person pull-ups and gymnast mounts now retain the hanging arms-only mask
+through states 19/54. This prevents the torso flashing into view while the
+interaction camera uses the shorter forward anchor for wall clearance.
+
+When the native state becomes grounded before the climbing skeleton has finished
+interpolating, the HD body fit accounts for the current animated head offset.
+The saved standing camera calibration remains unchanged. Once the head returns
+to standing height, the temporary correction releases over 120 ms, allowing
+normal running animation to resume. This changes only rendered body translation;
+Lara's collision root, camera collision handling and tracked hands remain native
+to their existing paths. Leaving gameplay, changing body/level or entering an
+unrelated animation clears the transition. The body correction requires the
+existing movement-stabilization setting; pull-up visibility applies independently.
+
+Validation: Release/x64 build and **360,299** production first-person regression
+checks passed. Coverage includes TR4/5, normal and gymnast pull-up visibility,
+anchor offsets 80/100/144, multiple headings and interpolation fractions, a
+stale climbing skeleton after the root mounts the crate, preservation of the
+standing calibration, and timed release at 30/60/90/144 Hz. Headset confirmation
+of repeated crate/ledge mounts is still needed.
+
+Installed DLL SHA-256: `E5FC214D0165B4E799626B3454540755715ED77C4D2559EF585204B304D5F0A7`.
+Previous DLL, personal INI and log: `build/before-mount-torso-20261002-235537/`.
+Deployment manifest: `build/mount-torso-deploy/manifest.json`. The active INI is
+unchanged, including `FirstPersonAnchorZ=144` and the known-good hand calibration.
 
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
@@ -5042,18 +5105,18 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonRoomscaleMove` | `1` | Let collision-checked physical steps move Lara |
 | `FirstPersonRoomscaleDeadzoneMetres` | `0.02` | Lean allowance before the body follows |
 | `FirstPersonRecenterKey` | `0x23` | End; recapture positional neutral while preserving viewing heading |
-| `FirstPersonDriftLog` | `0` | Enable room-scale/heading and forward-motion diagnostics in `TombRaiderVR.log` |
+| `FirstPersonDriftLog` | `1` | Enable room-scale/heading and forward-motion diagnostics in `TombRaiderVR.log` |
 | `FirstPersonHideHead` | `1` | Hide head/face/braid; roll body hiding applies independently |
 | `FirstPersonMoveWithHead` | `1` | Convert modern-controls movement using the HMD viewing direction |
 | `FirstPersonBodyFollowsHead` | `1` | Enable body following during supported ground states |
 | `FirstPersonBodyDeadzoneDegrees` | `0` | Body-follow angular deadzone |
 | `FirstPersonBodyTurnDegreesPerFrame` | `4` | Body-follow turn limit at a 60 Hz reference, scaled by elapsed time |
 | `FirstPersonHeadAim` | `1` | Headset-aim fallback when motion tracking is inactive; its visible vertical tilt remains defective, separate from motion-gun aiming |
-| `FirstPersonMotionGuns` | `0` | Experimental Quest Touch tracking for TR4/TR5 guns in remastered/HD graphics; off by default |
-| `FirstPersonMotionGunGripForwardMetres` | `0.1778` | Mesh grip calibration; positive moves the gun back along its barrel axis, with the calibrated grip anchored to the controller |
-| `FirstPersonMotionGunRaiseMetres` | `0.0254` | Raise the mesh in controller-local up while preserving the calibrated grip anchor; metres |
+| `FirstPersonMotionGuns` | `1` | Quest Touch tracking for TR4/TR5 guns in remastered/HD graphics; enabled in the known-good profile |
+| `FirstPersonMotionGunGripForwardMetres` | `0.2032` | Mesh grip calibration; positive moves the gun back along its barrel axis, with the calibrated grip anchored to the controller |
+| `FirstPersonMotionGunRaiseMetres` | `-0.06985` | Raise the mesh in controller-local up while preserving the calibrated grip anchor; metres |
 | `FirstPersonMotionGunRightMetres` | `0` | Controller-local lateral mesh offset; positive right |
-| `FirstPersonMotionGunPitchDegrees` | `0` | Barrel angle correction; positive up |
+| `FirstPersonMotionGunPitchDegrees` | `-30` | Barrel angle correction; positive up |
 | `FirstPersonMotionGunYawDegrees` | `0` | Barrel angle correction; positive right |
 | `FirstPersonMotionGunRollDegrees` | `0` | Grip roll correction; positive clockwise |
 | `FirstPersonMotionGunHotkeys` | `1` | Enable focused-game Ctrl+function-key live calibration |
@@ -5187,8 +5250,8 @@ confirmation. Adjust the value and restart; 0 restores the preceding build's
 placement without reverting its pivot or aiming fixes (with raise also zero).
 An earlier requested fit was **1 inch up and 5 inches forward** relative to
 that 12-inch-back test: `0.1778` grip-forward (7 inches back) and
-`0.0254` raise (1 inch up). Those remain template defaults, not the current
-personal fit. These are controller-local mesh calibration
+`0.0254` raise (1 inch up). Those were historical template defaults, superseded by the known-good
+Steam profile below. These are controller-local mesh calibration
 values, not a headset-facing offset. For manual tuning, decrease grip-forward
 to move the guns forward and increase raise to move them up; one inch is
 `0.0254` metres. INI edits take effect on restart, or use the live keys below.
@@ -5213,9 +5276,8 @@ That is an 8-inch local grip-back calibration, 2.75 inches below zero and
 **3.75 inches below the original `0.0254 m` setting**: `0.0254 - 3.75 * 0.0254
 = -0.06985 m`, matching the final TR1–3 profile. These are empirical
 mesh-fit values, not a desired physical hand-to-controller separation.
-The earlier -20-degree fit is historical. These are personal settings, not
-new defaults. This port updates only the installed hand-height key; the other
-personal calibration values are preserved.
+The earlier -20-degree fit is historical. The values above are now both the
+personal fit and the shipped defaults, synchronized with `TombRaiderVR.ini.good`.
 The grip pivot remains fixed; use Ctrl+Shift+F3/F4 to fine-tune pitch and
 Ctrl+F7 to save. No extra one-inch-forward adjustment was reapplied.
 

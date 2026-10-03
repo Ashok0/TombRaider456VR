@@ -83,11 +83,8 @@ struct Config {
     // cap feels like it arrives too early.
     float ceilingMarginUnits  = 128.0f;
 
-    // Rotation-only head tracking. The safest possible first test: the camera
-    // can pivot but can never be displaced into geometry, so a wrong world
-    // scale cannot put you inside a wall. Turn positional on once looking
-    // around behaves.
-    bool  positionalTracking = false;
+    // Positional head tracking is enabled in the known-good Steam profile.
+    bool  positionalTracking = true;
 
     // Seated tracking origin rather than standing.
     //
@@ -694,7 +691,7 @@ struct Config {
 
     // --- first person (TR4/TR5) -------------------------------------------
     // Startup remains third person; Y+LT toggles the runtime mode.
-    bool  firstPerson           = false; // legacy INI compatibility
+    bool  firstPerson           = true; // feature enabled; startup view remains third person
     int   firstPersonJoint      = 14;
     int   firstPersonAnchorX    = 0;
     int   firstPersonAnchorY    = -32;
@@ -706,18 +703,18 @@ struct Config {
     bool  firstPersonRoomscaleMove = true;
     float firstPersonRoomscaleDeadzoneMetres = 0.02f;
     int   firstPersonRecenterKey = 0x23; // End; RecentreKey remains available too
-    bool  firstPersonDriftLog = false;
+    bool  firstPersonDriftLog = true;
     bool  firstPersonHideHead   = true;
     bool  firstPersonMoveWithHead = true;
     bool  firstPersonBodyFollowsHead = true;
     float firstPersonBodyDeadzoneDegrees = 0.0f;
     float firstPersonBodyTurnDegreesPerFrame = 4.0f;
     bool  firstPersonHeadAim = true;
-    bool  firstPersonMotionGuns = false; // opt-in dual pistols/Uzis prototype
-    float firstPersonMotionGunGripForwardMetres = 0.1778f; // seven inches back
-    float firstPersonMotionGunRaiseMetres = 0.0254f; // one inch controller-local up
+    bool  firstPersonMotionGuns = true;
+    float firstPersonMotionGunGripForwardMetres = 0.2032f; // eight inches back
+    float firstPersonMotionGunRaiseMetres = -0.06985f; // 2.75 inches controller-local down
     float firstPersonMotionGunRightMetres = 0;
-    float firstPersonMotionGunPitchDegrees = 0;
+    float firstPersonMotionGunPitchDegrees = -30.0f;
     float firstPersonMotionGunYawDegrees = 0;
     float firstPersonMotionGunRollDegrees = 0;
     bool firstPersonMotionGunHotkeys = true;
@@ -1130,7 +1127,7 @@ struct Config {
     //       view-space shift d is exactly equivalent to P * translate(d):
     //           clip.x += m[0]*dx + m[4]*dy + m[8]*dz
     //       which yields the same delta/depth parallax as shifting the view.
-    int   eyeOffsetMode = 2;
+    int   eyeOffsetMode = 3;
 
     // Yaw the RIGHT eye's view by this many degrees. Diagnostic only.
     //

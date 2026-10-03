@@ -1798,7 +1798,7 @@ int main() {
                   "leaving water cannot force FP on when the user selected third person");
             g_runtimeEnabled=true; state=2; UpdateSceneCamera(camera);
         }
-        for (bool hideHead:{false,true}) for (int hanging:{10,30,31,75,82,83,139}) {
+        for (bool hideHead:{false,true}) for (int hanging:{10,30,31,75,82,83,139,19,54}) {
             RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
             state=int16_t(hanging); UpdateSceneCamera(camera);
             Check(g_ledgeArmsOnly && bits==(baseBits&kArmMeshBits),
@@ -1809,8 +1809,11 @@ int main() {
                   "HD ledge pass retains upper arms, forearms and hands, with no body or hair");
             Check(bits==(baseBits&kArmMeshBits),"ledge draw restores persistent mask");
             state=19; UpdateSceneCamera(camera);
+            Check(g_ledgeArmsOnly && bits==(baseBits&kArmMeshBits),
+                  "pull-up keeps torso hidden while interaction camera anchor is retracted");
+            state=2; UpdateSceneCamera(camera);
             Check(!g_ledgeArmsOnly && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
-                  "pull-up exits the arms-only mask without losing the standing body snapshot");
+                  "standing after pull-up restores body without losing the saved mesh mask");
             state=int16_t(hanging); UpdateSceneCamera(camera);
             spotCamera=1; UpdateSceneCamera(camera);
             Check(!g_ledgeArmsOnly && bits==baseBits,"cutscene suspends ledge visibility override");
@@ -2129,10 +2132,11 @@ int main() {
     // Stand -> jump/hang -> vault/pull-up -> stand. The last climb skeleton
     // can coexist with a newly relocated standing root during interpolation.
     // It must never replace the persistent standing reference (sky/side drift).
-    for (int which:{0,1}) for (float heading:{0.f,0.8f,-1.9f}) {
+    for (int which:{0,1}) for (float heading:{0.f,0.8f,-1.9f}) for (int anchor:{80,100,144}) {
         game=dll.game=which; resetRoomscale(); ResetMovementStabilization();
         config.firstPersonMovementStabilization=true; config.firstPersonRoomscaleMove=false;
         config.firstPersonBodyFollowsHead=false; collisionMode=0;
+        config.firstPersonAnchorZ=anchor;
         physicalPose(0); FirstPersonRecenter(); g_headingBase=heading;
         pos.y_rot=prev.y_rot=Angle(heading); fraction=256; gaitSway={};
         dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
@@ -2162,6 +2166,8 @@ int main() {
         }
         // Native mount completion advances root onto crate while cached head
         // matrices still contain a high, laterally shifted pull-up frame.
+        state=19; Anchor(camera);
+        Check(g_mountBodyTransition.active,"pull-up arms-only interval arms body handoff correction");
         prev=pos; pos.x_pos+=96; pos.z_pos+=128; pos.y_pos-=768;
         state=2; gaitSway={240,-1200,300};
         for (int f:{0,32,64,128,192,256}) {
@@ -2172,6 +2178,18 @@ int main() {
                   std::fabs(camera.z_pos-(prev.z_pos+128*t+offset.z))<1.1f &&
                   std::fabs(camera.y_pos-(prev.y_pos-768*t+standingReference.y))<1.1f,
                   "post-pull-up camera remains at original root-relative height/centre instead of capturing stale climb offsets");
+            PHD_VECTOR animated{config.firstPersonAnchorX,config.firstPersonAnchorY,config.firstPersonAnchorZ};
+            FakeGaitJoint(itemMemory,&animated,14,f);
+            locomotion::Vec view{},floor{};VR().FirstPersonViewOffset(view.x,view.z);VR().HeadFloorOffset(floor.x,floor.z);
+            const auto physical=locomotion::Rotate(view-floor,g_headingBase)*LiveWorldUnitsPerMetre();
+            float palette[12]={1,0,0,float(animated.x),0,1,0,float(animated.y),0,0,1,float(animated.z)};
+            stabilization::OffsetBodyPalette(palette,1,g_bodyVisualOffset);
+            Check(std::fabs(palette[3]-camera.x_pos-physical.x)<1.1f &&
+                  std::fabs(palette[11]-camera.z_pos-physical.z)<1.1f,
+                  "stale mount skeleton is fitted to final eye, preserving configured torso clearance");
+            Check(std::fabs(g_groundEye.local.z-standingReference.z)<.001f,
+                  "temporary body correction never becomes a permanent camera offset");
+
         }
         prev=pos; gaitSway={}; fraction=256; Anchor(camera);
         Check(Near(g_groundEye.local.y,standingReference.y),"settled standing frame retains the same camera height");
@@ -2179,6 +2197,7 @@ int main() {
         Check(!g_groundEye.valid,"FP exit still discards the saved standing reference");
         config.firstPersonBodyFollowsHead=true;
     }
+    config.firstPersonAnchorZ=144;
     // Run -> wall impact (AS_SPLAT=12) -> stop. Raised crate floors must
     // remain blocking throughout, even when a query returns no X/Z shift.
     for (int which:{0,1}) for (float heading:{0.f,.8f,-1.9f}) {
@@ -2596,6 +2615,29 @@ int main() {
         }
         state=2;gaitSway={};physicalPose(0);UpdateSceneCamera(camera);
         Check(camera.y_pos==-700,"roll ascent leaves no floor-clamp offset behind");
+    }
+    // Mount correction follows stale interpolation, then releases by elapsed
+    // time without changing ordinary running after the handoff has finished.
+    for (int hz:{30,60,90,144}) {
+        stabilization::MountBodyTransition transition;
+        transition.Begin();
+        const locomotion::Vec residual{200,-120};
+        for (int frame=0;frame<hz;++frame) {
+            const auto fix=transition.Correction(residual,-1600,frame/double(hz));
+            Check(Near(fix.x,residual.x) && Near(fix.z,residual.z),
+                  "unfinished climb pose keeps full correction independent of frame count");
+        }
+        for (int frame=0;frame<=hz;++frame) {
+            const double elapsed=frame/double(hz);
+            const auto fix=transition.Correction(residual,-700,1+elapsed);
+            const float weight=float(std::max(0.0,1-elapsed/.12));
+            Check(std::fabs(fix.x-residual.x*weight)<.002f && std::fabs(fix.z-residual.z*weight)<.002f,
+                  "standing handoff releases smoothly with equal timing at every render rate");
+        }
+        Check(!transition.active,"mount fit cannot remain latched during normal running");
+        transition.Begin();transition.Reset();
+        Check(locomotion::Length(transition.Correction(residual,-1600,3))==0,
+              "camera/session reset discards stale mount correction");
     }
     // Native turns outside an eligible FP ground roll must stay native.
     for (int guard=0;guard<11;++guard) {

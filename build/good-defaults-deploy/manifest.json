@@ -1,0 +1,8 @@
+{
+  "backup": "C:\\dev\\TombRaider456VR\\build\\before-good-defaults-20261002-162012",
+  "game": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+  "reference_sha256": "3F6BDC841A2D6C46FB3A02E9FDF4E37E2AC73CAEAF9A3883BCC64BB0390B8C19",
+  "reference_keys": 139,
+  "dll_sha256": "ED8935300227B3F1A101173C84C72DA8A7CC9FF2AC64E27D55D83CA5E0D7B329",
+  "ini_sha256": "3F17A65794A8A5F1CC1A8448A46AB75E39188D4FFA1101865333F0253C4546A3"
+}

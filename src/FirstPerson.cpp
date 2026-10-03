@@ -142,6 +142,7 @@ uint64_t g_stabilizeAction=0;
 locomotion::Vec g_stabilizeDirection{};
 stabilization::RootMotion g_rootMotion;
 stabilization::GroundEye g_groundEye;
+stabilization::MountBodyTransition g_mountBodyTransition;
 locomotion::Vec g_bodyVisualOffset{};
 float g_lastBodyYaw=0;
 int g_headingLevel=-1;
@@ -157,6 +158,7 @@ void ResetMovementStabilization() {
     g_hardStopRoot=false;
     g_rootMotion.Reset();
     g_groundEye.Reset();
+    g_mountBodyTransition.Reset();
     g_bodyVisualOffset={};
 }
 
@@ -1666,6 +1668,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         g_dragShown = shown;
     }
     if (!g_haveHeading || !sameBody || relocated) {
+        g_mountBodyTransition.Reset();
         g_renderTurn.Reset(); g_turnTrace={}; g_rootMotion.Reset();
         const float oldBase=g_headingBase;
         const float bodyTurn=sameBody ? Wrap(Radians(pos.y_rot)-g_lastBodyYaw) : 0;
@@ -1839,10 +1842,15 @@ void TraceForwardCamera(const uint8_t* item, const float body[3],
     }
 }
 
-void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose) {
+void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose,const PHD_VECTOR& animatedHead) {
     using namespace locomotion;
     g_bodyVisualOffset={};
-    if (!CanTurnBody(item)) return;
+    if (!CanTurnBody(item)) {
+        const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+        if (IsLedgeMountState(state)) g_mountBodyTransition.Begin();
+        else g_mountBodyTransition.Reset();
+        return;
+    }
     const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
     const auto& prev=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
     const int frac=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256);
@@ -1856,6 +1864,15 @@ void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose) {
                           float(pose.z_pos-int32_t(prev.z_pos+(int64_t(pos.z_pos)-prev.z_pos)*frac/256))};
     g_bodyVisualOffset=g_groundEye.BodyOffsetAtEye(g_headingBase,bodyYaw,
         view,floor,LiveWorldUnitsPerMetre(),eyeFromRoot);
+    if (Cfg().firstPersonMovementStabilization && g_groundEye.valid) {
+        const float t=frac/256.f;
+        const Vec root{prev.x_pos+(pos.x_pos-prev.x_pos)*t,prev.z_pos+(pos.z_pos-prev.z_pos)*t};
+        const Vec animatedFromRoot{animatedHead.x-root.x,animatedHead.z-root.z};
+        const Vec expected=Rotate(g_groundEye.bodyLocal,bodyYaw);
+        const float height=animatedHead.y-(prev.y_pos+(pos.y_pos-prev.y_pos)*t);
+        g_bodyVisualOffset=g_bodyVisualOffset-g_mountBodyTransition.Correction(
+            animatedFromRoot-expected,height,GetTickCount64()/1000.0);
+    } else g_mountBodyTransition.Reset();
     static uint64_t nextFitLog=0;
     if (Cfg().firstPersonDriftLog && GetTickCount64()>=nextFitLog) {
         nextFitLog=GetTickCount64()+5000;
@@ -1932,7 +1949,7 @@ bool Anchor(PHD_3DPOS& pose) {
     // then locks that transient high/sideways offset into every standing frame.
     // Item/level changes and explicit view toggles discard this calibration.
     ClampRenderedHeadToCollision(item, pose);
-    FitBodyToRenderedEye(item,pose);
+    FitBodyToRenderedEye(item,pose,head);
     TraceForwardCamera(item, body, head, frac, GetTickCount64(), &pose);
     pose.z_rot = 0;
     if (!g_loggedFirst) {
@@ -2061,6 +2078,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         g_renderTurn.Reset(); g_turnTrace={}; g_rootMotion.Reset();
         if (!g_runtimeEnabled || !Cfg().firstPerson) g_groundEye.Reset();
         g_bodyVisualOffset={};
+        g_mountBodyTransition.Reset();
         g_bodyTime = {};
         g_dragPrevious = g_dragCurrent = g_dragShown = {};
         ++g_skipped;
@@ -2072,8 +2090,9 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
     SetMeshVisibility(g_active && Cfg().firstPersonHideHead,
                       g_active && IsRollState(item),
                       g_active && IsCrouchState(item),
-                      g_active && item && locomotion::IsLedgeHangState(
-                          *reinterpret_cast<const int16_t*>(item+off::item_anim_state)),
+                      g_active && item && (locomotion::IsLedgeHangState(
+                          *reinterpret_cast<const int16_t*>(item+off::item_anim_state)) ||
+                          locomotion::IsLedgeMountState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state))),
                       g_active && item && LaraWaterStatus()==1); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
 }
 

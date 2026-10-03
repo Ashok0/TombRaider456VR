@@ -16,7 +16,11 @@ Config g_cfg;
 float  g_liveScale = 423.0f;
 float  g_liveIpd   = 1.0f;
 std::wstring g_iniPath;
-motiongun::Calibration g_liveGun, g_savedGun;
+motiongun::Calibration g_liveGun{
+    g_cfg.firstPersonMotionGunRightMetres,g_cfg.firstPersonMotionGunRaiseMetres,
+    g_cfg.firstPersonMotionGunGripForwardMetres,g_cfg.firstPersonMotionGunPitchDegrees,
+    g_cfg.firstPersonMotionGunYawDegrees,g_cfg.firstPersonMotionGunRollDegrees};
+motiongun::Calibration g_savedGun=g_liveGun;
 
 int GetInt(const wchar_t* key, int def, const wchar_t* ini) {
     return static_cast<int>(GetPrivateProfileIntW(L"VR", key, def, ini));
@@ -344,7 +348,8 @@ void LoadConfig(const wchar_t* ini) {
         L"FirstPersonMotionGunRaiseMetres",
         g_cfg.firstPersonMotionGunRaiseMetres, ini);
     g_cfg.firstPersonMotionGunRightMetres=GetFloat(L"FirstPersonMotionGunRightMetres",0,ini);
-    g_cfg.firstPersonMotionGunPitchDegrees=GetFloat(L"FirstPersonMotionGunPitchDegrees",0,ini);
+    g_cfg.firstPersonMotionGunPitchDegrees=GetFloat(L"FirstPersonMotionGunPitchDegrees",
+        g_cfg.firstPersonMotionGunPitchDegrees,ini);
     g_cfg.firstPersonMotionGunYawDegrees=GetFloat(L"FirstPersonMotionGunYawDegrees",0,ini);
     g_cfg.firstPersonMotionGunRollDegrees=GetFloat(L"FirstPersonMotionGunRollDegrees",0,ini);
     g_cfg.firstPersonMotionGunHotkeys=GetBool(L"FirstPersonMotionGunHotkeys",true,ini);

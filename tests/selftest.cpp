@@ -695,6 +695,39 @@ static void TestGunCalibration() {
     Check(muzzle,"combined calibration preserves rendered muzzle and shot origin");
 }
 
+static void TestKnownGoodDefaults() {
+    printf("\nKnown-good INI defaults\n");
+    auto checkProfile=[]() {
+        const auto& c=tr::Cfg();
+        Check(c.positionalTracking && c.eyeOffsetMode==3,"known-good positional tracking and eye mode");
+        Check(c.firstPerson && c.firstPersonMotionGuns && c.firstPersonDriftLog,
+              "known-good first-person, motion guns and diagnostics enabled");
+        CheckNear(c.firstPersonMotionGunGripForwardMetres,.2032f,"known-good eight-inch grip");
+        CheckNear(c.firstPersonMotionGunRaiseMetres,-.06985f,"known-good lowered hand height");
+        CheckNear(c.firstPersonMotionGunPitchDegrees,-30,"known-good gun pitch");
+        const auto& live=tr::LiveMotionGunCalibration();
+        CheckNear(live.gripForwardMetres,c.firstPersonMotionGunGripForwardMetres,"live grip matches fallback");
+        CheckNear(live.raiseMetres,c.firstPersonMotionGunRaiseMetres,"live hand height matches fallback");
+        CheckNear(live.pitchDegrees,c.firstPersonMotionGunPitchDegrees,"live gun pitch matches fallback");
+    };
+    checkProfile(); // Includes startup before any INI could be loaded.
+    wchar_t tempDir[MAX_PATH]{},ini[MAX_PATH]{};
+    GetTempPathW(MAX_PATH,tempDir);
+    const bool created=GetTempFileNameW(tempDir,L"vrd",0,ini)!=0;
+    Check(created,"create isolated default-profile INI");
+    if (!created) return;
+    tr::LoadConfig(ini);checkProfile(); // Empty INI exercises missing-key fallbacks.
+    DeleteFileW(ini);
+    tr::LoadConfig(ini);checkProfile(); // Failed/missing file preserves usable defaults.
+    Check(tr::EnsureConfigFile(ini),"fresh installation creates embedded template");
+    tr::LoadConfig(ini);checkProfile();
+    WritePrivateProfileStringW(L"VR",L"FirstPersonMotionGuns",L"0",ini);
+    Check(!tr::EnsureConfigFile(ini),"startup cannot overwrite an existing user profile");
+    tr::LoadConfig(ini);
+    Check(!tr::Cfg().firstPersonMotionGuns,"explicit user override takes precedence over defaults");
+    DeleteFileW(ini);
+}
+
 static void TestGunCalibrationPersistence() {
     printf("\nGun calibration save/reload\n");
     wchar_t tempDir[MAX_PATH]{}, ini[MAX_PATH]{};
@@ -1114,6 +1147,7 @@ int main() {
     TestPhysicalBodyCentering();
     TestMotionGunEquipStyles();
     TestGunCalibration();
+    TestKnownGoodDefaults();
     TestGunCalibrationPersistence();
 
     printf("\n%s (%d failure%s)\n",
