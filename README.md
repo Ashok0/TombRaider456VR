@@ -319,7 +319,34 @@ Previous DLL, personal INI and log: `build/before-mount-torso-20261002-235537/`.
 Deployment manifest: `build/mount-torso-deploy/manifest.json`. The active INI is
 unchanged, including `FirstPersonAnchorZ=144` and the known-good hand calibration.
 
+### Hard-landing camera dip ported from TR1-3 (2026-10-03)
 
+After a large survivable fall, TR4/5 first person now follows Lara's animated
+neck height through the impact kneel and recovery. Native `lara_col_fastfall`
+uses standing state 2 with animation 24, so ordinary standing stabilization had
+previously suppressed this motion. The exception is specific to that state and
+animation. Horizontal centering remains stabilized, subject to existing wall
+clearance; the kneeling pose never overwrites saved standing calibration.
+Entering first person during the kneel also avoids capturing a crouched height.
+
+The roll floor/ceiling guard now also covers hard landings, including physical
+headset ducking. Recovery restores normal standing stabilization. Other landing
+and vault animations retain their previous handling, and fatal falls still use
+the native death camera. No new setting is required.
+
+Validation: Release/x64 built successfully; **443,948** production first-person
+regression checks passed. Landing cases cover TR4/5, stabilization enabled and
+disabled, with/without existing calibration, multiple headings/interpolation
+fractions, impact/recovery height, physical ducking, floor limits, horizontal
+centering, unmodified tracking neutral/root position, ordinary animations and
+fatal falls. The state/animation writes and ITEM_INFO animation offset were
+verified in stock and retail TR4/5 DLLs (all four available builds).
+Headset confirmation of the landing motion remains pending.
+
+Installed DLL SHA-256: `64F38CB3BF61AAD2D01F38D23A71DF162F5F337A126D92ED7A9D7C87056E17A6`.
+Previous DLL, INI and log: `build/before-hard-landing-20261003-012812/`.
+Deployment manifest: `build/hard-landing-deploy/manifest.json`. The active INI,
+including your camera offset and controller calibration, is unchanged.
 
 | | | State |
 |---|---|---|
