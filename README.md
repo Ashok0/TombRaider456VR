@@ -10,6 +10,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming and cutscenes dynamically toggle to third person.
 * Culling fixes for VR
 * Camera fixes for VR
+* Vignettes removed 
 * UI fixes
 * FMV fixes
 * Gamepad and VR controller support
