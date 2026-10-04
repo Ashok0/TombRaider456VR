@@ -1,0 +1,9 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-lt-draw-y-holster-20261004-085133",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "dll_sha256":  "C52354484AF38991064DE33A90CF7E4114911ADFCB9FF5783BFF144519555A5E",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "regression_checks":  492197,
+    "general_selftests":  "passed"
+}

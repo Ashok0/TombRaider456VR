@@ -231,9 +231,11 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
     // Right grip is the physical VR "RB" and normally emits only XInput X,
     // which is Walk. TR6 binds Sneak to XInput RIGHT_SHOULDER. Holding Y with
     // the right grip consumes both ordinary actions and emits only Sneak.
-    // Dual-grip Action takes priority over that chord in gameplay.
+    // Dual-grip Action takes priority over that chord in gameplay. In first
+    // person, preserve Y for holstering even while the right grip is held.
     const bool rightGrip = R.grip > 0.5f;
-    const bool sneakChord = rightGrip && L.btnUpper && !touchGripAction;
+    const bool sneakChord = rightGrip && L.btnUpper && !touchGripAction &&
+        !(gameplay && FirstPersonActive());
     if (rightGrip && !touchGripAction) b |= XB_X;
     if (sneakChord) {
         b &= static_cast<uint16_t>(~(XB_X | XB_Y));
@@ -290,7 +292,9 @@ void ApplyMergedChords(XGamepad& pad, bool gameplay,
     }
 
     const bool actionConsumed = ApplyViewChords(pad);
-    FirstPersonGunTriggers(pad.bLeftTrigger,pad.bRightTrigger,actionConsumed);
+    if (FirstPersonGunTriggers(pad.bLeftTrigger,pad.bRightTrigger,actionConsumed,
+                               (pad.wButtons & XB_Y)!=0))
+        pad.wButtons &= static_cast<uint16_t>(~XB_Y);
     // Add synthetic Action AFTER Y+trigger handling so holding grips with a
     // trigger cannot switch the view or graphics. This also supports a physical
     // Xbox pad's LB+RB chord when one is merged with Touch input.

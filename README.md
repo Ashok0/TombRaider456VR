@@ -46,7 +46,8 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Toggle Classic Graphics | Y + RT |
 | Toggle First Person (TR1-5 only) | Y + LT |
 | Equip Weapon (Third Person) | LT (Hold) |
-| Toggle Weapon (First Person; TR1-5 only) | LT (Hold) |
+| Equip Weapon (First Person; TR1-5 only) | LT (Press while unarmed) |
+| Holster Weapon (First Person; TR1-5 only) | Y |
 | Shoot (Third Person) | RT |
 | Shoot (First Person; TR1-5 only) | LT and/or RT |
 | Roll | B |
@@ -90,12 +91,16 @@ also changes your view, and Lara follows during supported ground movement.
 R3's D-pad shift remains available. See [Phase 23](#phase-23-tr45-first-person)
 for settings, gameplay exceptions and the current motion limitations.
 
-With `FirstPersonMotionGuns=1` in first-person remastered/HD gameplay, the
-weapon controls above are overridden: **hold LT for 0.5 seconds** to toggle
-draw/holster with LT alone, **tap LT** to fire the left pistol/Uzi on release,
-and **hold RT** to fire the right pistol/Uzi or selected single weapon at its
-native rate. Hold LT+RT to sustain both dual guns; this cannot become a
-holster gesture until LT is released. Single weapons aim with the right controller. TR5 grappling still
+In first person, **press LT while unarmed** to start drawing immediately;
+release it and the guns stay equipped. LT never holsters. **Press Y** to
+holster; Y keeps its normal Action binding when unarmed. Y+LT still switches
+views and Y+RT still switches graphics. Drawing uses the normal weapon animation.
+
+With `FirstPersonMotionGuns=1` in first-person remastered/HD gameplay, **press LT**
+to fire the equipped left pistol/Uzi, and **press RT** to fire the right
+pistol/Uzi or selected single weapon. Hold either trigger for continuous fire
+at the weapon's native rate, or hold both to fire both dual guns. The LT squeeze used to draw cannot also fire the left gun.
+Single weapons aim with the right controller. TR5 grappling still
 requires native laser targeting and a valid attachment point. For calibration
 keys and readiness/fallback rules, see
 [Touch motion guns](#experimental-touch-motion-guns-tr4tr5).
@@ -4886,7 +4891,7 @@ stereo and third-person paths are unchanged by this feature.
 | Gun targeting | Tracked muzzle origins, native hit processing and bounded hitscan aim assistance; all-weapon extension preserves shotgun pellets and launcher physics |
 | Gun presentation and fit | Hands and guns only when motion-ready; wrist skinning correction prevents hidden forearm weights from warping the hand; position/angle calibration retains the grip pivot |
 | HK VR scope (TR5) | Working 3x world magnification inside the original scope; eye-aligned activation, mesh-attached lens and depth-only close-eye protection; surrounding VR view stays unzoomed |
-| Trigger handling | Independent pistol/Uzi taps and sustained LT+RT; RT for single weapons; native held RT grab/Action preserved when guns are not ready; 0.5-second LT equip gesture |
+| Trigger handling | Pistol/Uzi fire on press and sustain independently while held; RT for single weapons; native held RT grab/Action preserved when guns are not ready; immediate LT draw and Y holster |
 | Cutscenes | Native presentation during cutsequences, transitions, flybys and TR4 tutorial scenes; restore the player's FP preference afterward and cancel queued shots |
 | Culling versus wall clearance | Portal traversal starts in the effective FP eye's room; a separate swept eye-clearance path limits wall clipping |
 | Third-person centering | Cold startup now captures a gameplay positional neutral automatically; FP handoff still clears translation immediately |
@@ -5491,31 +5496,30 @@ build\hk_scope_gl_tests.exe
 
 In first-person remastered/HD motion-gun mode:
 
-- Short LT squeeze: fire the left pistol/Uzi on release; no shot for single weapons.
-- Hold RT: sustain the right pistol/Uzi or selected single weapon at its native rate.
-- Hold LT+RT: sustain both dual guns; releasing RT first keeps LT in firing mode.
-- Hold LT alone for 0.5 seconds: draw/holster once; release before toggling again.
+- Press LT while unarmed: begin drawing immediately, with no hold or toggle.
+- Press Y with guns drawing or ready: holster; a brief press during drawing waits for it to finish.
+- Press LT with ready guns: fire the left pistol/Uzi immediately; no shot for single weapons.
+- Press RT: fire the right pistol/Uzi or selected single weapon.
+- Hold either trigger: sustain its gun at the native fire rate. Hold both to fire both dual guns.
+- Release: stop repeating; a quick tap queues exactly one shot if native animation is not ready yet.
+
+The draw squeeze is consumed until LT releases, so drawing cannot also fire the
+left gun. Holding or pressing LT again never holsters. Y retains Action while
+unarmed; a Y press used to holster stays consumed until released. View/graphics
+chords take priority, and dual-grip Action remains separate from Y holstering.
+
+The equip adapter supports both native draw settings without changing them:
+hold-to-draw receives sustained equip input while guns are armed; toggle-to-draw
+receives a request until native drawing/holstering acknowledges it. Requests
+survive brief taps and supported weapon changes. Both classic/modern control
+schemes use their own setting. These draw/holster bindings also work with motion
+guns disabled or classic graphics; separate hand firing requires motion guns.
 
 Each native firing operation consumes one request (one full volley for the
 shotgun). Held triggers renew that request while native animation owns cadence,
-ammo and effects. A short LT tap waits for release to distinguish it from the
-long equip gesture. A dual-fire hold cannot become a holster gesture until LT
-is released. Both hands can have one shot queued at once. The long gesture supports both native draw settings:
-in **hold-to-draw**, the mod maintains the equip input until the next long
-gesture; in **toggle-to-draw**, it sends a pulse that ends when the native
-weapon state acknowledges it. This fixes guns immediately holstering after
-the earlier 150 ms pulse ended in hold mode, without changing game settings.
-Both control schemes (classic/modern) use their own native draw setting.
-The grapple-equip input correction (2026-09-29) preserves the LT gesture and
-draw/holster intent when native selection changes between supported guns,
-while clearing queued shots and release-to-fire taps from the old weapon.
-A fresh long hold uses Lara's settled native holstered/ready state instead of
-blindly inverting a potentially stale armed flag. These address two reproduced
-input-state failures, but the user's retest confirmed they did NOT fix the
-grapple lockout. Firing the grapple
-is not required by the new equip-cycle tests. The 0.5-second threshold, aim,
-ammo/ownership and third-person controls are unchanged. Equip diagnostics now
-record current/requested/last weapon IDs and the pre-gesture armed intent.
+ammo and effects. Both hands can have one shot queued at once. Weapon handoffs
+clear queued presses and repeats from the old weapon.
+
 The subsequent grapple animation correction (2026-09-29) addresses the observed
 failure: the log showed weapon 6 stuck in native holstering status 3 while
 LT input and requests for other guns continued to arrive. In `RICH3.PDP`
@@ -5546,10 +5550,9 @@ write the matching hand's native counter; left-only/right-only requests now
 retain their matching shots and flashes. This correction does not change hand
 calibration, wrist pivots, muzzle offsets, camera behavior or third-person firing.
 
-Y+LT (view), Y+RT (graphics), menus, third person, classic graphics, flares/torches
-and TR6 keep their existing controls. Held RT resumes when tracking/readiness
-returns. An inherited LT alone must be released before it can start an equip
-gesture. During requested controller fire, `AnimatePistols` temporarily clears
+Y+LT (view), Y+RT (graphics), menus, third person, flares/torches and TR6
+keep their existing controls. Held RT resumes when tracking/readiness returns.
+Held triggers resume when readiness returns; the LT squeeze used to draw stays consumed until release. During requested controller fire, `AnimatePistols` temporarily clears
 the native target and restores it on return, avoiding the selected-target but
 lost-arm-lock stall reported during bat attacks. Trigger timing,
 per-hand requests and hand-only masks have automated coverage; actual controller
@@ -5992,3 +5995,28 @@ docs/             engine-map.html — the full renderer map
 TombRaiderVR.ini  the ini template; src/DefaultIni.h is generated from it
 trace.txt         the Ghidra session that produced src/Engine.h
 ```
+
+
+#### First-person draw/holster bindings (2026-10-04)
+
+LT now immediately requests draw while unarmed and never requests holster. Y
+requests holster while drawing/ready, with native Action preserved when unarmed.
+The old half-second gesture is removed. Automated coverage includes both games,
+all six gun IDs, both control schemes/draw styles, brief taps before native
+acknowledgment, weapon handoffs, held/repeated LT, Y during drawing, and motion-gun
+and graphics fallbacks. In-headset confirmation remains pending.
+
+
+#### Trigger press and held fire (2026-10-04)
+
+Both triggers now request a shot on press and repeat independently while held.
+The previous RT path renewed a request during recoil and kept it after release,
+causing an unwanted second shot after a tap. Unconsumed initial presses now
+survive release, while held repeats are canceled on release. Native weapon
+animation, fire rate and ammunition remain in control. LT draw and Y holster
+retain their bindings; the draw squeeze cannot also fire the left gun.
+
+Regression coverage reproduces the old duplicate, checks taps at several poll
+rates before/after native animation can fire, and verifies independent sustained
+fire plus production pistol/Uzi/revolver caller routing. Headset retesting is
+still needed for controller feel.

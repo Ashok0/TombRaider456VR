@@ -651,6 +651,14 @@ bool MotionTriggerMode() {
     return MotionWeaponSupported(gun);
 }
 
+bool WeaponControlMode() {
+    if (!g_boundDll || !g_boundBase || GameDllBound()!=g_boundDll ||
+        GameDllBase()!=g_boundBase || !g_active || !Gate()) return false;
+    int gun=*Ptr<int16_t>(g_boundDll->lara+4);
+    if (!gun) gun=*Ptr<int16_t>(g_boundDll->lara+8);
+    return MotionWeaponSupported(gun);
+}
+
 const char* g_gunPoseFailure[2] = {"not-built","not-built"};
 unsigned g_headAimFallbacks[2]{};
 void ReportMotionState(const char* where) {
@@ -2445,49 +2453,50 @@ void Remove() {
     g_boundBase = 0;
 }
 
-void UpdateGunTriggers(uint8_t& left, uint8_t& right, bool enabled, uint64_t now) {
-    int weapon=enabled ? CurrentMotionWeapon() : 0;
-    if (enabled && !weapon) weapon=*Ptr<int16_t>(g_boundDll->lara+8);
+bool UpdateGunTriggers(uint8_t& left, uint8_t& right, bool enabled, uint64_t now, bool y=false) {
+    if (!enabled) {
+        g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=0;
+        return false;
+    }
+    int weapon=CurrentMotionWeapon();
+    if (!weapon) weapon=*Ptr<int16_t>(g_boundDll->lara+8);
     if (weapon!=g_triggerWeapon) {
-        if (enabled && MotionWeaponSupported(g_triggerWeapon) && MotionWeaponSupported(weapon)) {
+        if (MotionWeaponSupported(g_triggerWeapon) && MotionWeaponSupported(weapon)) {
             // Native drawing/inventory may change the selected gun during an
-            // LT gesture. Retain draw intent and timing, but never transfer a
-            // queued shot or a release-to-fire tap to the newly selected gun.
-            g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=false;
-            g_gunTriggers.leftCanTap=false;
+            // LT press. Retain draw intent, but never transfer a
+            // queued press or repeat to the newly selected gun.
+            g_gunTriggers.Clear(0); g_gunTriggers.Clear(1);
         } else {
-            g_gunTriggers.Reset(); g_gunEquip.Reset();
+            g_gunTriggers.Reset();
         }
         g_triggerWeapon=weapon;
     }
-    g_gunTriggers.Update(enabled,enabled && MotionReady(),left>30,right>30,now);
-    if (!motiongun::DualWeapon(weapon)) g_gunTriggers.pending[0]=false;
-    if (!enabled) { g_gunEquip.Reset(); return; }
-    const auto* app=*Ptr<uint8_t*>(g_motionDll->app);
+    const auto* app=reinterpret_cast<const uint8_t*>(Base()+L().app);
     // LaraGun selects the setting for classic/modern controls, not graphics.
     const unsigned controlScheme=(app[0x9e4]>>1)&1;
     const bool holdMode=app[0x9ec+controlScheme]==0;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
-    const bool equipRequest=g_gunTriggers.Equip(now);
-    if (equipRequest && !g_gunEquip.requestHeld)
-        LogF("firstperson: Touch equip gesture native=%s status=%d gun=%d requested=%d last=%d intent=%d",
-            holdMode ? "hold" : "toggle",status,CurrentMotionWeapon(),
-            *Ptr<int16_t>(g_boundDll->lara+6),*Ptr<int16_t>(g_boundDll->lara+8),
-            int(g_gunEquip.desiredArmed));
-    left=g_gunEquip.Update(holdMode,status,equipRequest) ? 255 : 0;
+    const bool rawLeft=left>30;
+    const bool nativeEquip=g_gunEquip.Update(holdMode,status,rawLeft,y);
+    const bool motion=MotionTriggerMode();
+    g_gunTriggers.Update(motion,motion && MotionReady() && g_gunEquip.desiredArmed && !g_gunEquip.consumeY,
+        rawLeft && !g_gunEquip.blockLeft,right>30,now);
+    if (!motiongun::DualWeapon(weapon)) g_gunTriggers.Clear(0);
+    left=nativeEquip ? 255 : 0;
     // RT also owns native grab/Action while the guns are away or Lara's hands
-    // are busy. Keep its analog value AND hold duration in those states. LT's
-    // long-hold equip gesture still works; only ready guns own shot-only RT.
-    if (status==4) right=g_gunTriggers.WantsShot() ? 255 : 0;
+    // are busy. Keep its analog value AND hold duration in those states.
+    if (status==4 && motion) right=g_gunTriggers.WantsShot() ? 255 : 0;
+    if ((!g_gunEquip.desiredArmed || g_gunEquip.consumeY) && status==4) right=0;
+    return g_gunEquip.consumeY;
 }
 
 } // namespace
 
-void FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed) {
+bool FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed, bool y) {
     DWORD process=0;
     GetWindowThreadProcessId(GetForegroundWindow(),&process);
-    const bool enabled=!chordConsumed && process==GetCurrentProcessId() && MotionTriggerMode();
-    UpdateGunTriggers(left,right,enabled,GetTickCount64());
+    const bool enabled=!chordConsumed && process==GetCurrentProcessId() && WeaponControlMode();
+    return UpdateGunTriggers(left,right,enabled,GetTickCount64(),y);
 }
 
 bool FirstPersonDrawingTrackedHands() { return g_renderArm>=0; }
@@ -2546,8 +2555,8 @@ void FirstPersonUpdate() {
     if (!MotionReady() || CurrentMotionWeapon()!=5) g_hkScopeBindItem=nullptr;
     if (g_gunTriggers.active && !MotionTriggerMode()) {
         g_gunTriggers.Reset();
-        g_gunEquip.Reset();
     }
+    if (!WeaponControlMode()) g_gunEquip.Reset();
     PollMotionGunCalibration();
     ReportMotionActivity();
     static bool recenterHeld = false;

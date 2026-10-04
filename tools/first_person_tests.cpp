@@ -1156,15 +1156,17 @@ int main() {
                 };
                 g_gunTriggers.Reset(); g_gunTriggers.Update(true,true,false,false,0);
                 g_gunTriggers.Update(true,true,true,false,1);
-                g_gunTriggers.Update(true,true,false,false,2);
                 const int before=nativeShotCalls;
                 Check(fire(rightCaller)==0,"LT cannot fire the right pistol/Uzi or Desert Eagle");
                 if (dual) {
                     Check(fire(leftCaller)==-1 && nativeShotHand==0 && nativeShotCalls==before+1,
-                          "LT release fires native left pistol/Uzi from left controller");
+                          "LT press fires native left pistol/Uzi before release");
                     Check(fire(leftCaller)==0,"native left call cannot repeat a consumed tap");
+                    g_gunTriggers.Update(true,true,true,false,2);
+                    g_gunTriggers.Update(true,true,false,false,3);
+                    Check(fire(leftCaller)==0,"LT release discards repeat queued during native recoil");
                 }
-                g_gunTriggers.pending[0]=false;
+                g_gunTriggers.Clear(0);
                 g_gunTriggers.Update(true,true,false,true,3);
                 const int beforeRight=nativeShotCalls;
                 if (dual) Check(fire(leftCaller)==0,"RT cannot fire left pistol/Uzi");
@@ -1172,6 +1174,17 @@ int main() {
                       "RT fires right pistol/Uzi or shared revolver branch from right controller");
                 Check(!g_gunTriggers.WantsShot() && fire(rightCaller)==0,
                       "one RT request is consumed exactly once through native caller routing");
+                g_gunTriggers.Update(true,true,false,true,4);
+                g_gunTriggers.Update(true,true,false,false,5);
+                Check(fire(rightCaller)==0 && nativeShotCalls==beforeRight+1,
+                      "RT tap cannot fire a second native shot from a queued repeat after release");
+                for (int repeat=0;repeat<8;++repeat) {
+                    g_gunTriggers.Update(true,true,false,true,10+repeat);
+                    Check(fire(rightCaller)==-1 && fire(rightCaller)==0,
+                          "held RT continues native shots with one consume per request");
+                }
+                g_gunTriggers.Update(true,true,false,false,20);
+                Check(fire(rightCaller)==0,"held RT stops on release through native caller routing");
                 g_gunTriggers.pending[1]=true; VR().m_controllerPoseValid[1]=false;
                 Check(fire(rightCaller)==0,"missing right pose cannot produce a head-aimed shot");
                 VR().m_controllerPoseValid[1]=true;
@@ -1278,73 +1291,70 @@ int main() {
         Check(rt==255 && g_gunTriggers.Consume(1),"held RT resumes when guns become ready");
         lt=0; rt=0; UpdateGunTriggers(lt,rt,true,50);
         lt=255; rt=0; UpdateGunTriggers(lt,rt,true,60);
+        Check(rt==255 && g_gunTriggers.Consume(0) && !g_gunTriggers.Consume(1),
+              "production LT press immediately fires only the left gun");
+        lt=255; rt=0; UpdateGunTriggers(lt,rt,true,65);
         lt=0; rt=0; UpdateGunTriggers(lt,rt,true,70);
-        Check(rt==255 && g_gunTriggers.pending[0] && !g_gunTriggers.pending[1],
-              "left-only tap still sends native firing request exclusively for left gun");
-        for (uint8_t holdMode:{uint8_t(0),uint8_t(1)}) {
-            appMemory[0x9ec]=holdMode; appMemory[0x9e4]=1; status=0;
-            g_gunTriggers.Reset(); g_gunEquip.Reset();
-            lt=rt=0; UpdateGunTriggers(lt,rt,true,0);
-            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,10);
-            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,509);
-            Check(lt==0 && rt==200,"499 ms hold does not equip or interfere with native held RT");
-            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,510);
-            Check(lt==255 && rt==200,"0.5-second equip gesture coexists with native held RT in either draw style");
-        }
-        // A supported gun-ID handoff during drawing must not cancel the LT
-        // gesture/latch. In particular, reproduce grapple -> holstered -> gun.
+        Check(rt==0 && !g_gunTriggers.WantsShot(),
+              "production LT release cancels the held repeat instead of firing");
         auto& lastGun=*reinterpret_cast<int16_t*>(laraMemory+8);
         const auto savedLastGun=lastGun;
-        for (int which:{0,1}) for (int target=1;target<=6;++target)
-        for (uint8_t style:{uint8_t(0),uint8_t(1)}) {
-            dll.game=which; appMemory[0x9e4]=1; appMemory[0x9ec]=style;
-            gun=lastGun=6; status=0;
-            g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=6;
-            lt=rt=0; UpdateGunTriggers(lt,rt,true,0);
-            lt=255; rt=0; UpdateGunTriggers(lt,rt,true,10);
-            lt=255; rt=0; UpdateGunTriggers(lt,rt,true,510);
-            Check(lt==255,"grapple holstered state accepts a fresh half-second equip request");
-            gun=lastGun=int16_t(target);
-            g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
-            lt=255; rt=0; UpdateGunTriggers(lt,rt,true,520);
-            Check(lt==255,"supported weapon handoff before draw acknowledgment must retain native LT request");
-            Check(!g_gunTriggers.WantsShot(),"equip handoff never carries queued shots to the new gun");
-            status=2; lt=255; rt=0; UpdateGunTriggers(lt,rt,true,530);
-            Check(lt==(style==0 ? 255 : 0),"hold style stays armed and toggle style ends its acknowledged pulse");
-            status=4; lt=rt=0; UpdateGunTriggers(lt,rt,true,800);
-            Check(lt==(style==0 ? 255 : 0) && !g_gunTriggers.WantsShot(),
-                  "releasing draw gesture after grapple handoff cannot immediately holster or fire");
-        }
-        lastGun=savedLastGun;
-        // Full equip -> holster -> re-equip cycle without firing, including
-        // a temporarily empty current ID and either native control scheme.
         for (int which:{0,1}) for (int scheme:{0,1})
-        for (uint8_t style:{uint8_t(0),uint8_t(1)}) {
+        for (uint8_t style:{uint8_t(0),uint8_t(1)}) for (int target=1;target<=6;++target) {
             dll.game=which; appMemory[0x9e4]=uint8_t(1 | (scheme<<1));
             appMemory[0x9ec+scheme]=style;
             gun=lastGun=6; status=0;
             g_gunTriggers.Reset(); g_gunEquip.Reset(); g_triggerWeapon=6;
-            auto poll=[&](uint64_t now,bool held) {
-                lt=held ? 255 : 0; rt=0;
-                Check(MotionTriggerMode(),"grapple equip cycle retains FP trigger routing");
-                UpdateGunTriggers(lt,rt,MotionTriggerMode(),now);
-                Check(!g_gunTriggers.WantsShot(),"grapple equip cycle never needs or queues a shot");
-            };
-            poll(0,false); poll(10,true); poll(510,true);
-            Check(lt==255,"first grapple draw gesture reaches native input");
-            status=2; poll(530,true);
-            status=4; poll(800,false);
-            Check(lt==(style==0 ? 255 : 0),"grapple stays drawn after release");
-            poll(1000,true); poll(1500,true);
-            Check(lt==(style==0 ? 0 : 255),"next grapple gesture requests holster");
-            status=3; poll(1520,true);
-            status=0; gun=0; poll(1800,false);
-            Check(lt==0,"completed grapple holster stays holstered");
-            poll(2000,true); poll(2500,true);
-            Check(lt==255,"LT re-equips after grapple holster without firing");
-            gun=6; status=2; poll(2520,true);
-            status=4; poll(2800,false);
-            Check(lt==(style==0 ? 255 : 0),"redrawn grapple stays armed after trigger release");
+            lt=255; rt=200; UpdateGunTriggers(lt,rt,true,0);
+            Check(lt==255 && rt==200,"first LT poll draws immediately while preserving native grab RT");
+            gun=lastGun=int16_t(target);
+            lt=rt=0; UpdateGunTriggers(lt,rt,true,10);
+            Check(lt==255 && !g_gunTriggers.WantsShot(),"tap survives weapon handoff before native draw acknowledgment");
+            status=2; lt=rt=0; UpdateGunTriggers(lt,rt,true,20);
+            Check(lt==(style==0 ? 255 : 0),"drawing acknowledges toggle request and retains native hold");
+            status=4; lt=rt=0; UpdateGunTriggers(lt,rt,true,30);
+            Check(lt==(style==0 ? 255 : 0) && !g_gunTriggers.WantsShot(),"released draw tap cannot holster or shoot");
+            for (uint64_t now:{40ull,540ull,10000ull}) {
+                lt=255; rt=0; UpdateGunTriggers(lt,rt,true,now);
+                Check(lt==(style==0 ? 255 : 0),"repeated or held LT never holsters ready guns");
+            }
+            lt=rt=0;
+            Check(UpdateGunTriggers(lt,rt,true,10010,true),"Y claims native Action when guns are held");
+            Check(lt==(style==0 ? 0 : 255) && !g_gunTriggers.WantsShot(),"Y immediately holsters without a queued LT shot");
+            lt=0; rt=255; UpdateGunTriggers(lt,rt,true,10020,false);
+            Check(lt==(style==0 ? 0 : 255) && rt==0 && !g_gunTriggers.WantsShot(),
+                  "brief Y survives input polls before native holster and suppresses firing");
+            status=3; lt=rt=0; UpdateGunTriggers(lt,rt,true,10030);
+            status=0; gun=0; lt=rt=0; UpdateGunTriggers(lt,rt,true,10040);
+            Check(lt==0,"completed holster remains unarmed");
+            lt=255; rt=0; UpdateGunTriggers(lt,rt,true,10050);
+            Check(lt==255,"LT immediately redraws from empty current gun using last weapon");
+            gun=int16_t(target); status=2; lt=255; rt=0; UpdateGunTriggers(lt,rt,true,10060);
+            status=4; lt=255; rt=0; UpdateGunTriggers(lt,rt,true,10070);
+            lt=rt=0; UpdateGunTriggers(lt,rt,true,10080);
+            Check(!g_gunTriggers.WantsShot(),"draw squeeze held through readiness never fires on release");
+        }
+        // Equip/holster remains available without tracked guns or HD graphics.
+        for (bool tracked:{false,true}) for (uint8_t hd:{uint8_t(0),uint8_t(1)}) {
+            config.firstPersonMotionGuns=tracked; appMemory[0x9e4]=hd; appMemory[0x9ec]=1;
+            gun=lastGun=1; status=0; g_gunEquip.Reset(); g_gunTriggers.Reset();
+            Check(WeaponControlMode(),"first-person weapon bindings do not require motion guns or HD");
+            lt=255; rt=150; UpdateGunTriggers(lt,rt,true,0);
+            Check(lt==255 && rt==150,"fallback draws immediately and preserves grab input");
+            status=4; lt=rt=0; UpdateGunTriggers(lt,rt,true,10);
+            Check(lt==0,"toggle fallback stays armed after release");
+            Check(UpdateGunTriggers(lt,rt,true,20,true) && lt==255,"fallback Y holsters");
+        }
+        config.firstPersonMotionGuns=true;
+        lastGun=savedLastGun;
+        {
+            VRSystem::HandState hands[2]{};
+            hands[0].btnUpper=true; hands[1].grip=1;
+            XState pad{}; bool shifted=false,gripAction=false;
+            BuildStateFromHands(hands,pad,shifted,true,gripAction);
+            Check((pad.Gamepad.wButtons & XB_Y) && (pad.Gamepad.wButtons & XB_X) &&
+                  !(pad.Gamepad.wButtons & XB_RIGHT_SHOULDER),
+                  "right grip cannot steal Y holster in first person");
         }
         // A ready-weapon handoff clears old shots and a pending LT tap without
         // resetting held edges (which would otherwise create an RT shot).
@@ -1730,7 +1740,7 @@ int main() {
             auto& cutsceneBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
             cutsceneBits=0x7fff; SetMeshVisibility(true,false);
             g_gunTriggers.active=true; g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
-            g_gunEquip.initialized=true;
+            g_gunEquip.pending=true;
             UpdateSceneCamera(camera);
             Check(!g_active && !g_haveHeading && !g_scenePoseValid,
                   "UI/cutscene transitions/flyby/tutorial/fixed camera suspend FP");
@@ -1738,7 +1748,7 @@ int main() {
                   "cutscene uses untouched native camera without toggling FP preference");
             Check(cutsceneBits==0x7fff && !g_headHidden && !g_rollHidden,
                   "native Lara head/body visibility restored during cutscene");
-            Check(!g_gunTriggers.active && !g_gunTriggers.WantsShot() && !g_gunEquip.initialized,
+            Check(!g_gunTriggers.active && !g_gunTriggers.WantsShot() && !g_gunEquip.pending,
                   "cutscene cancels queued hand shots and equip gestures");
             const int beforeDraw=draws,beforeHair=hairs;
             Detour_DrawCreatureHD(itemMemory,0,0); Detour_DrawHair(0);
@@ -1826,7 +1836,7 @@ int main() {
                 water=swimming; state=int16_t(swim);
                 Check(!Gate(),"water status immediately gates FP regardless of current swimming animation");
                 g_gunTriggers.active=true; g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
-                g_gunEquip.initialized=true; g_renderTurn.Sample(1,TurnTime());
+                g_gunEquip.pending=true; g_renderTurn.Sample(1,TurnTime());
                 PHD_3DPOS nativeCamera{123,456,789,10,20,30,0}; camera=nativeCamera;
                 UpdateSceneCamera(camera);
                 Check(!g_active && !g_scenePoseValid && !g_haveHeading && g_runtimeEnabled &&
@@ -1834,7 +1844,7 @@ int main() {
                       "surface and underwater use untouched native third-person camera while retaining FP preference");
                 Check(!g_underwaterHidden && !g_headHidden && bits==baseBits,
                       "swimming restores full native classic Lara visibility");
-                Check(!g_renderTurn.valid && !g_gunTriggers.WantsShot() && !g_gunEquip.initialized,
+                Check(!g_renderTurn.valid && !g_gunTriggers.WantsShot() && !g_gunEquip.pending,
                       "water entry cancels pending FP turn/fire/equip state");
                 float x=.4f,z=.6f,r=.8f; FirstPersonInput(x,z,r,false);
                 Check(x==.4f && z==.6f && r==.8f && !g_haveManualInput,
