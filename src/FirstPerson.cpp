@@ -136,7 +136,7 @@ locomotion::Vec g_manualLocal{}, g_manualWorld{};
 bool g_haveManualInput = false;
 bool g_shifted = false;
 bool g_jumpPressed = false;
-int g_directionalRootScale = 1;
+uint64_t g_groundMoveAction = 0; // Scoped stick intent, not the active native gait.
 bool g_stabilizeRoot=false;
 bool g_hardStopRoot=false; // Scoped to one ordinary above-water simulation tick.
 uint64_t g_stabilizeAction=0;
@@ -157,6 +157,7 @@ void ResetMovementStabilization() {
     g_turnTrace={};
     g_stabilizeRoot=false;
     g_hardStopRoot=false;
+    g_groundMoveAction=0;
     g_rootMotion.Reset();
     g_groundEye.Reset();
     g_mountBodyTransition.Reset();
@@ -545,7 +546,7 @@ bool UseHardLandingCamera(const uint8_t* item) {
         *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
 }
 
-bool CanHardStop(const uint8_t* item) {
+bool CanModifyGroundMotion(const uint8_t* item) {
     if (!CanTurnBody(item) || (*reinterpret_cast<const uint32_t*>(item+0x1820)&8))
         return false;
     // A requested jump/interaction must keep its animation displacement even
@@ -1527,23 +1528,58 @@ void AdvanceLaraAnimation(uint8_t* item) {
     LogF("firstperson: native ground roll turned VR heading 180 degrees state=%d->%d",beforeState,afterState);
 }
 
+void AccelerateBackpedalStart(uint8_t* item,uint64_t action) {
+    // Animation 41 holds a slow 2-unit step for 16 frames before the normal
+    // 10-unit backward loop. Shorten that command-free startup, rather than
+    // boosting persistent velocity or borrowing another gait's displacement.
+    if ((action&locomotion::Directions)!=locomotion::Back || !g_boundDll->anims ||
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_state)!=16 ||
+        *reinterpret_cast<const int16_t*>(item+off::item_goal_state)!=16 ||
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_number)!=41 ||
+        *reinterpret_cast<const int16_t*>(item+22)!=0) return;
+    const auto* anims=*Ptr<const uint8_t*>(g_boundDll->anims);
+    if (!anims) return;
+    const auto* start=anims+41*48;
+    const int16_t first=*reinterpret_cast<const int16_t*>(start+28);
+    const int16_t last=*reinterpret_cast<const int16_t*>(start+30);
+    auto& frame=*reinterpret_cast<int16_t*>(item+off::item_anim_number+2);
+    if (*reinterpret_cast<const int16_t*>(start+10)!=16 ||
+        *reinterpret_cast<const int16_t*>(start+40)!=0 ||
+        first<0 || last<=first || frame<first || frame>last) return;
+    // Native AnimateLara still runs once, adds its own frame and performs the
+    // normal transition to the backward loop, including its native velocity.
+    frame=int16_t(std::min(int(frame)+3,int(last)));
+}
+
 // Match TR1-3: one animation tick, scaling only horizontal root displacement.
 // Native collision still runs afterwards, and vertical/gravity motion is intact.
 void __cdecl Detour_AnimateLara(uint8_t* item) {
     auto original = &AdvanceLaraAnimation;
-    const int scale = item && item == g_headingItem
-        ? std::clamp(g_directionalRootScale, 1, 3) : 1;
-    const bool stabilize=g_stabilizeRoot && item && item==g_headingItem && CanTurnBody(item);
-    const bool hardStop=g_hardStopRoot && item && item==g_headingItem && CanHardStop(item);
-    if (scale == 1 && !stabilize && !hardStop) {
+    // Gravity/goal changes can precede current_anim_state. Check both sides
+    // of AnimateLara: a grounded tick can execute a jump or relocation command.
+    const bool groundMotion=item && item==g_headingItem && CanModifyGroundMotion(item);
+    const uint64_t action=groundMotion ? g_groundMoveAction : 0;
+    const bool stabilize=g_stabilizeRoot && groundMotion;
+    const bool hardStop=g_hardStopRoot && groundMotion;
+    if (!action && !stabilize && !hardStop) {
+        if (g_stabilizeRoot) g_rootMotion.Reset();
         original(item);
         return;
     }
     auto& pos = *reinterpret_cast<PHD_3DPOS*>(item + off::item_pos);
     const int32_t oldX = pos.x_pos, oldZ = pos.z_pos;
+    if (action) AccelerateBackpedalStart(item,action);
     original(item);
-    if (hardStop && CanHardStop(item) &&
-        std::hypot(double(pos.x_pos)-oldX,double(pos.z_pos)-oldZ)<=256) {
+    const double distance=std::hypot(double(pos.x_pos)-oldX,double(pos.z_pos)-oldZ);
+    if (!CanModifyGroundMotion(item) || distance>256) {
+        // Leave native jumps, falls, interactions and authored relocations
+        // untouched. Validate BEFORE applying the directional multiplier.
+        g_rootMotion.Reset();
+        return;
+    }
+    const bool changingGait=action && !locomotion::GroundGaitMatchesAction(
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_state),action);
+    if (hardStop || changingGait) {
         // Keep the stopping animation, Y/gravity and subsequent collision.
         // Room-scale drag already happened BEFORE this snapshot, so only the
         // animation's residual horizontal movement is canceled, not real steps.
@@ -1552,28 +1588,69 @@ void __cdecl Detour_AnimateLara(uint8_t* item) {
         g_rootMotion.Reset();
         return;
     }
+    // Input may ask for side/back while the native run is still stopping.
+    // Only the resulting, matching gait supplies the directional velocity.
+    // Cancel outgoing movement above, before its collision routine runs, and
+    // start the new gait on the very tick AnimateLara transitions into it.
+    const int scale=locomotion::DirectionalRootScale(action,false);
+    if (distance*scale>256) { g_rootMotion.Reset(); return; }
     pos.x_pos = oldX + (pos.x_pos - oldX) * scale;
     pos.z_pos = oldZ + (pos.z_pos - oldZ) * scale;
-    auto& speed = *reinterpret_cast<int16_t*>(item + off::item_speed);
-    speed = static_cast<int16_t>(std::clamp<int>(speed * scale, -32768, 32767));
+    // Scale this displacement only. Native gravity animation reuses item_speed
+    // from the previous tick; writing our boosted/filtered speed back can feed
+    // it into a fall and multiply it again while a ground state is still set.
     // Native animation has run exactly once; its collision routine has NOT.
     // Never straighten a collision-resolved position or touch vertical motion.
-    if (stabilize && CanTurnBody(item) &&
-        !(*reinterpret_cast<const uint32_t*>(item+0x1820)&8)) {
+    if (stabilize) {
         locomotion::Vec step;
         if (g_rootMotion.Step({float(pos.x_pos-oldX),float(pos.z_pos-oldZ)},
             g_stabilizeDirection,*reinterpret_cast<int16_t*>(item+off::item_anim_state),
             g_stabilizeAction,step)) {
             pos.x_pos=oldX+int32_t(step.x); pos.z_pos=oldZ+int32_t(step.z);
-            speed=int16_t(std::copysign(std::round(g_rootMotion.speed),float(speed)));
         }
-    } else if (stabilize) g_rootMotion.Reset();
+    }
+}
+
+void PrepareGroundDirection(uint8_t* item,uint64_t action) {
+    using namespace locomotion;
+    // Shorten only ordinary side/back gait handoffs. Let native lara_as_stop
+    // perform its floor/ceiling checks and choose the target animation itself.
+    // Never splice a landing, step-up/down, jump or interaction animation.
+    if (!g_boundDll->anims || !CanModifyGroundMotion(item) ||
+        (*Ptr<uint64_t>(g_boundDll->input)&(0x10|0x40|0x100|0x1000)) ||
+        *reinterpret_cast<const int16_t*>(item+22)!=0) return; // required state
+    const auto direction=action&Directions;
+    if (direction!=StepLeft && direction!=StepRight && direction!=Back) return;
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    const int animation=*reinterpret_cast<const int16_t*>(item+off::item_anim_number);
+    const int goal=*reinterpret_cast<const int16_t*>(item+off::item_goal_state);
+    const bool stopping=animation==38 || animation==39 || animation==66 || animation==68;
+    if (GroundGaitMatchesAction(state,action) && !stopping && goal==state) return;
+    const bool ordinary=(state==1 && (animation==0 || animation==6 || animation==8 || animation==10)) ||
+        (state==0 && ((animation>=1 && animation<=5) || animation==7 || animation==9 || animation==20 || animation==21)) ||
+        (state==2 && (animation==11 || animation==103)) ||
+        (state==16 && animation>=38 && animation<=41) ||
+        (state==22 && (animation==65 || animation==66)) ||
+        (state==21 && (animation==67 || animation==68));
+    if (!ordinary) return;
+    const auto* anims=*Ptr<const uint8_t*>(g_boundDll->anims);
+    if (!anims) return;
+    const auto* idle=anims+11*48;
+    const int16_t first=*reinterpret_cast<const int16_t*>(idle+28);
+    const int16_t last=*reinterpret_cast<const int16_t*>(idle+30);
+    if (*reinterpret_cast<const int16_t*>(idle+10)!=2 || first<0 || last<=first) return;
+    *reinterpret_cast<int16_t*>(item+off::item_anim_number)=11;
+    *reinterpret_cast<int16_t*>(item+off::item_anim_number+2)=first;
+    *reinterpret_cast<int16_t*>(item+off::item_anim_state)=2;
+    *reinterpret_cast<int16_t*>(item+off::item_goal_state)=2;
+    *reinterpret_cast<int16_t*>(item+off::item_speed)=0;
+    g_rootMotion.Reset();
 }
 
 void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     using namespace locomotion;
     g_dragPrevious = g_dragCurrent;
-    g_directionalRootScale = 1;
+    g_groundMoveAction = 0;
     g_stabilizeRoot=false;
     g_hardStopRoot=false;
     if (item && item == g_headingItem && g_active && g_haveHeading && Gate()) {
@@ -1587,7 +1664,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
             auto& input = *Ptr<uint64_t>(g_boundDll->input);
             // The LS deadzone has already produced zero manual input. Don't
             // brake keyboard/D-pad movement, shifted controls, jumps or rolls.
-            g_hardStopRoot=ground && CanHardStop(item) && !g_shifted && !g_jumpPressed &&
+            g_hardStopRoot=ground && CanModifyGroundMotion(item) && !g_shifted && !g_jumpPressed &&
                 Length(g_manualLocal)<=0.0001f && !(input & (Directions | 0x10 | 0x100));
             // Runs after native input conversion. All subsequent rotation,
             // animation and collision now agree on a single HMD/world heading.
@@ -1614,8 +1691,8 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
                     *Ptr<int16_t>(g_boundDll->lara + off::lara_move_angle) =
                         Angle(MovementYaw(g_manualLocal, head));
                     input = (input & ~Directions) | action;
-                    if (ground)
-                        g_directionalRootScale = DirectionalRootScale(action, preparingJump);
+                    if (ground && !preparingJump)
+                        g_groundMoveAction = action;
                     if (ground && !preparingJump && Cfg().firstPersonMovementStabilization) {
                         g_stabilizeRoot=true;
                         g_stabilizeDirection=directionalWorld;
@@ -1648,8 +1725,9 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
             lastState = state;
         }
     }
+    if (g_groundMoveAction) PrepareGroundDirection(item,g_groundMoveAction);
     g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
-    g_directionalRootScale = 1;
+    g_groundMoveAction = 0;
     g_stabilizeRoot=false;
     g_hardStopRoot=false;
 }
@@ -2082,7 +2160,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
             // leaving water, anchor to Lara rather than the pre-swim heading.
             g_headingItem=nullptr;
         }
-        g_directionalRootScale = 1;
+        g_groundMoveAction = 0;
         g_renderTurn.Reset(); g_turnTrace={}; g_rootMotion.Reset();
         if (!g_runtimeEnabled || !Cfg().firstPerson) g_groundEye.Reset();
         g_bodyVisualOffset={};
@@ -2361,7 +2439,7 @@ void Remove() {
     g_headingItem = nullptr;
     g_dragPrevious = g_dragCurrent = g_dragShown = {};
     g_haveManualInput = false;
-    g_directionalRootScale = 1;
+    g_groundMoveAction = 0;
     g_bodyTime = {};
     g_boundDll = nullptr;
     g_boundBase = 0;
@@ -2537,7 +2615,7 @@ void FirstPersonToggle() {
     g_bodyTime = {};
     g_loggedFirst = false;
     g_haveManualInput = false;
-    g_directionalRootScale = 1;
+    g_groundMoveAction = 0;
     RestoreHeadMesh();
     if (wasActive && !g_runtimeEnabled) VR().RecenterThirdPersonHead();
     else VR().RecentreOffset();

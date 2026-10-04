@@ -246,6 +246,8 @@ int unstableHeight=0, nativeCollisionPasses=0;
 bool blockStableMotion=false, startAirborne=false;
 int animationNextState=-1, animationNextGoal=-1;
 bool animationStartsGravity=false;
+bool animationRetainsSpeed=false;
+bool collisionStartsFall=false;
 tr::locomotion::Vec collisionPush{};
 tr::locomotion::Vec beforeNativeCollision{};
 tr::PHD_VECTOR gaitSway{};
@@ -254,7 +256,15 @@ void __cdecl FakeUnstableAnimate(uint8_t* item) {
     auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
     p.x_pos+=int32_t(unstableStep.x); p.z_pos+=int32_t(unstableStep.z);
     p.y_pos+=unstableHeight;
-    *reinterpret_cast<int16_t*>(item+tr::off::item_speed)=int16_t(tr::locomotion::Length(unstableStep));
+    auto& speed=*reinterpret_cast<int16_t*>(item+tr::off::item_speed);
+    if (animationRetainsSpeed) {
+        // Native gravity animation inherits speed instead of overwriting it
+        // from the grounded animation table every tick.
+        p.x_pos-=int32_t(unstableStep.x); p.z_pos-=int32_t(unstableStep.z);
+        const float angle=tr::Radians(*reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_move_angle));
+        const auto step=tr::locomotion::Rotate({0,float(speed)},angle);
+        p.x_pos+=int32_t(std::round(step.x)); p.z_pos+=int32_t(std::round(step.z));
+    } else speed=int16_t(tr::locomotion::Length(unstableStep));
     if (startAirborne) *reinterpret_cast<int16_t*>(item+tr::off::item_anim_state)=3;
     if (animationNextState>=0) *reinterpret_cast<int16_t*>(item+tr::off::item_anim_state)=int16_t(animationNextState);
     if (animationNextGoal>=0) *reinterpret_cast<int16_t*>(item+tr::off::item_goal_state)=int16_t(animationNextGoal);
@@ -269,6 +279,59 @@ void __cdecl FakeUnstableAboveWater(uint8_t* item,void*) {
     ++nativeCollisionPasses;
     if (blockStableMotion) { p.x_pos=previous.x_pos; p.z_pos=previous.z_pos; }
     p.x_pos+=int32_t(collisionPush.x); p.z_pos+=int32_t(collisionPush.z);
+    if (collisionStartsFall) {
+        *reinterpret_cast<int16_t*>(item+tr::off::item_anim_state)=3;
+        *reinterpret_cast<int16_t*>(item+tr::off::item_goal_state)=3;
+        *reinterpret_cast<uint32_t*>(item+0x1820)|=8;
+    }
+}
+void __cdecl FakeGaitTransitionAnimate(uint8_t* item) {
+    ++animationTicks;
+    auto& state=*reinterpret_cast<int16_t*>(item+tr::off::item_anim_state);
+    auto& frame=*reinterpret_cast<int16_t*>(item+tr::off::item_anim_number+2);
+    if (animationNextState>=0) state=int16_t(animationNextState);
+    ++frame;
+    // Model the native ordering: select/advance animation, read its velocity,
+    // then translate along lara.move_angle. The outgoing run has NOT become
+    // a slow sidestep just because this tick's input asks for one.
+    const int16_t speed=state==1 ? 70 : state==0 ? 24 : state==2 ? 32 : 12;
+    *reinterpret_cast<int16_t*>(item+tr::off::item_speed)=speed;
+    auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    const float angle=tr::Radians(*reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_move_angle));
+    p.x_pos+=int32_t(std::round(std::sin(angle)*speed));
+    p.z_pos+=int32_t(std::round(std::cos(angle)*speed));
+    p.y_pos+=7;
+}
+alignas(8) uint8_t immediateGaitAnimations[42*48]{};
+const uint8_t* immediateGaitTable=immediateGaitAnimations;
+void __cdecl FakeBackpedalAnimate(uint8_t* item) {
+    ++animationTicks;
+    auto& anim=*reinterpret_cast<int16_t*>(item+tr::off::item_anim_number);
+    auto& frame=*reinterpret_cast<int16_t*>(item+tr::off::item_anim_number+2);
+    ++frame;
+    if (anim==41 && frame>759) { anim=40; frame=684; }
+    // Actual stock TR4/5 startup/loop speeds from the installed PDP tables.
+    const int16_t speed=anim==41 ? 2 : 10;
+    *reinterpret_cast<int16_t*>(item+tr::off::item_speed)=speed;
+    auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    p.z_pos-=speed; ++p.y_pos;
+}
+bool blockGaitStart=false;
+int standingGaitChecks=0;
+void __cdecl FakeImmediateGaitAboveWater(uint8_t* item,void* collision) {
+    auto& state=*reinterpret_cast<int16_t*>(item+tr::off::item_anim_state);
+    auto& anim=*reinterpret_cast<int16_t*>(item+tr::off::item_anim_number);
+    if (state==2 && anim==11) {
+        ++standingGaitChecks; // Native lara_as_stop checks destination terrain.
+        const auto action=actionInput&tr::locomotion::Directions;
+        animationNextState=blockGaitStart ? 2 : action==tr::locomotion::StepLeft ? 22 :
+            action==tr::locomotion::StepRight ? 21 : 16;
+        *reinterpret_cast<int16_t*>(item+tr::off::item_goal_state)=int16_t(animationNextState);
+    } else animationNextState=-1;
+    FakeUnstableAboveWater(item,collision);
+    if (state==22) anim=65;
+    if (state==21) anim=67;
+    if (state==16) anim=41;
 }
 void __cdecl FakeGaitJoint(uint8_t* item,tr::PHD_VECTOR* v,int joint,int frac) {
     Check(joint==14,"stabilized eye still queries native head joint");
@@ -1322,17 +1385,17 @@ int main() {
     g_runtimeEnabled = g_active = g_haveHeading = true;
     g_headingItem = itemMemory; g_headingBase = 0.4f; Head(0.6f);
     constexpr uint64_t preserved = (uint64_t(1) << 40) | 0x40; // high bits + Action
-    struct Direction { float x, z; uint64_t action; float offset; int scale; };
+    struct Direction { float x, z; uint64_t action; float offset; int scale, gait; };
     const Direction dirs[] = {
-        {0, 1, locomotion::Forward, 0, 1},
-        {-1, 0, locomotion::StepLeft, -kPi/2, 3},
-        {1, 0, locomotion::StepRight, kPi/2, 3},
-        {0, -1, locomotion::Back | locomotion::Walk, kPi, 3},
-        {0.2f, 1, locomotion::Forward, 0, 1}
+        {0, 1, locomotion::Forward, 0, 1, 1},
+        {-1, 0, locomotion::StepLeft, -kPi/2, 3, 22},
+        {1, 0, locomotion::StepRight, kPi/2, 3, 21},
+        {0, -1, locomotion::Back | locomotion::Walk, kPi, 3, 16},
+        {0.2f, 1, locomotion::Forward, 0, 1, 1}
     };
     for (int modern : {0, 1}) for (float cam : {-2.4f, 0.0f, 2.1f}) for (const auto& d : dirs) {
         *reinterpret_cast<int32_t*>(appMemory + drva::app_off::cfgFlags) = modern ? 2 : 0;
-        state = 2; pos = {}; analogMemory[2] = Angle(cam);
+        state = int16_t(d.gait); pos = {}; analogMemory[2] = Angle(cam);
         float x = d.x, z = d.z, turn = 0;
         FirstPersonInput(x, z, turn, false);
         Check(g_haveManualInput && Near(g_manualLocal.x, d.x) && Near(g_manualLocal.z, d.z), "simulation retains raw directional intent");
@@ -1348,7 +1411,7 @@ int main() {
         const float decodedAngle = std::atan2(float(seenAnalog[0]), float(seenAnalog[1]));
         Check(Near(Wrap(decodedAngle - d.offset), 0), "native steering is cardinal and independent of chase camera");
         Check(animationTicks == ticks + 1 && pos.x_pos == 3*d.scale && pos.z_pos == 5*d.scale && pos.y_pos == 7, "one animation tick; only horizontal root motion scaled");
-        Check(*reinterpret_cast<int16_t*>(itemMemory + off::item_speed) == 10*d.scale && g_directionalRootScale == 1, "speed scaled for collision and scope restored");
+        Check(*reinterpret_cast<int16_t*>(itemMemory + off::item_speed) == 10 && g_groundMoveAction == 0, "native animation speed preserved and action scope restored");
     }
     // Side-jump compression uses turn-left/right actions, never sidestep gait.
     for (int s : {2, 15}) {
@@ -1498,6 +1561,7 @@ int main() {
         // Previously these tests forced TR4's -1 sentinel even for TR5.
         for (int modern : {0, 1}) for (const auto& d : dirs) {
             resetRoomscale(); config.firstPersonRoomscaleMove = false;
+            state=int16_t(d.gait);
             nativeMoves = true;
             *reinterpret_cast<int32_t*>(appMemory + drva::app_off::cfgFlags) = modern ? 2 : 0;
             physicalPose(0.6f); g_headingBase = 0.4f;
@@ -2030,12 +2094,258 @@ int main() {
     config.firstPersonDriftLog = false; g_manualLocal = {0,1};
     TraceForwardCamera(itemMemory, traceBody, traceHead, 128, 2048);
     Check(g_cameraMotionTrace.samples == 0, "disabled diagnostics remain inactive");
+    // Reproduce the reported forward -> side/back launch. Native transitions
+    // retain the old gait for several frames, pass through stop, then enter
+    // the requested gait INSIDE AnimateLara. Input intent is not gait state.
+    for (int which:{0,1}) for (bool smoothing:{false,true}) for (int modern:{0,1})
+        for (float heading:{0.f,0.73f,-2.4f}) for (int outgoing:{0,1,16,21,22})
+        for (const auto& d:dirs) {
+        const int incoming=d.action==locomotion::StepLeft ? 22 :
+            d.action==locomotion::StepRight ? 21 : (d.action&locomotion::Back) ? 16 : 1;
+        if (outgoing==incoming || (outgoing==0 && incoming==1)) continue;
+        game=dll.game=which;
+        resetRoomscale(); physicalPose(heading); FirstPersonRecenter();
+        config.firstPersonRoomscaleMove=false;
+        config.firstPersonMovementStabilization=smoothing;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern ? 2 : 0;
+        auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+        auto& frame=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number+2);
+        state=int16_t(outgoing); goal=state; flags=0; frame=0;
+        collisionPush={}; blockStableMotion=collisionStartsFall=false;
+        animationNextState=-1;
+        g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeGaitTransitionAnimate);
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAboveWater);
+        // Prime the actual smoother with the outgoing animation's speed.
+        float x=outgoing==22 ? -1.f : outgoing==21 ? 1.f : 0.f;
+        float z=outgoing==16 ? -1.f : (outgoing==0 || outgoing==1) ? 1.f : 0.f, r=0;
+        FirstPersonInput(x,z,r,false); Detour_LaraAboveWater(itemMemory,nullptr);
+        x=d.x; z=d.z; FirstPersonInput(x,z,r,false);
+        for (int tick=0;tick<10;++tick) {
+            goal=int16_t(tick<4 ? 2 : incoming);
+            animationNextState=tick==4 ? 2 : tick==7 ? incoming : -1;
+            const auto before=pos;
+            const int oldFrame=frame, animations=animationTicks, collisions=nativeCollisionPasses;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            if (tick<7) {
+                Check(beforeNativeCollision.x==0 && beforeNativeCollision.z==0,
+                      "direction change cannot redirect or boost the outgoing gait or stopping animation");
+                Check(!g_rootMotion.valid,"direction handoff clears the old gait's speed history");
+            } else {
+                const float expectedSpeed=incoming==1 ? 70.f : 36.f;
+                Check(std::fabs(locomotion::Length(beforeNativeCollision)-expectedSpeed)<2,
+                      "new gait starts at its own speed on the animation transition tick");
+                const float yaw=heading+d.offset;
+                Check(std::fabs(beforeNativeCollision.x*std::cos(yaw)-beforeNativeCollision.z*std::sin(yaw))<2,
+                      "accepted motion agrees with the new gait's collision direction");
+            }
+            Check(pos.y_pos==before.y_pos+7 && frame==oldFrame+1 && animationTicks==animations+1 &&
+                  nativeCollisionPasses==collisions+1,
+                  "direction handoff advances animation and preserves vertical motion and native collision");
+        }
+        // Native collision retains final authority over walls and corrections.
+        blockStableMotion=true; collisionPush={3,-2};
+        const auto blocked=pos; Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(pos.x_pos==blocked.x_pos+3 && pos.z_pos==blocked.z_pos-2,
+              "gait handoff cannot undo native wall collision or pushback");
+        blockStableMotion=false; collisionPush={}; animationNextState=-1;
+        goal=0; flags=0;
+    }
+    // Immediate handoff re-enters the native standing dispatcher before its
+    // terrain checks; the incoming animation supplies velocity on this tick.
+    *reinterpret_cast<int16_t*>(immediateGaitAnimations+11*48+10)=2;
+    *reinterpret_cast<int16_t*>(immediateGaitAnimations+11*48+28)=184;
+    *reinterpret_cast<int16_t*>(immediateGaitAnimations+11*48+30)=185;
+    for (int which:{0,1}) for (bool smoothing:{false,true}) for (int modern:{0,1})
+        for (float heading:{0.f,0.73f,-2.4f}) for (const auto& d:dirs) {
+        if (d.action==locomotion::Forward) continue;
+        for (int oldAnim:{0,1,2,3,6,8,10,11,38,39,40,41,65,66,67,68,103}) {
+            game=dll.game=which; resetRoomscale(); physicalPose(heading); FirstPersonRecenter();
+            config.firstPersonRoomscaleMove=false; config.firstPersonMovementStabilization=smoothing;
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern ? 2 : 0;
+            auto& anim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            auto& frame=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number+2);
+            auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+            auto& required=*reinterpret_cast<int16_t*>(itemMemory+22);
+            anim=int16_t(oldAnim); frame=5; required=0;
+            state=goal=oldAnim==11 || oldAnim==103 ? 2 : oldAnim>=65 && oldAnim<=66 ? 22 :
+                oldAnim>=67 && oldAnim<=68 ? 21 : oldAnim>=38 && oldAnim<=41 ? 16 :
+                oldAnim>=1 && oldAnim<=3 ? 0 : 1;
+            *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+            collisionPush={}; blockStableMotion=collisionStartsFall=blockGaitStart=false;
+            actionInput=0; animationNextState=-1; standingGaitChecks=0;
+            dll.anims=rva(&immediateGaitTable);
+            g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeGaitTransitionAnimate);
+            g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeImmediateGaitAboveWater);
+            float x=d.x,z=d.z,r=0; FirstPersonInput(x,z,r,false);
+            const auto before=pos; const int animations=animationTicks, collisions=nativeCollisionPasses;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(state==d.gait && std::fabs(locomotion::Length(beforeNativeCollision)-36)<2,
+                  "side/back starts on the first simulation tick, including reversals and repressed stopping gaits");
+            Check(pos.y_pos==before.y_pos+7 && animationTicks==animations+1 && nativeCollisionPasses==collisions+1,
+                  "immediate gait entry does not run extra animation or collision ticks");
+            Check(std::fabs(beforeNativeCollision.x*std::cos(heading+d.offset)-
+                  beforeNativeCollision.z*std::sin(heading+d.offset))<2,
+                  "immediate gait uses matching movement and collision heading");
+            const int checked=standingGaitChecks;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(standingGaitChecks==checked,"held side/back does not restart an active gait each tick");
+            goal=2; // Release/re-press before the current gait enters its stop clip.
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(state==d.gait && standingGaitChecks==checked+1 && locomotion::Length(beforeNativeCollision)>30,
+                  "repress cancels a pending stop before the stop animation begins");
+            // Model a floor/ceiling rejection in native lara_as_stop.
+            state=goal=1; anim=0; frame=4; blockGaitStart=true;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(state==2 && beforeNativeCollision.x==0 && beforeNativeCollision.z==0 &&
+                  standingGaitChecks==checked+2,"native standing terrain rejection prevents immediate movement");
+            // Authored poses, requested actions and missing animation data keep
+            // the previously validated wait-for-gait fallback.
+            for (int guard=0;guard<8;++guard) {
+                state=goal=1; anim=0; frame=4; required=0; actionInput=d.action;
+                *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+                dll.anims=rva(&immediateGaitTable); immediateGaitTable=immediateGaitAnimations;
+                if (guard==0) { state=goal=2; anim=24; } // impact kneel
+                if (guard==1) anim=55; // step-up animation
+                if (guard==2) goal=15;
+                if (guard==3) required=56;
+                if (guard==4) *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=8;
+                if (guard==5) actionInput|=0x40;
+                if (guard==6) dll.anims=0;
+                if (guard==7) immediateGaitTable=nullptr;
+                const int oldState=state,oldGoal=goal,animation=anim;
+                PrepareGroundDirection(itemMemory,d.action);
+                Check(anim==animation && state==oldState && goal==oldGoal && frame==4,
+                      "instant handoff preserves landing, steps, jump/interaction, gravity and fallback behavior");
+            }
+            dll.anims=0; immediateGaitTable=immediateGaitAnimations;
+            blockGaitStart=false; animationNextState=-1; required=0; goal=0;
+            *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+        }
+    }
+    // Backpedal startup is a 16-frame, constant 2-unit crawl before the
+    // 10-unit loop. Advance only that command-free clip four frames per tick.
+    for (int which:{0,1}) for (bool smoothing:{false,true}) {
+        game=dll.game=which; resetRoomscale(); physicalPose(0); FirstPersonRecenter();
+        config.firstPersonRoomscaleMove=false; config.firstPersonMovementStabilization=smoothing;
+        auto& anim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        auto& frame=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number+2);
+        auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        auto* start=immediateGaitAnimations+41*48;
+        *reinterpret_cast<int16_t*>(start+10)=16;
+        *reinterpret_cast<int16_t*>(start+28)=744;
+        *reinterpret_cast<int16_t*>(start+30)=759;
+        state=goal=16; anim=41; frame=744; actionInput=0;
+        *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+        dll.anims=rva(&immediateGaitTable);
+        g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeBackpedalAnimate);
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAboveWater);
+        collisionPush={}; blockStableMotion=collisionStartsFall=false;
+        float x=0,z=-1,r=0; FirstPersonInput(x,z,r,false);
+        for (int tick=0;tick<20;++tick) {
+            const int animations=animationTicks,collisions=nativeCollisionPasses;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(tick<3 ? anim==41 && frame==748+tick*4 : anim==40 && frame==684+tick-3,
+                  "backpedal reaches its normal loop after four startup ticks without speeding up the loop");
+            Check(beforeNativeCollision.x==0 && beforeNativeCollision.z>=-30 && beforeNativeCollision.z<0,
+                  "faster startup keeps backward motion bounded by existing top speed");
+            Check(*reinterpret_cast<int16_t*>(itemMemory+off::item_speed)==(anim==41 ? 2 : 10),
+                  "startup acceleration never boosts persistent native speed");
+            Check(animationTicks==animations+1 && nativeCollisionPasses==collisions+1 && pos.y_pos==tick+1,
+                  "startup shortening preserves one animation/collision call and native vertical motion");
+            if (tick==11) Check(beforeNativeCollision.z<=-27,"backpedal reaches 90 percent speed promptly with smoothing enabled");
+        }
+        blockStableMotion=true; const auto blocked=pos;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(pos.z_pos==blocked.z_pos,"accelerated backpedal obeys native wall collision");
+        blockStableMotion=false; x=z=0; FirstPersonInput(x,z,r,false); actionInput=0;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(beforeNativeCollision.z==0,"accelerated backpedal still stops immediately on release");
+        // Authored commands, stops and missing data keep their original timing.
+        for (int guard=0;guard<6;++guard) {
+            state=goal=16; anim=41; frame=744; dll.anims=rva(&immediateGaitTable);
+            uint64_t action=locomotion::Back|locomotion::Walk;
+            if (guard==0) *reinterpret_cast<int16_t*>(start+40)=1;
+            if (guard==1) goal=2;
+            if (guard==2) action=locomotion::StepLeft;
+            if (guard==3) anim=40;
+            if (guard==4) dll.anims=0;
+            if (guard==5) frame=743;
+            const int savedFrame=frame;
+            AccelerateBackpedalStart(itemMemory,action);
+            Check(frame==savedFrame,"non-startup/command-bearing/invalid animations are not accelerated");
+            *reinterpret_cast<int16_t*>(start+40)=0;
+        }
+        std::memset(start,0,48); dll.anims=0; goal=0;
+    }
+    // Side/back movement must never boost persistent native velocity or
+    // multiply an animation transition/relocation. Exercise both sides,
+    // backward, both games and the optional smoothing path.
+    for (int which:{0,1}) for (bool smoothing:{false,true}) for (const auto& d:dirs) {
+        game=dll.game=which;
+        auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+        auto& speed=*reinterpret_cast<int16_t*>(itemMemory+off::item_speed);
+        auto setup=[&]() {
+            resetRoomscale(); physicalPose(0); FirstPersonRecenter();
+            config.firstPersonMovementStabilization=smoothing;
+            config.firstPersonRoomscaleMove=false;
+            state=goal=int16_t(d.gait); flags=0; speed=10;
+            startAirborne=blockStableMotion=animationStartsGravity=false;
+            animationRetainsSpeed=collisionStartsFall=false;
+            animationNextState=animationNextGoal=-1;
+            unstableStep={0,10}; unstableHeight=7; collisionPush={};
+            g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAnimate);
+            g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAboveWater);
+            float x=d.x,z=d.z,r=0; FirstPersonInput(x,z,r,false);
+        };
+        setup();
+        for (int tick=0;tick<80;++tick) {
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(speed==10,"held directional movement never feeds boosted speed into native physics");
+            Check(locomotion::Length(beforeNativeCollision)<=10*d.scale+1,
+                  "held directional movement remains bounded across simulation ticks");
+        }
+        collisionStartsFall=true;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(speed==10 && state==3,"collision-triggered fall inherits unboosted native speed");
+        collisionStartsFall=false; animationRetainsSpeed=true;
+        for (int tick=0;tick<80;++tick) {
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(speed==10 && locomotion::Length(beforeNativeCollision)<=11 && !g_rootMotion.valid,
+                  "holding side/back through a fall cannot compound inherited speed");
+        }
+        for (int transition=0;transition<8;++transition) {
+            setup();
+            if (transition==0) flags=8; // Gravity can precede a state change.
+            if (transition==1) animationStartsGravity=true;
+            if (transition==2) animationNextState=3;
+            if (transition==3) animationNextGoal=15;
+            if (transition==4) goal=56;
+            if (transition==5) animationNextState=19;
+            if (transition==6) unstableStep={600,10}; // Authored relocation.
+            if (transition==7) { flags=8; animationRetainsSpeed=true; }
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            if (transition==7)
+                Check(speed==10 && locomotion::Length(beforeNativeCollision)<=11,
+                      "gravity in an eligible ground state cannot multiply persistent speed");
+            else
+                Check(beforeNativeCollision.x==unstableStep.x && beforeNativeCollision.z==unstableStep.z &&
+                      speed==int16_t(locomotion::Length(unstableStep)),
+                      "ground transitions and relocations preserve native displacement and speed");
+            Check(pos.y_pos==7 && !g_rootMotion.valid,
+                  "excluded root correction preserves vertical motion and clears smoothing history");
+        }
+        animationRetainsSpeed=collisionStartsFall=animationStartsGravity=false;
+        animationNextState=animationNextGoal=-1; goal=0; flags=0;
+    }
     // Enabled stabilization: test the production animation/simulation hooks,
     // not only a camera math helper, and retain post-animation collision.
     for (int which:{0,1}) {
         game=dll.game=which;
         for (const auto& d:dirs) {
             resetRoomscale(); physicalPose(0); FirstPersonRecenter();
+            state=int16_t(d.gait);
             config.firstPersonMovementStabilization=true;
             g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAnimate);
             g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeUnstableAboveWater);

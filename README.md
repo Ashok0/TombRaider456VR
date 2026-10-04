@@ -348,6 +348,93 @@ Previous DLL, INI and log: `build/before-hard-landing-20261003-012812/`.
 Deployment manifest: `build/hard-landing-deploy/manifest.json`. The active INI,
 including your camera offset and controller calibration, is unchanged.
 
+### Sidestep movement safety guards (2026-10-03, initial attempt)
+
+First-person side/back movement now scales only the current grounded horizontal
+displacement. It no longer writes boosted or smoothed speed into `ITEM_INFO`:
+native TR4/5 gravity animation inherits that speed, allowing a ground movement
+boost to leak into a fall. Root correction also checks gravity, current state
+and requested state before and after animation, and rejects large displacements
+before multiplying them. Jumps, falls, interactions and authored relocations
+retain native movement. Native collision still runs after each animation tick.
+
+Validation: Release/x64 build succeeded; **449,178** first-person regression
+checks passed. Added coverage includes sustained left/right/back movement,
+collision-triggered falls with inherited speed, gravity before state changes,
+animation-triggered gravity/jump/interaction transitions and large relocations,
+in TR4/5 with stabilization enabled and disabled. Native speed inheritance was
+checked in both symbol-bearing game DLLs. Headset testing reported no improvement
+for the forward-to-side/back launch; that handoff is addressed below.
+Deployment details and the backup location are in
+`build/sidestep-fix-deploy/manifest.json`.
+
+### Forward-to-side/back animation handoff (2026-10-03)
+
+Changing LS direction while Lara was still walking/running forward applied the
+new side/back direction and three-times multiplier to the outgoing forward
+animation. Its forward collision routine still ran afterward. The previous
+tests used fixed animation displacement and did not model this delayed gait
+transition.
+
+The movement hook now checks the resulting native animation state: forward
+walk/run (0/1), back walk (16), right step (21), or left step (22). Until that
+state matches LS intent, the outgoing/stopping animation advances in place.
+The new gait starts moving on the tick the native animation actually enters it,
+using its own speed. Speed-smoothing history is discarded during the handoff.
+This also covers side/back-to-forward and left/right reversals. Physical
+room-scale movement, vertical animation and subsequent native collision retain
+their existing handling; jump/interaction/airborne exclusions remain in force.
+
+Validation: the new handoff regression failed against the previous source.
+After the fix, **462,786** first-person regression checks passed and Release/x64
+built successfully. Coverage includes delayed outgoing/stop/new-gait frames,
+TR4/5, classic/modern controls, stabilization on/off, multiple headings, wall
+pushback, animation progression and vertical motion. The native run-to-stop
+and side/back state selection were inspected in both symbol-bearing game DLLs.
+Headset testing confirmed that this fixes the launch, with a minor gait-change
+delay addressed below. Deployment and backup details:
+`build/gait-handoff-deploy/manifest.json`.
+
+### Responsive sidestep/backstep entry (2026-10-04)
+
+Ordinary side/back direction changes now enter the native standing dispatcher
+before the simulation tick. This skips the outgoing walk/run/side/back stop
+frames, including release/re-press during a pending stop. Native standing
+control still checks the destination floor/ceiling and selects the requested
+animation. That new animation supplies its own speed and collision routine on
+the first tick; the launch-prevention gait check remains intact. Holding an
+active gait does not restart it.
+
+The shortcut is restricted to known ordinary gait/idle animations. Landings,
+step-up/down poses, jumps, interactions, gravity and pending required states
+retain native timing. Missing/invalid animation data uses the previous safe
+handoff. Runtime animation-table addresses were checked against AnimateLara
+in all four supported TR4/5 binaries; idle frame bounds are read from that table.
+
+Validation: Release/x64 built successfully and **491,550** first-person checks
+passed. `tools/verify_ground_gait_entry.py` verified first-tick side/back entry
+and bounded native speed in all **40 TR4 + 15 TR5** installed animation tables.
+Headset confirmation of responsiveness is pending. Deployment and backup:
+`build/responsive-sidestep-deploy/manifest.json`.
+
+### Faster backpedal startup (2026-10-04)
+
+Native backward-start animation 41 holds a 2-unit step for 16 frames before
+the ordinary 10-unit backward loop. First-person LS back now advances that
+command-free startup four animation frames per simulation tick, reducing the
+slow entry from roughly half a second to about 0.15–0.2 seconds. The normal
+backpedal speed and existing speed smoothing are unchanged. Native animation
+and collision still execute once per tick; stored speed is never multiplied.
+Release, direction changes, gravity, pending interactions, other animations
+and missing/invalid animation data retain their existing handling.
+
+Validation: Release/x64 built successfully; **491,936** first-person checks
+passed. Tests cover shortened startup, unchanged loop cadence/top speed,
+smoothing on/off, wall collision, release and excluded animations in TR4/5.
+All **55** installed animation tables confirm the command-free startup,
+native speeds and four-tick transition. Headset feel still needs confirmation.
+Deployment and backup: `build/backpedal-start-deploy/manifest.json`.
+
 | | | State |
 |---|---|---|
 | **Phase 1** | **Mono head tracking** — one image to the monitor, engine projection, nothing submitted to the compositor | The bring-up test. `Mode=mono` |
@@ -4855,8 +4942,13 @@ the legacy controller-chord behavior.
   the native back-hop or modern-controls run toward the camera. Native input
   heading, Lara's facing and movement angle are aligned before animation;
   residual native turn rate is cleared. Side/back horizontal animation movement
-  uses the TR1–3 three-times scale once per animation tick; forward movement and
-  jump motion are not multiplied.
+  uses the TR1–3 three-times scale once per eligible grounded animation tick;
+  the actual gait must match stick intent. Ordinary side/back changes use the
+  immediate native standing dispatcher; other outgoing/stopping gaits finish
+  in place before a direction change moves Lara. Native stored speed is preserved
+  during active movement. Gravity, jump/interaction transitions and
+  large animation relocations bypass correction. Forward movement and jump
+  motion are not multiplied.
 - **Immediate LS-release stop (TR4/5 first person):** returning LS to its existing
   deadzone cancels leftover horizontal movement from ordinary grounded stopping
   animations on the next simulation tick. The animation continues in place;

@@ -1,0 +1,8 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-gait-handoff-20261003-232332",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "dll_sha256":  "E31E4BD8DF29CA1E24AF857208771D17BE1185B607D34142EE62633E90F7EEAE",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "regression_checks":  462786
+}

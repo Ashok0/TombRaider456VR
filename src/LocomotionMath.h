@@ -114,4 +114,16 @@ inline int DirectionalRootScale(uint64_t action, bool preparingJump) {
     const uint64_t direction = action & Directions;
     return direction == Back || direction == StepLeft || direction == StepRight ? 3 : 1;
 }
+inline bool GroundGaitMatchesAction(int state, uint64_t action) {
+    // Shared TR4/5 native control/collision table states. Stop/turn and the
+    // outgoing gait can persist after input changes; they must finish before
+    // their velocity can be used along the newly requested direction.
+    switch (action & Directions) {
+    case Forward: return state==0 || state==1; // walk/run
+    case Back: return state==16;              // continuous backward walk
+    case StepRight: return state==21;
+    case StepLeft: return state==22;
+    default: return false;
+    }
+}
 } // namespace tr::locomotion

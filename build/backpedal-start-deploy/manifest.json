@@ -1,0 +1,9 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-backpedal-start-20261004-001314",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "dll_sha256":  "2DF0D5FB92CA1B7626A9E331DF8456072901CD416ECBA038866B589E92E4B50C",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "regression_checks":  491936,
+    "animation_tables_checked":  55
+}
