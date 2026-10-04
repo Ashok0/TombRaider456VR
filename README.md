@@ -220,6 +220,22 @@ added to the personal INI; controller calibration, including hand height
 `-0.06985 m` (3.75 inches below the original setting), was preserved. Both original
 TR4 DDS hashes are unchanged after installation.
 
+### First-person midjump B reversal (2026-10-04)
+
+Press B during a forward jump or backflip to perform the native midair 180 turn
+in first person. The view now follows Lara's actual half-turn, including pending
+movement and analog heading, so body-follow cannot undo it on landing. Native
+jump timing, velocity, gravity and collision remain in control; the camera
+stays upright and physical lean/height calibration is preserved.
+
+The animation observer now includes forward-flip clips 207/210 and backflip 212
+alongside ground rolls. Only an actual native 180-degree yaw change rotates the
+VR frame; holding B or rendering another frame cannot rotate it again. The
+animation whitelist is checked against all 55 installed TR4/TR5 PDP tables with
+`python tools/verify_jump_roll.py <game-directory>`. Production-hook tests cover
+both games and control schemes, wrapped headings, gravity, landing, held input
+and camera/menu/death/water exclusions. In-headset confirmation remains pending.
+
 ### First-person B-roll reversal and floor clearance (2026-10-02)
 
 TR4/5 first-person ground rolls now preserve the native 180-degree turn. The

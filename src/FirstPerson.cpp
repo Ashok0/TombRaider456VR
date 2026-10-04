@@ -1517,12 +1517,14 @@ void AdvanceLaraAnimation(uint8_t* item) {
     const bool observe=item && item==g_headingItem && g_active && g_haveHeading &&
         Gate() && LaraWaterStatus()==0;
     const int beforeState=observe ? *reinterpret_cast<const int16_t*>(item+off::item_anim_state) : -1;
+    const int beforeAnimation=observe ? *reinterpret_cast<const int16_t*>(item+off::item_anim_number) : -1;
     const int16_t beforeYaw=observe ? reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot : 0;
     g_hAnimateLara.Original<Fn_AnimateLara>()(item);
     if (!observe || !Gate() || LaraWaterStatus()!=0) return;
     const int afterState=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    const int afterAnimation=*reinterpret_cast<const int16_t*>(item+off::item_anim_number);
     const int16_t afterYaw=reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot;
-    const float turn=locomotion::GroundRollTurn(beforeState,afterState,beforeYaw,afterYaw);
+    const float turn=locomotion::NativeRollTurn(beforeState,afterState,beforeAnimation,afterAnimation,beforeYaw,afterYaw);
     if (turn==0) return;
     g_headingBase=Wrap(g_headingBase+turn);
     VR().PivotHeadFloorOffset(turn);
@@ -1533,7 +1535,8 @@ void AdvanceLaraAnimation(uint8_t* item) {
     analog[2]=analog[3]=Angle(g_lastHeadWorld);
     g_rootMotion.Reset();
     g_renderTurn.Reset();
-    LogF("firstperson: native ground roll turned VR heading 180 degrees state=%d->%d",beforeState,afterState);
+    LogF("firstperson: native roll turned VR heading 180 degrees state=%d->%d anim=%d->%d",
+         beforeState,afterState,beforeAnimation,afterAnimation);
 }
 
 void AccelerateBackpedalStart(uint8_t* item,uint64_t action) {

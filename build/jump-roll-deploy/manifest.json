@@ -1,0 +1,9 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-jump-roll-20261004-182026",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "dll_sha256":  "123E75228481CB7E6B64A9EEF1B1F10173C9C40D12A9ACB0DF6F8EF5CCFC4A7D",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "regression_checks":  500506,
+    "animation_tables_checked":  55
+}

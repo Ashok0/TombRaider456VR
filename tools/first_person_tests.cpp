@@ -232,12 +232,14 @@ void __cdecl FakeAnimate(uint8_t* item) {
     pos.x_pos += 3; pos.y_pos += 7; pos.z_pos += 5;
     *reinterpret_cast<int16_t*>(item + tr::off::item_speed) = 10;
 }
-int rollNextState=23,rollYawDelta=32768;
+int rollNextState=23,rollYawDelta=32768,rollNextAnimation=-1;
 void __cdecl FakeRollAnimate(uint8_t* item) {
     FakeAnimate(item);
     auto& pos=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
     pos.y_rot=int16_t(int(pos.y_rot)+rollYawDelta);
     *reinterpret_cast<int16_t*>(item+tr::off::item_anim_state)=int16_t(rollNextState);
+    if (rollNextAnimation>=0)
+        *reinterpret_cast<int16_t*>(item+tr::off::item_anim_number)=int16_t(rollNextAnimation);
     // turn180_effect's native analog transition fields must remain untouched.
     analogMemory[4]=45;analogMemory[5]=pos.y_rot;
 }
@@ -2883,6 +2885,69 @@ int main() {
         }
         Check(std::fabs(Wrap(g_headingBase-initialBase))<.0001f,"two rolls restore original VR forward direction");
     }
+    // Midjump B uses native flip clips, whose half-turn must also turn the VR
+    // frame. Preserve native displacement/gravity and apply it once per flip.
+    for (int which:{0,1}) for (bool modern:{false,true})
+    for (int clip:{207,210,212}) for (int degrees:{-170,0,170}) {
+        game=dll.game=which;resetRoomscale();collisionMode=0;gaitSway={};
+        config.firstPersonBodyFollowsHead=true;config.firstPersonRoomscaleMove=false;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern ? 2 : 0;
+        g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeRollAnimate);
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeAboveWater);
+        pos.y_rot=Angle(degrees*kPi/180);prev=pos;fraction=256;
+        physicalPose(.3f);FirstPersonRecenter();UpdateSceneCamera(camera);
+        physicalPose(.5f,.02f,.01f,-.03f);
+        float x=0,z=1,r=0;FirstPersonInput(x,z,r,false);
+        state=clip==212 ? 25 : 3;
+        actionInput=0x100 | locomotion::Forward;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check((seenInput&0x100)!=0,"first-person jump input preserves native B/roll action");
+        auto& animation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        animation=int16_t(clip);rollNextState=state;rollNextAnimation=clip;rollYawDelta=32768;
+        auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+        const auto savedFlags=flags;flags|=8;
+        const auto before=pos;const float oldBase=g_headingBase;
+        const auto oldMove=g_manualWorld;const float neutralY=VR().m_firstPersonNeutral[1];
+        locomotion::Vec lean;VR().FirstPersonViewOffset(lean.x,lean.z);
+        lean=locomotion::Rotate(lean,oldBase);
+        const int ticks=animationTicks;
+        Detour_AnimateLara(itemMemory);
+        Check(animationTicks==ticks+1 && pos.x_pos==before.x_pos+3 &&
+              pos.y_pos==before.y_pos+7 && pos.z_pos==before.z_pos+5 && (flags&8),
+              "midair flip preserves native animation, trajectory and gravity");
+        Check(std::fabs(std::fabs(Wrap(g_headingBase-oldBase))-kPi)<.0001f &&
+              uint16_t(int(pos.y_rot)-int(before.y_rot))==32768,
+              "forward/back jump flip rotates Lara and first-person heading together");
+        Check(Near(g_manualWorld.x,-oldMove.x) && Near(g_manualWorld.z,-oldMove.z) &&
+              analogMemory[2]==Angle(g_lastHeadWorld) && analogMemory[3]==analogMemory[2],
+              "midair reversal updates pending movement and analog heading");
+        locomotion::Vec newLean;VR().FirstPersonViewOffset(newLean.x,newLean.z);
+        newLean=locomotion::Rotate(newLean,g_headingBase);
+        Check(Near(lean.x,newLean.x) && Near(lean.z,newLean.z) &&
+              VR().m_firstPersonNeutral[1]==neutralY,"jump reversal preserves physical lean and height calibration");
+        const float turned=g_headingBase;
+        rollYawDelta=0;
+        Detour_AnimateLara(itemMemory);
+        for (fraction=0;fraction<=256;fraction+=64) {
+            UpdateSceneCamera(camera);
+            Check(Near(g_headingBase,turned) && camera.x_rot==0 && camera.z_rot==0,
+                  "held B and repeated views cannot repeat the half-turn or flip the camera upside down");
+        }
+        // Transition out of the flip, then land: body-follow keeps the new view.
+        rollNextState=clip==212 ? 3 : 25;rollNextAnimation=clip==207 ? 209 : clip+1;
+        Detour_AnimateLara(itemMemory);
+        Check(Near(g_headingBase,turned),"leaving the flip animation cannot apply a second turn");
+        flags=savedFlags;state=2;animation=11;fraction=256;
+        UpdateSceneCamera(camera);TurnBodyToHead(itemMemory,1.f);
+        Check(Near(g_headingBase,turned) &&
+              std::fabs(Wrap(Radians(pos.y_rot)-g_lastHeadWorld))<.001f,
+              "landing body-follow faces the reversed view instead of undoing the flip");
+        rollNextAnimation=-1;
+    }
+    for (int stateValue:{3,25}) for (int clip:{0,77,208,209,211,213})
+        Check(locomotion::NativeRollTurn(stateValue,stateValue,clip,clip,0,int16_t(-32768))==0,
+              "ordinary airborne turns outside flip animations do not rotate the VR frame");
+
     // Clamp the final rendered headset centre against the actual sampled floor,
     // including deep physical ducking, slopes, low ceilings, and entry mid-roll.
     for (int which:{0,1}) for (bool calibrated:{false,true}) for (int mode:{0,16,17,18}) {
@@ -3012,10 +3077,12 @@ int main() {
     }
     for (int other:{1,3,8,9,19,23,28,45,54})
         Check(!locomotion::IsHardLanding(other,24),"landing exception does not include unrelated states");
-    // Native turns outside an eligible FP ground roll must stay native.
-    for (int guard=0;guard<11;++guard) {
+    // Native turns outside an eligible FP ground/jump roll must stay native.
+    for (int clip:{37,207,212}) for (int guard=0;guard<11;++guard) {
         resetRoomscale();config.firstPersonMovementStabilization=true;physicalPose(0);
         FirstPersonRecenter();UpdateSceneCamera(camera);state=45;rollNextState=23;rollYawDelta=32768;
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=int16_t(clip);
+        if (clip!=37) state=rollNextState=clip==207 ? 3 : 25;
         g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeRollAnimate);
         if (guard==0) g_active=false;
         if (guard==1) g_runtimeEnabled=false;

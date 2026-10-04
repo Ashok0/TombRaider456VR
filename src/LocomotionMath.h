@@ -48,8 +48,17 @@ inline bool IsHardLanding(int state,int animation) {
     // hard fall, just like TR1-3. Stop alone also includes idle and vault exits.
     return state==2 && animation==24;
 }
-inline float GroundRollTurn(int beforeState,int afterState,int16_t beforeYaw,int16_t afterYaw) {
-    return (IsGroundRollState(beforeState) || IsGroundRollState(afterState)) &&
+inline bool IsJumpRollAnimation(int state,int animation) {
+    // Installed TR4/5 Lara tables: forward flips 207/210 and backflip 212
+    // contain turn180_effect. Ordinary jumps and wall deflections do not.
+    return (state==3 && (animation==207 || animation==210)) ||
+        (state==25 && animation==212);
+}
+inline float NativeRollTurn(int beforeState,int afterState,int beforeAnimation,int afterAnimation,
+                            int16_t beforeYaw,int16_t afterYaw) {
+    return (IsGroundRollState(beforeState) || IsGroundRollState(afterState) ||
+            IsJumpRollAnimation(beforeState,beforeAnimation) ||
+            IsJumpRollAnimation(afterState,afterAnimation)) &&
         uint16_t(int(afterYaw)-int(beforeYaw))==0x8000u ? 3.14159265358979323846f : 0.f;
 }
 inline bool IsLedgeHangState(int state) {
