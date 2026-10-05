@@ -345,10 +345,11 @@ void __cdecl FakeImmediateGaitAboveWater(uint8_t* item,void* collision) {
         ++standingGaitChecks; // Native lara_as_stop checks destination terrain.
         const auto action=actionInput&tr::locomotion::Directions;
         animationNextState=blockGaitStart ? 2 : action==tr::locomotion::StepLeft ? 22 :
-            action==tr::locomotion::StepRight ? 21 : 16;
+            action==tr::locomotion::StepRight ? 21 : action==tr::locomotion::Forward ? 1 : 16;
         *reinterpret_cast<int16_t*>(item+tr::off::item_goal_state)=int16_t(animationNextState);
     } else animationNextState=-1;
     FakeUnstableAboveWater(item,collision);
+    if (state==1) anim=0;
     if (state==22) anim=65;
     if (state==21) anim=67;
     if (state==16) anim=41;
@@ -2406,6 +2407,53 @@ int main() {
             blockGaitStart=false; animationNextState=-1; required=0; goal=0;
             *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
         }
+    }
+    // Continuous zigzags must move on EVERY tick, including side -> forward.
+    // Use the production input/simulation/animation path and retain collision.
+    for (int which:{0,1}) for (bool smoothing:{false,true}) for (int modern:{0,1})
+    for (float heading:{0.f,0.73f,-2.4f}) {
+        game=dll.game=which;resetRoomscale();physicalPose(heading);FirstPersonRecenter();
+        config.firstPersonRoomscaleMove=false;config.firstPersonMovementStabilization=smoothing;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern ? 2 : 0;
+        auto& anim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        state=goal=1;anim=0;
+        *reinterpret_cast<int16_t*>(itemMemory+22)=0;
+        *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+        dll.anims=rva(&immediateGaitTable);
+        g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeGaitTransitionAnimate);
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeImmediateGaitAboveWater);
+        blockStableMotion=collisionStartsFall=blockGaitStart=false;collisionPush={};
+        const int sequence[]={1,0,2,0,1,2,4,3,0};
+        for (int tick=0;tick<90;++tick) {
+            const auto& d=dirs[sequence[tick%9]];
+            actionInput=0;
+            float x=d.x,z=d.z,turn=0;FirstPersonInput(x,z,turn,false);
+            const int animations=animationTicks,collisions=nativeCollisionPasses;
+            const auto old=pos;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            const float expected=d.action==locomotion::Forward ? 70.f : 36.f;
+            Check(state==d.gait && std::fabs(locomotion::Length(beforeNativeCollision)-expected)<2,
+                  "continuous zigzag enters forward/side/back gait with nonzero bounded motion every tick");
+            Check(animationTicks==animations+1 && nativeCollisionPasses==collisions+1 && pos.y_pos==old.y_pos+7,
+                  "zigzag retains one native animation/collision tick and vertical motion");
+            Check(std::fabs(beforeNativeCollision.x*std::cos(heading+d.offset)-
+                            beforeNativeCollision.z*std::sin(heading+d.offset))<2,
+                  "zigzag movement agrees with incoming gait collision direction");
+        }
+        // Forward entry still respects native standing terrain rejection.
+        state=goal=22;anim=65;blockGaitStart=true;
+        float x=0,z=1,turn=0;actionInput=0;FirstPersonInput(x,z,turn,false);
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(state==2 && locomotion::Length(beforeNativeCollision)==0,
+              "blocked forward entry never overrides native terrain rejection");
+        blockGaitStart=false;state=goal=21;anim=67;blockStableMotion=true;
+        const auto blocked=pos;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(locomotion::Length(beforeNativeCollision)>60 &&
+              pos.x_pos==blocked.x_pos && pos.z_pos==blocked.z_pos,
+              "instant forward entry preserves native wall collision");
+        blockStableMotion=false;dll.anims=0;animationNextState=-1;goal=0;
     }
     // Backpedal startup is a 16-frame, constant 2-unit crawl before the
     // 10-unit loop. Advance only that command-free clip four frames per tick.

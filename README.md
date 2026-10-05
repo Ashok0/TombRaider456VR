@@ -71,13 +71,13 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 ### Session changes and current deployment (2026-10-04 to 2026-10-05)
 
 This summary covers the October 4 work, the rollback/redeploy after midnight,
-and the October 5 shadow correction (America/New_York). Changes below apply
+and the October 5 shadow and zigzag corrections (America/New_York). Changes below apply
 to TR4/5 first person.
 
 | Change | Current status |
 |---|---|
 | LS left/right/back launching Lara during forward movement | Retained: apply movement only when the native gait matches stick intent; preserve native stored speed. The user confirmed the launch fix. See [gait handoff](#forward-to-sideback-animation-handoff-2026-10-03). |
-| Delay entering sidestep/backstep | Retained: ordinary gait changes use the native standing dispatcher immediately, with native collision checks. See [responsive entry](#responsive-sidestepbackstep-entry-2026-10-04). |
+| Delay entering sidestep/backstep | Extended October 5 to include returning to forward movement: ordinary gait changes use the native standing dispatcher immediately, with native collision checks. See [responsive entry](#responsive-sidestepbackstep-entry-2026-10-04). |
 | Slow backpedal startup | Retained: shorten the initial backward animation while preserving normal top speed. See [backpedal startup](#faster-backpedal-startup-2026-10-04). |
 | Weapon equip and holster | Retained: press LT while unarmed to draw; releasing or pressing LT again never holsters. Y holsters. The draw squeeze cannot fire. See [bindings](#first-person-drawholster-bindings-2026-10-04). |
 | Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
@@ -92,17 +92,40 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 5 current deployment:** Release/x64 shadow fix installed with DLL
+**October 5 current deployment:** Release/x64 zigzag fix installed with DLL
 hash verification. Personal INI and controller calibration were preserved.
 The reverted 200 ms camera transition remains absent. Automated checks passed;
 there has been no new headset validation.
 
-- Installed DLL SHA-256: `DB8FF2E8A9773C1B426A5EDABF2C11460CD372C42745E1D312AE041F287F7097`.
-- Deployment record: [shadow fix manifest](build/shadow-body-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-shadow-body-20261005-110652/`.
+- Installed DLL SHA-256: `3E3F2763E2693A34770834A712EC87C078AF3B384A677FA02F45E332B37E85EC`.
+- Deployment record: [zigzag fix manifest](build/zigzag-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-zigzag-20261005-155514/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### Continuous forward/sidestep zigzags (2026-10-05)
+
+The immediate direction handoff previously accepted left, right and back but
+excluded forward. Returning from a sidestep to forward therefore canceled
+horizontal movement while the outgoing animation stopped. Forward now uses the
+same immediate native standing dispatcher, allowing ordinary forward/left/right
+zigzags to move on the first simulation tick in either direction.
+
+The incoming gait supplies its own velocity; outgoing running speed is never
+multiplied into a sidestep. Native floor/ceiling rejection, wall collision,
+jump/interaction timing and the existing launch safeguards remain active.
+This removes the animation handoff delay while retaining each gait's normal
+speed and the existing LS deadzone.
+
+Validation: a new repeated-zigzag regression failed on the prior code and passed
+with the fix. **556,018 first-person checks passed**, including 2,160 consecutive
+zigzag ticks across both games, control modes, headings and smoothing settings,
+terrain rejection, wall collision and all eight jiggle integration cases.
+`tools/verify_ground_gait_entry.py` also verified first-tick walk/run/side/back
+entry in all **40 TR4 + 15 TR5** installed animation tables. Release/x64 built
+and deployed with DLL hash verification and unchanged INI. In-headset
+confirmation remains pending. [Deployment record](build/zigzag-deploy/manifest.json).
 
 ### First-person floor shadow alignment (2026-10-05)
 
@@ -508,13 +531,14 @@ delay addressed below. Deployment and backup details:
 
 ### Responsive sidestep/backstep entry (2026-10-04)
 
-Ordinary side/back direction changes now enter the native standing dispatcher
+Ordinary side/back direction changes enter the native standing dispatcher
 before the simulation tick. This skips the outgoing walk/run/side/back stop
 frames, including release/re-press during a pending stop. Native standing
 control still checks the destination floor/ceiling and selects the requested
 animation. That new animation supplies its own speed and collision routine on
 the first tick; the launch-prevention gait check remains intact. Holding an
-active gait does not restart it.
+active gait does not restart it. The [October 5 zigzag fix](#continuous-forwardsidestep-zigzags-2026-10-05)
+extends this to forward entry as well.
 
 The shortcut is restricted to known ordinary gait/idle animations. Landings,
 step-up/down poses, jumps, interactions, gravity and pending required states
@@ -5054,8 +5078,8 @@ the legacy controller-chord behavior.
   heading, Lara's facing and movement angle are aligned before animation;
   residual native turn rate is cleared. Side/back horizontal animation movement
   uses the TR1–3 three-times scale once per eligible grounded animation tick;
-  the actual gait must match stick intent. Ordinary side/back changes use the
-  immediate native standing dispatcher; other outgoing/stopping gaits finish
+  the actual gait must match stick intent. Ordinary forward/side/back changes use the
+  immediate native standing dispatcher; protected outgoing/stopping animations finish
   in place before a direction change moves Lara. Native stored speed is preserved
   during active movement. Gravity, jump/interaction transitions and
   large animation relocations bypass correction. Forward movement and jump

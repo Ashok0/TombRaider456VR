@@ -1,0 +1,15 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-zigzag-20261005-155514",
+    "dll_sha256":  "3E3F2763E2693A34770834A712EC87C078AF3B384A677FA02F45E332B37E85EC",
+    "previous_dll_sha256":  "DB8FF2E8A9773C1B426A5EDABF2C11460CD372C42745E1D312AE041F287F7097",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "build":  "Release x64",
+    "regression_checks":  556018,
+    "regression_reproduced_before_fix":  true,
+    "dynamic_bones_integration":  "8 cases passed",
+    "native_gait_audit":  "40 TR4 and 15 TR5 animation tables passed",
+    "headset_verified":  false,
+    "mount_camera_transition":  false
+}

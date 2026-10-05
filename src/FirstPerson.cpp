@@ -1667,14 +1667,16 @@ void __cdecl Detour_AnimateLara(uint8_t* item) {
 
 void PrepareGroundDirection(uint8_t* item,uint64_t action) {
     using namespace locomotion;
-    // Shorten only ordinary side/back gait handoffs. Let native lara_as_stop
-    // perform its floor/ceiling checks and choose the target animation itself.
+    // Shorten ordinary forward/side/back gait handoffs in both directions.
+    // Without Forward here, every sidestep -> forward change waits for a stop.
+    // Native lara_as_stop performs its floor/ceiling checks and chooses the
+    // target animation itself.
     // Never splice a landing, step-up/down, jump or interaction animation.
     if (!g_boundDll->anims || !CanModifyGroundMotion(item) ||
         (*Ptr<uint64_t>(g_boundDll->input)&(0x10|0x40|0x100|0x1000)) ||
         *reinterpret_cast<const int16_t*>(item+22)!=0) return; // required state
     const auto direction=action&Directions;
-    if (direction!=StepLeft && direction!=StepRight && direction!=Back) return;
+    if (direction!=Forward && direction!=StepLeft && direction!=StepRight && direction!=Back) return;
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
     const int animation=*reinterpret_cast<const int16_t*>(item+off::item_anim_number);
     const int goal=*reinterpret_cast<const int16_t*>(item+off::item_goal_state);
