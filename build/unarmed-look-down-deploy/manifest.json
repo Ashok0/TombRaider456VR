@@ -1,0 +1,10 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-unarmed-look-down-20261004-225901",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "dll_sha256":  "E3C732F596CCFA3E2F60D6B7DAF616BC1B8A7D032C92E63406A095BC8FAAE92F",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "regression_checks":  547446,
+    "show_arms_down_degrees":  15,
+    "hide_arms_down_degrees":  10
+}

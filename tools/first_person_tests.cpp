@@ -4,7 +4,8 @@
 // From a VS x64 developer prompt at the repo root:
 // cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX
 //    /Ithird_party\openvr\headers /Isrc tools\first_person_tests.cpp
-//    /Febuild\first_person_tests.exe /Fobuild\first_person_tests.obj /link /OPT:REF user32.lib
+//    tools\dynamic_bones_regression.cpp
+//    /Febuild\first_person_tests.exe /Fobuild\ /link /OPT:REF user32.lib
 // build\first_person_tests.exe
 #include <windows.h>
 #include <algorithm>
@@ -22,6 +23,10 @@
 #include "../src/FirstPerson.cpp"
 #include "../src/VRSystem.cpp"
 #include "../src/Gamepad.cpp"
+
+// Separate translation unit executes the real dynamic-bone observer/solver.
+void TestDynamicBonesVisibility();
+void TestDynamicBonesNativeDraws();
 
 namespace {
 tr::Config config;
@@ -216,7 +221,13 @@ void __cdecl FakeJoint(uint8_t* item, tr::PHD_VECTOR* v, int joint, int frac) {
     jointCalled = true;
 }
 int16_t nativeAimLock=0;
+const float* skinFixture=nullptr;
+int skinFixtureCount=0;
 int32_t __cdecl FakeSkinJoints(uint8_t*,float* joints,int32_t) {
+    if (skinFixture) {
+        std::memcpy(joints,skinFixture,skinFixtureCount*12*sizeof(float));
+        return skinFixtureCount;
+    }
     std::memset(joints,0,15*12*sizeof(float));
     for (int i=0;i<15;++i) joints[i*12]=joints[i*12+5]=joints[i*12+10]=1.f;
     return 15;
@@ -1791,6 +1802,8 @@ int main() {
         g_dragCurrent = {0.1f, 0}; VR().RecentreOffset();
         Check(Near(g_dragCurrent.x, 0), "Numpad recenter uses the same FP counter reset");
 
+        const auto visibilityGunStatus=*reinterpret_cast<int16_t*>(laraMemory+2);
+        *reinterpret_cast<int16_t*>(laraMemory+2)=4; // Existing armed/head/interaction coverage.
         // Roll overrides compose with head hiding and restore the original
         // mask in both classic and HD draw paths, including menu transitions.
         resetRoomscale();
@@ -1944,12 +1957,106 @@ int main() {
               "native masking cannot destroy captured hidden torso/head transforms");
         g_bodySkinScope=false;
         Check(!FirstPersonBodyPalette(visible,count),"NPC and later native draws cannot inherit body palette");
+        // Integration: production GetJoints capture -> native visibility mask
+        // -> production dynamic-bone body detection and spring solver.
+        for (int jointCount:{15,33}) {
+            float fixture[33*12]{};
+            int32_t mapping[33]{};
+            for (int j=0;j<jointCount;++j) {
+                fixture[j*12]=fixture[j*12+5]=fixture[j*12+10]=1.f;
+                // Skinning palettes can have overlapping origins; the real
+                // classifier deliberately counts separated origins only.
+                int origin=jointCount==15 ? (j<7 ? j%4 : j) : (j<20 ? j : 0);
+                fixture[j*12+3]=float(100+origin*30);
+                mapping[j]=j%15;
+            }
+            auto* geom=objectInfo+off::object_geom;
+            *reinterpret_cast<int32_t*>(geom+28)=jointCount;
+            *reinterpret_cast<const int32_t**>(geom+48)=mapping;
+            skinFixture=fixture;skinFixtureCount=jointCount;
+            for (bool hidden:{true,false}) {
+                bits=0x7fff & ~kHeadMeshBit;
+                if (hidden) bits &= ~kArmMeshBits;
+                g_bodySkinScope=true;
+                float nativePalette[33*12]{};
+                Check(Detour_GetJoints(itemMemory,nativePalette,0)==jointCount,
+                      "physics integration captures native body palette");
+                TestDynamicBonesVisibility();
+                g_renderArm=0;TestDynamicBonesNativeDraws();g_renderArm=-1;
+                g_bodySkinScope=false;
+                TestDynamicBonesNativeDraws();
+            }
+        }
+        skinFixture=nullptr;skinFixtureCount=0;
         g_bodyVisualOffset={};
         object=oldObject; dll.objects=oldObjects; dll.gLaraHeads=oldHeads;
         RestoreHeadMesh(); bits=baseBits;
         state = 45; UpdateSceneCamera(camera); FirstPersonToggle();
         Check(bits == baseBits && !g_rollHidden && !g_haveHeading && !g_headingItem,
               "toggle during roll restores mesh and clears heading identity");
+        *reinterpret_cast<int16_t*>(laraMemory+2)=visibilityGunStatus;
+    }
+    // Unarmed movement uses actual rendered masks, including unmasked HD
+    // body passes. Animation frames cannot override forward-view arm hiding.
+    for (int which:{0,1}) for (bool hideHead:{false,true})
+    for (int gait:{0,1,2,5,6,7,16,20,21,22}) {
+        game=dll.game=which;resetRoomscale();collisionMode=0;
+        config.firstPersonHideHead=hideHead;
+        auto& status=*reinterpret_cast<int16_t*>(laraMemory+2);
+        auto& gun=*reinterpret_cast<int16_t*>(laraMemory+4);
+        const auto oldStatus=status,oldGun=gun;
+        status=0;gun=1;state=int16_t(gait);
+        auto& bits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
+        RestoreHeadMesh();bits=0x7fff;g_unarmedArmVisibility={};
+        const uint32_t visible=0x7fff & ~(hideHead ? kHeadMeshBit : 0u);
+        const uint32_t hidden=visible & ~kArmMeshBits;
+        for (int frame=0;frame<40;++frame) {
+            *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number+2)=int16_t(frame);
+            Head(frame*.03f,0);UpdateSceneCamera(camera);
+            Check(g_unarmedArmsHidden && bits==hidden,"unarmed arms stay hidden looking forward throughout every ground gait");
+            for (int pass:{0,1,4}) {
+                Detour_DrawCreatureHD(itemMemory,0,pass);
+                Check(drawnUseBits==1 && (drawnBodyBits&kArmMeshBits)==0 && bits==hidden,
+                      "unmasked HD body passes cannot bring animated arms into forward view");
+                Detour_DrawCreatureHD(itemMemory,1,pass);
+                Check(drawnBodyBits==hidden && bits==hidden,"masked HD passes preserve arm hiding and restore item bits");
+            }
+        }
+        Head(0,-20*kPi/180);UpdateSceneCamera(camera);
+        Check(!g_unarmedArmsHidden && bits==visible,"glancing down restores both complete unarmed arms");
+        Detour_DrawCreatureHD(itemMemory,0,0);
+        Check((drawnBodyBits&kArmMeshBits)==kArmMeshBits,"unarmed hands render normally when looking down");
+        for (float degrees:{-14.f,-11.f,-13.f}) {
+            Head(0,degrees*kPi/180);UpdateSceneCamera(camera);
+            Check(!g_unarmedArmsHidden,"small pitch fluctuations do not flicker revealed arms");
+        }
+        Head(0,-9*kPi/180);UpdateSceneCamera(camera);
+        Check(g_unarmedArmsHidden,"raising view hides hands before reaching straight ahead");
+        Head(0,-12*kPi/180);UpdateSceneCamera(camera);
+        Check(g_unarmedArmsHidden,"hidden arms stay hidden until a deliberate downward glance");
+        // Preserve a native non-arm visibility change while our arm mask owns
+        // those bits; then restore the original arms on a downward glance.
+        bits&=~1u;UpdateSceneCamera(camera);
+        Head(0,-20*kPi/180);UpdateSceneCamera(camera);
+        Check(bits==(visible&~1u),"native body changes survive hiding without permanently losing arms");
+        Head(0,0);UpdateSceneCamera(camera);
+        for (int nativeStatus:{1,2,3,4,5}) {
+            status=int16_t(nativeStatus);UpdateSceneCamera(camera);
+            Check(!g_unarmedArmsHidden && (bits&kArmMeshBits)==kArmMeshBits,
+                  "drawing, holding and holstering guns or busy hands bypass unarmed movement hiding");
+        }
+        status=0;
+        for (int heldObject:{7,8}) {
+            gun=int16_t(heldObject);UpdateSceneCamera(camera);
+            Check(!g_unarmedArmsHidden,"flare and torch hands remain visible");
+        }
+        gun=1;state=10;UpdateSceneCamera(camera);
+        Check(!g_unarmedArmsHidden && (bits&kArmMeshBits)==kArmMeshBits,"ledge grabbing keeps native hands visible");
+        state=int16_t(gait);UpdateSceneCamera(camera);
+        Check(g_unarmedArmsHidden,"returning to unarmed movement reapplies the visibility rule");
+        FirstPersonToggle();
+        Check(!g_unarmedArmsHidden && bits==0x7ffe,"third-person transition restores arms and native body visibility");
+        status=oldStatus;gun=oldGun;
     }
     // A mode switch can happen after this frame's pose was already sampled.
     // Absolute room position must not survive even for that first third-person draw.

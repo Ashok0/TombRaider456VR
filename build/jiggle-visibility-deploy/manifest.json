@@ -1,0 +1,11 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-jiggle-visibility-20261004-231545",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "dll_sha256":  "9568FE8A0D94B93287A6F210DBCEC0589775F06F6A65E26333D2B001906DDCBB",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "regression_checks":  547454,
+    "jiggle_integration":  "TR4/TR5, 15/33 joints, visibility, jump/landing frame parity, native fallback and scope guards",
+    "selftest":  "ALL PASSED (0 failures)",
+    "headset_verified":  false
+}

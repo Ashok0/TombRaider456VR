@@ -1,5 +1,6 @@
 #include "DynamicBones.h"
 #include "BoneSkin.h"
+#include "FirstPerson.h"
 #include "GameDll.h"
 #include "Engine.h"
 #include "Config.h"
@@ -765,13 +766,24 @@ void DynamicBonesObserveDraw() {
         if (vs.num_joints > g_scopeJointsMax) g_scopeJointsMax = vs.num_joints;
     }
 
+    // First-person visibility zeros hidden head/arm matrices in the native
+    // palette. Scoring that palette can reject Lara's body and stop chest
+    // deformation, or change the solver's winning draw as the player looks
+    // up/down. Use the same complete skeleton that BoneSkin uploads. The
+    // capture is scoped to this body draw; never borrow a different layout.
+    uint64_t visibleMask = 0;
+    int bodyCount = 0;
+    const float* bodyPalette = FirstPersonBodyPalette(visibleMask, bodyCount);
+    const float* joints = bodyPalette && bodyCount == vs.num_joints
+                        ? bodyPalette : vs.joints;
+
     // Score this draw and keep the frame's best. Every draw of every scope
     // is a candidate, because the body is not reliably in the first scope --
     // measured frames run 15-joint and 33-joint draws side by side.
     const int n = (vs.num_joints < kMaxJoints) ? vs.num_joints : kMaxJoints;
     float extent = 0.0f;
     int   distinct = 0;
-    Summarise(vs.joints, n, extent, distinct);
+    Summarise(joints, n, extent, distinct);
 
     if (g_candCount < kMaxCandidates) {
         g_cand[g_candCount++] = { n, distinct, extent, vs.shader };
@@ -811,7 +823,7 @@ void DynamicBonesObserveDraw() {
 
     if (!g_haveBest || score > g_bestScore) {
         g_bestScore = score;
-        std::memcpy(g_best.joints, vs.joints,
+        std::memcpy(g_best.joints, joints,
                     sizeof(float) * 12 * static_cast<size_t>(n));
         g_best.count    = n;
         g_best.shader   = vs.shader;
@@ -832,7 +844,7 @@ void DynamicBonesObserveDraw() {
             }
             return;
         }
-        std::memcpy(g_torsoThis.m, vs.joints + idx * 12, sizeof(g_torsoThis.m));
+        std::memcpy(g_torsoThis.m, joints + idx * 12, sizeof(g_torsoThis.m));
         g_haveThis = true;
     }
 }

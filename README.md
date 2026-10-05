@@ -220,6 +220,36 @@ added to the personal INI; controller calibration, including hand height
 `-0.06985 m` (3.75 inches below the original setting), was preserved. Both original
 TR4 DDS hashes are unchanged after installation.
 
+### Unarmed hands visible only when looking down (2026-10-04)
+
+During first-person standing, walking, running, sidestepping and backpedaling,
+unarmed arms are hidden from a forward-facing view. Looking down at least
+15 degrees reveals the normal animated arms and hands; raising the view to
+within 10 degrees of level hides them again. This small hysteresis band avoids
+flicker during a downward glance. The rule applies across the entire gait
+animation and both classic and HD rendering, including unmasked HD body passes.
+
+Weapon drawing/holding/holstering, busy-hand interactions, climbing/grabbing,
+flares and torches retain their existing visibility. The mesh override restores
+native visibility when leaving first person and preserves unrelated native
+mesh changes. This is a direct arm-visibility rule with no camera calibration
+or positioning changes. The earlier idle-only camera capture attempt remains
+reverted. Automated coverage checks both games, all ordinary ground gaits,
+look-down/forward transitions, HD render passes and native mask restoration;
+headset visual confirmation remains pending.
+
+The subsequent jiggle regression came from physics classifying the native
+palette after hidden arm/head joints had been zeroed. It now classifies and
+samples the complete first-person skeleton already used by the skin renderer,
+so visibility cannot reject the body or change its physics sample. A matching
+joint count is required; other draws keep their native palette. The integration
+regression in `tools/dynamic_bones_regression.cpp`, run by
+`build\run_first_person_tests.cmd`, reproduces the old hidden-arm failure and
+compares every spring state across takeoff and landing with visible/hidden arms
+in both games and 15/33-joint layouts. It also checks third-person/attachment
+fallback, tracked-hand scope exclusion, shader locking and non-world passes.
+Automated tests pass; this physics correction still needs headset confirmation.
+
 ### First-person midjump B reversal (2026-10-04)
 
 Press B during a forward jump or backflip to perform the native midair 180 turn

@@ -170,6 +170,8 @@ bool g_rollHidden = false;
 bool g_crouchHidden = false;
 bool g_underwaterHidden = false;
 bool g_ledgeArmsOnly = false;
+bool g_unarmedArmsHidden = false;
+firstperson::UnarmedArmVisibility g_unarmedArmVisibility;
 uint8_t* g_meshItem = nullptr;
 uint32_t g_meshBaseBits = 0;
 unsigned g_anchored = 0;
@@ -386,6 +388,7 @@ void RestoreHeadMesh() {
     g_meshOverride = false;
     g_meshItem = nullptr;
     g_headHidden = g_rollHidden = g_crouchHidden = g_underwaterHidden = g_ledgeArmsOnly = false;
+    g_unarmedArmsHidden=false;
 }
 
 // Native icons are world points projected into a flat HUD, not Lara meshes.
@@ -458,15 +461,15 @@ void __cdecl Detour_DrawActionIndicators() {
     }
 }
 
-uint32_t VisibleMeshBits(uint32_t base, bool head, bool roll, bool crouch, bool ledge, bool underwater = false) {
+uint32_t VisibleMeshBits(uint32_t base, bool head, bool roll, bool crouch, bool ledge, bool underwater = false, bool hideArms = false) {
     if (roll || crouch || underwater) return 0;
     if (ledge) return base & kArmMeshBits;
-    return head ? base & ~kHeadMeshBit : base;
+    return base & ~(head ? kHeadMeshBit : 0u) & ~(hideArms ? kArmMeshBits : 0u);
 }
 
 void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
-                       bool ledgeArms = false, bool hideUnderwater = false) {
-    if ((!hideHead && !hideRoll && !hideCrouch && !ledgeArms && !hideUnderwater) || !g_boundDll || !g_boundBase) {
+                       bool ledgeArms = false, bool hideUnderwater = false, bool hideArms = false) {
+    if ((!hideHead && !hideRoll && !hideCrouch && !ledgeArms && !hideUnderwater && !hideArms) || !g_boundDll || !g_boundBase) {
         RestoreHeadMesh();
         return;
     }
@@ -475,6 +478,7 @@ void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
         g_meshOverride = false;
         g_meshItem = nullptr;
         g_headHidden = g_rollHidden = g_crouchHidden = g_underwaterHidden = g_ledgeArmsOnly = false;
+        g_unarmedArmsHidden=false;
         return;
     }
     if (!g_meshOverride || item != g_meshItem) {
@@ -483,22 +487,26 @@ void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
         g_meshBaseBits = *reinterpret_cast<uint32_t*>(
             item + off::item_mesh_bits);
         g_headHidden = g_rollHidden = g_crouchHidden = g_underwaterHidden = g_ledgeArmsOnly = false;
+        g_unarmedArmsHidden=false;
     }
     auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
     const uint32_t expected = VisibleMeshBits(g_meshBaseBits,g_headHidden,
-        g_rollHidden,g_crouchHidden,g_ledgeArmsOnly,g_underwaterHidden);
+        g_rollHidden,g_crouchHidden,g_ledgeArmsOnly,g_underwaterHidden,g_unarmedArmsHidden);
     if (g_meshOverride && bits != expected) {
         // Preserve native visibility changes outside our owned mask. During
         // a hidden stance we own the full mask and retain its original snapshot.
-        if (!g_rollHidden && !g_crouchHidden && !g_underwaterHidden && !g_ledgeArmsOnly)
-            g_meshBaseBits = (bits & ~kHeadMeshBit) | (g_meshBaseBits & kHeadMeshBit);
+        if (!g_rollHidden && !g_crouchHidden && !g_underwaterHidden && !g_ledgeArmsOnly) {
+            const uint32_t owned=kHeadMeshBit | (g_unarmedArmsHidden ? kArmMeshBits : 0u);
+            g_meshBaseBits = (bits & ~owned) | (g_meshBaseBits & owned);
+        }
     }
     g_headHidden = hideHead;
     g_rollHidden = hideRoll;
     g_crouchHidden = hideCrouch;
     g_underwaterHidden = hideUnderwater;
     g_ledgeArmsOnly = ledgeArms;
-    bits = VisibleMeshBits(g_meshBaseBits,hideHead,hideRoll,hideCrouch,ledgeArms,hideUnderwater);
+    g_unarmedArmsHidden=hideArms;
+    bits = VisibleMeshBits(g_meshBaseBits,hideHead,hideRoll,hideCrouch,ledgeArms,hideUnderwater,hideArms);
 }
 
 bool IsCrouchState(const uint8_t* item) {
@@ -2121,15 +2129,15 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
     }
     const int previousArm = g_renderArm;
     g_renderArm = -1;
-    if (lara && (Cfg().firstPersonHideHead || g_ledgeArmsOnly)) {
+    if (lara && (Cfg().firstPersonHideHead || g_ledgeArmsOnly || g_unarmedArmsHidden)) {
         auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
         const uint32_t savedBits = bits;
         // Native HD body passes use useMeshBits=0: their effective mask is ALL
         // joints, even if the item's persistent mask is zero/stale at startup.
-        // Only remove the head from that effective mask, for this draw alone.
+        // Apply visibility to that effective mask for this draw alone.
         // Already-masked weapon passes must retain their native restrictions.
-        bits = (useMeshBits ? savedBits : UINT32_MAX) &
-            (g_ledgeArmsOnly ? kArmMeshBits : ~kHeadMeshBit);
+        bits = VisibleMeshBits(useMeshBits ? savedBits : UINT32_MAX,
+            Cfg().firstPersonHideHead,false,false,g_ledgeArmsOnly,false,g_unarmedArmsHidden);
         g_bodySkinScope=true; g_bodySkinReady=false;
         g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item, 1, renderPass);
         g_bodySkinScope=g_bodySkinReady=false;
@@ -2184,13 +2192,17 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
     if (wasActive && !g_active) VR().RecenterThirdPersonHead();
     const auto* item = g_boundDll && g_boundBase
         ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
+    const bool unarmedMovement=g_active && item && CanTurnBody(item) &&
+        *Ptr<int16_t>(g_boundDll->lara+2)==0 &&
+        *Ptr<int16_t>(g_boundDll->lara+4)>=0 && *Ptr<int16_t>(g_boundDll->lara+4)<=6;
+    const bool hideUnarmedArms=g_unarmedArmVisibility.Hide(unarmedMovement,VR().HeadPitchRadians());
     SetMeshVisibility(g_active && Cfg().firstPersonHideHead,
                       g_active && IsRollState(item),
                       g_active && IsCrouchState(item),
                       g_active && item && (locomotion::IsLedgeHangState(
                           *reinterpret_cast<const int16_t*>(item+off::item_anim_state)) ||
                           locomotion::IsLedgeMountState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state))),
-                      g_active && item && LaraWaterStatus()==1); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
+                      g_active && item && LaraWaterStatus()==1,hideUnarmedArms); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
 }
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {
@@ -2610,6 +2622,7 @@ void FirstPersonRecenter() {
 }
 
 void FirstPersonToggle() {
+    g_unarmedArmVisibility={};
     ResetMovementStabilization();
     g_calibrationActive=false;
     g_cameraMotionTrace = {};
