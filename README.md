@@ -68,6 +68,40 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
+### Session changes and current deployment (2026-10-04 to 2026-10-05)
+
+This summary covers the October 4 work and the rollback/redeploy after midnight
+on October 5 (America/New_York). Changes below apply to TR4/5 first person.
+
+| Change | Current status |
+|---|---|
+| LS left/right/back launching Lara during forward movement | Retained: apply movement only when the native gait matches stick intent; preserve native stored speed. The user confirmed the launch fix. See [gait handoff](#forward-to-sideback-animation-handoff-2026-10-03). |
+| Delay entering sidestep/backstep | Retained: ordinary gait changes use the native standing dispatcher immediately, with native collision checks. See [responsive entry](#responsive-sidestepbackstep-entry-2026-10-04). |
+| Slow backpedal startup | Retained: shorten the initial backward animation while preserving normal top speed. See [backpedal startup](#faster-backpedal-startup-2026-10-04). |
+| Weapon equip and holster | Retained: press LT while unarmed to draw; releasing or pressing LT again never holsters. Y holsters. The draw squeeze cannot fire. See [bindings](#first-person-drawholster-bindings-2026-10-04). |
+| Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
+| B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
+| Unarmed hands in the forward view | Retained and user-confirmed: hide arms while looking ahead; reveal them when looking down at least 15 degrees, hide again within 10 degrees of level. See [hand visibility](#unarmed-hands-visible-only-when-looking-down-2026-10-04). |
+| Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
+| Camera jump after mounting crates | **Reverted:** the experimental 200 ms climb-to-standing camera transition was removed at the user's request. It is absent from current source and the redeployed DLL; the reported camera jump remains unresolved. |
+
+The earlier LT+Y equip experiment and idle-only camera-calibration attempts also
+remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
+reference preservation and render-only mount body-fit correction remain in
+place; those are separate from the reverted 200 ms camera transition.
+
+**October 5 redeploy:** clean Release/x64 rebuild of the reverted source,
+installed with DLL hash verification. Personal INI and controller calibration
+were preserved. The camera-transition experiment passed its automated checks
+before being reverted; that does not establish in-headset comfort. The rollback
+redeploy was build/hash verified, with no new headset validation.
+
+- Installed DLL SHA-256: `A793C6236C34C3D9CC35EEA079C21FA80FB3B71D3838BB081C9181FFFCE3EE1A`.
+- Deployment record: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-reverted-redeploy-20261005-003712/`.
+- Current regression runner: `build\run_first_person_tests.cmd`, including
+  `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
 **A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a),
 driving an OpenVR runtime. It supports the retail Steam release, the HD
 Definitive Patch and the 2026-01-17 build every address here was read out of;
@@ -235,8 +269,9 @@ native visibility when leaving first person and preserves unrelated native
 mesh changes. This is a direct arm-visibility rule with no camera calibration
 or positioning changes. The earlier idle-only camera capture attempt remains
 reverted. Automated coverage checks both games, all ordinary ground gaits,
-look-down/forward transitions, HD render passes and native mask restoration;
-headset visual confirmation remains pending.
+look-down/forward transitions, HD render passes and native mask restoration.
+The user confirmed the hand-visibility rule works; the ensuing jiggle regression
+and its correction are recorded below.
 
 The subsequent jiggle regression came from physics classifying the native
 palette after hidden arm/head joints had been zeroed. It now classifies and
@@ -5135,7 +5170,7 @@ when Lara's guns were holstered or her hands were busy. With no shot queued,
 that erased native RT grab/Action input, including ledge catches. RT now retains
 its original analog value and held duration whenever gun status is not ready
 (`4`). Ready guns retain independent firing and resume held RT after tracking recovery;
-the LT hold-to-equip gesture remains active. Held grab input cannot turn into
+the October 4 LT press-to-equip binding remains active. Held grab input cannot turn into
 a shot simply because the guns become ready. This changes input ownership only,
 not movement stabilization, aiming or camera behavior. Live ledge testing remains
 necessary despite passing the synthetic input checks.
@@ -5903,7 +5938,7 @@ The swimming-camera build remains backed up under
 The earlier render-rate turning build is backed up under
 `build/before-swim-third-person-20260929-000013/`.
 This release retains swimming's third-person fallback, render-rate turning,
-the hard stop and half-second LT hold, and excludes
+the hard stop and October 4 LT press-to-equip/Y-holster bindings, and excludes
 the reverted swimming body-follow changes. The older surface-roomscale build remains backed up under
 `build/before-hard-stop-20260928-193548/`.
 The previous crate-impact build remains under
