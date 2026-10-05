@@ -96,6 +96,15 @@ hook::InlineHook g_hDrawCreatureHD;
 hook::InlineHook g_hDrawHair;
 hook::InlineHook g_hAimWeapon;
 hook::InlineHook g_hGetJoints;
+hook::InlineHook g_hShadowJoint;
+struct ShadowDll { uint32_t timestamp, draw, torsoReturn; };
+constexpr ShadowDll kShadowDlls[] = {
+    {0x696B4999,0xB8A00,0xB8AF0},
+    {0x696B499C,0xAC310,0xAC400},
+    {0x68C12FDA,0xB9480,0xB9572},
+    {0x68C12FE9,0xAC510,0xAC602},
+};
+const ShadowDll* g_shadowDll=nullptr;
 hook::InlineHook g_hFireWeapon;
 hook::InlineHook g_hPistolHandler;
 hook::InlineHook g_hAnimatePistols;
@@ -853,6 +862,32 @@ bool BuildGunPose(int hand, GunPose& out) {
     return true;
 }
 
+bool BodyVisualOffsetApplies(const uint8_t* item) {
+    return g_active && g_scenePoseValid && g_boundDll && g_boundBase &&
+        item && item==g_headingItem && item==*Ptr<uint8_t*>(g_boundDll->laraItem) &&
+        CanTurnBody(item);
+}
+
+void GetJointForCaller(uint8_t* item,PHD_VECTOR* point,int32_t joint,int32_t frac,
+                       uintptr_t caller) {
+    g_hShadowJoint.Original<Fn_GetJointAbsPositionLerp>()(item,point,joint,frac);
+    // Only S_PrintShadowHD's torso query owns this correction. The result is
+    // consumed by its floor/height queries BEFORE it builds the shadow mesh,
+    // so the shadow conforms to the ground beneath the visually shifted body.
+    // Camera, muzzle, hit-test and classic-renderer queries remain native.
+    if (!g_shadowDll || caller!=g_boundBase+g_shadowDll->torsoReturn ||
+        joint!=7 || !point || !BodyVisualOffsetApplies(item)) return;
+    const double x=double(point->x)+g_bodyVisualOffset.x;
+    const double z=double(point->z)+g_bodyVisualOffset.z;
+    if (!std::isfinite(x) || !std::isfinite(z) || x<INT32_MIN || x>INT32_MAX ||
+        z<INT32_MIN || z>INT32_MAX) return;
+    point->x=int32_t(std::lround(x));point->z=int32_t(std::lround(z));
+}
+
+void __cdecl Detour_ShadowJoint(uint8_t* item,PHD_VECTOR* point,int32_t joint,int32_t frac) {
+    GetJointForCaller(item,point,joint,frac,reinterpret_cast<uintptr_t>(_ReturnAddress()));
+}
+
 int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     g_renderHandJoint = -1;
     g_bodySkinReady=false;
@@ -860,7 +895,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     if (g_renderArm<0 && joints && count>0 && count<=33 && g_active &&
         g_boundDll && item && item==g_headingItem &&
         item==*Ptr<uint8_t*>(g_boundDll->laraItem)) {
-        if (g_scenePoseValid && CanTurnBody(item))
+        if (BodyVisualOffsetApplies(item))
             stabilization::OffsetBodyPalette(joints,count,g_bodyVisualOffset);
         const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
         if (g_bodySkinScope && object>=0) {
@@ -2320,6 +2355,18 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             reinterpret_cast<void*>(&Detour_GetJoints),5,
             kGetJointsPrologue,sizeof(kGetJointsPrologue),"GetJoints"))
         Log("firstperson: body palette correction unavailable; native masking retained");
+    if (g_hGetJoints.installed()) for (const auto& entry:kShadowDlls) {
+        if (entry.timestamp!=d.timestamp) continue;
+        const auto* call=reinterpret_cast<const uint8_t*>(base+entry.torsoReturn-5);
+        int32_t relative=0;std::memcpy(&relative,call+1,sizeof(relative));
+        if (*call==0xe8 && int64_t(entry.torsoReturn)+relative==d.getJointAbsPositionLerp &&
+            g_hShadowJoint.Install(reinterpret_cast<void*>(base+d.getJointAbsPositionLerp),
+                reinterpret_cast<void*>(&Detour_ShadowJoint),5,
+                kGetJointsPrologue,sizeof(kGetJointsPrologue),"FirstPersonShadowJoint")) {
+            g_shadowDll=&entry;
+            Log("firstperson: HD floor shadow follows rendered body offset before native floor sampling");
+        } else Log("firstperson: shadow joint call-site mismatch; native shadow retained");
+    }
     if (Cfg().firstPersonMotionGuns) {
         if (g_motionDll &&
             !std::memcmp(reinterpret_cast<const void*>(base+g_motionDll->getSpheres),
@@ -2449,6 +2496,7 @@ void Remove() {
     g_hPistolHandler.Remove();
     g_hAnimatePistols.Remove();
     g_hFireWeapon.Remove();
+    g_hShadowJoint.Remove();g_shadowDll=nullptr;
     g_hGetJoints.Remove();
     g_motionDll = nullptr;
     g_hDrawHair.Remove();

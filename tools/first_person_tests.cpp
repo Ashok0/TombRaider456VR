@@ -220,6 +220,13 @@ void __cdecl FakeJoint(uint8_t* item, tr::PHD_VECTOR* v, int joint, int frac) {
     }
     jointCalled = true;
 }
+int shadowJointCalls=0, shadowJointFraction=0;
+uint8_t* shadowJointItem=nullptr;
+tr::PHD_VECTOR shadowNativePoint{1000,-400,2000};
+void __cdecl FakeShadowJoint(uint8_t* item,tr::PHD_VECTOR* point,int32_t,int32_t frac) {
+    ++shadowJointCalls;shadowJointFraction=frac;shadowJointItem=item;
+    *point=shadowNativePoint;
+}
 int16_t nativeAimLock=0;
 const float* skinFixture=nullptr;
 int skinFixtureCount=0;
@@ -1987,6 +1994,64 @@ int main() {
                 TestDynamicBonesNativeDraws();
             }
         }
+        // The CPU floor-shadow anchor and GPU body must receive the same
+        // world-space translation, regardless of yaw, animation interpolation
+        // or arm visibility. Native shadow height remains untouched.
+        g_hShadowJoint.m_trampoline=reinterpret_cast<void*>(&FakeShadowJoint);
+        for (const auto& shadow:kShadowDlls) {
+            g_shadowDll=&shadow;
+            const auto caller=g_boundBase+shadow.torsoReturn;
+            for (int yaw:{0,8192,16384,24576,-32768,-16384}) {
+                for (int frac:{0,64,128,255,256}) for (bool hidden:{false,true}) {
+                    const double angle=yaw*3.141592653589793/32768.;
+                    g_bodyVisualOffset={float(150*std::sin(angle)),float(150*std::cos(angle))};
+                    float fixture[15*12]{};
+                    for (int j=0;j<15;++j) {
+                        fixture[j*12]=fixture[j*12+5]=fixture[j*12+10]=1;
+                        fixture[j*12+3]=float(shadowNativePoint.x);
+                        fixture[j*12+7]=float(shadowNativePoint.y);
+                        fixture[j*12+11]=float(shadowNativePoint.z);
+                    }
+                    skinFixture=fixture;skinFixtureCount=15;
+                    bits=hidden ? 0x7fff&~kArmMeshBits : 0x7fff;
+                    float body[15*12]{};
+                    Detour_GetJoints(itemMemory,body,0);
+                    for (int repeat=0;repeat<2;++repeat) {
+                        PHD_VECTOR point{};const int before=shadowJointCalls;
+                        GetJointForCaller(itemMemory,&point,7,frac,caller);
+                        Check(shadowJointCalls==before+1 && shadowJointFraction==frac &&
+                              shadowJointItem==itemMemory,"shadow preserves native interpolation and calls engine once");
+                        Check(std::abs(point.x-body[7*12+3])<=.51f &&
+                              std::abs(point.z-body[7*12+11])<=.51f &&
+                              point.y==shadowNativePoint.y,"floor shadow matches rendered torso without height drift or accumulation");
+                    }
+                }
+            }
+            g_bodyVisualOffset={35,-60};
+            // Every non-shadow joint caller (eyes, gun muzzles, hit tests,
+            // classic rendering) and every non-grounded/third-person case
+            // must receive the native result.
+            for (int guard=0;guard<10;++guard) {
+                auto* item=itemMemory;int joint=7;auto returnAddress=caller;
+                if (guard==0) ++returnAddress;
+                if (guard==1) joint=14;
+                if (guard==2) item=laraMemory;
+                if (guard==3) g_active=false;
+                if (guard==4) g_scenePoseValid=false;
+                if (guard==5) g_headingItem=nullptr;
+                if (guard==6) state=3; // jump
+                if (guard==7) state=19; // climb
+                if (guard==8) water=1;
+                if (guard==9) g_shadowDll=nullptr;
+                PHD_VECTOR point{};
+                GetJointForCaller(item,&point,joint,128,returnAddress);
+                Check(point.x==shadowNativePoint.x && point.y==shadowNativePoint.y &&
+                      point.z==shadowNativePoint.z,"unrelated callers and inactive body offsets retain native shadow anchor");
+                g_active=g_scenePoseValid=true;g_headingItem=itemMemory;
+                state=2;water=0;g_shadowDll=&shadow;
+            }
+        }
+        g_shadowDll=nullptr;g_hShadowJoint.m_trampoline=nullptr;
         skinFixture=nullptr;skinFixtureCount=0;
         g_bodyVisualOffset={};
         object=oldObject; dll.objects=oldObjects; dll.gLaraHeads=oldHeads;

@@ -70,8 +70,9 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ### Session changes and current deployment (2026-10-04 to 2026-10-05)
 
-This summary covers the October 4 work and the rollback/redeploy after midnight
-on October 5 (America/New_York). Changes below apply to TR4/5 first person.
+This summary covers the October 4 work, the rollback/redeploy after midnight,
+and the October 5 shadow correction (America/New_York). Changes below apply
+to TR4/5 first person.
 
 | Change | Current status |
 |---|---|
@@ -83,6 +84,7 @@ on October 5 (America/New_York). Changes below apply to TR4/5 first person.
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
 | Unarmed hands in the forward view | Retained and user-confirmed: hide arms while looking ahead; reveal them when looking down at least 15 degrees, hide again within 10 degrees of level. See [hand visibility](#unarmed-hands-visible-only-when-looking-down-2026-10-04). |
 | Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
+| Floor shadow displaced ahead of Lara | HD shadow now follows the same horizontal visual body correction as Lara, before native floor sampling. Automated regression and four-build binary checks passed; headset confirmation pending. See [shadow alignment](#first-person-floor-shadow-alignment-2026-10-05). |
 | Camera jump after mounting crates | **Reverted:** the experimental 200 ms climb-to-standing camera transition was removed at the user's request. It is absent from current source and the redeployed DLL; the reported camera jump remains unresolved. |
 
 The earlier LT+Y equip experiment and idle-only camera-calibration attempts also
@@ -90,17 +92,40 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 5 redeploy:** clean Release/x64 rebuild of the reverted source,
-installed with DLL hash verification. Personal INI and controller calibration
-were preserved. The camera-transition experiment passed its automated checks
-before being reverted; that does not establish in-headset comfort. The rollback
-redeploy was build/hash verified, with no new headset validation.
+**October 5 current deployment:** Release/x64 shadow fix installed with DLL
+hash verification. Personal INI and controller calibration were preserved.
+The reverted 200 ms camera transition remains absent. Automated checks passed;
+there has been no new headset validation.
 
-- Installed DLL SHA-256: `A793C6236C34C3D9CC35EEA079C21FA80FB3B71D3838BB081C9181FFFCE3EE1A`.
-- Deployment record: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-reverted-redeploy-20261005-003712/`.
+- Installed DLL SHA-256: `DB8FF2E8A9773C1B426A5EDABF2C11460CD372C42745E1D312AE041F287F7097`.
+- Deployment record: [shadow fix manifest](build/shadow-body-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-shadow-body-20261005-110652/`.
+- Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### First-person floor shadow alignment (2026-10-05)
+
+TR4/5's HD body palette receives a horizontal rendering correction to fit
+Lara beneath the first-person camera. The native floor shadow obtains its torso
+position separately, so it previously stayed at the uncorrected position and
+could appear displaced ahead of her.
+
+The shadow's joint-7 query now receives the same world-space X/Z correction
+before `S_PrintShadowHD` samples floor height and builds its footprint. Native
+height and floor-conforming geometry are retained. The hook is limited to that
+exact caller and uses the body's eligibility checks; camera, muzzle, hit-test,
+classic-renderer, NPC and third-person joint queries retain native results.
+The full skeleton capture used by jiggle physics is unchanged.
+
+Validation: **549,454 first-person regression checks passed**, including new
+body/shadow alignment checks across headings, interpolation fractions, repeated
+draws and visible/hidden arms, plus native-result guards. All eight existing
+jiggle integration cases and the general self-test passed. Run
+`python tools/verify_first_person_shadow.py` to verify the joint caller, hook
+prologue and subsequent floor/height queries in all four supported TR4/5 DLLs.
+Release/x64 built and deployment hashes matched. In-headset alignment on flat
+ground, slopes and crate tops still needs user confirmation.
 
 **A VR mod for Tomb Raider IV–VI Remastered** (`tomb456.exe`, v1.0.2a),
 driving an OpenVR runtime. It supports the retail Steam release, the HD
