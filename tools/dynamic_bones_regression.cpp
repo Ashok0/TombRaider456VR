@@ -17,13 +17,13 @@ bool IsWorldPass() { return worldPass; }
 bool BoneSkinActive() { return true; }
 }
 
-void TestDynamicBonesVisibility() {
+void TestDynamicBonesVisibility(const float* rendered) {
     using namespace tr;
     uint64_t mask=0;int count=0;
     const float* full=FirstPersonBodyPalette(mask,count);
     Require(full && (count==15 || count==33),"real first-person capture is available");
     float native[33*12]{};
-    std::memcpy(native,full,count*12*sizeof(float));
+    std::memcpy(native,rendered ? rendered : full,count*12*sizeof(float));
     for(int j=0;j<count;++j)
         if (!(mask&(uint64_t(1)<<j))) std::memset(native+j*12,0,12*sizeof(float));
     const auto oldBound=g_boundDll;

@@ -1,0 +1,15 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-ik-open-hands-20261007-003136",
+    "dll_sha256":  "51151F9DD3003CB34D2CE4189C1593FFC6F576D80F816C2945157563DE752414",
+    "previous_dll_sha256":  "B8BBE7B77B00F058A5769B2513ECDFB23D7E183A158DCB83E33074FF0757DD6C",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "build":  "Release x64",
+    "regression_checks":  617030,
+    "dynamic_bones_integration":  "10 cases passed",
+    "native_hand_audit":  "4 DLL builds: RUN/REST geometry indices, descriptor copies and bare/glove/X-ray banks verified",
+    "resting_hands_while_running_in_ik":  true,
+    "native_descriptor_restored_after_draw":  true,
+    "headset_verified":  false
+}

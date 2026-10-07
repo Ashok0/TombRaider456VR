@@ -699,6 +699,7 @@ static void TestKnownGoodDefaults() {
     printf("\nKnown-good INI defaults\n");
     auto checkProfile=[]() {
         const auto& c=tr::Cfg();
+        Check(c.firstPersonFullBodyIK,"full-body IK enabled for new and existing profiles");
         Check(c.positionalTracking && c.eyeOffsetMode==3,"known-good positional tracking and eye mode");
         Check(c.firstPerson && c.firstPersonMotionGuns && c.firstPersonDriftLog,
               "known-good first-person, motion guns and diagnostics enabled");
@@ -725,6 +726,12 @@ static void TestKnownGoodDefaults() {
     Check(!tr::EnsureConfigFile(ini),"startup cannot overwrite an existing user profile");
     tr::LoadConfig(ini);
     Check(!tr::Cfg().firstPersonMotionGuns,"explicit user override takes precedence over defaults");
+    WritePrivateProfileStringW(L"VR",L"FirstPersonFullBodyIK",L"0",ini);
+    tr::LoadConfig(ini);
+    Check(!tr::Cfg().firstPersonFullBodyIK,"explicit arm-only fallback reads from INI");
+    WritePrivateProfileStringW(L"VR",L"FirstPersonFullBodyIK",L"1",ini);
+    tr::LoadConfig(ini);
+    Check(tr::Cfg().firstPersonFullBodyIK,"full-body IK can be re-enabled");
     DeleteFileW(ini);
 }
 

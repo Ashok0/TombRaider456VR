@@ -1,0 +1,15 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-landing-head-20261007-005551",
+    "dll_sha256":  "B37DAF9EFBDEFC1259D3943C7BA99EB9F727CE6DE6D6C302633A080F3205E7A1",
+    "previous_dll_sha256":  "51151F9DD3003CB34D2CE4189C1593FFC6F576D80F816C2945157563DE752414",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "build":  "Release x64",
+    "regression_checks":  618864,
+    "dynamic_bones_integration":  "10 cases passed",
+    "landing_head_override":  true,
+    "alternate_head_only_geometry_suppressed":  true,
+    "third_person_and_native_shadows_preserved":  true,
+    "headset_verified":  false
+}

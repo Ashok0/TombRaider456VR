@@ -1,0 +1,566 @@
+selftest.cpp
+C:\dev\TombRaider456VR\tests\..\tests\selftest.cpp(891): warning C4456: declaration of 't' hides previous local declaration
+C:\dev\TombRaider456VR\tests\..\tests\selftest.cpp(843): note: see declaration of 't'
+C:\dev\TombRaider456VR\tests\..\tests\selftest.cpp(914): warning C4456: declaration of 't' hides previous local declaration
+C:\dev\TombRaider456VR\tests\..\tests\selftest.cpp(843): note: see declaration of 't'
+InlineHook.cpp
+Log.cpp
+Config.cpp
+Generating Code...
+TombRaiderVR self-test
+======================
+
+projection vs ogl_setPerspAngles (symmetric case)
+  [ok] e00 =  1/tanX                                  got     1.250000 want     1.250000
+  [ok] e11 = -1/tanY  (engine Y flip)                 got    -1.666667 want    -1.666667
+  [ok] e02 =  0  (no shear)                           got     0.000000 want     0.000000
+  [ok] e12 =  0  (no shear)                           got     0.000000 want     0.000000
+  [ok] e22 = (n+f)/(n-f)                              got    -1.000977 want    -1.000977
+  [ok] e23 = 2fn/(n-f)                                got   -32.015633 want   -32.015633
+  [ok] e32 = -1                                       got    -1.000000 want    -1.000000
+  [ok] e33 =  0                                       got     0.000000 want     0.000000
+
+asymmetric frustum shear lands where vid_setPerspOffset writes
+  [ok] e00 = 2/(r-l)                                  got     1.250000 want     1.250000
+  [ok] e02 = (r+l)/(r-l)                              got    -0.250000 want    -0.250000
+  [ok] e11 = -2/(b-t)   (scale negated)               got    -1.176471 want    -1.176471
+  [ok] e12 = +(b+t)/(b-t) (shear NOT negated)         got     0.058824 want     0.058824
+  [ok] shear is non-zero for an asymmetric eye
+
+frustum edges land on NDC edges (real headset tangents)
+  [ok] right edge  -> ndc.x = +1                      got     1.000000 want     1.000000
+  [ok] left edge   -> ndc.x = -1                      got    -1.000000 want    -1.000000
+  [ok] top edge    -> ndc.y = +1                      got     1.000000 want     1.000000
+  [ok] bottom edge -> ndc.y = -1                      got    -1.000000 want    -1.000000
+  [ok] top edge is not short of the viewport (the fishbowl bug)
+
+near/far recovery from mProj[1]
+  [ok] ExtractNearFar succeeds
+  [ok] recovered zNear                                got    16.000000 want    16.000000
+  [ok] recovered zFar                                 got 32768.007812 want 32768.000000
+  [ok] rejects a degenerate matrix
+
+affine algebra
+  [ok] M * M^-1 == identity
+  [ok] I * M == M
+
+OpenVR (Y-up, metres) -> engine view space (Y-down, TR units)
+  [ok] x translation scaled, sign kept                got    13.536000 want    13.536000
+  [ok] y translation scaled AND negated               got   -42.299999 want   -42.299999
+  [ok] z translation scaled, sign kept                got   -21.150000 want   -21.150000
+  [ok] conjugated rotation stays orthonormal
+
+mView_packed round-trip
+  [ok] row 0 is floats 0..3
+  [ok] row 1 is floats 4..7
+  [ok] row 2 is floats 8..11
+  [ok] write(read(x)) == x for floats 0..11
+  [ok] floats 12..15 left untouched
+
+portal frustum maths
+  [ok] root frustum is 5 planes (near + four sides)
+  [ok] straight ahead is inside
+  [ok] just inside the right edge
+  [ok] just outside the right edge
+  [ok] just inside the bottom edge
+  [ok] just outside the bottom edge
+  [ok] behind the head is outside
+  [ok] nearer than the near plane is outside
+  [ok] a quad opening yields near + four edge planes
+  [ok] through the doorway, on axis
+  [ok] through the doorway, inside the cone
+  [ok] beside the doorway is culled
+  [ok] above the doorway is culled
+  [ok] in the doorway itself
+  [ok] reversed winding yields the same plane count
+  [ok] reversed winding: inside is still inside
+  [ok] reversed winding: outside is still outside
+  [ok] clip against a half-space succeeds
+  [ok] a square cut down the middle is still four-sided
+  [ok] every surviving vertex is on the kept side
+  [ok] clip that removes everything still succeeds
+  [ok] a fully-clipped opening is empty
+  [ok] an edge-on opening produces no bogus planes
+  [ok] the oversized box has no corner inside the frustum
+  [ok] ...and BoxVisible reports it visible anyway
+  [ok] a box wholly behind the head is culled
+
+inline hook mechanism
+  [ok] allocated a synthetic target
+  [ok] target returns 42 before hooking
+  [ok] refuses to patch on prologue mismatch
+  [ok] target untouched after a refused install
+  [ok] installs with matching prologue
+  [ok] detour runs and can call the original via the trampoline
+  [ok] original bytes restored on Remove()
+  [ok] allocated four-argument LOS-style target
+  [ok] native target reads all four arguments
+  [ok] six-byte LOS-style hook installs
+  [ok] detour forwards both LOS flags in r8/r9
+  [ok] four-argument target restored after Remove()
+
+Touch controller -> bind-pose wrist and muzzle
+  [ok] native barrel +Y maps to controller forward X  got     0.000000 want     0.000000
+  [ok] barrel remains level, not wrist-to-tip tilted  got     0.000000 want     0.000000
+  [ok] native barrel +Y maps to controller forward Z  got     1.000000 want     1.000000
+  [ok] right pistol keeps native muzzle side offset   got   -10.000000 want   -10.000000
+  [ok] left pistol keeps native muzzle side offset    got    10.000000 want    10.000000
+  [ok] muzzle above wrist does not pitch barrel down  got   -35.000000 want   -35.000000
+  [ok] HD pistol flash and shot share muzzle length   got   190.000000 want   190.000000
+  [ok] inverse bind with nonzero wrist origin
+  [ok] invert both native and HD axis-swizzled bind
+  [ok] invert both native and HD axis-swizzled bind
+  [ok] wrist stays at controller through yaw/pitch/roll and full heading rotation
+  [ok] left/right barrel direction stays controller-parallel through rotations
+  [ok] rendered muzzle equals flash/shot position for pistols and Uzis
+  [ok] HD blended helper bones follow the same arm placement
+  [ok] shader row packing preserves corrected wrist
+  [ok] regression fixture detects the old skin-palette pivot bug
+  [ok] raised/depth-calibrated grip stays fixed through full wrist/heading rotations
+  [ok] grip calibration preserves 1:1 controller translation
+  [ok] calibrated rendered muzzle, flash and shots stay aligned
+  [ok] grip adjustment does not add sideways offset   got     0.000000 want     0.000000
+  [ok] level grip adjustment does not add vertical offset got     0.000000 want     0.000000
+  [ok] grip adjustment pulls gun back twelve inches   got  -152.400009 want  -152.399994
+  [ok] latest calibration leaves horizontal alignment unchanged got     0.000000 want     0.000000
+  [ok] latest calibration raises guns exactly one inch got   -12.700000 want   -12.700000
+  [ok] latest calibration advances guns exactly five inches got    63.500008 want    63.500000
+  worst synthetic wrist error: 0.000313 game units
+  [ok] singular frame is rejected safely
+  [ok] native +90 yaw fires right                     got     0.866025 want     0.866025
+  [ok] native +30 pitch fires upward                  got    -0.500000 want    -0.500000
+  [ok] OpenVR yaw sign maps correctly                 got    -1.000000 want    -1.000000
+  [ok] heading rotates forward offset into world X    got   150.000000 want   150.000000
+  [ok] hand height uses Y-down                        got   210.000000 want   210.000000
+  [ok] heading rotates right offset into world -Z     got   280.000000 want   280.000000
+  [ok] near-barrel enemy assisted
+  [ok] assist ray normalized                          got     1.000000 want     1.000000
+  [ok] assist originates at muzzle not Lara
+  [ok] vertical enemy assist
+  [ok] assist includes vertical aim
+  [ok] outside 12 degree cone unchanged
+  [ok] enemy behind hand rejected
+  [ok] zero distance rejected
+  [ok] distant enemy rejected
+  [ok] invalid barrel rejected
+  [ok] confirmed sphere hit retains short native endpoint for HitTarget
+  [ok] miss retains long muzzle impact ray
+  [ok] minus 20 pitch points down in game axes        got     0.342020 want     0.342020
+  [ok] 20 degree tilt keeps grip X                    got   100.000000 want   100.000000
+  [ok] 20 degree tilt keeps grip Y                    got   200.000000 want   200.000000
+  [ok] 20 degree tilt keeps grip Z                    got   300.000000 want   300.000000
+  [ok] either trigger fires on press before release
+  [ok] release cancels held repeat after the press already fired
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] release stops sustained fire without a trailing shot
+  [ok] either trigger fires on press before release
+  [ok] release cancels held repeat after the press already fired
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] quick tap fires once across polling rates and delayed native animation
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] either trigger alone sustains only its own hand
+  [ok] release stops sustained fire without a trailing shot
+  [ok] LT press immediately queues only left
+  [ok] unfired LT press survives release
+  [ok] shot survives multiple input polls until native gun ready
+  [ok] only requested hand fires once
+  [ok] RT press fires only right
+  [ok] held RT sustains native cadence
+  [ok] simultaneous LT release and RT press fire independently
+  [ok] held solo LT sustains fire without RT
+  [ok] long solo LT release stops firing
+  [ok] unarmed LT never queues a shot
+  [ok] menu or mode change discards pending shots
+  [ok] held dual triggers recover firing without holstering
+  [ok] fresh press after reentry works
+  [ok] lost readiness cancels queued fire
+  [ok] RT requests an initial native shot
+  [ok] held RT remains able to fire after a shot
+  [ok] held RT resumes after a hit interruption
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] both triggers keep firing beyond holster threshold while guns stay armed
+  [ok] releasing RT first cannot turn a dual fire hold into holstering
+  [ok] fresh solo LT hold fires after dual firing
+  [ok] adding RT to held LT sustains both guns
+  [ok] reproduce drawn guns blocked by an unlocked native bat target
+  [ok] two-minute dual-trigger hold keeps native cadence after arm-lock loss and restores targeting
+  [ok] third-person/non-firing target remains untouched
+  [ok] native gun passes retain only right/left hand meshes
+  [ok] combined rifle hand pass excludes both forearms
+  [ok] only actual gun IDs are motion weapons
+  [ok] single weapons cannot inherit independent left-gun firing
+  [ok] upper arm and body passes suppressed
+
+physical body centering with the stabilized camera and skin palette
+  [ok] reproduce the old intermediate-angle camera/mesh mismatch
+  [ok] rendered mesh stays centered throughout two full physical turns in both directions and after camera handoff
+  [ok] physical body correction does not move the stable camera or world
+  [ok] body centering preserves genuine roomscale translation and leaning
+  [ok] body palette fit preserves rotations, height and hidden/padding matrices
+  [ok] grounded eye looks over deep ledge without camera retraction
+  [ok] eye-height crate wall still blocks camera
+  [ok] near ceiling still blocks camera at an edge
+  [ok] missing room is not treated as an open ledge
+  [ok] roomscale accepts shortened/sliding travel but rejects collision pushback and overshoot
+  [ok] reproduce accumulated ledge pushback reaching the persistent roomscale guard
+  [ok] five seconds of ledge pushback at every heading cannot corrupt the tracking neutral
+  [ok] jump and landing recover the remaining roomscale step without toggling views
+  [ok] rendered torso follows final collision-resolved eye through repeated edges and turns
+  [ok] edge and wall camera retractions never become permanent standing offsets
+  [ok] first LT poll immediately draws and claims the squeeze
+  [ok] LT release and long repeat cannot holster
+  [ok] one Y poll completes holster
+  [ok] tap LT re-equips in either native draw style
+  [ok] Y during drawing remembers holster request
+  [ok] released Y waits for draw to finish
+  [ok] queued Y holsters at first ready frame
+  [ok] completed holster cannot rearm
+  [ok] unarmed Y keeps Action
+  [ok] held Y cannot leak Action after holstering
+  [ok] Y release restores ordinary Action ownership
+  [ok] short LT request survives polls before native draw
+  [ok] native draw acknowledgment ends only toggle pulse
+  [ok] first LT poll immediately draws and claims the squeeze
+  [ok] LT release and long repeat cannot holster
+  [ok] one Y poll completes holster
+  [ok] tap LT re-equips in either native draw style
+  [ok] Y during drawing remembers holster request
+  [ok] released Y waits for draw to finish
+  [ok] queued Y holsters at first ready frame
+  [ok] completed holster cannot rearm
+  [ok] unarmed Y keeps Action
+  [ok] held Y cannot leak Action after holstering
+  [ok] Y release restores ordinary Action ownership
+  [ok] short LT request survives polls before native draw
+  [ok] native draw acknowledgment ends only toggle pulse
+
+Live motion-gun calibration
+  [ok] Ctrl reserved so calibration does not fire guns
+  [ok] reserved Ctrl release swallowed after deactivation
+  [ok] Ctrl remains native outside calibration
+  [ok] unowned Ctrl release remains native
+  [ok] plain function keys remain native
+  [ok] calibration inactive outside focused motion-gun gameplay
+  [ok] Alt chords are not consumed
+  [ok] all fourteen hotkey commands, repeat and keyup ownership
+  [ok] right step is quarter inch                     got     0.006350 want     0.006350
+  [ok] up step is quarter inch                        got     0.006350 want     0.006350
+  [ok] forward reduces grip-back                      got    -0.006350 want    -0.006350
+  [ok] yaw step is one degree                         got     1.000000 want     1.000000
+  [ok] pitch step is one degree                       got     1.000000 want     1.000000
+  [ok] roll step is one degree                        got     1.000000 want     1.000000
+  [ok] position limited to half metre                 got     0.500000 want     0.500000
+  [ok] pitch safely limited to ninety degrees         got    90.000000 want    90.000000
+  [ok] calibrated barrel yaw equals shot yaw          got     0.365998 want     0.365998
+  [ok] calibrated barrel pitch equals shot pitch      got    -0.500000 want    -0.500000
+  [ok] roll does not steer the barrel                 got     0.784886 want     0.784886
+  [ok] combined position/pitch/yaw/roll keeps calibrated grip pinned
+  [ok] combined calibration preserves rendered muzzle and shot origin
+
+Known-good INI defaults
+  [ok] full-body IK enabled for new and existing profiles
+  [ok] known-good positional tracking and eye mode
+  [ok] known-good first-person, motion guns and diagnostics enabled
+  [ok] known-good eight-inch grip                     got     0.203200 want     0.203200
+  [ok] known-good lowered hand height                 got    -0.069850 want    -0.069850
+  [ok] known-good gun pitch                           got   -30.000000 want   -30.000000
+  [ok] live grip matches fallback                     got     0.203200 want     0.203200
+  [ok] live hand height matches fallback              got    -0.069850 want    -0.069850
+  [ok] live gun pitch matches fallback                got   -30.000000 want   -30.000000
+  [ok] create isolated default-profile INI
+  [ok] full-body IK enabled for new and existing profiles
+  [ok] known-good positional tracking and eye mode
+  [ok] known-good first-person, motion guns and diagnostics enabled
+  [ok] known-good eight-inch grip                     got     0.203200 want     0.203200
+  [ok] known-good lowered hand height                 got    -0.069850 want    -0.069850
+  [ok] known-good gun pitch                           got   -30.000000 want   -30.000000
+  [ok] live grip matches fallback                     got     0.203200 want     0.203200
+  [ok] live hand height matches fallback              got    -0.069850 want    -0.069850
+  [ok] live gun pitch matches fallback                got   -30.000000 want   -30.000000
+  [ok] full-body IK enabled for new and existing profiles
+  [ok] known-good positional tracking and eye mode
+  [ok] known-good first-person, motion guns and diagnostics enabled
+  [ok] known-good eight-inch grip                     got     0.203200 want     0.203200
+  [ok] known-good lowered hand height                 got    -0.069850 want    -0.069850
+  [ok] known-good gun pitch                           got   -30.000000 want   -30.000000
+  [ok] live grip matches fallback                     got     0.203200 want     0.203200
+  [ok] live hand height matches fallback              got    -0.069850 want    -0.069850
+  [ok] live gun pitch matches fallback                got   -30.000000 want   -30.000000
+  [ok] fresh installation creates embedded template
+  [ok] full-body IK enabled for new and existing profiles
+  [ok] known-good positional tracking and eye mode
+  [ok] known-good first-person, motion guns and diagnostics enabled
+  [ok] known-good eight-inch grip                     got     0.203200 want     0.203200
+  [ok] known-good lowered hand height                 got    -0.069850 want    -0.069850
+  [ok] known-good gun pitch                           got   -30.000000 want   -30.000000
+  [ok] live grip matches fallback                     got     0.203200 want     0.203200
+  [ok] live hand height matches fallback              got    -0.069850 want    -0.069850
+  [ok] live gun pitch matches fallback                got   -30.000000 want   -30.000000
+  [ok] startup cannot overwrite an existing user profile
+  [ok] explicit user override takes precedence over defaults
+  [ok] explicit arm-only fallback reads from INI
+  [ok] full-body IK can be re-enabled
+
+Gun calibration save/reload
+  [ok] create isolated temporary INI
+  [ok] old INIs default to movement stabilization
+  [ok] old INIs enable the HK-only scope without calibration changes
+  [ok] old INIs attach lens to measured HK mesh
+  [ok] default scope forward fit                      got     0.180000 want     0.180000
+  [ok] default scope upward fit                       got     0.240000 want     0.240000
+  [ok] scope INI off switch is read
+  [ok] manual scope fit opt-out is read
+  [ok] scope forward fit setting is read              got     0.200000 want     0.200000
+  [ok] scope up fit setting is read                   got     0.220000 want     0.220000
+  [ok] INI can disable movement stabilization
+  [ok] INI can enable movement stabilization
+  [ok] restore discards unsaved changes               got    -0.069850 want    -0.069850
+  [ok] save six live values to INI
+  [ok] restore uses latest successful save            got    -0.063500 want    -0.063500
+  [ok] reload right offset                            got     0.006350 want     0.006350
+  [ok] reload up offset                               got    -0.063500 want    -0.063500
+  [ok] reload depth offset                            got     0.171450 want     0.171450
+  [ok] reload pitch                                   got   -29.000000 want   -29.000000
+  [ok] reload yaw                                     got     1.000000 want     1.000000
+  [ok] reload roll                                    got     1.000000 want     1.000000
+  [ok] save preserves unrelated INI settings
+  [ok] save preserves enabled motion guns
+  [ok] save creates recovery backup
+  [ok] backup preserves original INI
+
+ALL PASSED (0 failures)

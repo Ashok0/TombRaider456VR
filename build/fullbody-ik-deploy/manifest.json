@@ -1,0 +1,18 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-fullbody-IK-20261007-012403",
+    "dll_sha256":  "81092ACEECDD7195AF84CE22E70732FC851D8C19B042BE17068AD30CCC94AF0A",
+    "previous_dll_sha256":  "B37DAF9EFBDEFC1259D3943C7BA99EB9F727CE6DE6D6C302633A080F3205E7A1",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "build":  "Release x64",
+    "regression_checks":  649647,
+    "general_selftests":  "passed",
+    "dynamic_bones_integration":  "12 cases passed",
+    "native_shadow_and_hand_audits":  "all four DLLs passed",
+    "tracking":  "headset and controllers only",
+    "full_body_vrik":  true,
+    "native_foot_targets":  true,
+    "native_ledge_grips":  true,
+    "headset_verified":  false
+}

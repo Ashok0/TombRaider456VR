@@ -769,8 +769,9 @@ void DynamicBonesObserveDraw() {
     // First-person visibility zeros hidden head/arm matrices in the native
     // palette. Scoring that palette can reject Lara's body and stop chest
     // deformation, or change the solver's winning draw as the player looks
-    // up/down. Use the same complete skeleton that BoneSkin uploads. The
-    // capture is scoped to this body draw; never borrow a different layout.
+    // up/down. Use the complete native animation capture, before controller
+    // IK. BoneSkin uploads a separate posed palette. Both captures are scoped
+    // to this body draw; never borrow a different layout.
     uint64_t visibleMask = 0;
     int bodyCount = 0;
     const float* bodyPalette = FirstPersonBodyPalette(visibleMask, bodyCount);

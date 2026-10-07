@@ -1,0 +1,245 @@
+TombRaiderVR: starting
+config: mode=stereo tracking=rotation+position origin=seated units/m=423.0 ss=1.00 flipProjY=1 flipViewY=1 dup=1 flatHud=1
+config: culling=head frustum margin=8.0deg depth<=16 portals<=4096 far=0 widen=1 objects=1  sky=infinity
+config: first person TR4/TR5 joint=14 anchor=(0,-32,140), translation=on head=hidden move-with-head=on turn=120deg/s stabilization=on
+config: first person body-follow=1 deadzone=0.0 turn=4.0deg/60Hz head-aim=1; Y+LT=view, Y+RT=graphics (including menus)
+config: dynamic-bone measurement ON (torso joint 7, report every 900 frames) -- TR4/TR5 only
+config: dynamic-bone DEBUG DISPLACEMENT ON at 1.0x -- joint 7 is TORSO, so the whole upper body moves, not just the chest. This is a debug view, not the feature.
+engine: bound to 00007FF6B7160000 (reference base 0000000140000000, slide +140692241645568)
+engine: build identified as retail / community HD pack v1.0.2 (2025-09-10)
+hook[vid_setPass]: 00007FF6B716C770 -> 00007FFC0B7B71E0 (stole 10, tramp 00007FF6C5B5000E)
+hook[validate_draw]: 00007FF6B7171FF0 -> 00007FFC0B7B7280 (stole 6, tramp 00007FF6C5B6000E)
+hook[ogl_draw]: 00007FF6B7172EF0 -> 00007FFC0B7B9BC0 (stole 5, tramp 00007FF6C5B7000E)
+hook[ogl_drawVB]: 00007FF6B7173010 -> 00007FFC0B7B9BE0 (stole 5, tramp 00007FF6C5B8000E)
+hook[ogl_present]: 00007FF6B7172920 -> 00007FFC0B7BB7D0 (stole 6, tramp 00007FF6C5B9000E)
+hook[fmvShow]: 00007FF6B7171680 -> 00007FFC0B7BB7B0 (stole 7, tramp 00007FF6C5BA000E)
+hooks: all six installed
+hook[shader_init]: 00007FF6B7171B50 -> 00007FFC0B7C7EA0 (stole 7, tramp 00007FF6C5BB000E)
+hook[TR4 ogl_texUpdate]: 00007FF6B7174570 -> 00007FFC0B7CC8C0 (stole 5, tramp 00007FF6C5BC000E)
+hook[TR4 vidLoadTexture]: 00007FF6B716B490 -> 00007FFC0B7CCA40 (stole 5, tramp 00007FF6C5BD000E)
+TR4 effects: native sunray/atlas upload enhancement ready (TR4 resources only)
+TombRaiderVR: hooks installed; OpenVR will be brought up on the first frame
+gl: loader ready (shader api ready)
+motion hands: rigid wrist skinning and forearm seam trim ready
+TR4 effects: TEX\EFFECT.DDS array 6 layer 1: 6 enhanced mips, load OK
+boneskin: 15 skin program(s) matched, 15 patched, 0 fell back to the original
+pad: Touch controllers presented as an Xbox pad (_XInputGetState 00007FF6B77F49F8 -> 00007FFC0B7CD4E0, real 00007FFC284A4EE0)
+pad: move=Lstick look=Rstick(yaw only; hold RT+RB for pitch) jump=A(R lower) roll=B(R upper) action=Y(L upper)/LB+RB(both grips) system=BACK(L lower) walk=LS+RB(R grip) sneak=RB+Y duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=L3+R3 dpad=R3+Lstick
+pad: FP motion guns: tap LT=left pistol/Uzi on release, tap RT=right/single shot; hold LT 0.5s=draw/holster once
+gamedll: bound to tomb5.dll (Tomb Raider V (retail), build 0x68C12FE9, game=1) at 00007FFBD7080000
+gun calibration: Ctrl+F1..F6 position, Ctrl+Shift+F1..F6 angles; F7 save/restore
+firstperson: startup is third person; Y+LT switches views
+hook[LaraAboveWater]: 00007FFBD70CB2F0 -> 00007FFC0B7DBFA0 (stole 5, tramp 00007FFBD78E000E)
+hook[AnimateLara]: 00007FFBD70DF9B0 -> 00007FFC0B7DB9D0 (stole 6, tramp 00007FFBD78F000E)
+hook[AimWeapon]: 00007FFBD70DC430 -> 00007FFC0B7DAB00 (stole 5, tramp 00007FFBD790000E)
+hook[GetJoints]: 00007FFBD7135A00 -> 00007FFC0B7D7E10 (stole 5, tramp 00007FFBD791000E)
+hook[FirstPersonDrawToShadow]: 00007FFBD713CAB0 -> 00007FFC0B7D6DF0 (stole 6, tramp 00007FFBD792000E)
+firstperson: intact native shadows; eye-view body and hand offsets excluded
+hook[AnimatePistols]: 00007FFBD70D8710 -> 00007FFC0B7DA8E0 (stole 5, tramp 00007FFBD793000E)
+hook[FireWeapon]: 00007FFBD70DC4E0 -> 00007FFC0B7DA3D0 (stole 5, tramp 00007FFBD794000E)
+hook[PistolHandler]: 00007FFBD70D83F0 -> 00007FFC0B7DAA10 (stole 5, tramp 00007FFBD795000E)
+hook[GetTargetOnLOS]: 00007FFBD70933A0 -> 00007FFC0B7DA8B0 (stole 6, tramp 00007FFBD796000E)
+hook[SetGunFlash]: 00007FFBD710DAA0 -> 00007FFC0B7D8A00 (stole 7, tramp 00007FFBD797000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+firstperson: unarmed HD arm IK enabled, using shared gun calibration
+hook[phd_GenerateW2V]: 00007FFBD71214D0 -> 00007FFC0B7DFBE0 (stole 5, tramp 00007FFBD798000E)
+hook[DrawActionIndicators]: 00007FFBD714AC70 -> 00007FFC0B7D4CF0 (stole 5, tramp 00007FFBD799000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FFBD7136510 -> 00007FFC0B7DF2B0 (stole 5, tramp 00007FFBD79A000E)
+hook[DrawHair]: 00007FFBD716E760 -> 00007FFC0B7DF630 (stole 5, tramp 00007FFBD79B000E)
+hook[MotionRifleHandler]: 00007FFBD70D5A70 -> 00007FFC0B7DA390 (stole 6, tramp 00007FFBD79C000E)
+hook[MotionFireShotgun]: 00007FFBD70D5E80 -> 00007FFC0B7D9B50 (stole 5, tramp 00007FFBD79D000E)
+hook[MotionFireSpecial]: 00007FFBD70D64C0 -> 00007FFC0B7D9EF0 (stole 8, tramp 00007FFBD79E000E)
+hook[MotionFireCrossbow]: 00007FFBD70D65E0 -> 00007FFC0B7DA0D0 (stole 5, tramp 00007FFBD79F000E)
+hook[MotionGunJoint]: 00007FFBD711CD30 -> 00007FFC0B7DA130 (stole 5, tramp 00007FFBD7A0000E)
+hook[MotionInitialiseProjectile]: 00007FFBD70C6160 -> 00007FFC0B7DA250 (stole 5, tramp 00007FFBD7A1000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+firstperson: Tomb Raider V (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+hook[PrintRoomsList]: 00007FFBD713A040 -> 00007FFC0B7C3E00 (stole 5, tramp 00007FFBD7A2000E)
+hook[S_GetObjectBounds]: 00007FFBD712BD20 -> 00007FFC0B7C44A0 (stole 5, tramp 00007FFBD7A3000E)
+cull: hooked tomb5.dll (Tomb Raider V (retail))
+hook[DrawSkyHD]: 00007FFBD7139B50 -> 00007FFC0B7C4F40 (stole 5, tramp 00007FFBD7A4000E)
+sky: hooked tomb5.dll (Tomb Raider V (retail)) -- sky draws use rotation-only eye transform (optical infinity) and far-plane depth
+overlay: 5 optic overlay draw(s) stubbed in tomb5.dll (Tomb Raider V (retail)) -- binocular=1 scope=1 tint=1. The laser dot is a separate sprite and is untouched.
+hook[DrawLaraHD]: 00007FFBD7138FB0 -> 00007FFC0B7C4F60 (stole 8, tramp 00007FFBD7A5000E)
+dynbones: hooked tomb5.dll (Tomb Raider V (retail)) -- measuring only, nothing is drawn differently
+vr: initialisation attempt 1 at frame 1
+vr: using C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\openvr_api.dll
+vr: runtime installed=yes, IsHmdPresent=yes
+vr: initialised as a Scene app
+vr: eye 0 raw tangents l=-1.3764 r=0.8391 t=-1.4281 b=0.9657
+vr: eye 0 eyeToHead offset = (-0.0310, +0.0000, +0.0000) m
+vr: eye 1 raw tangents l=-0.8391 r=1.3764 t=-1.4281 b=0.9657
+vr: eye 1 eyeToHead offset = (+0.0310, +0.0000, +0.0000) m
+vr: ready, per-eye target 1728x1824
+vr: up and running
+stereo: created 3456x1824 double-wide target (fbo 2, tex 39)
+present: redirected FBO_default 0 -> 2
+stereo: mono scratch ready (2560x1440, fbo 3, tex 40)
+video: offscreen panel ready (2560x1440, fbo 4, tex 41, prog 609)
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+gamedll: no level loaded yet -- ceiling clamp stands down until there is one (this is normal at the title screen)
+vr: head pose ACQUIRED
+present: first stereo frame submitted
+pad: water_status=0 (above water) -- stick pitch decoupled
+pad: optics zoom left -- stick pitch decoupled
+cull: head-frustum portal traversal live on Tomb Raider V (retail) -- frustum 124.0 x 126.0 degrees, depth<=16, 4096 portals/frame budget
+sky: first DrawSkyHD draw (shader 1) -- rotation-only eye transform, far-plane depth
+inject: eye=0 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=-0.2425 proj[9]=-0.1932
+inject: eye=0 eyeView translation = (+292.1, +148.6, -256.2) world units
+inject: eye=0 final view translation = (55383.9, 41.6, 21315.1)
+inject: eye=0 packed view translation IN MEMORY = (52746.0, 1792.0, 27136.0) [floats 3,7,11 at 00007FF6C567ECD0]
+inject: eye=0 uid[1] (uViewMatrix location) = 3, shader=1
+inject: eye=1 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=0.2425 proj[9]=-0.1932
+inject: eye=1 eyeView translation = (+265.9, +148.6, -256.2) world units
+inject: eye=1 final view translation = (55383.9, 41.6, 21315.1)
+inject: eye=1 packed view translation IN MEMORY = (52746.0, 1792.0, 27136.0) [floats 3,7,11 at 00007FF6C567ECD0]
+inject: eye=1 uid[1] (uViewMatrix location) = 3, shader=1
+inject: SEPARATION between eyes = 0.00 world units (dx=0.00 dy=0.00 dz=0.00)
+inject: *** ZERO SEPARATION -- both eyes are rendering the SAME view. This is why depth is flat and why world scale changes nothing. ***
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: locked to shader 20 (15 joints) -- the latch stays here so the drive stays continuous
+boneskin: measured buffer 4 -- 27349 vertices, 4185 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+boneskin: front of the torso is local +Z (30 samples, mean alignment 1.00 with Lara's facing)
+boneskin: torso shape, side view -- BACK on the left, FRONT on the right, top row is the neck end. x -68..68  y -249..-82  depth -81..75
+boneskin:   |        ....            |
+boneskin:   |        .......         |
+boneskin:   |      . :-=--..         |
+boneskin:   |.::...=-=:...=+:        |
+boneskin:   |:.......:......=-.      |
+boneskin:   |=.-:-:=.:......--::.    |
+boneskin:   |%..:+:..:.....:::...::. |
+boneskin:   |@-......:.:::::. .....:.|
+boneskin:   |#.....:.:.......... ...:|
+boneskin:   |:::.....:....... .......|
+boneskin:   |  .:......... ..... ... |
+boneskin:   |         ......... ..   |
+boneskin:   |          ..... .. ..   |
+boneskin:   |           ....... ..   |
+boneskin: front profile, neck to waist: -10 8 13 13 17 25 28 39 52 63 70 73 75 75 72 67 58 55 53 53
+boneskin: chest region (measured bust) -- height -179..-114 of -249..-82, depth from 25 forward (front 75, belly line 55), within 46 of centre. Selects 200 torso vertices at full weight (y -170..-123) and 117 partly.
+boneskin: live -- Lara's body (shader 20) now deforms per vertex, and the whole-torso view has stood down
+vr: ceiling clamp active -- headroom 27 units, eye held -101 units above the camera
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+firstperson: headset neutral=(-0.019,1.183,0.008)m
+firstperson: resolved body fit yaw=118.6 base=113.9 offset=(0.6,-0.6) pending=(0.000,-0.000)m
+firstperson: native joint 14 anchored; offset from body=(114,-672,-92)
+firstperson shadow: receiver origin native=(48050,-906,31516) FP=(47156,-672,32168); light camera isolated
+cull: first-person eye in room 0; game camera seeded room 0
+locomotion: state=1 head=118.6 body=118.6 manual=(+0.00,-0.00) pending=(+0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+cull: first-person eye in room 0; game camera seeded room 1
+locomotion: state=2 head=119.0 body=119.0 manual=(+0.00,-0.00) pending=(-0.000,+0.002)m drag=(+0.000,+0.000)m input=0000000000000020
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to third person
+dynbones: joints=15 shader=20 lock=20  frames=900 dup=0% snaps=6  drive_peak=4837.7 accel_raw=1080421 drive_used=0  disp_peak=28.10  L=(0.59,8.40,1.58) R=(0.59,8.40,1.58)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+firstperson: headset neutral=(-0.028,1.193,0.019)m
+firstperson: resolved body fit yaw=174.7 base=172.9 offset=(0.0,0.0) pending=(0.000,-0.000)m
+firstperson: native joint 14 anchored; offset from body=(16,-717,-108)
+cull: first-person eye in room 0; game camera seeded room 0
+locomotion: state=2 head=174.9 body=174.8 manual=(+0.00,-0.00) pending=(-0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=179.7 body=179.7 manual=(+0.00,-0.00) pending=(-0.001,+0.004)m drag=(+0.000,+0.000)m input=0000000000000000
+stereo health @frame 1800: world draws=111359  duplicated=53446  injected eye0=52565 eye1=52565  (94% of world draws got per-eye matrices)  offscreen-skipped=6229  classify-mismatch=0  ortho3D=0  sky=10648  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(325.8, -74.7, 192.4) prog=79 loc=26  eye1=(177.9, -74.7, 192.4) prog=79 loc=26  separation=147.92
+halves: 14 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF6C567E8A0  mProj[1](persp)=00007FF6C567E8E0
+  proj=00007FF6C567E8A0  draws=1729     ortho/2D
+  proj=00007FF6C567E8E0  draws=111359   perspective/world
+cull: 13.6 rooms/frame from the engine + 2.5 added by the head frustum, 0.2 items rescued/frame  *** A BUDGET WAS HIT -- raise CullMaxPortals/CullMaxDepth ***
+fp-turn: 1.00s polls=60 views=60 turned=9 max-step=2.018deg
+locomotion: state=2 head=-160.8 body=-160.9 manual=(-0.00,+0.00) pending=(-0.006,+0.016)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-157.6 body=-157.6 manual=(-0.00,+0.00) pending=(-0.003,+0.022)m drag=(+0.000,+0.000)m input=0000000000000000
+boneskin: measured buffer 246 -- 4268 vertices, 0 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+locomotion: state=2 head=-149.0 body=-149.1 manual=(-0.00,+0.00) pending=(-0.017,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-141.4 body=-141.6 manual=(-0.00,+0.00) pending=(-0.018,+0.010)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-148.4 body=-147.9 manual=(-0.00,+0.00) pending=(-0.008,+0.010)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-133.2 body=-133.2 manual=(-0.00,+0.00) pending=(-0.006,+0.027)m drag=(+0.000,-0.007)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=59 turned=38 max-step=5.294deg
+locomotion: state=2 head=-73.1 body=-73.2 manual=(+0.00,+0.00) pending=(-0.001,+0.024)m drag=(-0.002,+0.000)m input=0000000000000000
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+locomotion: state=2 head=-17.3 body=-17.3 manual=(+0.00,+0.00) pending=(-0.005,+0.024)m drag=(-0.005,+0.002)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=49 max-step=2.340deg
+firstperson: resolved body fit yaw=14.9 base=-8.5 offset=(-17.4,-0.6) pending=(-0.007,0.021)m
+locomotion: state=2 head=15.0 body=15.0 manual=(+0.00,+0.00) pending=(-0.007,+0.021)m drag=(+0.000,+0.002)m input=0000000000000000
+locomotion: state=1 head=16.2 body=16.2 manual=(+0.08,+0.47) pending=(-0.009,+0.018)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=18.5 body=18.5 manual=(+0.12,+0.99) pending=(-0.013,+0.016)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=59 elapsed=1000ms frac=7..245 animSide=-79.13..17.00u rootSideStep=-0.94..0.64u eyeSideStep=-0.92..0.90u trackedSide=0.0354..0.0461m bodyYawError=-0.25..0.11deg
+locomotion: state=1 head=15.2 body=15.2 manual=(+0.07,+0.25) pending=(-0.015,+0.017)m drag=(-0.002,+0.002)m input=0000000000000001
+locomotion: state=1 head=16.1 body=16.1 manual=(+0.00,+0.00) pending=(-0.012,+0.018)m drag=(+0.000,+0.000)m input=0000000000000000
+boneskin: measured buffer 126 -- 5008 vertices, 0 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+locomotion: state=2 head=16.4 body=16.4 manual=(+0.10,+0.18) pending=(-0.013,+0.018)m drag=(+0.000,+0.000)m input=0000000000000001
+locomotion: state=1 head=16.5 body=16.5 manual=(+0.05,+0.50) pending=(-0.013,+0.018)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=16.9 body=16.9 manual=(+0.08,+1.00) pending=(-0.012,+0.015)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=21.4 body=21.2 manual=(+0.00,+0.00) pending=(-0.014,+0.016)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=24.6 body=24.5 manual=(+0.00,+0.00) pending=(-0.015,+0.016)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=23.8 body=23.8 manual=(+0.00,+0.00) pending=(-0.011,+0.010)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=62 views=60 turned=2 max-step=0.185deg
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+dynbones: joints=15 shader=20 lock=20  frames=1800 dup=0% snaps=6  drive_peak=844.9 accel_raw=3056768 drive_used=0  disp_peak=27.95  L=(-0.03,8.53,-0.86) R=(-0.03,8.53,-0.86)
+dynbones: engine drive -- jumps=2 lands=2  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 3 DrawLaraHD scope(s), joints [15,15,0]
+locomotion: state=2 head=8.1 body=8.1 manual=(+0.06,+0.37) pending=(-0.015,-0.007)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=8.1 body=8.1 manual=(+0.08,+0.56) pending=(-0.015,-0.007)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=8.6 body=8.6 manual=(+0.00,+0.00) pending=(-0.014,-0.007)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=8.7 base=-22.1 offset=(-21.9,-5.5) pending=(-0.014,-0.008)m
+fp-turn: 1.01s polls=58 views=60 turned=10 max-step=1.962deg
+locomotion: state=1 head=8.3 body=8.3 manual=(+0.00,+0.00) pending=(-0.013,-0.007)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=8.2 body=8.3 manual=(+0.00,+0.00) pending=(-0.013,-0.007)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=3.5 body=4.0 manual=(+0.00,+0.00) pending=(-0.003,-0.008)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=23.2 body=22.1 manual=(+0.00,+0.00) pending=(-0.009,-0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=28.7 body=29.0 manual=(+0.00,+0.00) pending=(-0.003,-0.011)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=24.5 body=24.5 manual=(+0.00,+0.00) pending=(+0.015,+0.016)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=21.4 body=21.7 manual=(+0.00,+0.00) pending=(+0.003,+0.012)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=13.6 body=14.5 manual=(+0.00,+0.00) pending=(+0.010,+0.006)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+locomotion: state=2 head=16.4 body=17.7 manual=(+0.00,+0.00) pending=(+0.070,+0.025)m drag=(+0.040,+0.035)m input=0000000000000000
+locomotion: state=2 head=-41.0 body=-39.8 manual=(+0.00,+0.00) pending=(+0.022,+0.020)m drag=(+0.002,+0.005)m input=0000000000000000
+firstperson: resolved body fit yaw=-30.4 base=-22.1 offset=(7.0,4.1) pending=(-0.005,0.020)m
+locomotion: state=2 head=-30.5 body=-30.4 manual=(+0.00,+0.00) pending=(-0.006,+0.019)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-30.6 body=-30.5 manual=(+0.00,+0.00) pending=(-0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-30.5 body=-30.5 manual=(+0.00,+0.00) pending=(-0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-30.5 body=-30.5 manual=(+0.00,+0.00) pending=(-0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-30.5 body=-30.5 manual=(+0.00,+0.00) pending=(-0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-30.5 body=-30.5 manual=(+0.00,+0.00) pending=(-0.006,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-30.5 body=-30.5 manual=(+0.00,+0.00) pending=(-0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-30.5 body=-30.5 manual=(+0.00,+0.00) pending=(-0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+hook[TR4 vidLoadTexture]: removed
+hook[TR4 ogl_texUpdate]: removed
+pad: _XInputGetState restored
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+vr: third-person positional neutral captured; tracked rotation preserved
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[AnimatePistols]: removed
+hook[FireWeapon]: removed
+hook[FirstPersonDrawToShadow]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[AnimateLara]: removed
+hook[DrawSkyHD]: removed
+hook[DrawLaraHD]: removed
+hook[shader_init]: removed
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+hook[fmvShow]: removed
+hook[ogl_present]: removed
+hook[ogl_drawVB]: removed
+hook[ogl_draw]: removed
+hook[validate_draw]: removed
+hook[vid_setPass]: removed

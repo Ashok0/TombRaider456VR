@@ -8,6 +8,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 
 * Native stereo with 6DOF
 * First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming and cutscenes dynamically toggle to third person.
+* Full-body VRIK in TR4/5 HD first person using headset and controllers: inferred torso/hips, leg IK on animated foot targets, and arms sharing the gun wrist calibration.
 * Culling fixes for VR
 * Camera fixes for VR
 * Vignettes removed 
@@ -68,11 +69,11 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
-### Session changes and current deployment (2026-10-04 to 2026-10-06)
+### Session changes and current deployment (2026-10-04 to 2026-10-07)
 
 This summary covers the October 4 work, the rollback/redeploy after midnight,
-and the October 5 shadow and zigzag corrections (America/New_York). Changes below apply
-to TR4/5 first person.
+and the subsequent shadow, zigzag and controller-arm corrections through October 7
+(America/New_York). Changes below apply to TR4/5 first person.
 
 | Change | Current status |
 |---|---|
@@ -82,9 +83,11 @@ to TR4/5 first person.
 | Weapon equip and holster | Retained: press LT while unarmed to draw; releasing or pressing LT again never holsters. Y holsters. The draw squeeze cannot fire. See [bindings](#first-person-drawholster-bindings-2026-10-04). |
 | Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
-| Unarmed hands in the forward view | Retained and user-confirmed: hide arms while looking ahead; reveal them when looking down at least 15 degrees, hide again within 10 degrees of level. See [hand visibility](#unarmed-hands-visible-only-when-looking-down-2026-10-04). |
+| Unarmed hands in the forward view | Extended October 7: walking and running share controller arm IK and resting-hand meshes; wrist bends and roll are constrained and forearms absorb most roll. The prior look-down-only animation remains the fallback when IK is disabled or tracking is unavailable. See [wrist correction](#consistent-walkingrunning-ik-and-wrist-limits-2026-10-07). |
 | Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
 | Floor shadow displaced/split in first person | User confirmed the intact silhouette, but the October 5 placement changes did not resolve displacement/HMD movement. October 6 corrects the shadow projection camera origin and isolates the light-camera pass from headset injection. Automated checks pass; headset confirmation pending. See [shadow projection](#first-person-shadow-projection-origin-2026-10-06). |
+| Head visible during landing kneel | October 7: force head/hair hiding during the native hard-landing animation, including alternate head-only geometry. Normal visibility resumes on recovery; third person and shadow draws remain native. See [landing head visibility](#head-hiding-during-the-landing-kneel-2026-10-07). |
+| Full-body VRIK | October 7: headset/controller-only torso and hip inference, leg IK preserving animated foot targets, controller arms through ordinary jumps, native ledge grips, and body visibility while armed. See [full-body VRIK](#full-body-vrik-with-headset-and-controllers-2026-10-07). |
 | Camera jump after mounting crates | **Reverted:** the experimental 200 ms climb-to-standing camera transition was removed at the user's request. It is absent from current source and the redeployed DLL; the reported camera jump remains unresolved. |
 
 The earlier LT+Y equip experiment and idle-only camera-calibration attempts also
@@ -92,17 +95,170 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 6 current deployment:** Release/x64 shadow projection correction installed with DLL
+**October 7 current deployment:** Release/x64 full-body VRIK, including the prior landing-head, resting-hand, wrist and shadow corrections, installed with DLL
 hash verification. Personal INI and controller calibration were preserved.
 The reverted 200 ms camera transition remains absent. Automated checks passed;
 there has been no new headset validation.
 
-- Installed DLL SHA-256: `FE89987DEC3E3E7A02689E198F5CEDF03D5BA99A3679C57AE45A4FB20CBF5CC6`.
-- Deployment record: [shadow projection manifest](build/shadow-projection-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-shadow-projection-20261006-232506/`.
+- Installed DLL SHA-256: `81092ACEECDD7195AF84CE22E70732FC851D8C19B042BE17068AD30CCC94AF0A`.
+- Deployment record: [full-body VRIK manifest](build/fullbody-ik-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-fullbody-IK-20261007-012403/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### Full-body VRIK with headset and controllers (2026-10-07)
+
+TR4/5 HD first person now infers Lara's torso and hips from the headset and
+solves both legs back to their native animated foot targets. Physical crouching
+lowers the pelvis and bends the knees; leaning moves and tilts the chest, and a
+bounded portion of head yaw turns the chest. Pelvis movement is limited by both
+legs' reach, preserving leg lengths and foot orientation/contact. Foot placement
+and stepping still come from game animation: this is headset/controller-only
+inference, without waist/foot tracking, procedural stepping or new terrain probes.
+
+Controller arms remain active during ordinary jumps and falls as well as walking,
+running, sidestepping and backpedaling. Unarmed hands keep the shared gun wrist
+calibration, resting running meshes and anti-twist limits. During hanging and
+ledge mounting, hands retain their native grip targets while the torso responds
+to the headset. The earlier jump-state switch back to animated arms is removed;
+this has automated coverage, but any remaining visual flicker needs headset
+validation. Rolls, swimming, death and other scripted interactions retain their
+existing presentation.
+
+Armed first person now draws the torso, legs and connecting arm chains. Separate
+tracked hand/gun passes retain their exact gun positions and orientations; the
+body pass excludes duplicate hands. Equip/holster transitions and unsupported
+weapons retain existing behavior. This does not change trigger timing, ammunition,
+ballistics, scopes, native movement, collision or animation state.
+
+`FirstPersonFullBodyIK=1` defaults on, including existing personal INIs. Set it to
+`0` in `[VR]` and restart to restore the earlier arm-only/armed-hand presentation.
+Unarmed full-body mode also requires `FirstPersonUnarmedIK=1`; both modes require
+motion guns, positional/head translation tracking, and valid headset/controller
+poses. This feature applies to TR4/5 HD, not classic graphics or TR6.
+
+The eye-view render palette contains the full-body pose. Jiggle physics continues
+to receive its separate complete native animation palette, and native shadow
+passes bypass every body/controller IK transform. The landing-kneel head/hair
+hiding correction remains active. No gameplay skeleton/root positions are edited.
+
+Validation: **649,647 first-person regression checks** and general self-tests pass,
+including real 15/33-joint palettes with reordered helper mappings and nonidentity
+bindings, crouch/lean/stride sweeps, connected limb endpoints, physical headset
+crouching, armed and unarmed wrist targets, native ledge grips, tracking loss,
+third-person/NPC isolation, unchanged native state, and native shadow palettes.
+All **12 jiggle integration cases** pass, including full-body IK on both skeleton
+layouts. Four-DLL shadow and resting-hand audits pass; Release/x64 builds.
+Logs: `build/fullbody-tests.log`, `build/fullbody-selftest.log`,
+`build/fullbody-build.log`, `build/fullbody-shadow-audit.log`, and
+`build/fullbody-hand-audit.log`. In-headset visual confirmation remains pending,
+particularly outfit deformation, deep crouches, jump/ledge transitions and scopes.
+
+### Head hiding during the landing kneel (2026-10-07)
+
+TR4/5 first person now explicitly hides Lara's head and hair during the native
+hard-landing kneel (STOP state 2, animation 24), even if general head hiding is
+disabled. In addition to the normal face list, the landing renderer rejects
+alternate geometry whose complete joint mapping belongs to the head. Body
+palettes containing a head joint are still drawn with that joint hidden, keeping
+the torso, arms and legs available. This does not change the landing camera.
+
+The landing override ends when the recovery animation leaves the hard-landing
+clip, returning to the existing head-visibility setting. Third-person, fatal-fall
+camera behavior and native shadow head/hair draws remain unchanged. General head
+hiding was already enabled in the installed INI; the new behavior is an explicit
+landing render guard, not an INI toggle.
+
+Validation: **618,864 first-person regression checks passed**, including alternate
+head-only draws, mixed body palettes, both games, both general head settings,
+recovery, third-person landing and native shadow draws. The existing VRIK/wrist
+checks and all ten jiggle-physics integration cases passed. Release/x64 built and
+was deployed with hash verification and unchanged personal INI. In-headset
+confirmation of the reported kneeling head visibility remains pending.
+
+### Resting hands while running in VRIK (2026-10-07)
+
+Lara's fingers still clenched while running because `DrawLaraHD` selects a separate
+`HAND_*_RUN` mesh, independently of the controller wrist pose. Unarmed VRIK now
+substitutes the corresponding `HAND_*_REST` geometry for that eye-view hand draw.
+Walking and running therefore use the same resting-hand shape as well as the
+same wrist IK. Bare, glove and X-ray hand variants retain their own materials
+and skeleton bindings, even when their mesh data is shared.
+
+The original geometry descriptor is restored immediately after the draw. Armed
+weapon grips, ledge interactions, third person, disabled/unavailable IK and native
+shadow passes retain their original selection. No animation state or hand asset
+is permanently changed, and missing resting-hand assets fall back to native.
+
+Validation: **617,030 first-person checks passed**, including real draw-hook mesh
+selection/restoration, both games, all three hand banks and single/combined hand
+masks. Wrist-limit, shadow and all ten jiggle-physics integration cases passed.
+`tools/verify_unarmed_hand_meshes.py` verified the hand tables, run/rest selection
+and complete 120-byte geometry copies in all four supported DLL builds. Release/x64
+built and was deployed with DLL hash verification and the personal INI preserved.
+In-headset confirmation of the resting-hand appearance remains pending.
+
+### Consistent walking/running IK and wrist limits (2026-10-07)
+
+Walking and running both retain controller-driven unarmed hands. Wrist orientation
+uses the same body-relative neutral reference for both gaits; the native running
+animation cannot add its hand roll back into the IK forearm. Shoulders still follow
+the body animation, while hands remain at the calibrated controller wrist targets.
+
+Previously, all controller rotation went directly into the hand while the forearm
+kept its animated roll, allowing the weighted wrist mesh to twist into a knot.
+The solver now separates bend from roll: wrist bend is limited to 55 degrees and
+total arm roll to +/-90 degrees, with 80% of that roll applied to the forearm.
+At most 18 degrees of controller roll is assigned directly to the hand. Roll is unwrapped
+across +/-180 degrees to avoid a sudden flip at that angle boundary. Twist history
+resets when unarmed IK becomes inactive. These constraints apply to unarmed IK;
+armed gun poses, firing and calibration controls retain their existing behavior.
+
+Validation: **616,802 first-person checks passed**, including repeated walk/run
+transitions on both skeleton layouts, removal of animated forearm roll, sweeps
+from +270 to -270 degrees and back, extreme wrist bends, connected wrist endpoints,
+and a blended wrist cross-section check. All ten jiggle integration cases and the
+existing shadow regressions passed. Release/x64 built successfully. The DLL was
+deployed with hash verification and the personal INI preserved. In-headset visual
+confirmation of this correction remains pending.
+
+### Unarmed controller arm IK (2026-10-06)
+
+TR4/5 HD first person now uses two-bone arm IK while Lara is unarmed during
+ordinary standing, walking, running, sidestepping and backpedaling. Each wrist
+uses the same controller position, world scale and live grip calibration as its
+gun. Controller rotation is now constrained by the October 7 wrist correction above. In this earlier arm-only stage, elbows bend from the animated shoulders and
+torso/legs retain native animation. It is now
+superseded by the October 7 full-body mode above. Finger tracking is not implemented.
+
+Tracked hands can be raised into view while looking straight ahead. The older
+look-down-only visibility rule remains the fallback when IK or tracking is
+unavailable. Both controllers must have valid poses. Draw/holster transitions,
+armed firing, jumps, climbing, hanging, swimming and scripted interactions retain
+their existing behavior. This update does not add a classic-graphics or TR6 path.
+Within reach, the solver preserves arm lengths. Beyond reach it extends the
+segments proportionally to keep the wrist at the calibrated controller target.
+
+`FirstPersonUnarmedIK=1` is enabled by default, including existing INIs without
+the key. It requires `FirstPersonMotionGuns=1`, positional tracking and first-person
+head translation. Set `FirstPersonUnarmedIK=0` in `[VR]` and restart to restore the
+previous unarmed presentation. The installed personal INI and gun calibration
+were preserved; the repository INI documents the new switch.
+
+IK edits only the eye-view arm palette. The skinning shader uploads that posed
+palette, while jiggle physics receives a separate complete native animation
+palette. Native shadow passes bypass both controller IK and body-fit offsets.
+No collision, item position or gameplay animation state is changed by IK.
+
+Validation: **604,924 first-person regression checks passed**, including the real
+15/33-joint palette path, both games and controllers, custom gun calibration,
+rotated wrists, body-fit offsets, connected arm segments, reach/fold singularities,
+tracking loss, weapon transitions, third-person/NPC isolation and native shadow
+palettes. All **ten jiggle integration cases** passed, including active IK on both
+skeleton layouts. The general self-tests and four-DLL native shadow audit passed;
+Release/x64 built successfully. In-headset visual confirmation, including outfit
+weights and elbow appearance, remains pending.
 
 ### Continuous forward/sidestep zigzags (2026-10-05)
 
@@ -5483,7 +5639,8 @@ IDs and routing, not full in-headset weapon behavior.
 
 Pistols/Uzis use both controllers independently. Single weapons use the right
 controller and RT; the left controller can move the visible support hand but
-does not steer the barrel (no two-hand constraint or VRIK). Only the right
+does not steer the barrel (no two-hand aiming constraint). Full-body VRIK can connect
+the visible arm chains without changing weapon aim. Only the right
 controller must be tracked for single-weapon aiming.
 It moves each hand/gun draw with its own controller, hides both upper arms
 and forearms as well as Lara's body and hair, and replaces each native hitscan shot's origin and
@@ -5837,7 +5994,7 @@ If the mode is unusable, set `FirstPersonMotionGuns=0` and restart.
 `TombRaiderVR.log` reports tracked arm draws and left/right shots in
 five-second windows for diagnosis. LOS logs show the requested ray and return
 value, not a measured wall impact (native collision uses a local endpoint).
-There is no VRIK: the visible hand/gun meshes move rigidly about the calibrated
+In the original motion-gun implementation, the visible hand/gun meshes move rigidly about the calibrated
 grips. Both upper arms and forearms remain hidden while motion-ready.
 
 ### Remaining motion issues and diagnostics

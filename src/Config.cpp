@@ -341,6 +341,10 @@ void LoadConfig(const wchar_t* ini) {
         L"FirstPersonHeadAim", g_cfg.firstPersonHeadAim, ini);
     g_cfg.firstPersonMotionGuns = GetBool(
         L"FirstPersonMotionGuns", g_cfg.firstPersonMotionGuns, ini);
+    g_cfg.firstPersonFullBodyIK = GetBool(
+        L"FirstPersonFullBodyIK", g_cfg.firstPersonFullBodyIK, ini);
+    g_cfg.firstPersonUnarmedIK = GetBool(
+        L"FirstPersonUnarmedIK", g_cfg.firstPersonUnarmedIK, ini);
     g_cfg.firstPersonMotionGunGripForwardMetres = GetFloat(
         L"FirstPersonMotionGunGripForwardMetres",
         g_cfg.firstPersonMotionGunGripForwardMetres, ini);

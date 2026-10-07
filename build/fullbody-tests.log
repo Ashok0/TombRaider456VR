@@ -1,0 +1,16 @@
+first_person_tests.cpp
+dynamic_bones_regression.cpp
+Generating Code...
+PASS: jiggle integration, 15 joints, mask 3fff
+PASS: jiggle integration, 33 joints, mask fffdfffb
+PASS: jiggle integration, 15 joints, mask 3fff
+PASS: jiggle integration, 33 joints, mask fffdfffb
+PASS: jiggle integration, 15 joints, mask ff
+PASS: jiggle integration, 15 joints, mask 3fff
+PASS: jiggle integration, 33 joints, mask 1c07f80ff
+PASS: jiggle integration, 33 joints, mask 1dfffbfff
+PASS: jiggle integration, 15 joints, mask ff
+PASS: jiggle integration, 15 joints, mask 3fff
+PASS: jiggle integration, 33 joints, mask 1c07f80ff
+PASS: jiggle integration, 33 joints, mask 1dfffbfff
+OK: 649647 first-person regression checks passed.

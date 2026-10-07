@@ -762,7 +762,7 @@ void BoneSkinAfterValidate() {
     }
     if (ps.locBodyMask>=0) {
         uint64_t mask=0; int count=0;
-        const float* palette=FirstPersonBodyPalette(mask,count);
+        const float* palette=FirstPersonRenderBodyPalette(mask,count);
         const bool active=palette && ps.locJoints>=0;
         if (active || ps.bodyMaskLive) {
             const float visible[4]={float(mask&0xffffu),float((mask>>16)&0xffffu),

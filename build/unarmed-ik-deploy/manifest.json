@@ -1,0 +1,18 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-unarmed-ik-20261006-234948",
+    "dll_sha256":  "6BE44AF0BBB455CFF1BB8EA2D9468C19956D8D7453E7759E56781D672D0225F0",
+    "previous_dll_sha256":  "FE89987DEC3E3E7A02689E198F5CEDF03D5BA99A3679C57AE45A4FB20CBF5CC6",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "build":  "Release x64",
+    "regression_checks":  604924,
+    "dynamic_bones_integration":  "10 cases passed, including 15/33-joint active unarmed IK",
+    "native_shadow_audit":  "4 DLL builds passed",
+    "general_selftest":  "passed",
+    "headset_verified":  false,
+    "unarmed_arms_ik":  true,
+    "full_body_ik":  false,
+    "shared_gun_calibration":  true,
+    "mount_camera_transition":  false
+}

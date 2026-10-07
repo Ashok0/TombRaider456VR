@@ -711,6 +711,8 @@ struct Config {
     float firstPersonBodyTurnDegreesPerFrame = 4.0f;
     bool  firstPersonHeadAim = true;
     bool  firstPersonMotionGuns = true;
+    bool  firstPersonUnarmedIK = true;
+    bool  firstPersonFullBodyIK = true; // Headset/controller inferred torso and legs.
     float firstPersonMotionGunGripForwardMetres = 0.2032f; // eight inches back
     float firstPersonMotionGunRaiseMetres = -0.06985f; // 2.75 inches controller-local down
     float firstPersonMotionGunRightMetres = 0;

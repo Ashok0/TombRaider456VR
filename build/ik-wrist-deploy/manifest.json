@@ -1,0 +1,17 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-ik-wrist-20261007-000510",
+    "dll_sha256":  "B8BBE7B77B00F058A5769B2513ECDFB23D7E183A158DCB83E33074FF0757DD6C",
+    "previous_dll_sha256":  "6BE44AF0BBB455CFF1BB8EA2D9468C19956D8D7453E7759E56781D672D0225F0",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "build":  "Release x64",
+    "regression_checks":  616802,
+    "dynamic_bones_integration":  "10 cases passed",
+    "walking_ik_while_running":  true,
+    "wrist_bend_limit_degrees":  55,
+    "arm_roll_limit_degrees":  90,
+    "forearm_roll_share":  0.8,
+    "continuous_roll_boundary_test":  "Passed +270 to -270 degrees and return",
+    "headset_verified":  false
+}

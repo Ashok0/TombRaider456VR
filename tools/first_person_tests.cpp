@@ -25,11 +25,12 @@
 #include "../src/Gamepad.cpp"
 
 // Separate translation unit executes the real dynamic-bone observer/solver.
-void TestDynamicBonesVisibility();
+void TestDynamicBonesVisibility(const float* rendered=nullptr);
 void TestDynamicBonesNativeDraws();
 
 namespace {
 tr::Config config;
+tr::motiongun::Calibration testCalibration;
 tr::Layout layout{};
 tr::GameDllLayout dll{};
 alignas(16) uint8_t appMemory[4096]{};
@@ -481,7 +482,7 @@ bool InlineHook::Install(void*, void*, size_t, const uint8_t*, size_t,
 namespace tr {
 const Config& Cfg() { return config; }
 const motiongun::Calibration& LiveMotionGunCalibration() {
-    static motiongun::Calibration calibration; return calibration;
+    return testCalibration;
 }
 void AdjustMotionGunCalibration(int) {}
 bool SaveMotionGunCalibration() { return false; }
@@ -505,8 +506,12 @@ const GameDllLayout* GameDllBound() { return g_boundDll; }
 uint64_t GameDllBase() { return g_boundBase; }
 }
 
+#include "unarmed_ik_regression.inl"
+#include "fullbody_ik_regression.inl"
+
 int main() {
     using namespace tr;
+    config.firstPersonFullBodyIK=false; // Legacy presentation regressions; full-body has its own suite.
     // Native receiver coordinates are relative to the THIRD-PERSON camera.
     // The FP scene camera can move thousands of units without moving a world
     // point in the light's projection. Test perspective + rotated light maps,
@@ -1009,6 +1014,8 @@ int main() {
         for (auto& controller:VR().m_rawControllerPose) {
             controller=VR().m_rawHeadPose;
         }
+        TestUnarmedIK();
+        TestFullBodyIK();
         const int16_t aim[2]={};
         g_gunTriggers.Reset(); g_gunTriggers.Update(true,true,false,false,0);
         g_gunTriggers.Update(true,true,true,false,1);
@@ -2010,6 +2017,64 @@ int main() {
         *reinterpret_cast<void**>(objectInfo+off::object_geom+off::geom_mesh)=objectInfo;
         *reinterpret_cast<void**>(heads+off::geom_mesh)=objectInfo;
         Check(DrawingLaraHead(itemMemory),"loaded matching face geometry is still hidden");
+        // A landing head can be an alternate head-only palette rather than a
+        // mesh in gLaraHeads. Reproduce that draw through the actual hook.
+        {
+            const auto landingSettings=config;const int landingGame=game,landingDllGame=dll.game;
+            auto& landingAnim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            const auto savedLandingAnim=landingAnim;
+            const auto landingVehicle=vehicle;
+            uint8_t savedGeom[off::geom_stride];auto* geom=objectInfo+off::object_geom;
+            std::memcpy(savedGeom,geom,sizeof(savedGeom));
+            int32_t headMapping[33];std::fill_n(headMapping,33,14);
+            int32_t bodyMapping[33];for(int i=0;i<33;++i) bodyMapping[i]=i%15;
+            *reinterpret_cast<void**>(geom+off::geom_mesh)=heads+off::geom_stride;
+            for(int which:{0,1}) for(bool hide:{false,true}) for(int joints:{1,15,33}) {
+                game=dll.game=which;vehicle=which==0 ? -1 : 0;config.firstPersonHideHead=hide;
+                RestoreHeadMesh();bits=0x7fff;state=2;landingAnim=24;
+                *reinterpret_cast<int32_t*>(geom+28)=joints;
+                *reinterpret_cast<int32_t**>(geom+48)=headMapping;
+                UpdateSceneCamera(camera);
+                Check(g_active && HideLandingHead(itemMemory) && g_headHidden && !(bits&kHeadMeshBit),
+                      "hard landing forces head hiding even when the general head setting is off");
+                Check(!DrawingLaraHead(itemMemory) && DrawingLaraHead(itemMemory,true),
+                      "landing recognizes alternate head-only geometry outside the native face list");
+                for(int pass:{0,1,2}) for(int masked:{0,1}) {
+                    const int before=draws,beforeHair=hairs;
+                    Detour_DrawCreatureHD(itemMemory,masked,pass);Detour_DrawHair(0);
+                    Check(draws==before && hairs==beforeHair,"kneel skips alternate head and hair draw completely");
+                }
+                // A full-body palette that includes a head must still render.
+                *reinterpret_cast<int32_t*>(geom+28)=33;
+                *reinterpret_cast<int32_t**>(geom+48)=bodyMapping;
+                const int before=draws;
+                Detour_DrawCreatureHD(itemMemory,0,0);
+                Check(draws==before+1 && drawnUseBits==1 && !(drawnBodyBits&kHeadMeshBit) &&
+                      (drawnBodyBits&0x3fff)==0x3fff,"kneeling head removal preserves torso, arms and legs");
+                // The light sees the native head and braid during the kneel.
+                ShadowDll landingShadow{};static int landingPass=4;
+                landingShadow.renderPass=rva(&landingPass);const auto oldShadow=g_shadowDll;g_shadowDll=&landingShadow;
+                *reinterpret_cast<int32_t*>(geom+28)=joints;
+                *reinterpret_cast<int32_t**>(geom+48)=headMapping;
+                const int shadowBefore=draws,shadowHair=hairs;
+                Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+                Check(draws==shadowBefore+1 && hairs==shadowHair+1 && drawnUseBits==0,
+                      "kneeling shadow keeps native head and hair geometry");
+                g_shadowDll=oldShadow;
+                landingAnim=103;UpdateSceneCamera(camera);
+                Check(!HideLandingHead(itemMemory) && g_headHidden==hide && bool(bits&kHeadMeshBit)==!hide,
+                      "standing recovery releases only the landing-specific head override");
+                // Third-person landing remains completely native.
+                g_active=false;landingAnim=24;
+                const int thirdBefore=draws,thirdHair=hairs;
+                Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+                Check(!HideLandingHead(itemMemory) && draws==thirdBefore+1 && hairs==thirdHair+1 && drawnUseBits==0,
+                      "third-person landing does not hide head or hair");
+            }
+            RestoreHeadMesh();std::memcpy(geom,savedGeom,sizeof(savedGeom));
+            config=landingSettings;game=landingGame;dll.game=landingDllGame;landingAnim=savedLandingAnim;vehicle=landingVehicle;
+            state=2;UpdateSceneCamera(camera);
+        }
         g_hGetJoints.m_trampoline=reinterpret_cast<void*>(&FakeSkinJoints);
         state=2; g_active=g_scenePoseValid=true; g_headingItem=itemMemory;
         g_renderArm=-1; g_bodySkinScope=true; g_bodyVisualOffset={35,-60};

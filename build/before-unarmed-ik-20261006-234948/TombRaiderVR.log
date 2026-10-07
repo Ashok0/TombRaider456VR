@@ -1,0 +1,789 @@
+TombRaiderVR: starting
+config: mode=stereo tracking=rotation+position origin=seated units/m=423.0 ss=1.00 flipProjY=1 flipViewY=1 dup=1 flatHud=1
+config: culling=head frustum margin=8.0deg depth<=16 portals<=4096 far=0 widen=1 objects=1  sky=infinity
+config: first person TR4/TR5 joint=14 anchor=(0,-32,140), translation=on head=hidden move-with-head=on turn=120deg/s stabilization=on
+config: first person body-follow=1 deadzone=0.0 turn=4.0deg/60Hz head-aim=1; Y+LT=view, Y+RT=graphics (including menus)
+config: dynamic-bone measurement ON (torso joint 7, report every 900 frames) -- TR4/TR5 only
+config: dynamic-bone DEBUG DISPLACEMENT ON at 1.0x -- joint 7 is TORSO, so the whole upper body moves, not just the chest. This is a debug view, not the feature.
+engine: bound to 00007FF74A1B0000 (reference base 0000000140000000, slide +140694708224000)
+engine: build identified as retail / community HD pack v1.0.2 (2025-09-10)
+hook[vid_setPass]: 00007FF74A1BC770 -> 00007FFC1CF576F0 (stole 10, tramp 00007FF758BA000E)
+hook[validate_draw]: 00007FF74A1C1FF0 -> 00007FFC1CF57790 (stole 6, tramp 00007FF758BB000E)
+hook[ogl_draw]: 00007FF74A1C2EF0 -> 00007FFC1CF5A1C0 (stole 5, tramp 00007FF758BC000E)
+hook[ogl_drawVB]: 00007FF74A1C3010 -> 00007FFC1CF5A1E0 (stole 5, tramp 00007FF758BD000E)
+hook[ogl_present]: 00007FF74A1C2920 -> 00007FFC1CF5C810 (stole 6, tramp 00007FF758BE000E)
+hook[fmvShow]: 00007FF74A1C1680 -> 00007FFC1CF5C4A0 (stole 7, tramp 00007FF758BF000E)
+hooks: all six installed
+hook[shader_init]: 00007FF74A1C1B50 -> 00007FFC1CF69550 (stole 7, tramp 00007FF758C0000E)
+hook[TR4 ogl_texUpdate]: 00007FF74A1C4570 -> 00007FFC1CF6E0E0 (stole 5, tramp 00007FF758C1000E)
+hook[TR4 vidLoadTexture]: 00007FF74A1BB490 -> 00007FFC1CF6E260 (stole 5, tramp 00007FF758C2000E)
+TR4 effects: native sunray/atlas upload enhancement ready (TR4 resources only)
+TombRaiderVR: hooks installed; OpenVR will be brought up on the first frame
+gl: loader ready (shader api ready)
+motion hands: rigid wrist skinning and forearm seam trim ready
+TR4 effects: TEX\EFFECT.DDS array 6 layer 1: 6 enhanced mips, load OK
+boneskin: 15 skin program(s) matched, 15 patched, 0 fell back to the original
+pad: Touch controllers presented as an Xbox pad (_XInputGetState 00007FF74A8449F8 -> 00007FFC1CF6ED20, real 00007FFC322D4EE0)
+pad: move=Lstick look=Rstick(yaw only; hold RT+RB for pitch) jump=A(R lower) roll=B(R upper) action=Y(L upper)/LB+RB(both grips) system=BACK(L lower) walk=LS+RB(R grip) sneak=RB+Y duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=L3+R3 dpad=R3+Lstick
+pad: FP motion guns: tap LT=left pistol/Uzi on release, tap RT=right/single shot; hold LT 0.5s=draw/holster once
+gamedll: bound to tomb5.dll (Tomb Raider V (retail), build 0x68C12FE9, game=1) at 00007FFC03410000
+gun calibration: Ctrl+F1..F6 position, Ctrl+Shift+F1..F6 angles; F7 save/restore
+firstperson: startup is third person; Y+LT switches views
+hook[LaraAboveWater]: 00007FFC0345B2F0 -> 00007FFC1CF7A920 (stole 5, tramp 00007FFC03C7000E)
+hook[AnimateLara]: 00007FFC0346F9B0 -> 00007FFC1CF7A350 (stole 6, tramp 00007FFC03C8000E)
+hook[AimWeapon]: 00007FFC0346C430 -> 00007FFC1CF79480 (stole 5, tramp 00007FFC03C9000E)
+hook[GetJoints]: 00007FFC034C5A00 -> 00007FFC1CF76730 (stole 5, tramp 00007FFC03CA000E)
+hook[FirstPersonDrawToShadow]: 00007FFC034CCAB0 -> 00007FFC1CF76250 (stole 6, tramp 00007FFC03CB000E)
+firstperson: intact native shadows; eye-view body and hand offsets excluded
+hook[AnimatePistols]: 00007FFC03468710 -> 00007FFC1CF79260 (stole 5, tramp 00007FFC03CC000E)
+hook[FireWeapon]: 00007FFC0346C4E0 -> 00007FFC1CF78D50 (stole 5, tramp 00007FFC03CD000E)
+hook[PistolHandler]: 00007FFC034683F0 -> 00007FFC1CF79390 (stole 5, tramp 00007FFC03CE000E)
+hook[GetTargetOnLOS]: 00007FFC034233A0 -> 00007FFC1CF79230 (stole 6, tramp 00007FFC03CF000E)
+hook[SetGunFlash]: 00007FFC0349DAA0 -> 00007FFC1CF77380 (stole 7, tramp 00007FFC03D0000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+hook[phd_GenerateW2V]: 00007FFC034B14D0 -> 00007FFC1CF7E410 (stole 5, tramp 00007FFC03D1000E)
+hook[DrawActionIndicators]: 00007FFC034DAC70 -> 00007FFC1CF74350 (stole 5, tramp 00007FFC03D2000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FFC034C6510 -> 00007FFC1CF7DB50 (stole 5, tramp 00007FFC03D3000E)
+hook[DrawHair]: 00007FFC034FE760 -> 00007FFC1CF7DEB0 (stole 5, tramp 00007FFC03D4000E)
+hook[MotionRifleHandler]: 00007FFC03465A70 -> 00007FFC1CF78D10 (stole 6, tramp 00007FFC03D5000E)
+hook[MotionFireShotgun]: 00007FFC03465E80 -> 00007FFC1CF784D0 (stole 5, tramp 00007FFC03D6000E)
+hook[MotionFireSpecial]: 00007FFC034664C0 -> 00007FFC1CF78870 (stole 8, tramp 00007FFC03D7000E)
+hook[MotionFireCrossbow]: 00007FFC034665E0 -> 00007FFC1CF78A50 (stole 5, tramp 00007FFC03D8000E)
+hook[MotionGunJoint]: 00007FFC034ACD30 -> 00007FFC1CF78AB0 (stole 5, tramp 00007FFC03D9000E)
+hook[MotionInitialiseProjectile]: 00007FFC03456160 -> 00007FFC1CF78BD0 (stole 5, tramp 00007FFC03DA000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+firstperson: Tomb Raider V (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+hook[PrintRoomsList]: 00007FFC034CA040 -> 00007FFC1CF65250 (stole 5, tramp 00007FFC03DB000E)
+hook[S_GetObjectBounds]: 00007FFC034BBD20 -> 00007FFC1CF658F0 (stole 5, tramp 00007FFC03DC000E)
+cull: hooked tomb5.dll (Tomb Raider V (retail))
+hook[DrawSkyHD]: 00007FFC034C9B50 -> 00007FFC1CF665F0 (stole 5, tramp 00007FFC03DD000E)
+sky: hooked tomb5.dll (Tomb Raider V (retail)) -- sky draws use rotation-only eye transform (optical infinity) and far-plane depth
+overlay: 5 optic overlay draw(s) stubbed in tomb5.dll (Tomb Raider V (retail)) -- binocular=1 scope=1 tint=1. The laser dot is a separate sprite and is untouched.
+hook[DrawLaraHD]: 00007FFC034C8FB0 -> 00007FFC1CF66610 (stole 8, tramp 00007FFC03DE000E)
+dynbones: hooked tomb5.dll (Tomb Raider V (retail)) -- measuring only, nothing is drawn differently
+vr: initialisation attempt 1 at frame 1
+vr: using C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\openvr_api.dll
+vr: runtime installed=yes, IsHmdPresent=yes
+vr: initialised as a Scene app
+vr: eye 0 raw tangents l=-1.3764 r=0.8391 t=-1.4281 b=0.9657
+vr: eye 0 eyeToHead offset = (-0.0310, +0.0000, +0.0000) m
+vr: eye 1 raw tangents l=-0.8391 r=1.3764 t=-1.4281 b=0.9657
+vr: eye 1 eyeToHead offset = (+0.0310, +0.0000, +0.0000) m
+vr: ready, per-eye target 1728x1824
+vr: up and running
+stereo: created 3456x1824 double-wide target (fbo 2, tex 39)
+present: redirected FBO_default 0 -> 2
+stereo: mono scratch ready (2560x1440, fbo 3, tex 40)
+video: offscreen panel ready (2560x1440, fbo 4, tex 41, prog 609)
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+gamedll: no level loaded yet -- ceiling clamp stands down until there is one (this is normal at the title screen)
+vr: head pose ACQUIRED
+present: first stereo frame submitted
+pad: water_status=0 (above water) -- stick pitch decoupled
+pad: optics zoom left -- stick pitch decoupled
+cull: head-frustum portal traversal live on Tomb Raider V (retail) -- frustum 124.0 x 126.0 degrees, depth<=16, 4096 portals/frame budget
+sky: first DrawSkyHD draw (shader 1) -- rotation-only eye transform, far-plane depth
+inject: eye=0 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=-0.2425 proj[9]=-0.1932
+inject: eye=0 eyeView translation = (+233.6, +148.2, -145.9) world units
+inject: eye=0 final view translation = (54395.8, -1168.7, 23697.0)
+inject: eye=0 packed view translation IN MEMORY = (52747.0, 1792.0, 27136.0) [floats 3,7,11 at 00007FF7586CECD0]
+inject: eye=0 uid[1] (uViewMatrix location) = 3, shader=1
+inject: eye=1 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=0.2425 proj[9]=-0.1932
+inject: eye=1 eyeView translation = (+207.3, +148.2, -145.9) world units
+inject: eye=1 final view translation = (54395.8, -1168.7, 23697.0)
+inject: eye=1 packed view translation IN MEMORY = (52747.0, 1792.0, 27136.0) [floats 3,7,11 at 00007FF7586CECD0]
+inject: eye=1 uid[1] (uViewMatrix location) = 3, shader=1
+inject: SEPARATION between eyes = 0.00 world units (dx=0.00 dy=0.00 dz=0.00)
+inject: *** ZERO SEPARATION -- both eyes are rendering the SAME view. This is why depth is flat and why world scale changes nothing. ***
+vr: ceiling clamp active -- headroom 214 units, eye held 86 units above the camera
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: locked to shader 20 (15 joints) -- the latch stays here so the drive stays continuous
+boneskin: measured buffer 4 -- 27349 vertices, 4185 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+boneskin: front of the torso is local +Z (30 samples, mean alignment 1.00 with Lara's facing)
+boneskin: torso shape, side view -- BACK on the left, FRONT on the right, top row is the neck end. x -68..68  y -249..-82  depth -81..75
+boneskin:   |        ....            |
+boneskin:   |        .......         |
+boneskin:   |      . :-=--..         |
+boneskin:   |.::...=-=:...=+:        |
+boneskin:   |:.......:......=-.      |
+boneskin:   |=.-:-:=.:......--::.    |
+boneskin:   |%..:+:..:.....:::...::. |
+boneskin:   |@-......:.:::::. .....:.|
+boneskin:   |#.....:.:.......... ...:|
+boneskin:   |:::.....:....... .......|
+boneskin:   |  .:......... ..... ... |
+boneskin:   |         ......... ..   |
+boneskin:   |          ..... .. ..   |
+boneskin:   |           ....... ..   |
+boneskin: front profile, neck to waist: -10 8 13 13 17 25 28 39 52 63 70 73 75 75 72 67 58 55 53 53
+boneskin: chest region (measured bust) -- height -179..-114 of -249..-82, depth from 25 forward (front 75, belly line 55), within 46 of centre. Selects 200 torso vertices at full weight (y -170..-123) and 117 partly.
+boneskin: live -- Lara's body (shader 20) now deforms per vertex, and the whole-torso view has stood down
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+firstperson: headset neutral=(0.012,1.196,0.030)m
+firstperson: resolved body fit yaw=0.0 base=-5.2 offset=(0.0,0.0) pending=(0.000,-0.000)m
+firstperson: native joint 14 anchored; offset from body=(-6,-707,114)
+firstperson shadow: receiver origin native=(46771,-1615,30091) FP=(46586,-707,31346); light camera isolated
+cull: first-person eye in room 0; game camera seeded room 0
+locomotion: state=2 head=0.0 body=0.0 manual=(+0.00,+0.00) pending=(+0.000,-0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=2 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+locomotion: state=2 head=-0.5 body=-0.5 manual=(+0.00,+0.00) pending=(-0.000,+0.003)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=1 head=0.0 body=0.0 manual=(-0.11,+0.68) pending=(-0.001,+0.010)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=0.5 body=0.5 manual=(-0.01,+1.00) pending=(-0.000,+0.014)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-forward: game=5 state=1 samples=60 elapsed=1000ms frac=30..168 animSide=-84.72..17.01u rootSideStep=-1.56..0.47u eyeSideStep=-1.02..2.65u trackedSide=-0.0059..-0.0005m bodyYawError=-0.17..1.41deg
+locomotion: state=1 head=8.7 body=8.7 manual=(+0.13,+0.99) pending=(-0.003,+0.012)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-turn: 1.00s polls=60 views=59 turned=9 max-step=1.647deg
+locomotion: state=1 head=0.8 body=0.8 manual=(-0.00,+1.00) pending=(-0.002,+0.014)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=30..184 animSide=-9.36..19.36u rootSideStep=-0.78..1.05u eyeSideStep=-1.80..1.12u trackedSide=-0.0069..-0.0019m bodyYawError=-0.93..0.61deg
+locomotion: state=1 head=4.7 body=4.7 manual=(+0.06,+1.00) pending=(-0.003,+0.011)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-turn: 1.00s polls=60 views=60 turned=18 max-step=1.097deg
+locomotion: state=1 head=8.1 body=8.1 manual=(+0.12,+0.99) pending=(-0.005,+0.009)m drag=(+0.000,+0.000)m input=0000000010000021
+cull: first-person eye in room 2; game camera seeded room 0
+cull: first-person eye in room 2; game camera seeded room 2
+locomotion: state=1 head=9.3 body=9.3 manual=(+0.14,+0.99) pending=(-0.005,+0.010)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=38..184 animSide=-10.60..15.64u rootSideStep=-0.55..0.30u eyeSideStep=-1.03..0.96u trackedSide=-0.0093..-0.0041m bodyYawError=-0.06..0.39deg
+fp-turn: 1.00s polls=60 views=60 turned=21 max-step=0.482deg
+locomotion: state=1 head=9.3 body=9.3 manual=(+0.14,+0.99) pending=(-0.005,+0.011)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=9.4 body=9.4 manual=(+0.14,+0.99) pending=(-0.004,+0.011)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=46..199 animSide=-10.28..16.78u rootSideStep=-0.34..0.40u eyeSideStep=-0.97..0.92u trackedSide=-0.0096..-0.0086m bodyYawError=-0.05..0.05deg
+firstperson: resolved body fit yaw=9.4 base=5.5 offset=(1.9,0.8) pending=(-0.004,0.010)m
+locomotion: state=1 head=9.4 body=9.4 manual=(+0.14,+0.99) pending=(-0.004,+0.011)m drag=(+0.000,+0.000)m input=0000000010000021
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=813 R=813 shots L=0 R=0
+locomotion: state=1 head=8.3 body=8.3 manual=(+0.13,+0.99) pending=(-0.004,+0.011)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-forward: game=5 state=1 samples=60 elapsed=1000ms frac=53..253 animSide=-10.27..17.43u rootSideStep=-0.35..0.34u eyeSideStep=-0.71..0.94u trackedSide=-0.0116..-0.0079m bodyYawError=-0.06..0.06deg
+locomotion: state=1 head=-2.7 body=-2.7 manual=(-0.07,+1.00) pending=(-0.002,+0.015)m drag=(+0.000,+0.000)m input=0000000010000021
+cull: first-person eye in room 61; game camera seeded room 2
+cull: first-person eye in room 61; game camera seeded room 61
+locomotion: state=1 head=-9.4 body=-9.4 manual=(-0.18,+0.98) pending=(+0.002,+0.021)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=61..215 animSide=-10.07..23.53u rootSideStep=-0.39..1.72u eyeSideStep=-3.33..0.87u trackedSide=-0.0141..0.0011m bodyYawError=-1.47..0.35deg
+fp-turn: 1.00s polls=60 views=60 turned=14 max-step=1.982deg
+locomotion: state=1 head=-9.7 body=-9.7 manual=(-0.19,+0.98) pending=(+0.000,+0.022)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=-10.0 body=-10.0 manual=(-0.19,+0.98) pending=(-0.000,+0.020)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=69..215 animSide=-9.23..18.22u rootSideStep=-0.42..0.44u eyeSideStep=-0.96..1.05u trackedSide=-0.0034..0.0014m bodyYawError=-0.04..0.02deg
+locomotion: state=1 head=-6.6 body=-6.6 manual=(+0.00,+0.00) pending=(-0.002,+0.023)m drag=(+0.000,+0.002)m input=0000000000000020
+locomotion: state=1 head=-32.6 body=-32.9 manual=(+0.00,+0.00) pending=(+0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-32.1 body=-32.1 manual=(-0.44,+0.62) pending=(+0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=-31.8 body=-31.8 manual=(-0.58,+0.81) pending=(+0.006,+0.020)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-turn: 1.00s polls=60 views=60 turned=18 max-step=2.024deg
+locomotion: state=1 head=-30.1 body=-30.1 manual=(-0.58,+0.82) pending=(+0.008,+0.018)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=-14.6 body=-14.5 manual=(+0.00,+0.00) pending=(+0.002,+0.021)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: resolved body fit yaw=-15.2 base=-29.2 offset=(-7.2,-3.2) pending=(0.000,0.021)m
+locomotion: state=2 head=-15.3 body=-15.2 manual=(+0.00,+0.00) pending=(-0.000,+0.022)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=60 turned=15 max-step=1.999deg
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=897 R=897 shots L=0 R=0
+locomotion: state=2 head=-1.8 body=-1.5 manual=(+0.00,+0.00) pending=(-0.002,+0.024)m drag=(+0.000,+0.005)m input=0000000000000020
+locomotion: state=1 head=-4.6 body=-4.6 manual=(+0.02,+0.53) pending=(-0.004,+0.023)m drag=(+0.000,+0.002)m input=0000000010000021
+stereo health @frame 1800: world draws=79091  duplicated=39338  injected eye0=37049 eye1=37049  (93% of world draws got per-eye matrices)  offscreen-skipped=4993  classify-mismatch=0  ortho3D=0  sky=7580  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(246.2, -95.7, 82.0) prog=79 loc=26  eye1=(151.8, -95.7, 82.0) prog=79 loc=26  separation=94.41
+halves: 20 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7586CE8A0  mProj[1](persp)=00007FF7586CE8E0
+  proj=00007FF7586CE8A0  draws=4476     ortho/2D
+  proj=00007FF7586CE8E0  draws=79091    perspective/world
+cull: 10.9 rooms/frame from the engine + 2.0 added by the head frustum, 0.1 items rescued/frame  *** A BUDGET WAS HIT -- raise CullMaxPortals/CullMaxDepth ***
+fp-turn: 1.00s polls=60 views=60 turned=13 max-step=1.914deg
+locomotion: state=1 head=-2.2 body=-2.2 manual=(-0.17,+0.99) pending=(-0.009,+0.018)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=-4.5 body=-4.2 manual=(+0.00,+0.00) pending=(+0.007,+0.011)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-4.3 body=-6.0 manual=(+0.00,+0.00) pending=(-0.003,-0.013)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=16 head=5.5 body=5.5 manual=(-0.05,-0.95) pending=(-0.016,-0.014)m drag=(+0.000,+0.000)m input=00000000200000A2
+locomotion: state=16 head=22.5 body=20.9 manual=(+0.00,+0.00) pending=(-0.023,+0.011)m drag=(-0.005,+0.002)m input=0000000000000020
+locomotion: state=16 head=44.0 body=43.9 manual=(+0.00,+0.00) pending=(-0.004,+0.019)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=50.9 body=50.2 manual=(+0.00,+0.00) pending=(+0.003,+0.022)m drag=(+0.000,+0.002)m input=0000000000000020
+locomotion: state=2 head=-5.9 body=-4.4 manual=(+0.00,+0.00) pending=(+0.024,-0.015)m drag=(+0.007,-0.002)m input=0000000000000020
+locomotion: state=2 head=-13.3 body=-13.6 manual=(+0.00,+0.00) pending=(+0.004,-0.018)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=1 head=-9.6 body=-9.6 manual=(-0.07,+0.68) pending=(-0.000,-0.018)m drag=(+0.000,+0.000)m input=0000000010000021
+firstperson: resolved body fit yaw=-7.0 base=-6.7 offset=(3.9,2.1) pending=(-0.003,-0.017)m
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=900 R=900 shots L=0 R=0
+locomotion: state=1 head=-3.9 body=-3.9 manual=(+0.08,+0.36) pending=(-0.005,-0.017)m drag=(+0.000,+0.000)m input=0000000000000021
+locomotion: state=16 head=-2.5 body=-2.5 manual=(+0.26,-0.93) pending=(-0.006,-0.017)m drag=(+0.000,+0.000)m input=00000000200000A2
+locomotion: state=16 head=29.2 body=27.3 manual=(+0.00,+0.00) pending=(-0.021,+0.011)m drag=(-0.005,+0.002)m input=0000000000000020
+locomotion: state=16 head=7.3 body=7.6 manual=(+0.00,+0.00) pending=(+0.018,-0.013)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=16 head=8.1 body=8.1 manual=(+0.04,-1.00) pending=(+0.003,-0.022)m drag=(+0.000,+0.000)m input=00000000200000A2
+locomotion: state=16 head=7.8 body=7.8 manual=(+0.13,-0.86) pending=(-0.006,+0.002)m drag=(+0.000,+0.000)m input=00000000200000A2
+locomotion: state=2 head=10.9 body=11.0 manual=(+0.00,+0.00) pending=(-0.008,+0.005)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=1 head=10.8 body=10.8 manual=(+0.36,+0.88) pending=(-0.009,+0.005)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=8.6 body=8.6 manual=(+0.20,+0.98) pending=(-0.006,+0.003)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=8.6 body=8.5 manual=(+0.00,+0.00) pending=(-0.007,+0.002)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=11.7 body=11.5 manual=(+0.00,+0.00) pending=(-0.007,+0.004)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: resolved body fit yaw=43.7 base=26.5 offset=(-7.6,4.0) pending=(-0.008,0.020)m
+fp-turn: 1.00s polls=60 views=60 turned=20 max-step=2.000deg
+locomotion: state=2 head=62.4 body=62.6 manual=(+0.00,+0.00) pending=(-0.007,+0.023)m drag=(+0.002,+0.005)m input=0000000000000020
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=897 R=897 shots L=0 R=0
+locomotion: state=2 head=87.2 body=87.3 manual=(+0.00,+0.00) pending=(+0.000,+0.021)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=60 turned=44 max-step=2.020deg
+locomotion: state=2 head=106.9 body=107.1 manual=(+0.00,-0.00) pending=(+0.001,+0.017)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=1 head=105.4 body=105.4 manual=(+0.69,-0.30) pending=(+0.003,+0.018)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=105.0 body=105.0 manual=(+0.00,-0.00) pending=(+0.004,+0.017)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=1 head=74.3 body=75.3 manual=(+0.00,+0.00) pending=(+0.014,+0.018)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=71.7 body=71.7 manual=(+0.00,+0.00) pending=(+0.010,+0.016)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=105.3 body=104.8 manual=(+0.00,-0.00) pending=(-0.021,-0.010)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=83.1 body=82.7 manual=(+0.00,+0.00) pending=(+0.001,-0.006)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=172.3 body=172.2 manual=(+0.00,-0.00) pending=(+0.007,-0.019)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=60 turned=40 max-step=2.010deg
+locomotion: state=1 head=-165.1 body=-165.1 manual=(-0.27,-0.96) pending=(+0.018,-0.011)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=-166.8 body=-166.8 manual=(-0.19,-0.98) pending=(+0.016,-0.008)m drag=(+0.000,+0.000)m input=0000000010000021
+firstperson: resolved body fit yaw=-166.3 base=-165.1 offset=(-5.1,1.1) pending=(0.015,-0.010)m
+fp-turn: 1.00s polls=60 views=60 turned=8 max-step=2.014deg
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=894 R=894 shots L=0 R=0
+locomotion: state=1 head=177.5 body=177.5 manual=(+0.00,-0.00) pending=(+0.010,-0.003)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=176.4 body=176.5 manual=(+0.00,-0.00) pending=(+0.008,-0.017)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=168.2 body=168.4 manual=(+0.00,-0.00) pending=(-0.001,-0.022)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=60 turned=16 max-step=1.999deg
+locomotion: state=2 head=96.7 body=97.0 manual=(+0.00,-0.00) pending=(+0.007,+0.026)m drag=(+0.005,-0.002)m input=0000000000000020
+locomotion: state=2 head=41.2 body=41.1 manual=(+0.00,+0.00) pending=(+0.004,+0.025)m drag=(+0.005,+0.002)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=60 turned=60 max-step=2.022deg
+locomotion: state=2 head=0.1 body=-0.4 manual=(+0.00,+0.00) pending=(+0.001,+0.021)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-1.3 body=-1.3 manual=(+0.00,+0.00) pending=(+0.004,+0.018)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=60 turned=24 max-step=1.981deg
+locomotion: state=2 head=16.0 body=16.0 manual=(+0.00,+0.00) pending=(+0.002,+0.001)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=9.9 body=10.0 manual=(+0.00,+0.00) pending=(+0.012,-0.017)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=16.1 body=16.2 manual=(+0.00,+0.00) pending=(+0.010,-0.012)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: resolved body fit yaw=-19.1 base=11.2 offset=(30.0,4.2) pending=(0.022,-0.002)m
+locomotion: state=2 head=-19.9 body=-19.3 manual=(+0.00,+0.00) pending=(+0.022,-0.002)m drag=(+0.002,+0.000)m input=0000000000000020
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=900 R=900 shots L=0 R=0
+locomotion: state=2 head=-12.2 body=-12.3 manual=(+0.00,+0.00) pending=(+0.010,-0.019)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-11.6 body=-11.2 manual=(+0.00,+0.00) pending=(+0.007,-0.019)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-9.6 body=-9.8 manual=(+0.00,+0.00) pending=(+0.004,-0.017)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-2.7 body=-2.7 manual=(+0.00,+0.00) pending=(+0.002,-0.015)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=1 head=-2.7 body=-2.7 manual=(-0.06,+0.49) pending=(+0.002,-0.014)m drag=(+0.000,+0.000)m input=0000000010000021
+locomotion: state=1 head=3.3 body=2.9 manual=(+0.00,+0.00) pending=(-0.001,-0.013)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=60 turned=32 max-step=1.960deg
+locomotion: state=1 head=74.6 body=74.0 manual=(+0.00,+0.00) pending=(+0.015,-0.016)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=92.4 body=92.2 manual=(+0.00,-0.00) pending=(+0.019,-0.012)m drag=(+0.000,-0.002)m input=0000000000000020
+locomotion: state=2 head=149.5 body=149.7 manual=(+0.00,-0.00) pending=(+0.016,+0.016)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=59 turned=59 max-step=5.742deg
+locomotion: state=2 head=175.8 body=176.1 manual=(+0.00,-0.00) pending=(+0.009,+0.016)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=1 head=174.4 body=174.4 manual=(+0.02,-0.35) pending=(+0.009,+0.017)m drag=(+0.000,+0.000)m input=0000000000000021
+locomotion: state=22 head=174.0 body=174.0 manual=(+0.71,-0.50) pending=(+0.007,+0.018)m drag=(+0.000,+0.000)m input=0000000050000420
+firstperson: resolved body fit yaw=174.2 base=-178.2 offset=(-10.4,-0.3) pending=(0.006,0.018)m
+fp-turn: 1.00s polls=60 views=60 turned=2 max-step=0.489deg
+locomotion: state=1 head=174.2 body=174.2 manual=(+0.70,-0.71) pending=(+0.006,+0.017)m drag=(+0.000,+0.000)m input=0000000050000021
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=894 R=894 shots L=0 R=0
+locomotion: state=21 head=174.2 body=174.2 manual=(-0.65,-0.76) pending=(+0.006,+0.017)m drag=(+0.000,+0.000)m input=0000000090000820
+locomotion: state=16 head=173.9 body=173.9 manual=(-0.50,+0.86) pending=(+0.007,+0.017)m drag=(+0.000,+0.000)m input=00000000A00000A2
+locomotion: state=22 head=173.7 body=173.7 manual=(+0.86,+0.51) pending=(+0.006,+0.018)m drag=(+0.000,+0.000)m input=0000000060000420
+locomotion: state=1 head=173.4 body=173.4 manual=(+0.65,-0.76) pending=(+0.005,+0.019)m drag=(+0.000,+0.000)m input=0000000050000021
+locomotion: state=22 head=173.3 body=173.3 manual=(+0.94,-0.32) pending=(+0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000050000420
+locomotion: state=22 head=174.0 body=174.0 manual=(+0.00,-0.00) pending=(+0.006,+0.016)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=174.2 body=174.2 manual=(+0.00,-0.00) pending=(+0.006,+0.011)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=174.0 body=174.0 manual=(+0.00,-0.00) pending=(+0.006,+0.014)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: Touch left muzzle=(47438,-407,41241) yaw=31144 pitch=4011
+firstperson: Touch left LOS src=(47438,-407,41241) ray=(50175,-8507,22631) result=0 sphere=0
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to third person
+firstperson: Touch ready=0 arms L=606 R=606 shots L=1 R=0
+perf: 59.8 fps rendered
+stereo health @frame 3600: world draws=99132  duplicated=44982  injected eye0=43318 eye1=43318  (87% of world draws got per-eye matrices)  offscreen-skipped=12496  classify-mismatch=0  ortho3D=0  sky=14400  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(4.2, 20.9, -122.0) prog=79 loc=26  eye1=(8.6, 20.9, -122.0) prog=79 loc=26  separation=4.42
+halves: 23 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7586CE8A0  mProj[1](persp)=00007FF7586CE8E0
+  proj=00007FF7586CE8A0  draws=7804     ortho/2D
+  proj=00007FF7586CE8E0  draws=178223   perspective/world
+cull: 5.9 rooms/frame from the engine + 2.8 added by the head frustum, 0.0 items rescued/frame
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+firstperson: headset neutral=(0.019,1.214,0.131)m
+firstperson: resolved body fit yaw=-32.2 base=-30.7 offset=(0.0,0.0) pending=(0.000,-0.000)m
+firstperson: native joint 14 anchored; offset from body=(-67,-706,95)
+locomotion: state=2 head=-32.2 body=-32.2 manual=(+0.00,+0.00) pending=(-0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-18.6 body=-18.6 manual=(+0.00,+0.00) pending=(-0.003,+0.000)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=61 turned=16 max-step=1.995deg
+locomotion: state=2 head=-9.1 body=-9.0 manual=(+0.00,+0.00) pending=(-0.003,-0.004)m drag=(+0.000,+0.000)m input=0000000000004020
+firstperson: Touch left muzzle=(46848,-388,42298) yaw=-1666 pitch=3457
+firstperson: Touch left LOS src=(46848,-388,42298) ray=(43860,-7483,61276) result=0 sphere=0
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=-10.9 body=-11.0 manual=(+0.00,+0.00) pending=(-0.001,-0.004)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-6.3 body=-6.5 manual=(+0.00,+0.00) pending=(-0.008,-0.021)m drag=(+0.000,-0.002)m input=0000000000000020
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=240 R=240 shots L=2 R=0
+locomotion: state=2 head=-3.2 body=-3.2 manual=(+0.00,+0.00) pending=(-0.004,-0.018)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: Touch right muzzle=(46965,-399,42416) yaw=424 pitch=-856
+firstperson: Touch right LOS src=(46965,-399,42416) ray=(47639,792,62850) result=0 sphere=0
+firstperson: Touch right shot target=0000000000000000 assist=0 hp=0->0 native=-1
+firstperson: Touch right shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=-3.2 body=-3.1 manual=(+0.00,+0.00) pending=(+0.003,-0.018)m drag=(+0.000,+0.000)m input=0000000000004020
+firstperson: Touch right shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=-4.8 body=-4.8 manual=(+0.00,+0.00) pending=(+0.005,-0.017)m drag=(+0.000,+0.000)m input=0000000000004020
+firstperson: Touch left muzzle=(46915,-390,42407) yaw=-827 pitch=-994
+firstperson: Touch left LOS src=(46915,-390,42407) ray=(45991,1205,62804) result=0 sphere=0
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=-4.8 body=-4.9 manual=(+0.00,+0.00) pending=(+0.005,-0.015)m drag=(+0.000,+0.000)m input=0000000000004020
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=-4.8 body=-4.8 manual=(+0.00,+0.00) pending=(+0.004,-0.015)m drag=(+0.000,+0.000)m input=0000000000004020
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+firstperson: resolved body fit yaw=-5.0 base=-3.1 offset=(0.7,-0.2) pending=(0.003,-0.015)m
+locomotion: state=2 head=-5.0 body=-5.0 manual=(+0.00,+0.00) pending=(+0.003,-0.015)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=-4.9 body=-4.9 manual=(+0.00,+0.00) pending=(+0.004,-0.013)m drag=(+0.000,+0.000)m input=0000000000004020
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=-9.3 body=-8.5 manual=(+0.00,+0.00) pending=(+0.012,+0.014)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-58.9 body=-58.9 manual=(+0.00,+0.00) pending=(+0.009,+0.020)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.01s polls=60 views=61 turned=38 max-step=2.026deg
+locomotion: state=2 head=-88.0 body=-88.1 manual=(+0.00,+0.00) pending=(+0.005,+0.021)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=900 R=900 shots L=7 R=3
+locomotion: state=2 head=-85.2 body=-85.3 manual=(+0.00,+0.00) pending=(+0.004,+0.016)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=58 views=60 turned=4 max-step=0.770deg
+locomotion: state=2 head=-77.2 body=-77.2 manual=(+0.00,+0.00) pending=(+0.003,+0.007)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=-146.4 body=-145.9 manual=(-0.00,+0.00) pending=(+0.011,+0.020)m drag=(-0.002,+0.000)m input=0000000000000020
+fp-turn: 1.00s polls=60 views=60 turned=52 max-step=2.033deg
+locomotion: state=2 head=152.2 body=151.7 manual=(+0.00,-0.00) pending=(-0.000,+0.025)m drag=(+0.000,-0.005)m input=0000000000000020
+locomotion: state=2 head=159.5 body=159.3 manual=(+0.00,-0.00) pending=(-0.010,+0.020)m drag=(+0.002,-0.002)m input=0000000000000020
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to third person
+dynbones: joints=15 shader=20 lock=20  frames=900 dup=0% snaps=6  drive_peak=5522.8 accel_raw=1750542 drive_used=0  disp_peak=27.93  L=(-0.04,8.90,-0.63) R=(-0.04,8.90,-0.63)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,33,33,33]
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+firstperson: headset neutral=(0.011,1.212,0.135)m
+firstperson: resolved body fit yaw=160.2 base=163.1 offset=(0.0,0.0) pending=(0.000,-0.000)m
+firstperson: native joint 14 anchored; offset from body=(45,-712,-106)
+locomotion: state=2 head=160.0 body=160.1 manual=(+0.00,-0.00) pending=(+0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=157.6 body=157.6 manual=(+0.00,-0.00) pending=(-0.008,+0.012)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=1 head=157.6 body=157.6 manual=(+0.23,-0.89) pending=(-0.006,+0.022)m drag=(+0.002,-0.002)m input=0000000010000021
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=525 R=525 shots L=0 R=0
+locomotion: state=1 head=159.6 body=159.5 manual=(+0.00,-0.00) pending=(-0.005,+0.019)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: Touch left muzzle=(47271,-360,41287) yaw=28565 pitch=3013
+firstperson: Touch left LOS src=(47271,-360,41287) ray=(54893,-6799,23402) result=0 sphere=0
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=1 head=160.3 body=160.2 manual=(+0.00,-0.00) pending=(-0.008,+0.009)m drag=(+0.000,+0.000)m input=0000000000004020
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=160.3 body=160.3 manual=(+0.00,-0.00) pending=(-0.007,+0.007)m drag=(+0.000,+0.000)m input=0000000000004020
+locomotion: state=2 head=160.3 body=160.3 manual=(+0.00,-0.00) pending=(-0.007,+0.008)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=2 head=161.9 body=161.8 manual=(+0.00,-0.00) pending=(-0.007,+0.007)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=164.1 body=164.2 manual=(+0.00,-0.00) pending=(-0.007,+0.007)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=124.7 body=124.6 manual=(+0.00,-0.00) pending=(+0.009,+0.015)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=172.7 body=172.7 manual=(+0.05,-0.36) pending=(-0.013,-0.006)m drag=(+0.000,+0.000)m input=0000000000000001
+locomotion: state=1 head=172.4 body=172.4 manual=(+0.13,-0.83) pending=(-0.013,-0.005)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=10 max-step=1.786deg
+firstperson: resolved body fit yaw=171.2 base=174.4 offset=(0.4,-0.3) pending=(-0.011,-0.004)m
+locomotion: state=1 head=170.9 body=170.9 manual=(+0.20,-0.98) pending=(-0.011,-0.004)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=38..192 animSide=-83.27..19.34u rootSideStep=-0.36..0.28u eyeSideStep=-0.84..0.80u trackedSide=-0.0132..-0.0055m bodyYawError=-0.18..0.23deg
+locomotion: state=1 head=173.5 body=173.5 manual=(+0.16,-0.99) pending=(-0.010,-0.003)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=0 arms L=291 R=291 shots L=2 R=0
+locomotion: state=1 head=172.2 body=172.3 manual=(+0.00,-0.00) pending=(-0.005,-0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+boneskin: measured buffer 246 -- 4268 vertices, 0 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+locomotion: state=1 head=171.0 body=171.0 manual=(+0.13,-0.99) pending=(-0.007,-0.014)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=3 max-step=0.977deg
+locomotion: state=1 head=-179.4 body=-179.4 manual=(-0.04,-1.00) pending=(-0.005,-0.014)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 2; game camera seeded room 2
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=46..192 animSide=-83.26..18.40u rootSideStep=-1.09..0.39u eyeSideStep=-0.84..1.73u trackedSide=-0.0096..0.0029m bodyYawError=-0.05..1.05deg
+locomotion: state=1 head=-176.6 body=-176.6 manual=(-0.08,-1.00) pending=(-0.005,-0.012)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=7 max-step=1.218deg
+locomotion: state=1 head=-176.9 body=-176.9 manual=(-0.08,-1.00) pending=(-0.004,-0.014)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=53..230 animSide=-9.72..17.06u rootSideStep=-0.40..0.46u eyeSideStep=-0.39..0.88u trackedSide=0.0031..0.0070m bodyYawError=-0.07..0.06deg
+locomotion: state=1 head=-177.9 body=-177.9 manual=(-0.06,-1.00) pending=(-0.004,-0.017)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-178.0 body=-178.0 manual=(-0.06,-1.00) pending=(-0.004,-0.018)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=61..199 animSide=-9.73..16.89u rootSideStep=-0.39..0.34u eyeSideStep=-0.97..0.50u trackedSide=0.0011..0.0101m bodyYawError=-0.08..0.12deg
+locomotion: state=1 head=-179.1 body=-179.1 manual=(-0.10,-0.99) pending=(+0.006,-0.023)m drag=(+0.000,+0.005)m input=0000000010000001
+firstperson: resolved body fit yaw=179.8 base=-178.1 offset=(0.3,-1.1) pending=(0.012,-0.017)m
+locomotion: state=1 head=179.6 body=179.6 manual=(-0.08,-1.00) pending=(+0.013,-0.019)m drag=(-0.002,+0.002)m input=0000000010000001
+cull: first-person eye in room 2; game camera seeded room 0
+cull: first-person eye in room 0; game camera seeded room 0
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=61..238 animSide=-8.50..17.42u rootSideStep=-0.44..0.61u eyeSideStep=-0.86..0.84u trackedSide=0.0095..0.0147m bodyYawError=-0.14..0.12deg
+locomotion: state=1 head=-179.9 body=-179.9 manual=(-0.09,-1.00) pending=(+0.003,-0.010)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=178.8 body=178.8 manual=(-0.06,-1.00) pending=(+0.005,+0.002)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-157.4 body=-157.5 manual=(-0.00,+0.00) pending=(-0.003,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+perf: 59.9 fps rendered
+stereo health @frame 5400: world draws=128715  duplicated=59507  injected eye0=58855 eye1=58855  (91% of world draws got per-eye matrices)  offscreen-skipped=11005  classify-mismatch=0  ortho3D=0  sky=14400  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(7.1, -6.0, -61.2) prog=79 loc=26  eye1=(-17.9, -6.0, -61.2) prog=79 loc=26  separation=25.01
+halves: 15 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7586CE8A0  mProj[1](persp)=00007FF7586CE8E0
+  proj=00007FF7586CE8A0  draws=9108     ortho/2D
+  proj=00007FF7586CE8E0  draws=306938   perspective/world
+cull: 9.8 rooms/frame from the engine + 2.9 added by the head frustum, 0.7 items rescued/frame
+locomotion: state=2 head=-128.3 body=-128.1 manual=(-0.00,+0.00) pending=(-0.005,+0.024)m drag=(-0.002,-0.002)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=25 max-step=1.984deg
+locomotion: state=2 head=-82.8 body=-82.3 manual=(+0.00,+0.00) pending=(-0.007,+0.021)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=1 head=-87.2 body=-87.2 manual=(-0.58,+0.08) pending=(-0.007,+0.020)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=25 max-step=1.972deg
+locomotion: state=1 head=-91.3 body=-91.3 manual=(-0.96,-0.05) pending=(-0.010,+0.015)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 1; game camera seeded room 1
+locomotion: state=1 head=-93.4 body=-93.4 manual=(-0.99,-0.09) pending=(-0.008,+0.020)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=84..230 animSide=-83.66..18.24u rootSideStep=-0.29..0.39u eyeSideStep=-1.01..0.61u trackedSide=-0.0140..0.0020m bodyYawError=-0.15..0.02deg
+locomotion: state=1 head=-92.3 body=-92.2 manual=(-1.00,-0.07) pending=(-0.006,+0.021)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-92.4 body=-92.4 manual=(-1.00,-0.07) pending=(-0.006,+0.019)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=30..238 animSide=-8.13..18.19u rootSideStep=-0.57..0.45u eyeSideStep=-0.72..0.97u trackedSide=-0.0139..-0.0082m bodyYawError=-0.09..0.10deg
+cull: first-person eye in room 11; game camera seeded room 11
+firstperson: resolved body fit yaw=-91.9 base=-87.8 offset=(-0.3,-0.0) pending=(-0.006,0.021)m
+locomotion: state=1 head=-91.7 body=-91.7 manual=(-1.00,-0.05) pending=(-0.007,+0.021)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-93.7 body=-93.7 manual=(-1.00,-0.09) pending=(+0.001,+0.003)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=99..245 animSide=-8.52..18.40u rootSideStep=-0.35..0.38u eyeSideStep=-0.72..0.88u trackedSide=-0.0087..-0.0065m bodyYawError=-0.12..0.03deg
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=-91.2 body=-91.2 manual=(-1.00,-0.04) pending=(-0.002,-0.002)m drag=(+0.000,+0.000)m input=0000000010000001
+dynbones: joints=15 shader=20 lock=20  frames=1800 dup=0% snaps=7  drive_peak=1630.2 accel_raw=2901182 drive_used=0  disp_peak=13.24  L=(0.16,8.32,2.07) R=(0.16,8.32,2.07)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,15,15,0]
+locomotion: state=1 head=-86.7 body=-86.7 manual=(-1.00,+0.04) pending=(+0.001,+0.010)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=107..253 animSide=-11.34..17.78u rootSideStep=-0.63..0.47u eyeSideStep=-1.38..1.15u trackedSide=-0.0082..0.0119m bodyYawError=-0.13..0.62deg
+locomotion: state=1 head=-74.0 body=-74.0 manual=(-0.97,+0.25) pending=(-0.015,+0.015)m drag=(+0.000,+0.000)m input=0000000010000001
+boneskin: measured buffer 128 -- 5008 vertices, 0 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+locomotion: state=1 head=-77.3 body=-77.1 manual=(+0.00,+0.00) pending=(-0.009,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=1 head=-80.6 body=-80.6 manual=(+0.00,+0.00) pending=(-0.008,+0.015)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-80.6 body=-80.6 manual=(+0.00,+0.00) pending=(-0.008,+0.015)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-80.8 body=-80.8 manual=(+0.00,+0.00) pending=(-0.007,+0.016)m drag=(+0.000,+0.000)m input=0000000000024080
+locomotion: state=0 head=-81.7 body=-81.7 manual=(-0.43,+0.05) pending=(-0.007,+0.015)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=0 head=-82.0 body=-82.0 manual=(-1.00,+0.03) pending=(-0.006,+0.016)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=1 head=-82.3 body=-82.3 manual=(-1.00,+0.03) pending=(-0.006,+0.015)m drag=(+0.000,+0.000)m input=0000000010004001
+firstperson: resolved body fit yaw=-82.2 base=-87.8 offset=(-0.6,-7.8) pending=(-0.006,0.015)m
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=0..253 animSide=-84.91..56.72u rootSideStep=-0.47..0.50u eyeSideStep=-0.94..0.85u trackedSide=0.0138..0.0150m bodyYawError=-0.08..0.04deg
+locomotion: state=1 head=-82.3 body=-82.3 manual=(-1.00,+0.02) pending=(-0.007,+0.016)m drag=(+0.000,+0.000)m input=0000000010004001
+locomotion: state=1 head=-82.3 body=-82.3 manual=(+0.00,+0.00) pending=(-0.007,+0.015)m drag=(+0.000,+0.000)m input=0000000000024080
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=2 head=-82.9 body=-82.9 manual=(+0.00,+0.00) pending=(-0.005,+0.014)m drag=(+0.000,+0.000)m input=0000000000024080
+locomotion: state=0 head=-82.8 body=-82.8 manual=(-1.00,-0.05) pending=(-0.006,+0.013)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=0 head=-82.1 body=-82.1 manual=(-1.00,-0.01) pending=(-0.002,+0.008)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=15..207 animSide=-14.49..56.91u rootSideStep=-0.45..0.45u eyeSideStep=-0.94..0.88u trackedSide=0.0135..0.0199m bodyYawError=-0.11..0.09deg
+locomotion: state=0 head=-82.7 body=-82.7 manual=(-1.00,-0.02) pending=(-0.003,+0.006)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=0 head=-83.3 body=-83.3 manual=(-1.00,-0.03) pending=(-0.004,+0.007)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=23..161 animSide=-8.66..5.57u rootSideStep=-0.43..0.18u eyeSideStep=-0.94..0.20u trackedSide=0.0142..0.0176m bodyYawError=-0.05..0.04deg
+locomotion: state=0 head=-83.1 body=-83.1 manual=(-1.00,-0.03) pending=(-0.005,+0.008)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=0 head=-88.6 body=-88.6 manual=(-0.99,-0.12) pending=(-0.002,+0.018)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=0 head=-93.0 body=-93.0 manual=(-0.98,-0.20) pending=(-0.008,+0.007)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=23..176 animSide=-7.37..7.11u rootSideStep=-0.37..0.34u eyeSideStep=-1.13..0.99u trackedSide=-0.0143..0.0141m bodyYawError=-0.74..0.25deg
+locomotion: state=0 head=-112.2 body=-112.0 manual=(-0.00,+0.00) pending=(-0.007,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=-116.5 base=-111.2 offset=(0.0,-0.1) pending=(-0.006,0.015)m
+fp-turn: 1.00s polls=60 views=60 turned=14 max-step=2.004deg
+locomotion: state=2 head=-155.3 body=-155.2 manual=(-0.00,+0.00) pending=(+0.002,+0.022)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=137.8 body=138.0 manual=(+0.00,-0.00) pending=(+0.011,+0.021)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=60 max-step=2.018deg
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=2 head=84.3 body=84.1 manual=(+0.00,+0.00) pending=(+0.010,+0.019)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=1 head=86.1 body=86.1 manual=(+0.93,+0.27) pending=(+0.011,+0.017)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=0 head=89.6 body=89.6 manual=(+0.97,+0.24) pending=(+0.008,+0.013)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-turn: 1.00s polls=60 views=59 turned=16 max-step=3.790deg
+locomotion: state=0 head=95.2 body=95.2 manual=(+0.99,+0.14) pending=(+0.010,+0.018)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=46..184 animSide=-83.59..56.86u rootSideStep=-0.33..0.36u eyeSideStep=-0.50..1.08u trackedSide=-0.0110..0.0125m bodyYawError=0.02..0.28deg
+locomotion: state=0 head=95.9 body=95.9 manual=(+1.00,+0.09) pending=(+0.011,+0.018)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=0 head=97.2 body=97.2 manual=(+1.00,+0.07) pending=(+0.011,+0.017)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=53..192 animSide=-14.73..5.05u rootSideStep=-0.29..0.42u eyeSideStep=-0.90..1.47u trackedSide=0.0088..0.0347m bodyYawError=-0.11..1.22deg
+locomotion: state=0 head=99.4 body=99.4 manual=(+1.00,+0.03) pending=(+0.006,+0.025)m drag=(+0.005,-0.002)m input=0000000010024081
+locomotion: state=0 head=90.4 body=90.4 manual=(+0.98,+0.18) pending=(-0.004,+0.024)m drag=(+0.005,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=53..215 animSide=-8.17..5.32u rootSideStep=-0.49..0.87u eyeSideStep=-1.28..0.91u trackedSide=-0.0152..0.0368m bodyYawError=-0.77..0.23deg
+locomotion: state=0 head=93.3 body=93.3 manual=(+0.99,+0.13) pending=(-0.008,+0.020)m drag=(+0.000,+0.000)m input=0000000010024081
+firstperson: resolved body fit yaw=93.6 base=98.7 offset=(1.0,-2.9) pending=(-0.009,0.019)m
+locomotion: state=0 head=91.0 body=91.0 manual=(+0.99,+0.17) pending=(-0.004,+0.016)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=61..245 animSide=-8.93..3.71u rootSideStep=-0.45..0.71u eyeSideStep=-0.97..0.87u trackedSide=-0.0170..-0.0106m bodyYawError=-0.45..0.19deg
+locomotion: state=0 head=94.2 body=94.2 manual=(+0.99,+0.12) pending=(-0.010,+0.012)m drag=(+0.000,+0.000)m input=0000000010024081
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=0 head=92.6 body=92.6 manual=(+0.99,+0.14) pending=(-0.006,+0.011)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=69..222 animSide=-9.52..6.66u rootSideStep=-0.45..0.40u eyeSideStep=-0.93..1.01u trackedSide=-0.0202..-0.0092m bodyYawError=-1.31..0.59deg
+dynbones: joints=15 shader=20 lock=20  frames=2700 dup=0% snaps=7  drive_peak=23.5 accel_raw=177935 drive_used=0  disp_peak=8.63  L=(0.34,8.56,0.17) R=(0.34,8.56,0.17)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,15,15,0]
+locomotion: state=0 head=90.7 body=90.7 manual=(+0.98,+0.18) pending=(-0.003,+0.003)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=0 head=94.2 body=94.2 manual=(+0.99,+0.12) pending=(-0.004,-0.008)m drag=(+0.000,+0.000)m input=0000000010024081
+fp-forward: game=5 state=0 samples=61 elapsed=1000ms frac=30..230 animSide=-9.06..4.99u rootSideStep=-0.56..0.33u eyeSideStep=-0.81..1.27u trackedSide=-0.0208..-0.0070m bodyYawError=-0.35..0.54deg
+locomotion: state=0 head=88.9 body=88.9 manual=(+0.98,+0.20) pending=(+0.004,-0.006)m drag=(+0.000,+0.000)m input=0000000010024081
+locomotion: state=0 head=90.4 body=90.5 manual=(+0.00,-0.00) pending=(+0.002,-0.011)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=0 head=90.4 body=90.4 manual=(+0.00,-0.00) pending=(+0.004,-0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=1 head=90.5 body=90.5 manual=(+0.49,-0.15) pending=(+0.002,-0.022)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=90.7 body=90.7 manual=(+0.99,-0.14) pending=(-0.001,-0.020)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: resolved body fit yaw=93.7 base=98.7 offset=(0.0,-2.7) pending=(-0.004,-0.020)m
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=92..230 animSide=-82.99..17.24u rootSideStep=-0.46..0.41u eyeSideStep=-0.70..0.92u trackedSide=-0.0181..-0.0110m bodyYawError=-0.05..0.16deg
+locomotion: state=1 head=93.3 body=93.3 manual=(+0.98,-0.19) pending=(-0.003,-0.022)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=92.7 body=92.8 manual=(+0.00,-0.00) pending=(-0.006,-0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=92.1 body=92.1 manual=(+0.00,-0.00) pending=(-0.006,-0.019)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=90.7 body=90.7 manual=(+0.74,-0.15) pending=(-0.007,-0.017)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=90.6 body=90.6 manual=(+0.98,-0.19) pending=(-0.007,-0.017)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 1; game camera seeded room 1
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=0..253 animSide=-83.13..17.25u rootSideStep=-0.42..0.38u eyeSideStep=-0.43..0.84u trackedSide=-0.0229..-0.0220m bodyYawError=-0.03..0.04deg
+locomotion: state=1 head=91.0 body=91.0 manual=(+0.98,-0.19) pending=(-0.007,-0.018)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=91.4 body=91.4 manual=(+0.00,-0.00) pending=(-0.007,-0.018)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=2 max-step=1.607deg
+locomotion: state=2 head=56.7 body=56.8 manual=(+0.00,+0.00) pending=(-0.015,-0.005)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=8.9 body=8.9 manual=(+0.18,+0.51) pending=(-0.011,+0.016)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=8.9 body=8.9 manual=(+0.16,+0.55) pending=(-0.011,+0.016)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=40 max-step=2.018deg
+locomotion: state=2 head=11.5 body=11.5 manual=(+0.22,+0.98) pending=(-0.009,+0.016)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=55.7 body=55.7 manual=(+0.93,+0.36) pending=(-0.021,+0.014)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: resolved body fit yaw=107.2 base=96.4 offset=(0.4,11.5) pending=(-0.014,0.018)m
+fp-turn: 1.00s polls=62 views=60 turned=47 max-step=2.034deg
+locomotion: state=1 head=106.6 body=106.6 manual=(+0.75,-0.66) pending=(-0.008,+0.014)m drag=(+0.000,+0.000)m input=0000000090000001
+locomotion: state=1 head=98.9 body=98.9 manual=(+0.98,-0.20) pending=(-0.007,-0.001)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=99.3 body=99.3 manual=(+0.98,-0.20) pending=(-0.015,+0.012)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 0; game camera seeded room 0
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=0..253 animSide=-83.16..17.82u rootSideStep=-0.50..0.27u eyeSideStep=-1.29..0.74u trackedSide=-0.0025..0.0146m bodyYawError=-0.35..0.15deg
+locomotion: state=1 head=97.8 body=97.8 manual=(+0.98,-0.17) pending=(-0.014,+0.009)m drag=(+0.000,+0.000)m input=0000000010000001
+perf: 59.9 fps rendered
+stereo health @frame 7200: world draws=94232  duplicated=43851  injected eye0=43105 eye1=43105  (91% of world draws got per-eye matrices)  offscreen-skipped=8022  classify-mismatch=0  ortho3D=0  sky=14400  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(-6.0, 3.4, -76.9) prog=79 loc=26  eye1=(-23.5, 3.4, -76.9) prog=79 loc=26  separation=17.42
+halves: 15 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7586CE8A0  mProj[1](persp)=00007FF7586CE8E0
+  proj=00007FF7586CE8A0  draws=10600    ortho/2D
+  proj=00007FF7586CE8E0  draws=401170   perspective/world
+cull: 9.0 rooms/frame from the engine + 0.6 added by the head frustum, 0.4 items rescued/frame
+fp-turn: 1.00s polls=60 views=60 turned=25 max-step=2.011deg
+locomotion: state=1 head=153.7 body=153.7 manual=(+0.41,-0.91) pending=(-0.018,+0.005)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=60 elapsed=1000ms frac=7..192 animSide=-22.70..14.56u rootSideStep=-12.94..0.24u eyeSideStep=-1.77..3.27u trackedSide=-0.0089..-0.0023m bodyYawError=-0.08..3.49deg
+locomotion: state=1 head=-171.3 body=-171.3 manual=(-0.19,-0.98) pending=(-0.018,-0.001)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=59 turned=24 max-step=6.000deg
+locomotion: state=1 head=-177.8 body=-177.8 manual=(-0.08,-1.00) pending=(-0.018,+0.000)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=15..161 animSide=-10.38..28.69u rootSideStep=-0.24..2.01u eyeSideStep=-2.76..1.49u trackedSide=-0.0142..-0.0091m bodyYawError=-1.75..0.07deg
+locomotion: state=1 head=170.7 body=170.7 manual=(+0.12,-0.99) pending=(-0.017,+0.003)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=12 max-step=1.979deg
+locomotion: state=1 head=171.2 body=171.2 manual=(+0.11,-0.99) pending=(-0.018,+0.002)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=12 head=172.9 body=172.6 manual=(+0.09,-1.00) pending=(-0.019,+0.006)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=2 head=-164.9 body=-179.4 manual=(-0.00,+0.00) pending=(-0.016,-0.008)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=-162.8 base=-165.5 offset=(12.9,81.4) pending=(-0.014,-0.006)m
+fp-turn: 1.00s polls=60 views=60 turned=15 max-step=1.985deg
+locomotion: state=2 head=-90.5 body=-90.7 manual=(-0.00,+0.00) pending=(-0.003,+0.029)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-30.9 body=-30.6 manual=(+0.00,+0.00) pending=(-0.008,+0.024)m drag=(-0.005,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=60 max-step=2.007deg
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=-0.6 body=-0.6 manual=(-0.07,+0.69) pending=(-0.001,+0.022)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-0.4 body=-0.4 manual=(-0.08,+1.00) pending=(-0.008,+0.020)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=59 turned=25 max-step=5.869deg
+fp-forward: game=5 state=1 samples=62 elapsed=1000ms frac=38..238 animSide=-83.07..14.53u rootSideStep=-1.55..0.41u eyeSideStep=-1.06..2.68u trackedSide=-0.0082..0.0253m bodyYawError=-1.07..1.53deg
+locomotion: state=1 head=3.4 body=3.4 manual=(-0.02,+1.00) pending=(-0.014,+0.015)m drag=(+0.000,+0.000)m input=0000000010000001
+dynbones: joints=15 shader=20 lock=20  frames=3600 dup=0% snaps=7  drive_peak=86.5 accel_raw=312702 drive_used=0  disp_peak=8.72  L=(-0.12,8.38,1.77) R=(-0.12,8.38,1.77)
+dynbones: engine drive -- jumps=1 lands=1  last landing fallspeed=100 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,15,15,0]
+locomotion: state=1 head=3.9 body=3.9 manual=(-0.01,+1.00) pending=(-0.014,+0.014)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=46..192 animSide=-10.44..18.04u rootSideStep=-0.46..0.46u eyeSideStep=-1.46..0.89u trackedSide=-0.0061..-0.0024m bodyYawError=-0.11..0.10deg
+locomotion: state=1 head=1.8 body=1.8 manual=(-0.05,+1.00) pending=(-0.013,+0.013)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-1.7 body=-1.7 manual=(-0.10,+0.99) pending=(-0.014,+0.014)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=11 max-step=2.020deg
+locomotion: state=1 head=-54.1 body=-54.1 manual=(-0.85,+0.52) pending=(+0.015,+0.013)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=53..199 animSide=-9.63..31.75u rootSideStep=-0.44..2.35u eyeSideStep=-3.26..0.75u trackedSide=-0.0137..-0.0063m bodyYawError=-2.19..0.01deg
+cull: first-person eye in room 1; game camera seeded room 1
+locomotion: state=1 head=-117.2 body=-117.2 manual=(-0.42,-0.91) pending=(+0.002,+0.025)m drag=(-0.005,+0.000)m input=0000000050000001
+firstperson: resolved body fit yaw=-128.9 base=-93.6 offset=(-14.1,23.6) pending=(-0.003,0.026)m
+fp-turn: 1.00s polls=60 views=60 turned=44 max-step=2.021deg
+locomotion: state=1 head=-91.0 body=-91.0 manual=(-0.96,-0.28) pending=(-0.020,-0.000)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=61..215 animSide=-13.63..32.83u rootSideStep=-44.53..3.12u eyeSideStep=-32.08..4.11u trackedSide=-0.0699..-0.0143m bodyYawError=-2.75..2.62deg
+locomotion: state=1 head=-92.9 body=-92.9 manual=(-0.95,-0.31) pending=(-0.013,-0.000)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=15 max-step=2.019deg
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=-92.6 body=-92.6 manual=(-0.96,-0.29) pending=(-0.011,-0.003)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 11; game camera seeded room 11
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=61..207 animSide=-8.09..18.64u rootSideStep=-0.40..0.43u eyeSideStep=-0.90..1.42u trackedSide=-0.0350..-0.0315m bodyYawError=-0.18..0.11deg
+locomotion: state=1 head=-87.0 body=-87.0 manual=(-0.98,-0.18) pending=(-0.011,-0.003)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=6 max-step=1.072deg
+locomotion: state=1 head=-88.7 body=-88.7 manual=(-0.98,-0.20) pending=(-0.011,-0.002)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=69..245 animSide=-9.17..16.65u rootSideStep=-0.90..0.38u eyeSideStep=-0.97..1.99u trackedSide=-0.0342..-0.0290m bodyYawError=-0.08..0.72deg
+locomotion: state=1 head=-112.4 body=-112.4 manual=(-0.83,-0.56) pending=(-0.010,+0.011)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=19 max-step=2.014deg
+locomotion: state=1 head=-163.1 body=-163.3 manual=(-0.00,+0.00) pending=(+0.006,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=1 head=-169.3 body=-169.4 manual=(-0.00,+0.00) pending=(+0.011,+0.007)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-173.1 body=-173.1 manual=(-0.00,+0.00) pending=(+0.011,+0.006)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=40 max-step=2.001deg
+locomotion: state=19 head=176.2 body=-180.0 manual=(+0.19,-0.98) pending=(+0.014,-0.000)m drag=(+0.000,+0.000)m input=0000000010004001
+locomotion: state=19 head=176.8 body=-180.0 manual=(+0.19,-0.98) pending=(+0.012,+0.003)m drag=(+0.000,+0.000)m input=0000000010004001
+cull: first-person eye in room 3; game camera seeded room 3
+fp-turn: 1.00s polls=60 views=60 turned=1 max-step=0.006deg
+locomotion: state=19 head=-176.0 body=-180.0 manual=(+0.19,-0.98) pending=(+0.008,+0.016)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=19 head=-161.8 body=-180.0 manual=(+0.19,-0.98) pending=(+0.003,+0.027)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=12 max-step=2.007deg
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=19 head=-166.1 body=-180.0 manual=(+0.19,-0.98) pending=(+0.004,+0.027)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: resolved body fit yaw=-178.5 base=-164.0 offset=(-15.3,113.6) pending=(0.004,0.026)m
+locomotion: state=2 head=-166.6 body=-166.6 manual=(-0.14,-0.99) pending=(+0.004,+0.026)m drag=(-0.002,-0.005)m input=0000000010000001
+locomotion: state=1 head=-166.7 body=-166.7 manual=(-0.14,-0.99) pending=(+0.004,+0.021)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-167.1 body=-167.1 manual=(-0.13,-0.99) pending=(+0.005,+0.022)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=19 head=-167.4 body=-180.0 manual=(-0.12,-0.99) pending=(+0.001,+0.021)m drag=(+0.000,+0.000)m input=0000000010004001
+locomotion: state=19 head=-169.0 body=-180.0 manual=(-0.12,-0.99) pending=(-0.007,+0.025)m drag=(+0.000,+0.000)m input=0000000010004001
+locomotion: state=2 head=-175.9 body=-175.7 manual=(-0.00,+0.00) pending=(-0.002,+0.037)m drag=(-0.005,-0.017)m input=0000000000000000
+locomotion: state=1 head=165.9 body=165.9 manual=(+0.05,-0.65) pending=(+0.007,+0.019)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=163.5 body=163.5 manual=(+0.23,-0.97) pending=(+0.010,+0.011)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=14 max-step=3.273deg
+locomotion: state=1 head=108.1 body=107.9 manual=(+0.00,-0.00) pending=(+0.020,-0.012)m drag=(-0.002,-0.002)m input=0000000000000000
+locomotion: state=2 head=92.1 body=92.0 manual=(+0.00,-0.00) pending=(+0.011,-0.017)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=1 head=91.1 body=91.1 manual=(+0.74,-0.06) pending=(+0.010,-0.021)m drag=(-0.002,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=38 max-step=2.380deg
+locomotion: state=19 head=92.0 body=90.0 manual=(+1.00,+0.10) pending=(+0.008,-0.019)m drag=(+0.000,+0.000)m input=0000000010004001
+locomotion: state=28 head=93.4 body=90.0 manual=(+1.00,+0.10) pending=(+0.007,-0.030)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=10 head=93.7 body=90.0 manual=(+1.00,+0.10) pending=(+0.006,-0.029)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=1 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=10 head=106.7 body=90.0 manual=(+1.00,+0.10) pending=(-0.011,-0.030)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=31 head=115.6 body=90.0 manual=(+1.00,+0.10) pending=(-0.017,-0.032)m drag=(+0.000,+0.000)m input=0000000090000009
+locomotion: state=31 head=112.6 body=90.0 manual=(+1.00,+0.10) pending=(-0.015,-0.038)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=10 head=96.2 body=90.0 manual=(+1.00,+0.10) pending=(-0.005,-0.013)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=19 head=95.7 body=90.0 manual=(+1.00,+0.10) pending=(-0.005,-0.011)m drag=(+0.000,+0.000)m input=0000000010000001
+dynbones: joints=15 shader=20 lock=20  frames=4500 dup=1% snaps=7  drive_peak=492.9 accel_raw=3145830 drive_used=0  disp_peak=8.66  L=(0.02,8.33,-1.97) R=(0.02,8.33,-1.97)
+dynbones: engine drive -- jumps=2 lands=2  last landing fallspeed=0 (grounded now)
+dynbones: this frame ran 3 DrawLaraHD scope(s), joints [15,15,0]
+cull: first-person eye in room 36; game camera seeded room 3
+cull: first-person eye in room 36; game camera seeded room 36
+locomotion: state=19 head=94.1 body=90.0 manual=(+1.00,+0.10) pending=(-0.007,-0.004)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=19 head=85.0 body=90.0 manual=(+1.00,+0.10) pending=(-0.013,+0.035)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=19 head=85.0 body=90.0 manual=(+1.00,+0.10) pending=(-0.019,+0.044)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=19 head=85.8 body=90.0 manual=(+1.00,+0.10) pending=(-0.019,+0.045)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=89.6 base=92.0 offset=(-187.3,17.9) pending=(-0.010,0.056)m
+locomotion: state=2 head=72.6 body=81.9 manual=(+0.00,+0.00) pending=(-0.009,+0.058)m drag=(+0.038,+0.005)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=14 max-step=2.004deg
+locomotion: state=2 head=23.0 body=23.0 manual=(+0.14,+0.41) pending=(+0.008,+0.020)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=22.9 body=22.9 manual=(+0.19,+0.98) pending=(+0.009,+0.019)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=4.1 body=4.1 manual=(-0.17,+0.98) pending=(+0.014,+0.017)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=32 max-step=2.810deg
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=30..238 animSide=-84.10..19.55u rootSideStep=-0.28..2.49u eyeSideStep=-4.13..0.92u trackedSide=-0.0222..-0.0129m bodyYawError=-2.40..0.19deg
+locomotion: state=1 head=2.2 body=2.2 manual=(-0.21,+0.98) pending=(+0.013,+0.018)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 19; game camera seeded room 19
+locomotion: state=1 head=9.0 body=9.0 manual=(-0.09,+1.00) pending=(+0.010,+0.014)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=18 max-step=1.250deg
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=38..207 animSide=-10.65..17.25u rootSideStep=-0.88..1.06u eyeSideStep=-1.71..2.21u trackedSide=-0.0120..-0.0062m bodyYawError=-0.89..0.91deg
+locomotion: state=1 head=7.9 body=7.9 manual=(-0.10,+0.99) pending=(+0.009,+0.016)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-33.0 body=-32.7 manual=(+0.00,+0.00) pending=(+0.012,+0.020)m drag=(+0.000,+0.005)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=22 max-step=2.012deg
+locomotion: state=2 head=-79.8 body=-80.1 manual=(+0.00,+0.00) pending=(+0.011,+0.021)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=16 head=-93.8 body=-93.8 manual=(+0.92,+0.40) pending=(+0.011,+0.019)m drag=(+0.000,+0.000)m input=0000000020000082
+locomotion: state=21 head=-89.4 body=-89.4 manual=(+0.07,+1.00) pending=(+0.009,+0.020)m drag=(+0.000,+0.000)m input=0000000080000800
+fp-turn: 1.00s polls=60 views=60 turned=30 max-step=2.020deg
+locomotion: state=21 head=-90.0 body=-89.9 manual=(+0.00,+0.00) pending=(+0.005,+0.019)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=16 head=-89.9 body=-89.9 manual=(+0.90,+0.19) pending=(+0.005,+0.018)m drag=(+0.000,+0.000)m input=0000000020000082
+firstperson: resolved body fit yaw=-90.1 base=-81.2 offset=(-0.4,5.9) pending=(0.006,0.018)m
+locomotion: state=16 head=-90.1 body=-90.1 manual=(-0.00,+0.00) pending=(+0.006,+0.018)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=22 head=-90.1 body=-90.1 manual=(-0.10,-0.72) pending=(+0.005,+0.019)m drag=(+0.000,+0.000)m input=0000000040000400
+locomotion: state=1 head=-90.1 body=-90.0 manual=(-0.95,-0.31) pending=(+0.005,+0.019)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=21 head=-89.9 body=-89.9 manual=(-0.17,+0.99) pending=(+0.005,+0.019)m drag=(+0.000,+0.000)m input=0000000080000800
+locomotion: state=16 head=-89.9 body=-89.9 manual=(+0.93,+0.36) pending=(+0.005,+0.019)m drag=(+0.000,+0.000)m input=0000000020000082
+locomotion: state=16 head=-89.3 body=-89.4 manual=(+0.00,+0.00) pending=(+0.005,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=-88.9 body=-88.9 manual=(-1.00,-0.06) pending=(+0.007,+0.017)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=3 head=-88.6 body=-88.6 manual=(-0.99,-0.10) pending=(+0.006,+0.018)m drag=(+0.000,+0.000)m input=0000000010100011
+perf: 59.9 fps rendered
+stereo health @frame 9000: world draws=111226  duplicated=54043  injected eye0=53531 eye1=53531  (96% of world draws got per-eye matrices)  offscreen-skipped=4164  classify-mismatch=0  ortho3D=0  sky=14400  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(-0.1, 21.5, -130.9) prog=79 loc=26  eye1=(8.7, 21.5, -130.9) prog=79 loc=26  separation=8.76
+halves: 18 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF7586CE8A0  mProj[1](persp)=00007FF7586CE8E0
+  proj=00007FF7586CE8A0  draws=11624    ortho/2D
+  proj=00007FF7586CE8E0  draws=512396   perspective/world
+cull: 9.6 rooms/frame from the engine + 2.5 added by the head frustum, 0.4 items rescued/frame
+locomotion: state=3 head=-88.1 body=-91.3 manual=(-1.00,-0.09) pending=(+0.007,+0.017)m drag=(+0.000,+0.000)m input=0000000010100011
+locomotion: state=3 head=-73.8 body=-90.0 manual=(-0.99,+0.16) pending=(+0.002,+0.018)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=16 max-step=2.060deg
+locomotion: state=1 head=-53.2 body=-53.2 manual=(-0.87,+0.49) pending=(-0.003,+0.012)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-56.4 body=-56.4 manual=(-0.90,+0.45) pending=(+0.001,-0.002)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=6 max-step=2.010deg
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=76..222 animSide=-21.65..18.12u rootSideStep=-13.59..0.32u eyeSideStep=-12.26..0.97u trackedSide=-0.0231..-0.0120m bodyYawError=-0.16..31.52deg
+locomotion: state=1 head=-58.2 body=-58.2 manual=(-0.91,+0.42) pending=(+0.001,-0.004)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 43; game camera seeded room 43
+locomotion: state=1 head=-83.1 body=-83.1 manual=(-1.00,-0.00) pending=(+0.000,+0.008)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: resolved body fit yaw=-86.5 base=-76.8 offset=(0.2,6.0) pending=(0.000,0.014)m
+fp-turn: 1.00s polls=60 views=60 turned=24 max-step=2.502deg
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=84..238 animSide=-9.31..21.56u rootSideStep=-0.37..2.98u eyeSideStep=-3.23..1.05u trackedSide=-0.0236..-0.0135m bodyYawError=-2.20..0.08deg
+locomotion: state=1 head=-89.8 body=-89.8 manual=(-0.99,-0.12) pending=(+0.000,+0.017)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-85.9 body=-85.9 manual=(-1.00,-0.05) pending=(-0.003,+0.021)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 42; game camera seeded room 42
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=-85.9 body=-85.8 manual=(-1.00,-0.05) pending=(-0.004,+0.021)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=92..238 animSide=-10.54..16.95u rootSideStep=-0.38..0.32u eyeSideStep=-0.71..0.84u trackedSide=-0.0134..-0.0061m bodyYawError=-0.10..0.15deg
+locomotion: state=1 head=-86.6 body=-86.6 manual=(-1.00,-0.06) pending=(-0.006,+0.019)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=-90.8 body=-90.8 manual=(-0.99,-0.14) pending=(-0.009,+0.020)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=53..256 animSide=-9.95..17.92u rootSideStep=-0.43..0.43u eyeSideStep=-0.93..0.78u trackedSide=-0.0245..-0.0089m bodyYawError=-0.15..0.00deg
+dynbones: joints=15 shader=20 lock=20  frames=5400 dup=0% snaps=7  drive_peak=126.1 accel_raw=483272 drive_used=0  disp_peak=26.45  L=(-0.26,8.43,1.55) R=(-0.26,8.43,1.55)
+dynbones: engine drive -- jumps=3 lands=3  last landing fallspeed=92 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,15,15,0]
+locomotion: state=1 head=-90.2 body=-90.2 manual=(-0.00,+0.00) pending=(-0.007,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-88.3 body=-88.4 manual=(+0.00,+0.00) pending=(-0.006,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-75.0 body=-76.0 manual=(+0.00,+0.00) pending=(+0.006,+0.021)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-47.9 body=-48.6 manual=(+0.00,+0.00) pending=(+0.014,+0.019)m drag=(-0.002,+0.002)m input=0000000000000000
+locomotion: state=2 head=-42.3 body=-42.0 manual=(+0.00,+0.00) pending=(+0.009,+0.018)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=-51.9 base=-80.6 offset=(-7.8,-27.4) pending=(-0.003,0.006)m
+locomotion: state=2 head=-62.4 body=-61.7 manual=(+0.00,+0.00) pending=(-0.020,+0.004)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-79.4 body=-79.3 manual=(+0.00,+0.00) pending=(-0.019,+0.008)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=26 max-step=2.005deg
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=2 head=-119.0 body=-119.1 manual=(-0.00,+0.00) pending=(-0.010,+0.011)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-75.4 body=-75.4 manual=(+0.00,+0.00) pending=(-0.015,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=62 views=60 turned=48 max-step=2.006deg
+locomotion: state=2 head=-20.7 body=-20.7 manual=(+0.00,+0.00) pending=(-0.017,+0.016)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=-18.3 body=-18.7 manual=(+0.00,+0.00) pending=(-0.007,-0.001)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=38 max-step=2.005deg
+locomotion: state=2 head=49.1 body=48.8 manual=(+0.00,+0.00) pending=(+0.001,-0.011)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=101.1 body=101.3 manual=(+0.00,-0.00) pending=(-0.002,+0.023)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=1 head=100.4 body=100.4 manual=(+0.60,-0.10) pending=(-0.003,+0.022)m drag=(+0.000,+0.000)m input=0000000010000001
+fp-turn: 1.00s polls=60 views=60 turned=33 max-step=2.005deg
+locomotion: state=1 head=94.5 body=94.5 manual=(+0.99,+0.13) pending=(-0.002,+0.023)m drag=(+0.002,+0.000)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=15..256 animSide=-83.96..17.57u rootSideStep=-0.36..0.51u eyeSideStep=-0.80..0.94u trackedSide=-0.0016..0.0202m bodyYawError=-0.37..0.02deg
+locomotion: state=1 head=92.2 body=92.2 manual=(+0.99,+0.17) pending=(-0.006,-0.003)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: resolved body fit yaw=89.8 base=93.6 offset=(1.1,-0.5) pending=(-0.006,-0.005)m
+locomotion: state=1 head=84.7 body=84.7 manual=(+0.95,+0.30) pending=(-0.007,-0.013)m drag=(+0.000,+0.000)m input=0000000010000001
+cull: first-person eye in room 42; game camera seeded room 43
+cull: first-person eye in room 43; game camera seeded room 43
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=23..256 animSide=-7.99..18.99u rootSideStep=-0.39..0.50u eyeSideStep=-1.33..0.73u trackedSide=-0.0255..-0.0025m bodyYawError=-0.38..0.47deg
+locomotion: state=1 head=91.0 body=91.0 manual=(+0.98,+0.19) pending=(-0.012,-0.017)m drag=(+0.000,+0.000)m input=0000000010000001
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=1 head=91.6 body=91.6 manual=(+0.98,+0.18) pending=(-0.011,-0.014)m drag=(+0.000,+0.000)m input=0000000010000001
+locomotion: state=1 head=96.2 body=96.2 manual=(+0.99,+0.10) pending=(-0.018,-0.014)m drag=(-0.002,+0.002)m input=0000000010000001
+fp-forward: game=5 state=1 samples=61 elapsed=1000ms frac=30..238 animSide=-11.52..17.48u rootSideStep=-0.53..0.43u eyeSideStep=-12.79..4.37u trackedSide=-0.0124..-0.0029m bodyYawError=-0.09..0.43deg
+cull: first-person eye in room 43; game camera seeded room 19
+cull: first-person eye in room 19; game camera seeded room 19
+locomotion: state=1 head=96.8 body=96.7 manual=(+0.00,-0.00) pending=(-0.013,-0.012)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=1 head=98.2 body=98.2 manual=(+0.00,-0.00) pending=(-0.007,-0.008)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=106.2 body=106.2 manual=(+0.00,-0.00) pending=(-0.005,-0.007)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=21 max-step=2.025deg
+locomotion: state=2 head=152.5 body=152.4 manual=(+0.00,-0.00) pending=(+0.003,-0.009)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=175.4 body=175.0 manual=(+0.00,-0.00) pending=(-0.000,-0.023)m drag=(-0.002,+0.002)m input=0000000000000000
+fp-turn: 1.00s polls=60 views=60 turned=11 max-step=2.022deg
+locomotion: state=2 head=176.2 body=176.4 manual=(+0.00,-0.00) pending=(+0.007,+0.036)m drag=(+0.005,-0.012)m input=0000000000000000
+locomotion: state=2 head=171.8 body=172.0 manual=(+0.00,-0.00) pending=(+0.003,+0.018)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=169.6 base=150.9 offset=(17.0,9.4) pending=(0.007,0.005)m
+locomotion: state=2 head=147.0 body=147.4 manual=(+0.00,-0.00) pending=(+0.020,-0.017)m drag=(-0.007,+0.002)m input=0000000000000000
+locomotion: state=2 head=153.6 body=153.1 manual=(+0.00,-0.00) pending=(+0.018,-0.011)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+locomotion: state=2 head=118.7 body=121.4 manual=(+0.00,-0.00) pending=(+0.062,+0.047)m drag=(-0.014,-0.035)m input=0000000000000000
+locomotion: state=2 head=114.8 body=115.1 manual=(+0.00,-0.00) pending=(+0.016,+0.051)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=116.7 body=116.7 manual=(+0.00,-0.00) pending=(+0.013,+0.044)m drag=(+0.000,+0.000)m input=0000000000000000
+dynbones: joints=15 shader=20 lock=20  frames=6300 dup=0% snaps=7  drive_peak=19.2 accel_raw=201716 drive_used=0  disp_peak=8.60  L=(-0.04,8.56,-0.39) R=(-0.04,8.56,-0.39)
+dynbones: engine drive -- jumps=3 lands=3  last landing fallspeed=92 (grounded now)
+dynbones: this frame ran 4 DrawLaraHD scope(s), joints [33,15,15,0]
+locomotion: state=2 head=116.7 body=116.7 manual=(+0.00,-0.00) pending=(+0.013,+0.044)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=116.7 body=116.7 manual=(+0.00,-0.00) pending=(+0.013,+0.044)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=116.7 body=116.7 manual=(+0.00,-0.00) pending=(+0.013,+0.044)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=116.7 body=116.7 manual=(+0.00,-0.00) pending=(+0.013,+0.044)m drag=(+0.000,+0.000)m input=0000000000000000
+locomotion: state=2 head=116.7 body=116.7 manual=(+0.00,-0.00) pending=(+0.013,+0.044)m drag=(+0.000,+0.000)m input=0000000000000000
+hook[TR4 vidLoadTexture]: removed
+hook[TR4 ogl_texUpdate]: removed
+pad: _XInputGetState restored
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+vr: third-person positional neutral captured; tracked rotation preserved
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[AnimatePistols]: removed
+hook[FireWeapon]: removed
+hook[FirstPersonDrawToShadow]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[AnimateLara]: removed
+hook[DrawSkyHD]: removed
+hook[DrawLaraHD]: removed
+hook[shader_init]: removed
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+hook[fmvShow]: removed
+hook[ogl_present]: removed
+hook[ogl_drawVB]: removed
+hook[ogl_draw]: removed
+hook[validate_draw]: removed
+hook[vid_setPass]: removed
