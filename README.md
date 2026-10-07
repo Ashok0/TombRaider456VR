@@ -68,7 +68,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
-### Session changes and current deployment (2026-10-04 to 2026-10-05)
+### Session changes and current deployment (2026-10-04 to 2026-10-06)
 
 This summary covers the October 4 work, the rollback/redeploy after midnight,
 and the October 5 shadow and zigzag corrections (America/New_York). Changes below apply
@@ -84,7 +84,7 @@ to TR4/5 first person.
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
 | Unarmed hands in the forward view | Retained and user-confirmed: hide arms while looking ahead; reveal them when looking down at least 15 degrees, hide again within 10 degrees of level. See [hand visibility](#unarmed-hands-visible-only-when-looking-down-2026-10-04). |
 | Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
-| Floor shadow displaced ahead of Lara | HD shadow now follows the same horizontal visual body correction as Lara, before native floor sampling. Automated regression and four-build binary checks passed; headset confirmation pending. See [shadow alignment](#first-person-floor-shadow-alignment-2026-10-05). |
+| Floor shadow displaced/split in first person | User confirmed the intact silhouette, but the October 5 placement changes did not resolve displacement/HMD movement. October 6 corrects the shadow projection camera origin and isolates the light-camera pass from headset injection. Automated checks pass; headset confirmation pending. See [shadow projection](#first-person-shadow-projection-origin-2026-10-06). |
 | Camera jump after mounting crates | **Reverted:** the experimental 200 ms climb-to-standing camera transition was removed at the user's request. It is absent from current source and the redeployed DLL; the reported camera jump remains unresolved. |
 
 The earlier LT+Y equip experiment and idle-only camera-calibration attempts also
@@ -92,14 +92,14 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 5 current deployment:** Release/x64 zigzag fix installed with DLL
+**October 6 current deployment:** Release/x64 shadow projection correction installed with DLL
 hash verification. Personal INI and controller calibration were preserved.
 The reverted 200 ms camera transition remains absent. Automated checks passed;
 there has been no new headset validation.
 
-- Installed DLL SHA-256: `3E3F2763E2693A34770834A712EC87C078AF3B384A677FA02F45E332B37E85EC`.
-- Deployment record: [zigzag fix manifest](build/zigzag-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-zigzag-20261005-155514/`.
+- Installed DLL SHA-256: `FE89987DEC3E3E7A02689E198F5CEDF03D5BA99A3679C57AE45A4FB20CBF5CC6`.
+- Deployment record: [shadow projection manifest](build/shadow-projection-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-shadow-projection-20261006-232506/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
@@ -127,7 +127,108 @@ entry in all **40 TR4 + 15 TR5** installed animation tables. Release/x64 built
 and deployed with DLL hash verification and unchanged INI. In-headset
 confirmation remains pending. [Deployment record](build/zigzag-deploy/manifest.json).
 
+### First-person shadow projection origin (2026-10-06)
+
+The user reported that the October 5 native-position changes made no difference
+to the remaining incorrect angle, displacement and HMD-relative movement.
+Those tests covered shadow geometry but missed the projection onto the scene.
+
+Native `DrawPhaseGame` calls `DrawToShadow` before `S_InitialisePolyList`.
+`DrawToShadow` builds shadow matrix 0 using the interpolated third-person
+camera origin. The first-person hook subsequently substitutes a different
+scene-camera origin without updating that matrix. A fixed world point therefore
+arrived in the shadow projection in the wrong coordinate system.
+
+The new caster hook captures the native receiver matrix before the camera
+replacement. Once the first-person camera is resolved, only the receiver
+translation is rebased by `C_firstPerson - C_native`. For a world point `P`,
+this preserves `M_new * (P - C_firstPerson) == M_native * (P - C_native)`.
+The light angle, projection basis, caster geometry and intact silhouette stay
+native. The next shadow build restores the original matrix before rebuilding,
+and leaving first person restores native placement without accumulating offsets.
+The TR4/5 light-camera scope also explicitly blocks headset/eye-view injection
+in `validate_draw`; subsequent scene draws retain stereo projection.
+
+Validation: **600,948 first-person regression checks passed**, including fixed
+world-point projection under translated/rotated scene cameras, perspective and
+orthographic light projections, repeated updates, third-person restoration,
+silhouette, movement and all eight jiggle integration cases. The general
+self-test passed. The binary audit verifies the actual caster hook bytes and
+shadow-before-scene ordering in all four supported TR4/5 DLLs. Release/x64
+built and deployed with hash verification; INI unchanged. This remains an
+automated validation, not headset confirmation. The game log now records
+`firstperson shadow: receiver origin native=... FP=...; light camera isolated`
+once per binding so execution of the correction can be checked.
+[Deployment record](build/shadow-projection-deploy/manifest.json).
+
+### Native first-person shadow placement (2026-10-05)
+
+**User reported no improvement to displacement or HMD-relative movement.**
+Native caster placement is retained, but the missing receiver-projection
+correction is addressed by the October 6 change above.
+
+The user confirmed that the shadow was back in one piece, but reported it was
+still displaced and moved with the headset. The previous revision incorrectly
+applied the head-dependent first-person visual body fit to the shadow body,
+braid and floor anchor. Shadows need Lara's native world position, as in the
+working third-person view.
+
+The native shadow pass now returns the original joint palette before any
+first-person body-fit correction, physics capture or controller transform.
+Hair uses its untouched native render origin. The floor-shadow joint hook has
+been removed entirely. The confirmed intact-silhouette fix remains: shadow
+rendering retains native body/head/weapon/hair visibility and bypasses
+first-person clipping and hand splitting. Eye-view body fit, arm visibility,
+movement and jiggle physics retain their existing behavior.
+
+Validation: the new position-invariance regression failed on the preceding
+revision and passed with this correction. **584,748 first-person checks passed**,
+including 15/33-joint native shadow positions under varying camera-fit offsets,
+head/limb hiding and hand states, native braid position, third-person placement,
+zigzag movement and all eight jiggle integration cases. The shadow audit passed
+for all four supported TR4/5 DLLs. Release/x64 built and deployed with DLL hash
+verification; INI unchanged. Headset confirmation of placement is pending.
+[Deployment record](build/shadow-native-deploy/manifest.json).
+
+### First-person split-shadow correction (2026-10-05)
+
+**Partially superseded:** the user confirmed this fixed the split silhouette.
+Its body/braid/floor position corrections were subsequently removed as described
+above because they made the shadow move with the headset.
+
+The user reported that third-person shadows were correct but first-person
+shadows split into separated pieces. Two defects were found: first-person
+visibility and tracked-hand transforms were also applied during the native
+light/shadow pass, and the floor-shadow hook used `GetJoints`' byte signature
+instead of `GetJointAbsPositionLerp`'s. The live game log confirmed the latter
+hook was rejected. The earlier audit checked a hardcoded expected signature
+and failed to check the actual constant supplied to the installer.
+
+Shadow rendering now uses the verified DLL `gRenderPass == 4` flag, rather than
+mistaking `DrawCreatureHD`'s interpolation argument for the render pass. In that
+pass, native body/head/weapon masks and poses stay intact; first-person hiding,
+hand splitting and controller wrist transforms are bypassed. Every skinned
+part receives the same horizontal visual-body offset. Hair builds its own
+palette, so its draw gets the same offset through native `view_rel`, which is
+restored immediately afterward. Third-person placement and eye-view hand
+visibility retain their existing behavior. Shadow draws do not provide the
+captured skeleton used for jiggle physics.
+
+The floor hook now has its own correct signature. The audit reads the exact
+signature passed to `Install` and verifies the shadow-pass global and hair
+origin against all four supported TR4/5 DLLs. **563,716 regression checks passed**,
+including complete 15/33-joint shadow geometry, masked weapon draws, independent
+interpolation/shadow-pass selection, hair alignment/restoration, third-person
+placement, zigzag movement and all eight jiggle integration cases. Release/x64
+built and deployed with DLL hash verification; INI unchanged. The revised
+appearance still needs headset confirmation.
+[Deployment record](build/shadow-split-deploy/manifest.json).
+
 ### First-person floor shadow alignment (2026-10-05)
+
+**Superseded by the split-shadow correction above:** the initial deployment did
+not resolve the reported problem, and its floor hook failed to install. The
+following records the original implementation and automated checks.
 
 TR4/5's HD body palette receives a horizontal rendering correction to fit
 Lara beneath the first-person camera. The native floor shadow obtains its torso

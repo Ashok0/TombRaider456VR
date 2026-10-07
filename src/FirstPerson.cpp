@@ -96,13 +96,13 @@ hook::InlineHook g_hDrawCreatureHD;
 hook::InlineHook g_hDrawHair;
 hook::InlineHook g_hAimWeapon;
 hook::InlineHook g_hGetJoints;
-hook::InlineHook g_hShadowJoint;
-struct ShadowDll { uint32_t timestamp, draw, torsoReturn; };
+hook::InlineHook g_hDrawToShadow;
+struct ShadowDll { uint32_t timestamp, draw, torsoReturn, renderPass, viewRel, cast; };
 constexpr ShadowDll kShadowDlls[] = {
-    {0x696B4999,0xB8A00,0xB8AF0},
-    {0x696B499C,0xAC310,0xAC400},
-    {0x68C12FDA,0xB9480,0xB9572},
-    {0x68C12FE9,0xAC510,0xAC602},
+    {0x696B4999,0xB8A00,0xB8AF0,0x4F2DD0,0x4948A0,0xC7A80},
+    {0x696B499C,0xAC310,0xAC400,0x4EE720,0x4EF930,0xBC6C0},
+    {0x68C12FDA,0xB9480,0xB9572,0x4F3D10,0x4957E0,0xC8750},
+    {0x68C12FE9,0xAC510,0xAC602,0x4EE660,0x4EF870,0xBCAB0},
 };
 const ShadowDll* g_shadowDll=nullptr;
 hook::InlineHook g_hFireWeapon;
@@ -862,36 +862,77 @@ bool BuildGunPose(int hand, GunPose& out) {
     return true;
 }
 
+// The light projection is built before S_InitialisePolyList replaces the scene
+// camera. Preserve its native matrix, then rebase only the receiver's origin.
+bool g_shadowDepthScope=false, g_shadowReceiverPatched=false, g_loggedShadowReceiver=false;
+mat4* g_shadowReceiver=nullptr;
+mat4 g_nativeShadowReceiver{}, g_patchedShadowReceiver{};
+
+void RestoreShadowReceiver() {
+    if (g_shadowReceiver && g_shadowReceiverPatched &&
+        !std::memcmp(g_shadowReceiver,&g_patchedShadowReceiver,sizeof(mat4))) {
+        *g_shadowReceiver=g_nativeShadowReceiver;
+        VidState().consts|=kShadow;
+    }
+    g_shadowReceiverPatched=false;
+}
+
+void __cdecl Detour_DrawToShadow(int32_t room) {
+    RestoreShadowReceiver();g_shadowReceiver=nullptr;
+    const bool previous=g_shadowDepthScope;g_shadowDepthScope=true;
+    g_hDrawToShadow.Original<void (__cdecl*)(int32_t)>()(room);
+    g_shadowDepthScope=previous;
+    if (!previous && VidState().shadow) {
+        g_shadowReceiver=VidState().shadow;
+        g_nativeShadowReceiver=*g_shadowReceiver;
+    }
+}
+
+void RebaseShadowReceiver(const PHD_3DPOS& native,const PHD_3DPOS& scene) {
+    RestoreShadowReceiver();
+    if (!g_shadowReceiver || !g_active || !g_scenePoseValid) return;
+    const double delta[3]={double(scene.x_pos)-native.x_pos,
+                           double(scene.y_pos)-native.y_pos,
+                           double(scene.z_pos)-native.z_pos};
+    g_patchedShadowReceiver=g_nativeShadowReceiver;
+    // Column-major M * translate(C_firstPerson - C_native): for a world point
+    // P, M_new*(P-C_firstPerson) == M_native*(P-C_native). No HMD rotation,
+    // light-camera change, caster movement or per-eye offset belongs here.
+    for (int row=0;row<4;++row) {
+        double t=g_nativeShadowReceiver.m[12+row];
+        for (int axis=0;axis<3;++axis) t+=g_nativeShadowReceiver.m[axis*4+row]*delta[axis];
+        g_patchedShadowReceiver.m[12+row]=float(t);
+    }
+    *g_shadowReceiver=g_patchedShadowReceiver;g_shadowReceiverPatched=true;
+    VidState().consts|=kShadow;
+    if (!g_loggedShadowReceiver) {
+        LogF("firstperson shadow: receiver origin native=(%d,%d,%d) FP=(%d,%d,%d); light camera isolated",
+             native.x_pos,native.y_pos,native.z_pos,scene.x_pos,scene.y_pos,scene.z_pos);
+        g_loggedShadowReceiver=true;
+    }
+}
+
+
+bool DrawingNativeShadow() {
+    // DrawCreatureHD's third argument selects joint interpolation, NOT the
+    // shadow pass. DrawToShadow selects the DLL-wide gRenderPass=4 instead.
+    return g_boundBase && g_shadowDll && *Ptr<int32_t>(g_shadowDll->renderPass)==4;
+}
+
 bool BodyVisualOffsetApplies(const uint8_t* item) {
     return g_active && g_scenePoseValid && g_boundDll && g_boundBase &&
         item && item==g_headingItem && item==*Ptr<uint8_t*>(g_boundDll->laraItem) &&
         CanTurnBody(item);
 }
 
-void GetJointForCaller(uint8_t* item,PHD_VECTOR* point,int32_t joint,int32_t frac,
-                       uintptr_t caller) {
-    g_hShadowJoint.Original<Fn_GetJointAbsPositionLerp>()(item,point,joint,frac);
-    // Only S_PrintShadowHD's torso query owns this correction. The result is
-    // consumed by its floor/height queries BEFORE it builds the shadow mesh,
-    // so the shadow conforms to the ground beneath the visually shifted body.
-    // Camera, muzzle, hit-test and classic-renderer queries remain native.
-    if (!g_shadowDll || caller!=g_boundBase+g_shadowDll->torsoReturn ||
-        joint!=7 || !point || !BodyVisualOffsetApplies(item)) return;
-    const double x=double(point->x)+g_bodyVisualOffset.x;
-    const double z=double(point->z)+g_bodyVisualOffset.z;
-    if (!std::isfinite(x) || !std::isfinite(z) || x<INT32_MIN || x>INT32_MAX ||
-        z<INT32_MIN || z>INT32_MAX) return;
-    point->x=int32_t(std::lround(x));point->z=int32_t(std::lround(z));
-}
-
-void __cdecl Detour_ShadowJoint(uint8_t* item,PHD_VECTOR* point,int32_t joint,int32_t frac) {
-    GetJointForCaller(item,point,joint,frac,reinterpret_cast<uintptr_t>(_ReturnAddress()));
-}
-
 int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     g_renderHandJoint = -1;
     g_bodySkinReady=false;
     const int32_t count = g_hGetJoints.Original<Fn_GetJoints>()(item, joints, pass);
+    // Shadow positions must match native third person, independent of the
+    // head-dependent body fit used only to keep geometry out of the eye view.
+    // Also exclude shadow palettes from tracked-hand transforms and physics.
+    if (DrawingNativeShadow()) return count;
     if (g_renderArm<0 && joints && count>0 && count<=33 && g_active &&
         g_boundDll && item && item==g_headingItem &&
         item==*Ptr<uint8_t*>(g_boundDll->laraItem)) {
@@ -2125,6 +2166,17 @@ bool DrawingLaraHead(const uint8_t* item) {
 
 void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
                                    int32_t renderPass) {
+    if (DrawingNativeShadow()) {
+        // First-person clipping/hand splitting belongs only to the eye view.
+        // The light must see the intact native body, head and weapon meshes.
+        const int previousArm=g_renderArm, previousJoint=g_renderHandJoint;
+        const bool previousScope=g_bodySkinScope;
+        g_renderArm=-1;g_renderHandJoint=-1;g_bodySkinScope=false;
+        g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,useMeshBits,renderPass);
+        g_renderArm=previousArm;g_renderHandJoint=previousJoint;
+        g_bodySkinScope=previousScope;
+        return;
+    }
     if (g_active && g_rollHidden && g_boundDll && g_boundBase &&
         item == *Ptr<uint8_t*>(g_boundDll->laraItem)) return;
     bool lara = false;
@@ -2186,7 +2238,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
 }
 
 void __cdecl Detour_DrawHair(int32_t argument) {
-    if (g_active && (g_headHidden || g_rollHidden || g_crouchHidden || g_underwaterHidden || g_ledgeArmsOnly || MotionReady())) {
+    if (!DrawingNativeShadow() && g_active && (g_headHidden || g_rollHidden || g_crouchHidden || g_underwaterHidden || g_ledgeArmsOnly || MotionReady())) {
         ++g_hairSkips;
         return;
     }
@@ -2244,7 +2296,11 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {
     const void* caller = _ReturnAddress();
-    if (pose && IsSceneCall(caller)) UpdateSceneCamera(*pose);
+    if (pose && IsSceneCall(caller)) {
+        const PHD_3DPOS native=*pose;
+        UpdateSceneCamera(*pose);
+        RebaseShadowReceiver(native,*pose);
+    }
     if (pose && g_firingHand >= 0 && g_motionDll &&
         reinterpret_cast<uint64_t>(caller) ==
             g_boundBase + g_motionDll->fireViewReturn) {
@@ -2357,17 +2413,18 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             reinterpret_cast<void*>(&Detour_GetJoints),5,
             kGetJointsPrologue,sizeof(kGetJointsPrologue),"GetJoints"))
         Log("firstperson: body palette correction unavailable; native masking retained");
-    if (g_hGetJoints.installed()) for (const auto& entry:kShadowDlls) {
+    for (const auto& entry:kShadowDlls) {
         if (entry.timestamp!=d.timestamp) continue;
-        const auto* call=reinterpret_cast<const uint8_t*>(base+entry.torsoReturn-5);
-        int32_t relative=0;std::memcpy(&relative,call+1,sizeof(relative));
-        if (*call==0xe8 && int64_t(entry.torsoReturn)+relative==d.getJointAbsPositionLerp &&
-            g_hShadowJoint.Install(reinterpret_cast<void*>(base+d.getJointAbsPositionLerp),
-                reinterpret_cast<void*>(&Detour_ShadowJoint),5,
-                kGetJointsPrologue,sizeof(kGetJointsPrologue),"FirstPersonShadowJoint")) {
-            g_shadowDll=&entry;
-            Log("firstperson: HD floor shadow follows rendered body offset before native floor sampling");
-        } else Log("firstperson: shadow joint call-site mismatch; native shadow retained");
+        g_shadowDll=&entry;
+        const uint8_t tr4Debug[]={0x40,0x55,0x53,0x57,0x48,0x8d,0x6c,0x24,0xe0};
+        const uint8_t tr4Retail[]={0x40,0x55,0x53,0x57,0x48,0x8d,0x6c,0x24,0xb9};
+        const uint8_t tr5[]={0x40,0x55,0x53,0x57,0x41,0x55};
+        const auto* bytes=d.game==1 ? tr5 : retail ? tr4Retail : tr4Debug;
+        const size_t size=d.game==1 ? sizeof(tr5) : sizeof(tr4Debug);
+        if (!g_hDrawToShadow.Install(reinterpret_cast<void*>(base+entry.cast),
+                reinterpret_cast<void*>(&Detour_DrawToShadow),size,bytes,size,"FirstPersonDrawToShadow"))
+            Log("firstperson: shadow receiver origin correction unavailable");
+        Log("firstperson: intact native shadows; eye-view body and hand offsets excluded");
     }
     if (Cfg().firstPersonMotionGuns) {
         if (g_motionDll &&
@@ -2498,7 +2555,8 @@ void Remove() {
     g_hPistolHandler.Remove();
     g_hAnimatePistols.Remove();
     g_hFireWeapon.Remove();
-    g_hShadowJoint.Remove();g_shadowDll=nullptr;
+    RestoreShadowReceiver();g_shadowReceiver=nullptr;g_shadowDepthScope=g_loggedShadowReceiver=false;
+    g_hDrawToShadow.Remove();g_shadowDll=nullptr;
     g_hGetJoints.Remove();
     g_motionDll = nullptr;
     g_hDrawHair.Remove();
@@ -2564,6 +2622,7 @@ bool FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed, b
     return UpdateGunTriggers(left,right,enabled,GetTickCount64(),y);
 }
 
+bool FirstPersonShadowPass() { return g_shadowDepthScope; }
 bool FirstPersonDrawingTrackedHands() { return g_renderArm>=0; }
 int FirstPersonTrackedHandJoint() {
     return g_renderArm>=0 && g_renderHandJoint>=0 && g_renderHandJoint<72 ? g_renderHandJoint : -1;

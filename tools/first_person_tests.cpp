@@ -220,13 +220,8 @@ void __cdecl FakeJoint(uint8_t* item, tr::PHD_VECTOR* v, int joint, int frac) {
     }
     jointCalled = true;
 }
-int shadowJointCalls=0, shadowJointFraction=0;
-uint8_t* shadowJointItem=nullptr;
-tr::PHD_VECTOR shadowNativePoint{1000,-400,2000};
-void __cdecl FakeShadowJoint(uint8_t* item,tr::PHD_VECTOR* point,int32_t,int32_t frac) {
-    ++shadowJointCalls;shadowJointFraction=frac;shadowJointItem=item;
-    *point=shadowNativePoint;
-}
+int nativeShadowPass=0;
+float nativeShadowViewRel[3]{}, seenHairViewRel[3]{};
 int16_t nativeAimLock=0;
 const float* skinFixture=nullptr;
 int skinFixtureCount=0;
@@ -454,7 +449,17 @@ void __cdecl FakeDraw(uint8_t* item, int32_t useBits, int32_t pass) {
     drawnBodyBits=*reinterpret_cast<uint32_t*>(item+tr::off::item_mesh_bits);
     drawnUseBits=useBits; drawnPass=pass;
 }
-void __cdecl FakeHair(int32_t) { ++hairs; }
+float shadowDrawPalette[33*12]{};
+int shadowDrawCount=0;
+void __cdecl FakeShadowDraw(uint8_t* item,int32_t useBits,int32_t pass) {
+    FakeDraw(item,useBits,pass);
+    Check(tr::g_renderArm==-1 && !tr::FirstPersonDrawingTrackedHands(),
+          "light pass never uses the tracked-hand shader or wrist transform");
+    shadowDrawCount=tr::Detour_GetJoints(item,shadowDrawPalette,pass);
+    uint64_t mask=0;int count=0;
+    Check(!tr::FirstPersonBodyPalette(mask,count),"shadow cannot supply visibility-masked physics palette");
+}
+void __cdecl FakeHair(int32_t) { ++hairs;std::memcpy(seenHairViewRel,nativeShadowViewRel,sizeof(seenHairViewRel)); }
 void Head(float yaw, float pitch = 0) {
     auto& vr = tr::VR();
     const float c = std::cos(yaw), s = std::sin(yaw);
@@ -502,6 +507,60 @@ uint64_t GameDllBase() { return g_boundBase; }
 
 int main() {
     using namespace tr;
+    // Native receiver coordinates are relative to the THIRD-PERSON camera.
+    // The FP scene camera can move thousands of units without moving a world
+    // point in the light's projection. Test perspective + rotated light maps,
+    // not merely equality of caster bone palettes.
+    {
+        static mat4 maps[6]{}, nativeMap{};
+        g_hDrawToShadow.m_trampoline=reinterpret_cast<void*>(+[](int32_t room) {
+            Check(room==7 && FirstPersonShadowPass(),"native shadow map uses isolated light-camera scope");
+            VidState().shadow=maps;maps[0]=nativeMap;
+        });
+        for (float angle:{0.f,.7f,-1.9f}) for (bool perspective:{false,true}) {
+            const float c=std::cos(angle),q=std::sin(angle);
+            // Independent world -> light clip-space oracle, column-major.
+            mat4 world{};world.m[0]=c*.002f;world.m[8]=q*.002f;
+            world.m[1]=q*.003f;world.m[5]=.004f;world.m[9]=-c*.003f;
+            world.m[2]=-q*.001f;world.m[10]=c*.001f;
+            world.m[3]=perspective ? -.0001f*q : 0;
+            world.m[11]=perspective ? .0001f*c : 0;
+            world.m[12]=.2f;world.m[13]=-.3f;world.m[14]=.1f;world.m[15]=1;
+            const PHD_3DPOS native={1000,-1800,3000,0,0,0,0};
+            nativeMap=world;
+            for(int r=0;r<4;++r) nativeMap.m[12+r]+=world.m[r]*native.x_pos+
+                world.m[4+r]*native.y_pos+world.m[8+r]*native.z_pos;
+            for (int frame=0;frame<50;++frame) {
+                PHD_3DPOS scene={1000+frame*17,-700+frame*3,1000-frame*29,
+                    int16_t(frame*130),int16_t(frame*600),int16_t(frame*70),0};
+                Detour_DrawToShadow(7);
+                Check(!FirstPersonShadowPass(),"light-camera isolation ends before eye rendering");
+                g_active=g_scenePoseValid=true;VidState().consts=0;
+                RebaseShadowReceiver(native,scene);
+                Check((VidState().consts&kShadow)!=0,"rebased shadow matrix is marked for GPU upload");
+                for(int p=0;p<12;++p) {
+                    const float point[3]={float(500+p*77),float(-300+p*29),float(2500-p*63)};
+                    for(int r=0;r<4;++r) {
+                        const double wanted=world.m[12+r]+world.m[r]*double(point[0])+
+                            world.m[4+r]*double(point[1])+world.m[8+r]*double(point[2]);
+                        const double actual=maps[0].m[12+r]+maps[0].m[r]*double(point[0]-scene.x_pos)+
+                            maps[0].m[4+r]*double(point[1]-scene.y_pos)+maps[0].m[8+r]*double(point[2]-scene.z_pos);
+                        Check(std::fabs(actual-wanted)<.00001,"world shadow projection is invariant under FP camera translation/yaw/pitch/roll");
+                    }
+                }
+                const mat4 once=maps[0];RebaseShadowReceiver(native,scene);
+                Check(std::memcmp(&once,&maps[0],sizeof(mat4))==0,"receiver origin correction cannot accumulate");
+                Check(std::memcmp(maps[0].m,nativeMap.m,12*sizeof(float))==0,
+                      "light angle and shadow shape remain native");
+                g_active=false;RebaseShadowReceiver(native,scene);
+                Check(std::memcmp(&maps[0],&nativeMap,sizeof(mat4))==0,
+                      "third-person switch restores exact native shadow projection");
+            }
+        }
+        RestoreShadowReceiver();g_shadowReceiver=nullptr;VidState().shadow=nullptr;
+        g_hDrawToShadow.m_trampoline=nullptr;g_active=g_scenePoseValid=false;
+    }
+
     // Optical axis follows gun yaw/pitch/roll, not the headset; projected
     // barrel-ray points remain under the reticle at every distance.
     for (int yaw=-180;yaw<=180;yaw+=30) for (int pitch=-60;pitch<=60;pitch+=30)
@@ -1995,64 +2054,65 @@ int main() {
                 TestDynamicBonesNativeDraws();
             }
         }
-        // The CPU floor-shadow anchor and GPU body must receive the same
-        // world-space translation, regardless of yaw, animation interpolation
-        // or arm visibility. Native shadow height remains untouched.
-        g_hShadowJoint.m_trampoline=reinterpret_cast<void*>(&FakeShadowJoint);
-        for (const auto& shadow:kShadowDlls) {
-            g_shadowDll=&shadow;
-            const auto caller=g_boundBase+shadow.torsoReturn;
-            for (int yaw:{0,8192,16384,24576,-32768,-16384}) {
-                for (int frac:{0,64,128,255,256}) for (bool hidden:{false,true}) {
-                    const double angle=yaw*3.141592653589793/32768.;
-                    g_bodyVisualOffset={float(150*std::sin(angle)),float(150*std::cos(angle))};
-                    float fixture[15*12]{};
-                    for (int j=0;j<15;++j) {
-                        fixture[j*12]=fixture[j*12+5]=fixture[j*12+10]=1;
-                        fixture[j*12+3]=float(shadowNativePoint.x);
-                        fixture[j*12+7]=float(shadowNativePoint.y);
-                        fixture[j*12+11]=float(shadowNativePoint.z);
-                    }
-                    skinFixture=fixture;skinFixtureCount=15;
-                    bits=hidden ? 0x7fff&~kArmMeshBits : 0x7fff;
-                    float body[15*12]{};
-                    Detour_GetJoints(itemMemory,body,0);
-                    for (int repeat=0;repeat<2;++repeat) {
-                        PHD_VECTOR point{};const int before=shadowJointCalls;
-                        GetJointForCaller(itemMemory,&point,7,frac,caller);
-                        Check(shadowJointCalls==before+1 && shadowJointFraction==frac &&
-                              shadowJointItem==itemMemory,"shadow preserves native interpolation and calls engine once");
-                        Check(std::abs(point.x-body[7*12+3])<=.51f &&
-                              std::abs(point.z-body[7*12+11])<=.51f &&
-                              point.y==shadowNativePoint.y,"floor shadow matches rendered torso without height drift or accumulation");
-                    }
-                }
+        // Native shadow pass is a DLL global, NOT the DrawCreatureHD argument.
+        // In the light pass first-person hidden parts must remain connected,
+        // including when tracked hands would otherwise split/relocate them.
+        auto shadowBuild=kShadowDlls[0];shadowBuild.renderPass=rva(&nativeShadowPass);
+        shadowBuild.viewRel=rva(nativeShadowViewRel);
+        g_shadowDll=&shadowBuild;nativeShadowPass=4;
+        g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeShadowDraw);
+        for (int jointCount:{15,33}) for (int pass:{0,1,2,4})
+        for (int hide:{0,1,2,3,4}) for (int hand:{-1,0,1})
+        for (const locomotion::Vec offset: {locomotion::Vec{},locomotion::Vec{35,-60},
+                locomotion::Vec{-700,400},locomotion::Vec{900,-800}}) {
+            float fixture[33*12]{};
+            for (int j=0;j<jointCount;++j) {
+                fixture[j*12]=fixture[j*12+5]=fixture[j*12+10]=1;
+                fixture[j*12+3]=float(j*30);fixture[j*12+7]=float(-j*40);
+                fixture[j*12+11]=float(j*20);
             }
-            g_bodyVisualOffset={35,-60};
-            // Every non-shadow joint caller (eyes, gun muzzles, hit tests,
-            // classic rendering) and every non-grounded/third-person case
-            // must receive the native result.
-            for (int guard=0;guard<10;++guard) {
-                auto* item=itemMemory;int joint=7;auto returnAddress=caller;
-                if (guard==0) ++returnAddress;
-                if (guard==1) joint=14;
-                if (guard==2) item=laraMemory;
-                if (guard==3) g_active=false;
-                if (guard==4) g_scenePoseValid=false;
-                if (guard==5) g_headingItem=nullptr;
-                if (guard==6) state=3; // jump
-                if (guard==7) state=19; // climb
-                if (guard==8) water=1;
-                if (guard==9) g_shadowDll=nullptr;
-                PHD_VECTOR point{};
-                GetJointForCaller(item,&point,joint,128,returnAddress);
-                Check(point.x==shadowNativePoint.x && point.y==shadowNativePoint.y &&
-                      point.z==shadowNativePoint.z,"unrelated callers and inactive body offsets retain native shadow anchor");
-                g_active=g_scenePoseValid=true;g_headingItem=itemMemory;
-                state=2;water=0;g_shadowDll=&shadow;
+            skinFixture=fixture;skinFixtureCount=jointCount;
+            g_renderArm=hand;g_unarmedArmsHidden=true;
+            g_rollHidden=hide==1;g_crouchHidden=hide==2;
+            g_underwaterHidden=hide==3;g_ledgeArmsOnly=hide==4;
+            g_headHidden=true;g_bodyVisualOffset=offset;bits=0x7fff;
+            const int oldDraws=draws,oldHairs=hairs;
+            nativeShadowViewRel[0]=10;nativeShadowViewRel[1]=20;nativeShadowViewRel[2]=30;
+            Detour_DrawCreatureHD(itemMemory,0,pass);Detour_DrawHair(0);
+            Check(draws==oldDraws+1 && hairs==oldHairs+1 && drawnUseBits==0 &&
+                  drawnPass==pass && drawnBodyBits==0x7fff && bits==0x7fff && g_renderArm==hand,
+                  "shadow keeps native full-body/head/hair draw and restores eye hand state");
+            Check(seenHairViewRel[0]==10 && seenHairViewRel[1]==20 && seenHairViewRel[2]==30 &&
+                  nativeShadowViewRel[0]==10 && nativeShadowViewRel[1]==20 && nativeShadowViewRel[2]==30,
+                  "head-dependent body offsets never move the native shadow braid");
+            Check(shadowDrawCount==jointCount,"shadow retains complete native skeleton");
+            for (int j=0;j<jointCount;++j) {
+                Check(shadowDrawPalette[j*12]==1 && shadowDrawPalette[j*12+5]==1 &&
+                      shadowDrawPalette[j*12+10]==1 &&
+                      shadowDrawPalette[j*12+3]==fixture[j*12+3] &&
+                      shadowDrawPalette[j*12+7]==fixture[j*12+7] &&
+                      shadowDrawPalette[j*12+11]==fixture[j*12+11],
+                      "first-person shadow equals native third-person skeleton regardless of head-dependent offset");
             }
+            // Native weapon/attachment masks must also remain native.
+            bits=0x400;Detour_DrawCreatureHD(itemMemory,1,pass);
+            Check(drawnUseBits==1 && drawnBodyBits==0x400 && bits==0x400,
+                  "shadow retains native attachment masks instead of hand-only splitting");
         }
-        g_shadowDll=nullptr;g_hShadowJoint.m_trampoline=nullptr;
+        // Third-person light rendering remains exactly native, even if a
+        // previous first-person frame left an offset or visibility flags.
+        skinFixture=nullptr;skinFixtureCount=0;g_active=false;g_renderArm=-1;
+        const int nativeDraws=draws,nativeHairs=hairs;
+        Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+        Check(draws==nativeDraws+1 && hairs==nativeHairs+1 && drawnUseBits==0 &&
+              shadowDrawPalette[3]==0 && shadowDrawPalette[11]==0 &&
+              seenHairViewRel[0]==10 && seenHairViewRel[2]==30,
+              "third-person shadow body and braid retain native placement");
+        g_active=true;
+        nativeShadowPass=0;g_renderArm=-1;
+        g_rollHidden=g_crouchHidden=g_underwaterHidden=g_ledgeArmsOnly=g_unarmedArmsHidden=false;
+        g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeDraw);
+        g_shadowDll=nullptr;
         skinFixture=nullptr;skinFixtureCount=0;
         g_bodyVisualOffset={};
         object=oldObject; dll.objects=oldObjects; dll.gLaraHeads=oldHeads;

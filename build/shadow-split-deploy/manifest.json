@@ -1,0 +1,14 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-shadow-split-20261005-161202",
+    "dll_sha256":  "4C79B4BB0341898270A4B8C6E4243C0D16B2FAF2A539B42ADBBBC7DF5118235C",
+    "previous_dll_sha256":  "3E3F2763E2693A34770834A712EC87C078AF3B384A677FA02F45E332B37E85EC",
+    "ini_sha256":  "B706CE4260CF29345B48FE9ADEDBCB2CB86FDCFB5F640C130E7108C1F3FE61CA",
+    "build":  "Release x64",
+    "regression_checks":  563716,
+    "dynamic_bones_integration":  "8 cases passed",
+    "native_shadow_audit":  "4 builds: actual installed signature, global shadow pass, hair origin, floor caller verified",
+    "headset_verified":  false,
+    "mount_camera_transition":  false
+}

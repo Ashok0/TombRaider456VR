@@ -9,6 +9,8 @@ void FirstPersonToggle();
 void FirstPersonRecenter();
 void FirstPersonShutdown();
 bool FirstPersonActive();
+// True only while the native light camera draws its shadow map.
+bool FirstPersonShadowPass();
 // Unmasked palette only within Lara's first-person body draw.
 const float* FirstPersonBodyPalette(uint64_t& mask,int& count);
 // Render-only HK optic pose; no native zoom, weapon or camera state mutations.

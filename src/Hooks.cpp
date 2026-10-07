@@ -870,6 +870,7 @@ void __cdecl Detour_validate_draw() {
                      && worldPass
                      && !ortho3D
                      && !g_inTr6ShadowDepthPass
+                     && !FirstPersonShadowPass()
                      && (Cfg().monoTracking || TargetIsBackbuffer()
                          || AlternateEyeActive()
                          || (NativeTr6Active() && g_inNativeTr6Scene));
