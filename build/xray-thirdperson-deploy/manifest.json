@@ -1,0 +1,21 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-xray-thirdperson-20261009-153633",
+    "source_base":  "1790a4c73495dc3016ec806b545e8ba2cbb5cfcf",
+    "change":  "Use native third person for TR5 X-ray sequences via lara.skelebob; automatically restore first person after effect ends",
+    "dll_sha256":  "B80F18E9BD48C58697B3BBC3A3846B63F489C3E3918B5E064EE441073EF9ACA6",
+    "previous_dll_sha256":  "4ACA9672E1C170777C5E914E1BDAE4681620E34D491DC916D51E9727FD634212",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  1324985,
+    "native_address_checks":  808,
+    "dynamic_bones_integration_cases":  12,
+    "regression_reproduced_before_fix":  true,
+    "native_xray_flag_verified_in":  [
+                                         "PDB 0x696B499C",
+                                         "installed retail 0x68C12FE9"
+                                     ],
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

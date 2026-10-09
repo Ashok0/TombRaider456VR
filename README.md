@@ -7,7 +7,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 ## VR Mod Features
 
 * Native stereo with 6DOF
-* First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming, cutscenes, and switch-use animations temporarily use third person.
+* First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming, cutscenes, switch-use animations, and TR5 X-ray sequences temporarily use third person.
 * Full-body VRIK in TR4/5 HD first person using headset and controllers: inferred torso/hips, leg IK on animated foot targets, and arms sharing the gun wrist calibration.
 * Culling fixes for VR
 * Camera fixes for VR
@@ -85,6 +85,7 @@ and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and
 | Gun controller rumble | October 9: confirmed tracked shots give the firing hand a strong 80 ms haptic burst; both guns and automatic fire are supported. See [gun haptics](#per-gun-controller-haptics-2026-10-09). |
 | Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
+| TR5 X-ray sequence flickers in first person | October 9: force native third person while the X-ray effect is active, then automatically resume first person. See [X-ray camera override](#third-person-during-tr5-x-ray-sequences-2026-10-09). |
 | Wrists remain twisted until view toggle | October 9: reproduced full-turn accumulation in TR4/5 and replaced it with limits based on the current controller pose. See [wrist recovery](#persistent-wrist-twist-recovery-2026-10-09). |
 | Unarmed hands in the forward view | Extended October 7: walking and running share controller arm IK and resting-hand meshes; wrist bends and roll are constrained and forearms absorb most roll. The prior look-down-only animation remains the fallback when IK is disabled or tracking is unavailable. See [wrist correction](#consistent-walkingrunning-ik-and-wrist-limits-2026-10-07). |
 | Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
@@ -100,21 +101,50 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 9 current deployment:** Release/x64 from "Weapon rumble fix"
-(`60744a5`) plus the persistent wrist-twist correction. Switch camera, Action alignment,
+**October 9 current deployment:** Release/x64 from "Wrist fix"
+(`1790a4c`) plus automatic third person during TR5 X-ray sequences. Switch camera, Action alignment,
 landing-neck, monkey-bar and optional full-body centering fixes remain included.
 The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
 available, full-body IK is disabled. Personal settings and controller calibration
 were preserved. The earlier System-height calibration experiments are absent
-from this checkout. Automated checks pass; wrist recovery, haptic strength and the remaining
+from this checkout. Automated checks pass; X-ray presentation, wrist recovery, haptic strength and the remaining
 camera/interaction changes still need in-headset confirmation.
 
-- Installed DLL SHA-256: `4ACA9672E1C170777C5E914E1BDAE4681620E34D491DC916D51E9727FD634212`.
-- Deployment record: [wrist recovery manifest](build/wrist-recovery-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-wrist-recovery-20261009-040740/`.
+- Installed DLL SHA-256: `B80F18E9BD48C58697B3BBC3A3846B63F489C3E3918B5E064EE441073EF9ACA6`.
+- Deployment record: [X-ray third-person manifest](build/xray-thirdperson-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-xray-thirdperson-20261009-153633/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### Third person during TR5 X-ray sequences (2026-10-09)
+
+The X-ray side-scroller section reported in **Escape with the Iris** now uses
+native third person for the duration of the effect. Detection uses TR5's native
+`lara.skelebob` byte at offset 350, which the X-ray floor trigger enables and
+Lara's native renderers read. This keeps first person suspended even when the
+camera type changes between fixed and ordinary chase/look/combat views. Other
+parts of the level remain available in first person.
+
+The existing camera suspension path restores the full body/head/hair, releases
+tracked first-person rendering and clears pending movement, firing and equip
+input. When the X-ray flag clears, first person returns automatically with the
+player's viewing heading preserved. A player who selected third person stays
+in third person. The override is TR5-only and requires no INI setting. Personal
+settings remain unchanged, including disabled full-body IK.
+
+Validation: the new X-ray camera regression failed before the fix.
+**1,324,985 first-person checks**, **12 jiggle integration cases** and **808 native
+address checks** pass. Cases cover sustained X-ray mode across camera-type
+changes, full native body/hair rendering, the simulation's temporary flag
+refresh, queued input cleanup, automatic recovery, TR4 isolation and retaining
+a third-person preference. The flag's trigger writes and render reads were
+verified in both the PDB build and the installed retail TR5 DLL. Clean
+Release/x64 rebuild and installed DLL/unchanged INI hash checks passed.
+Logs: `build/xray-thirdperson-before-tests.log`, `build/xray-thirdperson-tests.log`,
+`build/xray-thirdperson-build.log`, `build/xray-address-tests.log`, and
+`build/xray-native-audit.log`. The reported session log is preserved at
+`build/xray-reported-session.log`. In-headset confirmation remains pending.
 
 ### Persistent wrist-twist recovery (2026-10-09)
 

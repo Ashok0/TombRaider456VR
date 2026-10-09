@@ -1,0 +1,749 @@
+TombRaiderVR: starting
+config: mode=stereo tracking=rotation+position origin=seated units/m=423.0 ss=1.00 flipProjY=1 flipViewY=1 dup=1 flatHud=1
+config: culling=head frustum margin=8.0deg depth<=16 portals<=4096 far=0 widen=1 objects=1  sky=infinity
+config: first person TR4/TR5 joint=14 anchor=(0,-32,140), translation=on head=hidden move-with-head=on turn=120deg/s stabilization=on
+config: first person body-follow=1 deadzone=0.0 turn=4.0deg/60Hz head-aim=1; Y+LT=view, Y+RT=graphics (including menus)
+config: dynamic-bone measurement ON (torso joint 7, report every 900 frames) -- TR4/TR5 only
+config: dynamic-bone DEBUG DISPLACEMENT ON at 1.0x -- joint 7 is TORSO, so the whole upper body moves, not just the chest. This is a debug view, not the feature.
+engine: bound to 00007FF75F270000 (reference base 0000000140000000, slide +140695061331968)
+engine: build identified as retail / community HD pack v1.0.2 (2025-09-10)
+hook[vid_setPass]: 00007FF75F27C770 -> 00007FFC08FB7220 (stole 10, tramp 00007FF76DC6000E)
+hook[validate_draw]: 00007FF75F281FF0 -> 00007FFC08FB72C0 (stole 6, tramp 00007FF76DC7000E)
+hook[ogl_draw]: 00007FF75F282EF0 -> 00007FFC08FB9C00 (stole 5, tramp 00007FF76DC8000E)
+hook[ogl_drawVB]: 00007FF75F283010 -> 00007FFC08FB9C20 (stole 5, tramp 00007FF76DC9000E)
+hook[ogl_present]: 00007FF75F282920 -> 00007FFC08FBB810 (stole 6, tramp 00007FF76DCA000E)
+hook[fmvShow]: 00007FF75F281680 -> 00007FFC08FBB7F0 (stole 7, tramp 00007FF76DCB000E)
+hooks: all six installed
+hook[shader_init]: 00007FF75F281B50 -> 00007FFC08FC7EE0 (stole 7, tramp 00007FF76DCC000E)
+hook[TR4 ogl_texUpdate]: 00007FF75F284570 -> 00007FFC08FCC900 (stole 5, tramp 00007FF76DCD000E)
+hook[TR4 vidLoadTexture]: 00007FF75F27B490 -> 00007FFC08FCCA80 (stole 5, tramp 00007FF76DCE000E)
+TR4 effects: native sunray/atlas upload enhancement ready (TR4 resources only)
+TombRaiderVR: hooks installed; OpenVR will be brought up on the first frame
+gl: loader ready (shader api ready)
+motion hands: rigid wrist skinning and forearm seam trim ready
+TR4 effects: TEX\EFFECT.DDS array 6 layer 1: 6 enhanced mips, load OK
+boneskin: 15 skin program(s) matched, 15 patched, 0 fell back to the original
+pad: Touch controllers presented as an Xbox pad (_XInputGetState 00007FF75F9049F8 -> 00007FFC08FCD520, real 00007FFC420E4EE0)
+pad: move=Lstick look=Rstick(yaw only; hold RT+RB for pitch) jump=A(R lower) roll=B(R upper) action=Y(L upper)/LB+RB(both grips) system=BACK(L lower) walk=LS+RB(R grip) sneak=RB+Y duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=L3+R3 dpad=R3+Lstick
+pad: FP motion guns: tap LT=left pistol/Uzi on release, tap RT=right/single shot; hold LT 0.5s=draw/holster once
+gamedll: bound to tomb5.dll (Tomb Raider V (retail), build 0x68C12FE9, game=1) at 00007FFB67680000
+gun calibration: Ctrl+F1..F6 position, Ctrl+Shift+F1..F6 angles; F7 save/restore
+firstperson: startup is third person; Y+LT switches views
+hook[LaraAboveWater]: 00007FFB676CB2F0 -> 00007FFC08FE0A80 (stole 5, tramp 00007FFB67EE000E)
+hook[AnimateLara]: 00007FFB676DF9B0 -> 00007FFC08FE04B0 (stole 6, tramp 00007FFB67EF000E)
+hook[AimWeapon]: 00007FFB676DC430 -> 00007FFC08FDF5E0 (stole 5, tramp 00007FFB67F0000E)
+hook[GetJoints]: 00007FFB67735A00 -> 00007FFC08FDC800 (stole 5, tramp 00007FFB67F1000E)
+hook[FirstPersonDrawToShadow]: 00007FFB6773CAB0 -> 00007FFC08FD9ED0 (stole 6, tramp 00007FFB67F2000E)
+firstperson: intact native shadows; eye-view body and hand offsets excluded
+hook[AnimatePistols]: 00007FFB676D8710 -> 00007FFC08FDF3C0 (stole 5, tramp 00007FFB67F3000E)
+hook[FireWeapon]: 00007FFB676DC4E0 -> 00007FFC08FDEE80 (stole 5, tramp 00007FFB67F4000E)
+hook[PistolHandler]: 00007FFB676D83F0 -> 00007FFC08FDF4F0 (stole 5, tramp 00007FFB67F5000E)
+hook[GetTargetOnLOS]: 00007FFB676933A0 -> 00007FFC08FDF390 (stole 6, tramp 00007FFB67F6000E)
+hook[SetGunFlash]: 00007FFB6770DAA0 -> 00007FFC08FDD400 (stole 7, tramp 00007FFB67F7000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+firstperson: unarmed HD arm IK enabled, using shared gun calibration
+hook[phd_GenerateW2V]: 00007FFB677214D0 -> 00007FFC08FE4D40 (stole 5, tramp 00007FFB67F8000E)
+hook[DrawActionIndicators]: 00007FFB6774AC70 -> 00007FFC08FD7A60 (stole 5, tramp 00007FFB67F9000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FFB67736510 -> 00007FFC08FE3F60 (stole 5, tramp 00007FFB67FA000E)
+hook[DrawHair]: 00007FFB6776E760 -> 00007FFC08FE4730 (stole 5, tramp 00007FFB67FB000E)
+hook[MotionRifleHandler]: 00007FFB676D5A70 -> 00007FFC08FDEE40 (stole 6, tramp 00007FFB67FC000E)
+hook[MotionFireShotgun]: 00007FFB676D5E80 -> 00007FFC08FDE590 (stole 5, tramp 00007FFB67FD000E)
+hook[MotionFireSpecial]: 00007FFB676D64C0 -> 00007FFC08FDE980 (stole 8, tramp 00007FFB67FE000E)
+hook[MotionFireCrossbow]: 00007FFB676D65E0 -> 00007FFC08FDEB80 (stole 5, tramp 00007FFB67FF000E)
+hook[MotionGunJoint]: 00007FFB6771CD30 -> 00007FFC08FDEBE0 (stole 5, tramp 00007FFB6800000E)
+hook[MotionInitialiseProjectile]: 00007FFB676C6160 -> 00007FFC08FDED00 (stole 5, tramp 00007FFB6801000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+firstperson: Tomb Raider V (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+hook[PrintRoomsList]: 00007FFB6773A040 -> 00007FFC08FC3E40 (stole 5, tramp 00007FFB6802000E)
+hook[S_GetObjectBounds]: 00007FFB6772BD20 -> 00007FFC08FC44E0 (stole 5, tramp 00007FFB6803000E)
+cull: hooked tomb5.dll (Tomb Raider V (retail))
+hook[DrawSkyHD]: 00007FFB67739B50 -> 00007FFC08FC4F80 (stole 5, tramp 00007FFB6804000E)
+sky: hooked tomb5.dll (Tomb Raider V (retail)) -- sky draws use rotation-only eye transform (optical infinity) and far-plane depth
+overlay: 5 optic overlay draw(s) stubbed in tomb5.dll (Tomb Raider V (retail)) -- binocular=1 scope=1 tint=1. The laser dot is a separate sprite and is untouched.
+hook[DrawLaraHD]: 00007FFB67738FB0 -> 00007FFC08FC4FA0 (stole 8, tramp 00007FFB6805000E)
+dynbones: hooked tomb5.dll (Tomb Raider V (retail)) -- measuring only, nothing is drawn differently
+vr: initialisation attempt 1 at frame 1
+vr: using C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\openvr_api.dll
+vr: runtime installed=yes, IsHmdPresent=yes
+vr: initialised as a Scene app
+vr: eye 0 raw tangents l=-1.3764 r=0.8391 t=-1.4281 b=0.9657
+vr: eye 0 eyeToHead offset = (-0.0309, +0.0000, +0.0000) m
+vr: eye 1 raw tangents l=-0.8391 r=1.3764 t=-1.4281 b=0.9657
+vr: eye 1 eyeToHead offset = (+0.0309, +0.0000, +0.0000) m
+vr: ready, per-eye target 1728x1824
+vr: up and running
+stereo: created 3456x1824 double-wide target (fbo 2, tex 39)
+present: redirected FBO_default 0 -> 2
+stereo: mono scratch ready (2560x1440, fbo 3, tex 40)
+video: offscreen panel ready (2560x1440, fbo 4, tex 41, prog 609)
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+gamedll: no level loaded yet -- ceiling clamp stands down until there is one (this is normal at the title screen)
+vr: head pose ACQUIRED
+present: first stereo frame submitted
+pad: water_status=0 (above water) -- stick pitch decoupled
+pad: optics zoom left -- stick pitch decoupled
+cull: head-frustum portal traversal live on Tomb Raider V (retail) -- frustum 124.0 x 126.0 degrees, depth<=16, 4096 portals/frame budget
+sky: first DrawSkyHD draw (shader 1) -- rotation-only eye transform, far-plane depth
+inject: eye=0 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=-0.2425 proj[9]=-0.1932
+inject: eye=0 eyeView translation = (-1.6, -3.7, -155.5) world units
+inject: eye=0 final view translation = (48976.7, -978.4, 33506.3)
+inject: eye=0 packed view translation IN MEMORY = (52752.0, 1791.0, 27136.0) [floats 3,7,11 at 00007FF76D78ECD0]
+inject: eye=0 uid[1] (uViewMatrix location) = 3, shader=1
+inject: eye=1 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=0.2425 proj[9]=-0.1932
+inject: eye=1 eyeView translation = (-27.8, -3.7, -155.5) world units
+inject: eye=1 final view translation = (48976.7, -978.4, 33506.3)
+inject: eye=1 packed view translation IN MEMORY = (52752.0, 1791.0, 27136.0) [floats 3,7,11 at 00007FF76D78ECD0]
+inject: eye=1 uid[1] (uViewMatrix location) = 3, shader=1
+inject: SEPARATION between eyes = 0.00 world units (dx=0.00 dy=0.00 dz=0.00)
+inject: *** ZERO SEPARATION -- both eyes are rendering the SAME view. This is why depth is flat and why world scale changes nothing. ***
+vr: ceiling clamp active -- headroom 167 units, eye held 39 units above the camera
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: locked to shader 20 (15 joints) -- the latch stays here so the drive stays continuous
+boneskin: measured buffer 18 -- 26971 vertices, 4556 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+boneskin: front of the torso is local +Z (30 samples, mean alignment 1.00 with Lara's facing)
+boneskin: torso shape, side view -- BACK on the left, FRONT on the right, top row is the neck end. x -62..61  y -249..-81  depth -81..71
+boneskin:   |        ... .           |
+boneskin:   |         .......        |
+boneskin:   |      . .--=-:.         |
+boneskin:   |.:-...--+:::..==.       |
+boneskin:   |-.......:......--:      |
+boneskin:   |=.-:-:=..:.....-:-:.    |
+boneskin:   |@:.:=:......=::::...=*. |
+boneskin:   |%-......::..-:..... ..-.|
+boneskin:   |#..:....::..:..... ....-|
+boneskin:   |::.:.. .-...... . .. ..:|
+boneskin:   |  .:....... .... .....:.|
+boneskin:   |          ..... ... ..  |
+boneskin:   |           . .... . ..  |
+boneskin:   |            ..=.. ...   |
+boneskin: front profile, neck to waist: -11 14 14 13 17 25 30 38 50 61 65 70 71 71 69 61 57 54 53 52
+boneskin: chest region (measured bust) -- height -178..-110 of -249..-81, depth from 25 forward (front 71, belly line 55), within 42 of centre. Selects 313 torso vertices at full weight (y -170..-118) and 282 partly.
+boneskin: live -- Lara's body (shader 20) now deforms per vertex, and the whole-torso view has stood down
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+firstperson: headset neutral=(0.085,1.200,0.060)m
+firstperson: resolved body fit yaw=-1.0 base=0.9 offset=(-0.8,0.1) pending=(0.000,-0.000)m
+firstperson: native joint 14 anchored; offset from body=(16,-675,138)
+firstperson shadow: receiver origin native=(35328,-24832,55424) FP=(32692,-24739,55303); light camera isolated
+cull: first-person eye in room 9; game camera seeded room 159
+HK scope: waiting for right-hand HK mesh binding
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=1 head=-1.0 body=-1.0 manual=(+0.00,+0.00) pending=(+0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.085,1.200,0.060)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.085,1.200,0.060)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.085,1.200,0.060)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.085,1.200,0.060)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.084,1.201,0.060)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.084,1.201,0.060)m
+HK scope: captured wrist binding from right-hand HK draw
+firstperson: Touch state [periodic] blocked=none game=1 gun=5 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=21 R=21 shots L=0 R=0
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.084,1.201,0.061)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.084,1.202,0.061)m
+HK scope: captured wrist binding from right-hand HK draw
+HK scope: eye-box=0/0 mesh-fit=1 radius=0.013m relief=-0.109/-0.095m miss=0.275/0.259m
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.083,1.202,0.061)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.083,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.082,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=2 head=-1.9 body=-1.5 manual=(+0.00,+0.00) pending=(+0.000,-0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.082,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.082,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.082,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.081,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.081,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.081,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.081,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.082,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.086,1.202,0.062)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.090,1.202,0.063)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.099,1.201,0.063)m
+cull: first-person eye in room 9; game camera seeded room 7
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=7 head=6.0 body=2.5 manual=(+0.00,+0.00) pending=(-0.004,+0.001)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.107,1.200,0.064)m
+cull: first-person eye in room 9; game camera seeded room 159
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=2 head=7.0 body=2.0 manual=(+0.00,+0.00) pending=(-0.001,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.111,1.200,0.065)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.117,1.199,0.066)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.123,1.198,0.068)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.128,1.198,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.133,1.198,0.071)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.138,1.197,0.072)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.142,1.197,0.074)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.146,1.196,0.076)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.150,1.196,0.077)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.153,1.196,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.156,1.195,0.080)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.157,1.195,0.081)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.159,1.195,0.082)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.160,1.195,0.083)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.161,1.196,0.083)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=2 head=20.0 body=2.0 manual=(+0.00,+0.00) pending=(+0.000,-0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.161,1.196,0.084)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.161,1.196,0.084)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.161,1.196,0.084)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.161,1.196,0.085)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.160,1.197,0.085)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.160,1.197,0.085)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.159,1.197,0.085)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.159,1.197,0.085)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.158,1.198,0.085)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.157,1.198,0.084)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.155,1.198,0.083)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.153,1.198,0.083)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.151,1.199,0.081)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.147,1.199,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.143,1.199,0.077)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to third person
+dynbones: joints=15 shader=20 lock=20  frames=900 dup=0% snaps=1  drive_peak=4110.9 accel_raw=1388004 drive_used=0  disp_peak=14.92  L=(-0.10,8.43,1.54) R=(-0.10,8.43,1.54)
+dynbones: engine drive -- jumps=0 lands=0  last landing fallspeed=0 (grounded now)
+dynbones: this frame ran 3 DrawLaraHD scope(s), joints [15,0,15]
+firstperson: Touch ready=0 arms L=147 R=147 shots L=0 R=0
+stereo health @frame 1800: world draws=131139  duplicated=68773  injected eye0=64665 eye1=64665  (98% of world draws got per-eye matrices)  offscreen-skipped=1809  classify-mismatch=0  ortho3D=0  sky=9148  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(36.2, 33.1, 91.6) prog=79 loc=26  eye1=(-62.8, 33.1, 91.6) prog=79 loc=26  separation=99.02
+halves: 20 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF76D78E8A0  mProj[1](persp)=00007FF76D78E8E0
+  proj=00007FF76D78E8A0  draws=8217     ortho/2D
+  proj=00007FF76D78E8E0  draws=131139   perspective/world
+cull: 7.0 rooms/frame from the engine + 0.4 added by the head frustum, 0.1 items rescued/frame  *** A BUDGET WAS HIT -- raise CullMaxPortals/CullMaxDepth ***
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to third person
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to third person
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: switched to FIRST PERSON
+firstperson: headset neutral=(0.098,1.216,0.082)m
+firstperson: resolved body fit yaw=-0.7 base=-4.4 offset=(-0.5,0.9) pending=(0.000,-0.000)m
+firstperson: native joint 14 anchored; offset from body=(20,-664,151)
+HK scope: waiting for right-hand HK mesh binding
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=1 head=-0.7 body=-0.7 manual=(+0.00,+0.00) pending=(-0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.097,1.215,0.082)m
+HK scope: captured wrist binding from right-hand HK draw
+HK scope: eye-box=0/0 mesh-fit=1 radius=0.013m relief=-0.113/-0.090m miss=0.288/0.280m
+vr: third-person positional neutral captured; tracked rotation preserved
+boneskin: measured buffer 20 -- 21545 vertices, 6044 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+boneskin: torso shape, side view -- BACK on the left, FRONT on the right, top row is the neck end. x -64..64  y -249..-75  depth -81..71
+boneskin:   |        .....           |
+boneskin:   |         .......        |
+boneskin:   |   .  ..:--==:.         |
+boneskin:   |.:-...-:=::::.==.       |
+boneskin:   |-..... ....:...--:.     |
+boneskin:   |*.-:*:=..:.:...=:::..   |
+boneskin:   |@-........::+:::::..-+- |
+boneskin:   |*:......:::::..........:|
+boneskin:   |+..:....:...-. ....:...:|
+boneskin:   |...:....:..........::...|
+boneskin:   |  ...... ....:......:.. |
+boneskin:   |          ...:.....::.  |
+boneskin:   |          ...::.. ....  |
+boneskin:   |          ....-.. ..    |
+boneskin: front profile, neck to waist: -9 15 15 13 21 25 30 44 55 63 69 71 71 70 66 61 54 53 53 46
+boneskin: chest region (measured bust) -- height -176..-109 of -249..-75, depth from 23 forward (front 71, belly line 52), within 43 of centre. Selects 723 torso vertices at full weight (y -166..-117) and 922 partly.
+firstperson: headset neutral=(0.097,1.215,0.082)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.096,1.215,0.081)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.096,1.215,0.081)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.096,1.214,0.080)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.096,1.213,0.080)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=2 head=-0.8 body=-0.9 manual=(+0.00,+0.00) pending=(-0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.097,1.213,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.097,1.212,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=7 head=-0.3 body=-0.6 manual=(+0.00,+0.00) pending=(-0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.098,1.212,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=2 head=-0.3 body=-0.5 manual=(+0.00,+0.00) pending=(-0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.101,1.211,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.102,1.211,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.103,1.210,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=1 head=2.5 body=2.5 manual=(+0.22,+0.75) pending=(-0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000010000001
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.105,1.210,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.105,1.210,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.106,1.209,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.107,1.209,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.108,1.209,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.108,1.209,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.109,1.209,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.111,1.209,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.115,1.208,0.080)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.118,1.208,0.080)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.121,1.208,0.081)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.124,1.208,0.082)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.126,1.208,0.082)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.127,1.208,0.082)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.128,1.207,0.083)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=1 head=76.4 body=76.4 manual=(+0.97,+0.22) pending=(+0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000010000001
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.128,1.207,0.082)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.128,1.207,0.082)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.126,1.207,0.081)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.124,1.207,0.081)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.122,1.208,0.080)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.117,1.209,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.114,1.209,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.110,1.210,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.107,1.210,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.105,1.210,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=21 head=119.0 body=119.0 manual=(+0.22,-0.98) pending=(+0.001,-0.000)m drag=(+0.000,+0.000)m input=0000000090000800
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.103,1.211,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.101,1.211,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.099,1.211,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.097,1.211,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.089,1.212,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.087,1.211,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.085,1.210,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+dynbones: joints=15 shader=20 lock=20  frames=1800 dup=0% snaps=3  drive_peak=4273.8 accel_raw=6859870 drive_used=0  disp_peak=16.13  L=(-0.03,8.52,-0.23) R=(-0.03,8.52,-0.23)
+dynbones: engine drive -- jumps=0 lands=0  last landing fallspeed=0 (grounded now)
+dynbones: this frame ran 3 DrawLaraHD scope(s), joints [15,0,15]
+firstperson: headset neutral=(0.083,1.210,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.082,1.210,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.081,1.209,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.080,1.207,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.079,1.205,0.078)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=21 head=96.7 body=96.7 manual=(+0.33,-0.94) pending=(+0.001,+0.001)m drag=(+0.000,+0.000)m input=0000000090000800
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.077,1.200,0.077)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.076,1.196,0.077)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.075,1.189,0.076)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.074,1.182,0.075)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.074,1.177,0.073)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.074,1.173,0.071)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.076,1.166,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.077,1.160,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.079,1.154,0.068)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.081,1.149,0.067)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=1 head=56.0 body=57.4 manual=(+0.00,+0.00) pending=(-0.001,-0.001)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.085,1.145,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.088,1.143,0.066)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.091,1.140,0.065)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.095,1.138,0.067)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.099,1.137,0.068)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.102,1.137,0.067)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.105,1.137,0.067)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.107,1.137,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.109,1.137,0.068)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.111,1.137,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.112,1.135,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.113,1.134,0.071)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.113,1.134,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.114,1.134,0.071)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.112,1.135,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=1 head=62.4 body=57.4 manual=(+0.00,+0.00) pending=(-0.000,-0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.111,1.135,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.110,1.135,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.108,1.136,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.107,1.136,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.105,1.136,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.102,1.137,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.098,1.138,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.093,1.139,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=2 head=55.5 body=57.4 manual=(+0.00,+0.00) pending=(+0.002,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.087,1.140,0.068)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.079,1.141,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.072,1.143,0.069)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.064,1.145,0.070)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.050,1.149,0.072)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.043,1.152,0.075)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.033,1.156,0.079)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.025,1.160,0.083)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.019,1.163,0.087)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.013,1.166,0.091)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.009,1.167,0.094)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.006,1.168,0.096)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.003,1.169,0.097)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(0.001,1.171,0.099)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.003,1.173,0.101)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=2 head=31.0 body=57.4 manual=(+0.00,+0.00) pending=(+0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.006,1.175,0.105)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.008,1.176,0.107)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.011,1.178,0.112)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.012,1.179,0.113)m
+HK scope: captured wrist binding from right-hand HK draw
+locomotion: state=21 head=-2.6 body=-2.6 manual=(+0.98,+0.19) pending=(+0.000,+0.001)m drag=(+0.000,+0.000)m input=0000000090000800
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.014,1.181,0.118)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.016,1.182,0.120)m
+HK scope: captured wrist binding from right-hand HK draw
+firstperson: Touch state [periodic] blocked=none game=1 gun=5 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=330 R=330 shots L=0 R=0
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.017,1.184,0.123)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.017,1.185,0.124)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.017,1.186,0.126)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.017,1.187,0.127)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.017,1.188,0.128)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.016,1.188,0.128)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.015,1.188,0.128)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.015,1.189,0.128)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.015,1.189,0.127)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: headset neutral=(-0.014,1.188,0.127)m
+HK scope: captured wrist binding from right-hand HK draw
+vr: third-person positional neutral captured; tracked rotation preserved
+firstperson: Touch ready=0 arms L=30 R=30 shots L=0 R=0
+perf: 59.3 fps rendered
+stereo health @frame 3600: world draws=159815  duplicated=83103  injected eye0=78933 eye1=78933  (98% of world draws got per-eye matrices)  offscreen-skipped=1949  classify-mismatch=0  ortho3D=0  sky=11680  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(24.7, -2.6, -54.9) prog=79 loc=26  eye1=(-3.3, -2.6, -54.9) prog=79 loc=26  separation=28.02
+halves: 0 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF76D78E8A0  mProj[1](persp)=00007FF76D78E8E0
+  proj=00007FF76D78E8A0  draws=16218    ortho/2D
+  proj=00007FF76D78E8E0  draws=290954   perspective/world
+cull: 5.3 rooms/frame from the engine + 1.0 added by the head frustum, 0.0 items rescued/frame  *** A BUDGET WAS HIT -- raise CullMaxPortals/CullMaxDepth ***
+hook[TR4 vidLoadTexture]: removed
+hook[TR4 ogl_texUpdate]: removed
+pad: _XInputGetState restored
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[AnimatePistols]: removed
+hook[FireWeapon]: removed
+hook[FirstPersonDrawToShadow]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[AnimateLara]: removed
+hook[DrawSkyHD]: removed
+hook[DrawLaraHD]: removed
+hook[shader_init]: removed
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+hook[fmvShow]: removed
+hook[ogl_present]: removed
+hook[ogl_drawVB]: removed
+hook[ogl_draw]: removed
+hook[validate_draw]: removed
+hook[vid_setPass]: removed

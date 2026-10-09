@@ -216,7 +216,8 @@ for game, stamp, dll, vals, prologue_names in rows:
     check('%s sizeof(lara_info)' % dll, 448, size)
     check('%s lara_info::water_status' % dll, 12, f.get('water_status'))
     for fld, want in (('left_arm', 240), ('right_arm', 264),
-                      ('turn_rate', 220), ('move_angle', 222), ('item_number', 0), ('Vehicle', 38)):
+                      ('turn_rate', 220), ('move_angle', 222), ('item_number', 0), ('Vehicle', 38),
+                      ('skelebob', 350)):
         check('%s lara_info::%s' % (dll, fld), want, f.get(fld))
     size, f = udt(dll, 'lara_arm')
     check('%s sizeof(lara_arm)' % dll, 24, size)

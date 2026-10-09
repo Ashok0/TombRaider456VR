@@ -66,6 +66,7 @@ constexpr uint32_t lara_turn_rate   = 220;
 constexpr uint32_t lara_move_angle  = 222;
 constexpr uint32_t lara_vehicle     = 38;
 constexpr uint32_t lara_movement_flags = 68; // IsMoving is bit 5; CanMonkeySwing is bit 6.
+constexpr uint32_t lara_skelebob = 350; // uint8: native TR5 X-ray rendering mode.
 constexpr uint32_t camera_type      = 32;
 constexpr uint32_t object_stride    = 3792;
 constexpr uint32_t object_geom      = 112;
@@ -371,6 +372,11 @@ bool IsSceneCall(const void* returnAddress) {
 bool ScriptedCameraActive() {
     if (!g_boundDll || !g_boundBase) return false;
     const auto& d=*g_boundDll;
+    // TR5 X-ray floor triggers set skelebob for the complete rendered effect.
+    // Its side-on camera can alternate with chase/look types, so type alone
+    // would repeatedly resume FP and corrupt the X-ray presentation. Suspend
+    // through the normal camera gate, preserving the player's FP preference.
+    if (d.game==1 && *Ptr<uint8_t>(d.lara+off::lara_skelebob)) return true;
     if (d.playingCutseq && *Ptr<int32_t>(d.playingCutseq)) return true;
     // Native handle_cutseq_triggering only uses this state while an ID is
     // active. Include fade-in/out without treating a stale trigger as a scene.

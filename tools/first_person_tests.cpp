@@ -2050,6 +2050,47 @@ int main() {
             Check(!g_active && !g_runtimeEnabled && !std::memcmp(&camera,&nativeCamera,sizeof(camera)),
                   "switch completion cannot enable FP for a third-person player");
         }
+        // TR5's X-ray floor trigger sets lara.skelebob even when the camera
+        // type is chase/look/combat. Keep the entire interval in native view.
+        for (uint8_t xrayValue:{uint8_t(1),uint8_t(2),uint8_t(255)}) {
+            resetRoomscale();physicalPose(.7f);g_headingBase=.4f;UpdateSceneCamera(camera);
+            const float headingBefore=g_lastHeadWorld;
+            auto& xray=laraMemory[350];const auto savedXray=xray;xray=xrayValue;
+            if (which==0) {
+                Check(Gate(),"TR4 ignores TR5 X-ray-only camera override");xray=savedXray;continue;
+            }
+            auto& xrayBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
+            RestoreHeadMesh();xrayBits=0x7fff;SetMeshVisibility(true,false);
+            g_gunTriggers.active=true;g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
+            g_gunEquip.pending=true;g_haveManualInput=true;
+            const PHD_3DPOS nativeCamera{100,200,300,10,20,30,0};
+            for (int cameraType:{0,1,0,2,0,3,0}) {
+                *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=cameraType;
+                camera=nativeCamera;UpdateSceneCamera(camera);
+                Check(!g_active && !g_haveHeading && !g_scenePoseValid && g_runtimeEnabled,
+                      "TR5 X-ray stays in third person across native camera type changes");
+                Check(!std::memcmp(&camera,&nativeCamera,sizeof(camera)) && xrayBits==0x7fff && !g_headHidden,
+                      "X-ray sequence retains native camera and complete body/head mesh");
+                Check(!g_gunTriggers.WantsShot() && !g_gunEquip.pending && !g_haveManualInput,
+                      "X-ray suspension clears first-person input and firing state");
+                const int beforeDraw=draws,beforeHair=hairs;
+                Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+                Check(draws==beforeDraw+1 && hairs==beforeHair+1,"X-ray body and hair use native third-person draws");
+                // ControlPhase clears the flag before LaraControl re-evaluates
+                // floor triggers. Input during that gap must not reactivate FP.
+                xray=0;float x=.8f,z=.7f,r=0;FirstPersonInput(x,z,r,false);
+                Check(!g_haveManualInput && !g_active,"mid-tick X-ray flag refresh cannot reactivate FP movement");
+                xray=xrayValue;
+            }
+            xray=0;physicalPose(-.4f);UpdateSceneCamera(camera);
+            Check(g_active && g_runtimeEnabled && Near(Wrap(g_lastHeadWorld-headingBefore),0),
+                  "leaving X-ray restores first person automatically with viewing heading preserved");
+            xray=xrayValue;g_runtimeEnabled=false;camera=nativeCamera;UpdateSceneCamera(camera);
+            xray=0;UpdateSceneCamera(camera);
+            Check(!g_active && !g_runtimeEnabled && !std::memcmp(&camera,&nativeCamera,sizeof(camera)),
+                  "leaving X-ray cannot enable FP for a third-person player");
+            xray=savedXray;
+        }
         resetRoomscale();
         cutseqTransition=4; cutseqNumber=0;
         Check(!ScriptedCameraActive() && Gate(),"stale cutscene transition without an ID does not lock FP off");
