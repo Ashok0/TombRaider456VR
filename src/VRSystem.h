@@ -93,6 +93,8 @@ public:
     void ReadControllers(HandState out[2]) const;
     // Queue a strong, bounded burst for a confirmed shot (0=left, 1=right).
     void GunShotHaptic(int hand);
+    // Both hands catch the ledge: one maximum-strength 80 ms burst.
+    void LedgeGrabHaptic();
     // Frame-latched tracking-space poses, matching the HMD sample used by
     // BeginFrame. Hand 0 is left, hand 1 is right.
     bool ControllerPose(int hand, vr::HmdMatrix34_t& out) const;

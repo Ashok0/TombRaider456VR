@@ -16,6 +16,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * FMV fixes
 * Gamepad and VR controller support
 * Two-hand pull-down gesture to mount a ledge in TR4/5 first person.
+* Brief maximum-strength rumble in both controllers when catching a ledge after a substantial jump in TR4/5 first person.
 * Dpad input support
 * Decoupled pitch
 * Sky dome fixes
@@ -86,6 +87,7 @@ and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and
 | Slow backpedal startup | Retained: shorten the initial backward animation while preserving normal top speed. See [backpedal startup](#faster-backpedal-startup-2026-10-04). |
 | Unarmed Y intermittently fails at switches | October 8: first-person movement and head following now yield to native interaction alignment. Regression reproduced before the fix; headset confirmation pending. See [Action alignment](#first-person-y--switch-alignment-2026-10-08). |
 | Weapon equip and holster | Retained: press LT while unarmed to draw; releasing or pressing LT again never holsters. Y holsters. The draw squeeze cannot fire. See [bindings](#first-person-drawholster-bindings-2026-10-04). |
+| Jump-to-ledge grab rumble | October 9: one maximum-strength 80 ms burst in both controllers on a confirmed ledge catch after substantial airborne travel. See [ledge-grab haptics](#jump-to-ledge-grab-haptics-2026-10-09). |
 | Gun controller rumble | October 9: confirmed tracked shots give the firing hand a strong 80 ms haptic burst; both guns and automatic fire are supported. See [gun haptics](#per-gun-controller-haptics-2026-10-09). |
 | Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
@@ -106,21 +108,56 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 9 current deployment:** Release/x64 from "Two handed pull gesture for mounting ledges"
-(`8a03ebc`) plus the IK hand grip-pivot correction. Switch camera, Action alignment,
+**October 9 current deployment:** Release/x64 from "Wrist fix"
+(`1f5d568`) plus jump-to-ledge grab haptics. Switch camera, Action alignment,
 landing-neck, monkey-bar and optional full-body centering fixes remain included.
 The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
 available, full-body IK is disabled. Personal settings and controller calibration
 were preserved. The earlier System-height calibration experiments are absent
-from this checkout. Automated checks pass; physical IK hand pivot alignment, ledge gesture feel, sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
+from this checkout. Automated checks pass; ledge-grab haptic feel, physical IK hand pivot alignment, ledge gesture feel, sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
 camera/interaction changes still need in-headset confirmation.
 
-- Installed DLL SHA-256: `5B144F73D3E154D5368BB0CB32FBC2DC9E07A72E4563698635ED648AFFF96631`.
-- Deployment record: [IK grip pivot manifest](build/ik-grip-pivot-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-ik-grip-pivot-20261009-162624/`.
+- Installed DLL SHA-256: `9466E78489C339E09DB29C1B6BE62FF06F05EF93D3ECF36ACF88D28F93E2F133`.
+- Deployment record: [ledge-grab haptics manifest](build/ledge-grab-haptics-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-ledge-grab-haptics-20261009-163608/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### Jump-to-ledge grab haptics (2026-10-09)
+
+In TR4/5 first person, catching a ledge after a substantial jump gives **both
+controllers one maximum-strength 80 ms burst**. The effect observes Lara's actual
+native airborne movement and the transition into ledge hang (state 10). A jump
+qualifies after at least **512 native units (half a tile)** of horizontal travel
+or vertical excursion. Distance is measured before collision so the game's
+ledge-alignment snap cannot turn a nearby grab into a large-jump event.
+
+The native catch may enter animation 29 before the hanging loop and retain its
+gravity flag for one tick; the event therefore uses the confirmed hang state,
+not animation 96 or a cleared gravity flag. Both hands share the existing gun
+haptic scheduler: maximum 3999-microsecond OpenVR pulses with at least 5 ms
+spacing, no sleeps, and no queued rumble tail. Only connected controller roles
+receive pulses. Gun feedback keeps its existing behavior.
+
+Small grabs, holding a ledge, shimmying, mounting, monkey bars, ladders and
+ordinary landings do not trigger or refresh this effect. Death, water, disabled
+first-person/controller input, scripted cameras, recentering and relocation
+clear or reject pending jump feedback. Native movement, collision and ledge
+input are unchanged. The installed INI and calibration are preserved; full-body
+IK remains disabled.
+
+Validation: **1,384,567 first-person regression checks** and **12 jiggle
+integration cases** pass. New tests exercise horizontal and vertical jumps in
+both games, catches with gravity still set or already cleared, catch animation
+29, synchronized bounded maximum pulses, repeated hang/shimmy/mount ticks, small
+grabs, ledge collision snaps, monkey bars, landing resets, context guards,
+relocation and missing VR runtime. Native `LaraTestHangJump` was inspected in both
+PDB builds. Clean Release/x64 build and deployed DLL/unchanged INI hash checks
+pass; actual controller feel still needs in-headset confirmation.
+
+Logs: `build/ledge-grab-haptics-tests.log`, `build/ledge-grab-haptics-build.log`,
+`build/ledge-grab-native-tr4.txt` and `build/ledge-grab-native-tr5.txt`.
 
 ### IK hand grip pivot correction (2026-10-09)
 

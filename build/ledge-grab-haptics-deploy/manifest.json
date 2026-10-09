@@ -1,0 +1,15 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-ledge-grab-haptics-20261009-163608",
+    "source_base":  "1f5d56830f06208ac0e1e874a2c9bb078ce4a546",
+    "change":  "Both controllers receive an 80 ms maximum-strength burst on a confirmed first-person ledge catch after at least half a native tile of airborne travel",
+    "dll_sha256":  "9466E78489C339E09DB29C1B6BE62FF06F05EF93D3ECF36ACF88D28F93E2F133",
+    "previous_dll_sha256":  "5B144F73D3E154D5368BB0CB32FBC2DC9E07A72E4563698635ED648AFFF96631",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  1384567,
+    "dynamic_bones_integration_cases":  12,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

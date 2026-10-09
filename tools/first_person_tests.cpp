@@ -1667,6 +1667,95 @@ int main() {
         VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=false;
         g_ledgePull.Reset();
     }
+    // Observe real native movement transitions, not input or render frames.
+    {
+        const auto savedItem=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
+        const auto savedConfig=config; const int savedGame=dll.game;
+        const auto savedAboveWater=g_hLaraAboveWater.m_trampoline;
+        const bool savedMoves=nativeMoves;
+        const auto savedSpot=dll.useSpotCam; dll.useSpotCam=rva(&spotCamera);
+        static int grabResult=-1;
+        static bool killOnCatch=false,clearCatchGravity=false;
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(+[](uint8_t* item,void* collision) {
+            FakeAboveWater(item,collision);
+            if (grabResult<0) return;
+            *reinterpret_cast<int16_t*>(item+off::item_anim_state)=int16_t(grabResult);
+            *reinterpret_cast<int16_t*>(item+off::item_anim_number)=29; // native catch entry, before hang loop 96
+            if(clearCatchGravity) *reinterpret_cast<uint32_t*>(item+0x1820)&=~8u;
+            if(killOnCatch) *reinterpret_cast<int16_t*>(item+off::item_hit_points)=0;
+            // Native collision snaps to a ledge: this must not count as jump travel.
+            reinterpret_cast<PHD_3DPOS*>(item+off::item_pos)->x_pos+=1024;
+        });
+        nativeMoves=false;config.gamepadEnabled=true;g_haveManualInput=false;actionInput=0;
+        auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+        auto& hp=*reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points);
+        const auto reset=[&]() {
+            g_ledgeGrab.Reset();g_ledgePull.Reset();VR().m_gunHaptics.Reset();
+            g_active=g_haveHeading=true;g_headingItem=itemMemory;
+            state=3;pos={};flags|=8;hp=1000;water=0;spotCamera=0;grabResult=-1;
+            config.gamepadEnabled=true;killOnCatch=false;clearCatchGravity=false;
+        };
+        const auto flight=[&](int travel,bool vertical=false) {
+            for(int distance=0;distance<=travel;distance+=64) {
+                state=distance<128 ? 3 : 11;
+                pos.x_pos=vertical ? 0 : distance;pos.y_pos=vertical ? -distance : 0;
+                Detour_LaraAboveWater(itemMemory,nullptr);
+                Check(!VR().m_gunHaptics.until[0] && !VR().m_gunHaptics.until[1],"jump travel alone cannot rumble");
+            }
+        };
+        for(int which:{0,1}) for(bool vertical:{false,true}) for(bool gravityClears:{false,true}) {
+            dll.game=which;reset();flight(640,vertical);
+            grabResult=10;clearCatchGravity=gravityClears;
+            const auto before=GetTickCount64();Detour_LaraAboveWater(itemMemory,nullptr);
+            const auto until=VR().m_gunHaptics.until[0];
+            Check(until>=before+80 && until<=GetTickCount64()+80 && until==VR().m_gunHaptics.until[1],
+                  "large native jump catch queues one synchronized 80 ms burst for both hands");
+            int pulses[2]{};
+            for(uint64_t now=until-80;now<=until+20;++now) VR().m_gunHaptics.Update(now,[&](int hand,unsigned short duration) {
+                Check(duration==3999 && now<until,"ledge grab uses maximum pulse duration and bounded envelope");++pulses[hand];
+            });
+            Check(pulses[0]==16 && pulses[1]==16,"both grab bursts respect shared 5 ms pulse spacing");
+            grabResult=-1;
+            for(int hanging:{10,30,31,19,54}) {
+                state=int16_t(hanging);Detour_LaraAboveWater(itemMemory,nullptr);
+                Check(VR().m_gunHaptics.until[0]==until && VR().m_gunHaptics.until[1]==until,
+                      "holding, shimmying and mounting cannot refresh grab rumble");
+            }
+        }
+        for(int result:{2,10,19,54,56,75,76,82,83,139}) {
+            reset();flight(result==10 ? 128 : 640);grabResult=result;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(!VR().m_gunHaptics.until[0] && !VR().m_gunHaptics.until[1],
+                  "nearby grabs, landings, mounts, ladders, monkey bars and stop-to-hang stay quiet");
+        }
+        for(int guard=0;guard<7;++guard) {
+            reset();flight(640);grabResult=10;
+            if(guard==0) g_active=false;
+            if(guard==1) water=1;
+            if(guard==2) hp=0;
+            if(guard==3) spotCamera=1;
+            if(guard==4) config.gamepadEnabled=false;
+            if(guard==5) killOnCatch=true;
+            if(guard==6) { pos.x_pos+=5000; } // relocation before the catch
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(!VR().m_gunHaptics.until[0] && !VR().m_gunHaptics.until[1],
+                  "disabled view/input, water, death, scripted cameras and relocations cannot rumble a stale jump");
+        }
+        reset();flight(640);FirstPersonRecenter();grabResult=10;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(!VR().m_gunHaptics.until[0] && !VR().m_gunHaptics.until[1],"recenter clears pending jump-grab classification");
+        reset();flight(640);grabResult=2;Detour_LaraAboveWater(itemMemory,nullptr);
+        state=11;grabResult=10;Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(!VR().m_gunHaptics.until[0] && !VR().m_gunHaptics.until[1],"landing clears travel before a subsequent short grab");
+        reset();flight(640);auto* system=VR().m_system;VR().m_system=nullptr;
+        VR().LedgeGrabHaptic();
+        Check(!VR().m_gunHaptics.until[0] && !VR().m_gunHaptics.until[1],"missing VR runtime queues no grab haptics");
+        VR().m_system=system;
+        std::memcpy(itemMemory,savedItem.data(),sizeof(itemMemory));
+        config=savedConfig;dll.game=savedGame;dll.useSpotCam=savedSpot;
+        g_hLaraAboveWater.m_trampoline=savedAboveWater;nativeMoves=savedMoves;
+        water=0;spotCamera=0;g_active=true;g_ledgeGrab.Reset();VR().m_gunHaptics.Reset();
+    }
     constexpr uint64_t preserved = (uint64_t(1) << 40) | 0x40; // high bits + Action
     struct Direction { float x, z; uint64_t action; float offset; int scale, gait; };
     const Direction dirs[] = {

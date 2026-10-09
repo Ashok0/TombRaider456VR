@@ -761,6 +761,14 @@ void VRSystem::GunShotHaptic(int hand) {
     if (m_system) m_gunHaptics.Shot(hand,GetTickCount64());
 }
 
+void VRSystem::LedgeGrabHaptic() {
+    if (!m_system) return;
+    const auto now=GetTickCount64();
+    // Share the pulse scheduler so overlapping effects retain its 5 ms limit.
+    m_gunHaptics.Shot(0,now);
+    m_gunHaptics.Shot(1,now);
+}
+
 void VRSystem::ReadControllers(HandState out[2]) const {
     out[0] = HandState();
     out[1] = HandState();
