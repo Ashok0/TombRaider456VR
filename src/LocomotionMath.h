@@ -61,6 +61,11 @@ inline float NativeRollTurn(int beforeState,int afterState,int beforeAnimation,i
             IsJumpRollAnimation(afterState,afterAnimation)) &&
         uint16_t(int(afterYaw)-int(beforeYaw))==0x8000u ? 3.14159265358979323846f : 0.f;
 }
+inline bool IsMonkeyBarState(int state) {
+    // TR4/5 lara_control_routines: hang2, swing, left/right traverse,
+    // native half-turn, and hanging turns. Ledges/ladders are separate.
+    return (state>=75 && state<=79) || state==82 || state==83;
+}
 inline bool IsLedgeHangState(int state) {
     // Shared TR4/5 hang, shimmy, alternate hang/turn and stop-to-hang states.
     switch (state) {

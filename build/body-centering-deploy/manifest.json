@@ -1,0 +1,17 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-body-centering-20261008-041341",
+    "source_base":  "349dc680d9e6c8f7ec9ca5a445cbb1340d6ffc30",
+    "change":  "Full-body IK uses an absolute rendered-eye anchor and headset plus stick yaw, with bounded leg reach",
+    "retained_change":  "Monkey-bar input fix",
+    "dll_sha256":  "BAD23E2C279EF22BA8223B8961F6D821D7ABEAFBD65F946BFE42CD3B514B7411",
+    "previous_dll_sha256":  "5ED1B134F432D067FADBBA5F62B98A98806611D15CC2306CFE5E28E3415D1677",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  805223,
+    "dynamic_bones_integration_cases":  12,
+    "regression_reproduced_before_fix":  true,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

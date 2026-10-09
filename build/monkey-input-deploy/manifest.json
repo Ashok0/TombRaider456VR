@@ -1,0 +1,17 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-monkey-input-20261008-011744",
+    "source_base":  "349dc680d9e6c8f7ec9ca5a445cbb1340d6ffc30",
+    "change":  "First-person monkey-bar movement follows VR heading in modern and tank controls",
+    "dll_sha256":  "5ED1B134F432D067FADBBA5F62B98A98806611D15CC2306CFE5E28E3415D1677",
+    "previous_dll_sha256":  "C9F966AFD552FC42533DB0DCD790838F338869702B988EB24D369B40B7C9717B",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  686617,
+    "dynamic_bones_integration_cases":  12,
+    "native_audit":  "All seven monkey states verified in TR4/TR5 debug and retail",
+    "regression_reproduced_before_fix":  true,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

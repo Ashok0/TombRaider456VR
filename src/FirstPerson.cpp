@@ -65,6 +65,7 @@ constexpr uint32_t lara_torso_z_rot = 234;
 constexpr uint32_t lara_turn_rate   = 220;
 constexpr uint32_t lara_move_angle  = 222;
 constexpr uint32_t lara_vehicle     = 38;
+constexpr uint32_t lara_movement_flags = 68; // CanMonkeySwing is bit 6.
 constexpr uint32_t camera_type      = 32;
 constexpr uint32_t object_stride    = 3792;
 constexpr uint32_t object_geom      = 112;
@@ -570,6 +571,13 @@ bool CanTurnBody(const uint8_t* item) {
     }
 }
 
+bool CanSteerMonkeyBars(const uint8_t* item) {
+    return item && LaraWaterStatus()==0 &&
+        *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0 &&
+        locomotion::IsMonkeyBarState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state)) &&
+        (*Ptr<uint32_t>(g_boundDll->lara+off::lara_movement_flags)&0x40)!=0;
+}
+
 bool UseHardLandingCamera(const uint8_t* item) {
     return item && CanTurnBody(item) && locomotion::IsHardLanding(
         *reinterpret_cast<const int16_t*>(item+off::item_anim_state),
@@ -1046,14 +1054,30 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
                   float(g_scenePose.z_pos)+view.z};
     Vec headDelta=Sub(eye,anchor);
     if(!firstperson::Finite({firstperson::IdentityBasis(),headDelta}) || firstperson::Length(headDelta)>4096) return false;
-    const float heading=Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
+    const auto& current=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const auto& previous=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
+    const float fraction=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256)/256.f;
+    const float nativeHeading=Radians(previous.y_rot)+Wrap(Radians(current.y_rot)-Radians(previous.y_rot))*fraction;
+    const bool grip=FullBodyGripState(item),unarmed=*Ptr<int16_t>(g_boundDll->lara+2)==0;
+    const float heading=grip ? nativeHeading : Wrap(g_headingBase+VR().HeadYawRadians());
     const Basis body{{{std::cos(heading),0,std::sin(heading)},{0,1,0},{-std::sin(heading),0,std::cos(heading)}}};
     Frame inverseBody{};Inverse({body,{}},inverseBody);
     vr::HmdMatrix34_t head{};if(!VR().HeadPose(head)) return false;
     const Basis headRotation=Multiply(ControllerBasis(head.m,g_headingBase),inverseBody.basis);
-    if(!firstperson::SolveBody(native,headDelta,headRotation,{std::sin(heading),0,std::cos(heading)},scale,posed)) return false;
+    const Vec forward{std::sin(heading),0,std::cos(heading)};
+    if(grip) {
+        if(!firstperson::SolveBody(native,headDelta,headRotation,forward,scale,posed)) return false;
+    } else {
+        const int joint=Cfg().firstPersonJoint;
+        if(joint<0 || joint>=15) return false;
+        // JointPoint is in world space; recovered palette joints are relative
+        // to the native render camera. Convert both anchors through the same
+        // native joint, after undoing the separate legacy body-fit translation.
+        const Vec anchorInPalette=Add(native[joint].origin,Sub(anchor,JointPoint(item,joint,0,0,0)));
+        if(!firstperson::SolveBodyAtEye(native,joint,anchorInPalette,Add(anchorInPalette,headDelta),
+            Wrap(heading-nativeHeading),headRotation,forward,posed)) return false;
+    }
     firstperson::ArmTwistState twist[2]={g_unarmedTwist[0],g_unarmedTwist[1]};
-    const bool grip=FullBodyGripState(item),unarmed=*Ptr<int16_t>(g_boundDll->lara+2)==0;
     for(int hand=0;hand<2;++hand) {
         const int first=hand ? 8 : 11;
         Frame chain[3]={posed[first],posed[first+1],posed[first+2]},changes[3]{},target=native[first+2];
@@ -1971,6 +1995,28 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         const bool ground = CanTurnBody(item);
         const bool jump = IsJumpSteeringState(state) && LaraWaterStatus() == 0 &&
             *reinterpret_cast<int16_t*>(item + off::item_hit_points) > 0;
+        if (CanSteerMonkeyBars(item) && g_haveManualInput && !g_shifted && Length(g_manualLocal)>0) {
+            // Native monkey controls read camTurn even though the rendered VR
+            // camera is decoupled from it. Rebuild their inputs AFTER native
+            // conversion, from the original LS intent and current VR heading.
+            const float head=Wrap(g_headingBase+VR().HeadYawRadians());
+            const Vec world=Cfg().firstPersonMoveWithHead ? Rotate(g_manualLocal,head) : g_manualWorld;
+            auto* analog=Ptr<int16_t>(g_boundDll->analogInput);
+            auto& input=*Ptr<uint64_t>(g_boundDll->input);
+            const float magnitude=std::min(32767.f,std::hypot(float(analog[0]),float(analog[1])));
+            const Vec decoded=SimulationStick(world,head,magnitude);
+            analog[0]=int16_t(std::round(decoded.x));analog[1]=int16_t(std::round(decoded.z));
+            analog[2]=analog[3]=Angle(head);
+            const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+            // Modern hang2/swing use Forward to request traversal and steer
+            // toward atan2(axes)+camTurn. Tank mode selects native body-local
+            // traverse/half-turn animations; StepLeft/Right are not turn bits.
+            const uint64_t action=NewControls() ? Forward :
+                (MovementAction(Rotate(world,-Radians(pos.y_rot)))&Directions);
+            input=(input&~Directions)|action;
+            // Do not set Lara yaw, move_angle, speed or ground gait: her native
+            // animation and ceiling collision retain ownership of the grip.
+        }
         if ((ground || jump) && g_haveManualInput) {
             const float head = Wrap(g_headingBase + VR().HeadYawRadians());
             auto* analog = Ptr<int16_t>(g_boundDll->analogInput);
@@ -3114,7 +3160,7 @@ void FirstPersonInput(float& leftX, float& leftY, float& rightX, bool shifted,
     const int state = *reinterpret_cast<int16_t*>(item + off::item_anim_state);
     const bool jump = IsJumpSteeringState(state) && LaraWaterStatus() == 0 &&
         *reinterpret_cast<int16_t*>(item + off::item_hit_points) > 0;
-    if (!CanTurnBody(item) && !jump) return;
+    if (!CanTurnBody(item) && !jump && !CanSteerMonkeyBars(item)) return;
     rightX = 0.0f;
     const float headWorld = Wrap(g_headingBase + VR().HeadYawRadians());
     g_lastHeadWorld = headWorld;

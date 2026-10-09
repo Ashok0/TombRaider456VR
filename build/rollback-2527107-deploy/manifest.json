@@ -1,0 +1,14 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-rollback-2527107-20261008-010115",
+    "source_commit":  "252710719b98e873c781ad9125919f1a98fd2073",
+    "commit_title":  "First person animation fixes",
+    "dll_sha256":  "C9F966AFD552FC42533DB0DCD790838F338869702B988EB24D369B40B7C9717B",
+    "previous_dll_sha256":  "021845890AFE9438D5EDEB765F29BEB5BF2756D79BD6DECC6D94BC5DFDD179E5",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  360299,
+    "source_modifications":  false,
+    "headset_verified":  false
+}

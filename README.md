@@ -69,10 +69,10 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
-### Session changes and current deployment (2026-10-04 to 2026-10-07)
+### Session changes and current deployment (2026-10-04 to 2026-10-08)
 
 This summary covers the October 4 work, the rollback/redeploy after midnight,
-and the subsequent shadow, zigzag and controller-arm corrections through October 7
+and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections through October 8
 (America/New_York). Changes below apply to TR4/5 first person.
 
 | Change | Current status |
@@ -87,7 +87,8 @@ and the subsequent shadow, zigzag and controller-arm corrections through October
 | Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
 | Floor shadow displaced/split in first person | User confirmed the intact silhouette, but the October 5 placement changes did not resolve displacement/HMD movement. October 6 corrects the shadow projection camera origin and isolates the light-camera pass from headset injection. Automated checks pass; headset confirmation pending. See [shadow projection](#first-person-shadow-projection-origin-2026-10-06). |
 | Head visible during landing kneel | October 7: force head/hair hiding during the native hard-landing animation, including alternate head-only geometry. Normal visibility resumes on recovery; third person and shadow draws remain native. See [landing head visibility](#head-hiding-during-the-landing-kneel-2026-10-07). |
-| Full-body VRIK | October 7: headset/controller-only torso and hip inference, leg IK preserving animated foot targets, controller arms through ordinary jumps, native ledge grips, and body visibility while armed. See [full-body VRIK](#full-body-vrik-with-headset-and-controllers-2026-10-07). |
+| Full-body VRIK | October 8: optional full-body mode now anchors its rendered eye point to the headset and follows headset plus stick yaw; **disabled in the installed INI**. See [body centering](#optional-full-body-centering-2026-10-08). Original October 7: headset/controller-only torso and hip inference, leg IK preserving animated foot targets, controller arms through ordinary jumps, native ledge grips, and body visibility while armed. See [full-body VRIK](#full-body-vrik-with-headset-and-controllers-2026-10-07). |
+| Monkey-bar LS directions reversed | October 8: first-person stick intent reaches native hanging controls using the VR heading, with separate modern/tank mappings. See [monkey-bar input](#first-person-monkey-bar-stick-directions-2026-10-08). |
 | Camera jump after mounting crates | **Reverted:** the experimental 200 ms climb-to-standing camera transition was removed at the user's request. It is absent from current source and the redeployed DLL; the reported camera jump remains unresolved. |
 
 The earlier LT+Y equip experiment and idle-only camera-calibration attempts also
@@ -95,27 +96,94 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 7 current deployment:** Release/x64 full-body VRIK, including the prior landing-head, resting-hand, wrist and shadow corrections, installed with DLL
-hash verification. Personal INI and controller calibration were preserved.
-The reverted 200 ms camera transition remains absent. Automated checks passed;
-there has been no new headset validation.
+**October 8 current deployment:** Release/x64 built from the current "Arm and
+hand IK" checkout (`349dc68`) plus the monkey-bar input fix and optional full-body centering update. The installed INI
+retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains available, full-body
+IK is disabled. Personal settings and controller calibration were preserved.
+The earlier System-height calibration experiments are absent from this checkout.
+Automated checks passed; in-headset monkey-bar and full-body centering confirmation remains pending.
 
-- Installed DLL SHA-256: `81092ACEECDD7195AF84CE22E70732FC851D8C19B042BE17068AD30CCC94AF0A`.
-- Deployment record: [full-body VRIK manifest](build/fullbody-ik-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-fullbody-IK-20261007-012403/`.
+- Installed DLL SHA-256: `BAD23E2C279EF22BA8223B8961F6D821D7ABEAFBD65F946BFE42CD3B514B7411`.
+- Deployment record: [optional body-centering manifest](build/body-centering-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-body-centering-20261008-041341/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
 
+### First-person monkey-bar stick directions (2026-10-08)
+
+First-person stick correction previously handled grounded movement and supported
+jumps, but skipped monkey bars. Native modern hanging controls therefore used
+the hidden chase-camera heading, which could reverse forward/back and left/right
+relative to the VR view. TR4/5 now capture the original LS intent while monkey
+hanging and rebuild the native input immediately before simulation.
+
+Modern controls steer using the VR heading plus the stick angle, retaining the
+native swing/turn behavior. Tank controls select forward, backward half-turn or
+side traverse relative to Lara's hanging direction. Native animations, ceiling
+collision and grip checks still control movement; this does not overwrite Lara's
+root, yaw, speed or animation state. `FirstPersonMoveWithHead=0` retains its
+existing alternative movement reference. Stick deadzone, shifted controls,
+Action/drop buttons, keyboard/D-pad input without LS, ledges, ladders, mounting,
+water, death, menus and third person keep their existing behavior.
+
+Validation: the new regression fails on the previous code; **686,617 first-person
+checks** and **12 jiggle integration cases** pass after the fix. Coverage includes
+both games, modern/tank modes, seven monkey states, opposing camera/head/body
+headings, cardinal/diagonal input, native-state preservation and guarded exits.
+`tools/verify_monkey_controls.py` verifies the seven native state-table entries
+and their control routines in all four supported debug/retail game DLLs.
+Clean Release/x64 rebuild and installed-DLL hash verification pass. Logs:
+`build/monkey-input-tests.log`, `build/monkey-input-before-tests.log`,
+`build/monkey-native-audit.log`, and `build/monkey-input-build.log`.
+
+### Optional full-body centering (2026-10-08)
+
+**Full-body IK remains disabled in the installed INI (`FirstPersonFullBodyIK=0`).**
+Arm-and-hand IK and the monkey-bar fix remain available. This update changes the
+rendered body only when full-body IK is enabled; no setting was switched on.
+
+The previous free-body solver left the feet on Lara's native footprint and
+followed only a fraction of headset displacement. Hip reach limits and bounded
+chest yaw could leave the torso behind during roomscale movement and turning.
+Free grounded/airborne full-body mode now reconstructs its pose from the native
+animation and current rendered eye every draw. The configured eye anchor follows
+headset XYZ displacement, including height changes; body yaw follows headset plus
+stick yaw, compensating for the native skeleton's interpolated yaw. It does not
+accumulate last-frame corrections or recapture a moving animation as calibration.
+Body heading is inferred from the headset, not measured by a waist tracker.
+
+Animated stride is retained in the moving/rotating body footprint. Vertical leg
+IK keeps foot height where anatomically reachable. At extreme heights, feet can
+release contact instead of stretching legs or leaving the torso behind. There
+are no new terrain probes or procedural stepping, so perfect floor contact at
+all physical heights is not guaranteed. Ledge/hanging grips keep the existing
+constrained pose behavior. Controller wrists retain the gun-calibrated targets.
+Native collision, root positions, camera, shadow skeleton and the separate
+jiggle-physics skeleton remain unchanged by this optional render correction.
+
+Validation: **805,223 first-person regression checks** and **12 jiggle integration
+cases** pass, with a clean Release/x64 build. The new rendered-anchor regression
+fails on the previous implementation. Tests exercise both games, armed/unarmed,
+15/33-joint palettes, nonidentity inverse binds, lateral movement, height changes,
+combined stick/physical turns, delayed/interpolated native yaw across angle wrap,
+controller positions and duplicate eye draws. Rendered eye/controller positions
+stay within native integer-joint precision (two game units in these fixtures).
+Independent constraints verify connected legs without stretching, reachable
+floor contact and no duplicate displacement when native roomscale movement
+consumes an offset. Existing disabled-mode, shadow and jiggle checks pass.
+Logs: `build/body-centering-before-tests.log`, `build/body-centering-tests.log`,
+and `build/body-centering-build.log`. Installed DLL and unchanged INI hashes were
+verified. In-headset confirmation remains pending; full-body mode stays off.
+
 ### Full-body VRIK with headset and controllers (2026-10-07)
 
-TR4/5 HD first person now infers Lara's torso and hips from the headset and
-solves both legs back to their native animated foot targets. Physical crouching
-lowers the pelvis and bends the knees; leaning moves and tilts the chest, and a
-bounded portion of head yaw turns the chest. Pelvis movement is limited by both
-legs' reach, preserving leg lengths and foot orientation/contact. Foot placement
-and stepping still come from game animation: this is headset/controller-only
-inference, without waist/foot tracking, procedural stepping or new terrain probes.
+The initial October 7 implementation inferred torso/hips from the headset while
+pinning the animated feet and limiting pelvis travel/chest yaw. That free-body
+anchoring was superseded by the [October 8 centering update](#optional-full-body-centering-2026-10-08)
+after the user reported body drift. Constrained ledge grips retain the original
+solver. Foot stride still comes from native animation; there are no waist/foot
+trackers, procedural steps or new terrain probes.
 
 Controller arms remain active during ordinary jumps and falls as well as walking,
 running, sidestepping and backpedaling. Unarmed hands keep the shared gun wrist

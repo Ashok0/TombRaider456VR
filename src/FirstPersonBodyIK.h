@@ -1,5 +1,5 @@
 // Headset/controller-only body inference. Input/output are joint frames, not
-// skinning matrices. Native animated feet remain the exact leg IK targets.
+// skinning matrices. Free body follows the eye; constrained grips retain native feet.
 #pragma once
 #include "FirstPersonIK.h"
 
@@ -88,6 +88,53 @@ inline bool SolveBody(const Frame (&native)[15],Vec headDelta,
         for(int j=0;j<3;++j) posed[first+j]=Multiply(correction[j],chain[j]);
         // Never accumulate numerical changes to the floor contact/orientation.
         posed[first+2]=native[first+2];
+    }
+    for(const auto& joint:posed) if(!Finite(joint)) return false;
+    return true;
+}
+// Free-standing/airborne body: solve from this frame's native skeleton and
+// absolute eye target, never yesterday's solved pose or a partial root offset.
+// Feet carry their animated stride into the tracked footprint. Vertical IK
+// keeps floor height when reachable; extreme heights release contact rather
+// than stretching legs or pulling the torso away from the headset.
+inline bool SolveBodyAtEye(const Frame (&native)[15],int anchorJoint,Vec anchor,Vec eye,
+                           float yawDelta,const Basis& headRotation,Vec forward,
+                           Frame (&posed)[15]) {
+    if(anchorJoint<0 || anchorJoint>=15 || !std::isfinite(yawDelta) ||
+       !Finite({headRotation,anchor}) || !Finite({IdentityBasis(),eye})) return false;
+    Frame inverseAnchor{};
+    if(!Inverse(native[anchorJoint],inverseAnchor)) return false;
+    const Vec localAnchor=Transform(inverseAnchor,anchor);
+    const Basis yaw=RotationMatrix(AxisRotation({0,1,0},yawDelta));
+    const Frame pivot{yaw,Sub(anchor,Transform(yaw,anchor))};
+    Frame footprint[15]{};
+    for(int joint=0;joint<15;++joint) {
+        Frame inverse{};
+        if(!Finite(native[joint]) || !Inverse(native[joint],inverse)) return false;
+        footprint[joint]=Multiply(pivot,native[joint]);
+        posed[joint]=footprint[joint];
+    }
+    posed[14].basis=Multiply(headRotation,posed[14].basis);
+    const Vec shift=Sub(eye,Transform(posed[anchorJoint],localAnchor));
+    for(auto& joint:posed) joint.origin=Add(joint.origin,shift);
+    for(int leg=0;leg<2;++leg) {
+        const int first=1+leg*3;
+        Frame chain[3]={posed[first],posed[first+1],posed[first+2]},correction[3]{};
+        const float upper=Length(Sub(chain[1].origin,chain[0].origin));
+        const float lower=Length(Sub(chain[2].origin,chain[1].origin));
+        if(upper<1.e-3f || lower<1.e-3f) return false;
+        Frame foot=footprint[first+2];foot.origin=Add(foot.origin,{shift.x,0,shift.z});
+        Vec delta=Sub(foot.origin,chain[0].origin),axis{};
+        float distance=Length(delta);
+        if(!Unit(delta,axis) && !Unit(Sub(chain[2].origin,chain[0].origin),axis)) axis={0,1,0};
+        const float reachable=std::clamp(distance,std::fabs(upper-lower)+.001f,upper+lower-.001f);
+        if(std::fabs(reachable-distance)>.0001f) foot.origin=Add(chain[0].origin,Scale(axis,reachable));
+        const Vec knee=Sub(chain[1].origin,chain[0].origin);
+        Vec pole=Sub(knee,Scale(axis,Dot(knee,axis)));
+        if(Length(pole)<(upper+lower)*.05f) pole=forward;
+        if(!SolveArm(chain,foot,pole,correction,nullptr,nullptr,false)) return false;
+        for(int i=0;i<3;++i) posed[first+i]=Multiply(correction[i],chain[i]);
+        posed[first+2]=foot;
     }
     for(const auto& joint:posed) if(!Finite(joint)) return false;
     return true;

@@ -1510,6 +1510,81 @@ int main() {
         Check(animationTicks == ticks + 1 && pos.x_pos == 3*d.scale && pos.z_pos == 5*d.scale && pos.y_pos == 7, "one animation tick; only horizontal root motion scaled");
         Check(*reinterpret_cast<int16_t*>(itemMemory + off::item_speed) == 10 && g_groundMoveAction == 0, "native animation speed preserved and action scope restored");
     }
+    // Monkey bars bypass the grounded body-turn path. Native modern controls
+    // steer with atan2(analog.x,analog.y)+camTurn; tank controls use body-local
+    // forward/back/step bits. Neither may inherit an unrelated chase camera.
+    {
+        const auto oldConfig=config;const int oldGame=game,oldDllGame=dll.game;
+        const auto oldFlags=*reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags);
+        const auto oldLaraFlags=laraMemory[0x44];
+        nativeMoves=false;laraMemory[0x44]|=0x40;water=0;
+        constexpr uint64_t keep=preserved|0x1000|0x200; // Action, drop, Look and high bits.
+        for(int which:{0,1}) for(int modern:{0,1}) for(int hanging:{75,76,77,78,79,82,83})
+            for(float body:{0.f,kPi/2,-kPi/2,kPi}) for(float head:{0.f,.7f,-2.4f,kPi})
+            for(float chase:{-2.1f,0.f,2.6f}) for(const auto& d:dirs) {
+            game=dll.game=which;g_active=g_runtimeEnabled=g_haveHeading=true;
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern ? 2 : 0;
+            state=int16_t(hanging);pos={};pos.y_rot=Angle(body);g_headingBase=.4f;Head(head-.4f);
+            analogMemory[2]=Angle(chase);config.firstPersonMoveWithHead=true;
+            float x=d.x,z=d.z,r=.5f;FirstPersonInput(x,z,r,false);
+            Check(g_haveManualInput && r==0,"monkey bars capture original stick intent and consume VR camera turn");
+            analogMemory[0]=6000;analogMemory[1]=8000;analogMemory[2]=Angle(chase);analogMemory[3]=Angle(chase-.5f);
+            actionInput=keep|locomotion::Forward|locomotion::Right;
+            *reinterpret_cast<int16_t*>(laraMemory+off::lara_move_angle)=1234;
+            *reinterpret_cast<int16_t*>(laraMemory+off::lara_turn_rate)=567;
+            const auto snapshot=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
+            const auto laraSnapshot=std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory));
+            const int calls=simulationTicks;Detour_LaraAboveWater(itemMemory,nullptr);
+            const float desired=head+std::atan2(d.x,d.z);
+            if(modern) {
+                const float actual=Radians(seenAnalog[2])+std::atan2(float(seenAnalog[0]),float(seenAnalog[1]));
+                Check(Near(Wrap(actual-desired),0),"monkey modern steering follows VR stick direction even with reversed chase camera");
+                Check(seenInput==(keep|locomotion::Forward),"modern monkey swing retains native forward-traverse request and unrelated buttons");
+            } else {
+                const float relative=desired-Radians(pos.y_rot);
+                const float sideways=std::sin(relative),forward=std::cos(relative);
+                const auto expected=std::fabs(sideways)>std::fabs(forward)
+                    ? (sideways<0 ? locomotion::StepLeft : locomotion::StepRight)
+                    : (forward<0 ? locomotion::Back : locomotion::Forward);
+                Check(seenInput==(keep|expected),"monkey tank directions map view intent into Lara's hanging frame");
+            }
+            Check(std::fabs(std::hypot(float(seenAnalog[0]),float(seenAnalog[1]))-10000)<2,
+                  "monkey correction preserves native stick magnitude");
+            Check(snapshot==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)) &&
+                  laraSnapshot==std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory)),
+                  "monkey correction never rewrites Lara root, grip, speed, animation, or turn rate");
+            Check(simulationTicks==calls+1 && !g_stabilizeRoot && !g_groundMoveAction,
+                  "monkey correction delegates once to native simulation without ground acceleration");
+        }
+        // Guards also run after a valid input poll, so losing a grip/changing
+        // state cannot reuse the previous hanging input in another interaction.
+        for(int guard=0;guard<10;++guard) {
+            g_active=g_runtimeEnabled=g_haveHeading=true;state=75;water=0;laraMemory[0x44]|=0x40;
+            *reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points)=1000;
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=0;
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=2;
+            float x=0,z=1,r=0;FirstPersonInput(x,z,r,false);
+            if(guard==0) laraMemory[0x44]&=~0x40;
+            if(guard==1) state=10;
+            if(guard==2) state=56;
+            if(guard==3) state=19;
+            if(guard==4) water=1;
+            if(guard==5) *reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points)=0;
+            if(guard==6) g_active=false;
+            if(guard==7) *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=1;
+            if(guard==8) FirstPersonInput(x,z,r,true);
+            if(guard==9) { x=z=0;FirstPersonInput(x,z,r,false); }
+            actionInput=keep|locomotion::Right;analogMemory[0]=123;analogMemory[1]=456;analogMemory[2]=2345;analogMemory[3]=6789;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(seenInput==actionInput && seenAnalog[0]==123 && seenAnalog[1]==456 && seenAnalog[2]==2345 && seenAnalog[3]==6789,
+                  "monkey guards preserve ledges ladders mounts death water UI shifted and non-stick input");
+        }
+        config=oldConfig;game=oldGame;dll.game=oldDllGame;laraMemory[0x44]=oldLaraFlags;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=oldFlags;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=0;
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points)=1000;
+        g_active=g_runtimeEnabled=g_haveHeading=true;water=0;nativeMoves=true;g_headingBase=.4f;Head(.6f);
+    }
     // Side-jump compression uses turn-left/right actions, never sidestep gait.
     for (int s : {2, 15}) {
         state = static_cast<int16_t>(s); pos = {}; float x=-1, z=0, r=0;

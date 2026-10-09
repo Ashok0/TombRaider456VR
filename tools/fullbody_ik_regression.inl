@@ -1,10 +1,12 @@
 // Real render-hook fixtures plus independent physical constraints for full-body IK.
 namespace {
 tr::motiongun::Vec bodyJointWorld[15]{};
+tr::motiongun::Basis bodyJointRotation{{{1,0,0},{0,1,0},{0,0,1}}};
 void __cdecl FakeBodyJoint(uint8_t* item,tr::PHD_VECTOR* point,int joint,int) {
     Check(item==itemMemory && joint>=0 && joint<15,"body IK reads only native Lara joints");
     const auto p=bodyJointWorld[joint];
-    point->x+=int(p.x);point->y+=int(p.y);point->z+=int(p.z);
+    const auto offset=tr::motiongun::Transform(bodyJointRotation,{float(point->x),float(point->y),float(point->z)});
+    point->x=int(p.x+offset.x);point->y=int(p.y+offset.y);point->z=int(p.z+offset.z);
 }
 int fullBodyDraws=0,fullBodyGunDraws=0;
 void __cdecl ObserveFullBodyDraw(uint8_t* item,int32_t masked,int32_t) {
@@ -71,6 +73,30 @@ void TestFullBodyIK() {
         }
         Check(std::fabs(firstperson::Length(Sub(output[14].origin,output[7].origin))-200)<.04f,"torso lean never stretches the spine");
     }
+    for(float yaw:{-3.14f,-1.7f,0.f,.9f,3.14f}) for(float height:{-900.f,-200.f,0.f,200.f,450.f,900.f}) {
+        Frame posed[15]{};const Vec offset{11,-32,144};const Vec anchor=Add(native[14].origin,offset);
+        const Vec eye=Add(anchor,{620,height,-430});
+        Check(firstperson::SolveBodyAtEye(native,14,anchor,eye,yaw,identity,{std::sin(yaw),0,std::cos(yaw)},posed),
+              "centered solver accepts physical height and translation sweep");
+        Check(nearVec(Transform(posed[14],offset),eye),"centered solver pins the eye even beyond leg reach");
+        for(int first:{1,4}) for(int segment=0;segment<2;++segment) {
+            const float originalLength=firstperson::Length(Sub(native[first+segment+1].origin,native[first+segment].origin));
+            Check(std::fabs(firstperson::Length(Sub(posed[first+segment+1].origin,posed[first+segment].origin))-originalLength)<.04f,
+                  "centering never stretches legs to reach the old footprint");
+            Frame inv{};Inverse(native[first+segment],inv);
+            Check(nearVec(Transform(Multiply(posed[first+segment],inv),native[first+segment+1].origin),posed[first+segment+1].origin),
+                  "centered leg skinning remains connected at knee and ankle");
+        }
+        Frame consumed[15]{},afterConsume[15]{};
+        const Vec acceptedStep{400,0,-650};
+        for(int i=0;i<15;++i) { consumed[i]=native[i];consumed[i].origin=Add(consumed[i].origin,acceptedStep); }
+        Check(firstperson::SolveBodyAtEye(consumed,14,Add(anchor,acceptedStep),eye,yaw,identity,
+              {std::sin(yaw),0,std::cos(yaw)},afterConsume),"body solves after native root consumes roomscale displacement");
+        for(int i=0;i<15;++i) Check(nearVec(afterConsume[i].origin,posed[i].origin),
+              "consuming roomscale motion cannot add a second rendered body offset");
+        if(height==0 || height==200) for(int foot:{3,6})
+            Check(Near(posed[foot].origin.y,native[foot].origin.y),"reachable standing/crouched legs retain floor height");
+    }
     Frame crouched[15]{};
     Check(firstperson::SolveBody(native,{120,220,160},identity,{0,0,1},1000,crouched) &&
           crouched[0].origin.y>native[0].origin.y+100 && crouched[7].origin.z>native[7].origin.z,
@@ -131,7 +157,7 @@ void TestFullBodyIK() {
             Check(render && !std::memcmp(render,palette,count*12*sizeof(float)),"skinning uploads the full-body pose without physics overwriting it");
             for(int i=0;i<count;++i) {
                 const int joint=mapping[i];const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
-                if(joint==3 || joint==6) Check(nearVec(actual.origin,Sub(bodyJointWorld[joint],camera)),"real palette keeps animated feet fixed despite head/body-fit offsets");
+                if((joint==3 || joint==6) && FullBodyGripState(itemMemory)) Check(nearVec(actual.origin,Sub(bodyJointWorld[joint],camera)),"constrained grip keeps native animated feet");
                 if(joint==10 || joint==13) {
                     Frame target{};Basis controller{};const int hand=joint==10 ? 1 : 0;
                     BuildControllerWrist(hand,target,controller);
@@ -143,6 +169,84 @@ void TestFullBodyIK() {
             }
         }
         state=2;status=0;
+        // Reproduce the reported drift: the actual rendered anchor must
+        // follow roomscale translation/height and stick + physical yaw exactly.
+        {
+            const auto savedSettings=config;const auto oldHead=VR().m_rawHeadPose;
+            const auto oldView=VR().m_headFromTracking;const auto oldScene=g_scenePose;
+            const auto oldBase=g_headingBase;const auto oldFit=g_bodyVisualOffset;
+            const auto oldPos=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+            const auto oldPrev=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos_prev);
+            const int oldFraction=fraction;
+            float unturned[33*12]{};std::memcpy(unturned,fixture,sizeof(fixture));
+            float neutral[3],neck[2];std::memcpy(neutral,VR().m_firstPersonNeutral,sizeof(neutral));
+            std::memcpy(neck,VR().m_firstPersonNeutralNeck,sizeof(neck));
+            vr::HmdMatrix34_t oldHands[2];std::memcpy(oldHands,VR().m_rawControllerPose,sizeof(oldHands));
+            config.firstPersonMovementStabilization=config.flipViewY=true;
+            config.firstPersonAnchorX=11;config.firstPersonAnchorY=-32;config.firstPersonAnchorZ=144;
+            auto& current=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+            auto& previous=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos_prev);
+            current.y_rot=previous.y_rot=0;
+            Head(0);VR().RecenterFirstPersonHead();
+            for(int which:{0,1}) for(int armed:{0,1}) for(int step=0;step<48;++step) {
+                dll.game=which;state=2;status=armed ? 4 : 0;
+                const float phase=step*6.2831853f/47;
+                Head(phase,.35f*std::sin(phase));g_headingBase=-phase*.65f;
+                // The native skeleton lags the tracked heading and interpolates
+                // across +/-pi. Its palette and joint queries share that pose.
+                current.y_rot=Angle(phase*.7f+.3f);previous.y_rot=Angle(phase*.7f-.6f);
+                fraction=(step%5)*64;
+                const float animatedYaw=Radians(previous.y_rot)+Wrap(Radians(current.y_rot)-Radians(previous.y_rot))*(fraction/256.f);
+                bodyJointRotation=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},animatedYaw));
+                const Vec relativeRoot=Sub(root,camera);
+                const Frame rotate{bodyJointRotation,Sub(relativeRoot,Transform(bodyJointRotation,relativeRoot))};
+                for(int i=0;i<count;++i) WriteRows(Multiply(rotate,ReadRows(unturned+i*12)),fixture+i*12);
+                for(int i=0;i<15;++i) bodyJointWorld[i]=Add(root,Transform(bodyJointRotation,native[i].origin));
+                VR().m_rawHeadPose.m[0][3]+=.65f*std::sin(phase);
+                VR().m_rawHeadPose.m[1][3]+=.3f*std::cos(phase);
+                VR().m_rawHeadPose.m[2][3]+=.5f*std::sin(phase*2);
+                g_bodyVisualOffset={80*std::cos(phase),-120*std::sin(phase)};
+                for(int hand=0;hand<2;++hand) {
+                    auto& m=VR().m_rawControllerPose[hand];m=VR().m_rawHeadPose;
+                    m.m[0][3]+=(hand ? .25f : -.25f);m.m[1][3]-=.3f;m.m[2][3]-=.35f;
+                }
+                const auto itemSnapshot=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
+                Detour_GetJoints(itemMemory,palette,0);
+                locomotion::Vec displacement{};VR().FirstPersonViewOffset(displacement.x,displacement.z);
+                displacement=locomotion::Rotate(displacement,g_headingBase)*LiveWorldUnitsPerMetre();
+                const Vec eye{float(g_scenePose.x_pos)+displacement.x,
+                    float(g_scenePose.y_pos)+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre(),
+                    float(g_scenePose.z_pos)+displacement.z};
+                for(int i=0;i<count;++i) {
+                    const auto joint=Multiply(ReadRows(palette+i*12),bind[i]);
+                    if(mapping[i]==14) {
+                        const Vec anchor=Transform(joint,{11,-32,144});
+                        Check(firstperson::Length(Sub(Add(anchor,camera),eye))<2,
+                              "full-body eye anchor stays within native integer-joint precision through roomscale and interpolated turns");
+                    }
+                    if(mapping[i]==0) {
+                        const Vec forward=Transform(joint.basis,{0,0,1});
+                        Check(Near(Wrap(std::atan2(forward.x,forward.z)-g_headingBase-phase),0),
+                              "enabled pelvis follows physical plus stick yaw without native-body lag");
+                    }
+                    if(mapping[i]==10 || mapping[i]==13) {
+                        Frame target{};Basis controller{};Check(BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller),"centered body wrist target available");
+                        Check(firstperson::Length(Sub(Add(joint.origin,camera),target.origin))<2,
+                              "centering body keeps controller hands within native integer-joint precision");
+                    }
+                }
+                Check(itemSnapshot==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)),"centering changes only render skeleton");
+                float repeated[33*12]{};Detour_GetJoints(itemMemory,repeated,0);
+                for(int i=0;i<count*12;++i) Check(std::fabs(repeated[i]-palette[i])<.002f,
+                    "repeated eye draws do not accumulate full-body offsets or rotations");
+            }
+            fraction=oldFraction;std::memcpy(fixture,unturned,sizeof(fixture));bodyJointRotation=identity;
+            for(int i=0;i<15;++i) bodyJointWorld[i]=Add(root,native[i].origin);
+            config=savedSettings;VR().m_rawHeadPose=oldHead;VR().m_headFromTracking=oldView;g_scenePose=oldScene;
+            g_headingBase=oldBase;g_bodyVisualOffset=oldFit;current=oldPos;previous=oldPrev;
+            std::memcpy(VR().m_firstPersonNeutral,neutral,sizeof(neutral));std::memcpy(VR().m_firstPersonNeutralNeck,neck,sizeof(neck));
+            std::memcpy(VR().m_rawControllerPose,oldHands,sizeof(oldHands));status=0;
+        }
         // Exercise the real HMD Y-up -> game Y-down path, not only a synthetic
         // solver delta. A physical crouch must lower the pelvis, keeping feet.
         const auto sceneBefore=g_scenePose;const float headY=VR().m_rawHeadPose.m[1][3];
