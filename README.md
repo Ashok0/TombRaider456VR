@@ -15,6 +15,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * UI fixes
 * FMV fixes
 * Gamepad and VR controller support
+* Two-hand pull-down gesture to mount a ledge in TR4/5 first person.
 * Dpad input support
 * Decoupled pitch
 * Sky dome fixes
@@ -56,6 +57,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Photo Mode | L3 + R3 |
 | Photo Mode Select | R3 (Dpad) + LS |
 | Ledge Grab | RT |
+| Mount Ledge (First Person; TR4/5 only) | While hanging still, pull both controllers down together about 22 cm / 9 inches; keep LS neutral |
 | Ledge Drop | B |
 | Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
 | 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
@@ -78,6 +80,7 @@ and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and
 | Change | Current status |
 |---|---|
 | LS left/right/back launching Lara during forward movement | Retained: apply movement only when the native gait matches stick intent; preserve native stored speed. The user confirmed the launch fix. See [gait handoff](#forward-to-sideback-animation-handoff-2026-10-03). |
+| Physical ledge pull-up | October 9: pull both hands downward while hanging still to request the native climb-up. Ledges only; no monkey-bar or ladder gesture. See [ledge gesture](#two-hand-ledge-pull-up-2026-10-09). |
 | Sprinting turns sideways instead of sidestepping | October 9: sprint now uses first-person direction mapping, body following and stable-eye handling; native sprint clips can immediately hand off to side/back gaits. See [sprint sidestepping](#first-person-sprint-to-sidestep-correction-2026-10-09). |
 | Delay entering sidestep/backstep | Extended October 5 to include returning to forward movement: ordinary gait changes use the native standing dispatcher immediately, with native collision checks. See [responsive entry](#responsive-sidestepbackstep-entry-2026-10-04). |
 | Slow backpedal startup | Retained: shorten the initial backward animation while preserving normal top speed. See [backpedal startup](#faster-backpedal-startup-2026-10-04). |
@@ -102,21 +105,62 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 9 current deployment:** Release/x64 from "X-Ray Fix"
-(`0efbc3f`) plus first-person sprint steering and sidestep corrections. Switch camera, Action alignment,
+**October 9 current deployment:** Release/x64 from "Sprinting fix"
+(`4399764`) plus the two-hand ledge pull-up gesture. Switch camera, Action alignment,
 landing-neck, monkey-bar and optional full-body centering fixes remain included.
 The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
 available, full-body IK is disabled. Personal settings and controller calibration
 were preserved. The earlier System-height calibration experiments are absent
-from this checkout. Automated checks pass; sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
+from this checkout. Automated checks pass; ledge gesture feel, sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
 camera/interaction changes still need in-headset confirmation.
 
-- Installed DLL SHA-256: `C9EF20B4A1AC6A36690BAD9D130E77758FD05B65C74DB5F7445CE58FD6799995`.
-- Deployment record: [sprint sidestep manifest](build/sprint-sidestep-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-sprint-sidestep-20261009-155304/`.
+- Installed DLL SHA-256: `57208113BC602BC09BC6303F17040DB8A3747D02E1A547B2F4554DD84D7AACEC`.
+- Deployment record: [ledge gesture manifest](build/ledge-gesture-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-ledge-gesture-20261009-161334/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### Two-hand ledge pull-up (2026-10-09)
+
+In TR4/5 first person, hang still from a ledge with LS neutral, then pull both
+controllers downward together about **22 cm / 9 inches within 0.85 seconds**.
+No extra button is needed for the gesture. Existing grab, climb and drop
+controls continue to work. This requires a stationary ledge hang (native state
+10, animation 96); it does not activate on monkey bars, ladders, during shimmying,
+on the ground, in water or in third person. It works independently of arm IK,
+full-body IK, controller-to-gun calibration and world scale.
+
+Both controllers must move downward in tracking space AND relative to the
+headset. One-hand movement, ordinary tracking jitter, crouching with the hands,
+raising only the head and slow drift do not qualify. A recognized pull requests
+native Forward + Action for at most 0.9 seconds, covering the hang animation's
+native dispatch window. It stops when Lara leaves the hang or manual movement/
+drop takes priority. For a blocked ledge, raise both hands at least 15 cm before
+trying again. Tracking loss, invalid poses, long sample gaps, camera suspension,
+recenter, level/body changes and relocation clear gesture history.
+
+The existing LaraAboveWater hook scopes Forward + Action and the native camera
+heading to the original movement call. Modern hanging controls therefore treat
+this as movement toward the ledge regardless of chase-camera/HMD yaw. Native
+collision, headroom and animation transition checks decide whether Lara mounts;
+the gesture never writes her position, speed, animation or goal. The synthetic
+input and heading are restored afterward.
+
+Validation: **1,342,030 first-person regression checks** and **12 jiggle
+integration cases** pass. New coverage includes 30/60/90/120 Hz samples, duplicate
+polls, false-positive movements, tracking gaps/loss, bounded requests and retries,
+all tested animation states, manual input priority, both games and control modes,
+scoped native input, blocked climbs and recenter cancellation. Native hang
+control/collision routines were inspected in both PDB builds;
+`tools/verify_ledge_pull_entry.py` confirms the hang/mount states and dispatch
+window in **40 TR4 and 15 TR5 installed animation tables**. Clean Release/x64
+build and installed DLL/unchanged INI hash checks pass. Full-body IK stays disabled.
+Tests stub native execution; actual gesture feel and mount behavior still need
+in-headset confirmation.
+
+Logs: `build/ledge-gesture-tests.log`, `build/ledge-gesture-native-tables.log`,
+and `build/ledge-gesture-build.log`.
 
 ### First-person sprint-to-sidestep correction (2026-10-09)
 

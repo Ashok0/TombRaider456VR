@@ -14,6 +14,7 @@
 #include "FirstPersonIK.h"
 #include "FirstPersonBodyIK.h"
 #include "MotionGunInput.h"
+#include "LedgePullGesture.h"
 
 #include <windows.h>
 #include <intrin.h>
@@ -154,6 +155,7 @@ bool g_stabilizeRoot=false;
 bool g_hardStopRoot=false; // Scoped to one ordinary above-water simulation tick.
 uint64_t g_stabilizeAction=0;
 locomotion::Vec g_stabilizeDirection{};
+firstperson::LedgePullGesture g_ledgePull;
 stabilization::RootMotion g_rootMotion;
 stabilization::GroundEye g_groundEye;
 stabilization::MountBodyTransition g_mountBodyTransition;
@@ -168,6 +170,7 @@ uint64_t g_bodySkinMask=0;
 int g_bodySkinCount=0;
 
 void ResetMovementStabilization() {
+    g_ledgePull.Reset();
     g_renderTurn.Reset();
     g_turnTrace={};
     g_stabilizeRoot=false;
@@ -2017,6 +2020,28 @@ void PrepareGroundDirection(uint8_t* item,uint64_t action) {
     g_rootMotion.Reset();
 }
 
+bool UpdateLedgePull(uint8_t* item, uint64_t now) {
+    // IsLedgeHangState is a visibility group which also includes monkey bars.
+    // Native TR4/5 lara_col_hang mounts from AS_HANG (10), animation 96 only.
+    bool eligible=item && item==g_headingItem && g_active && g_haveHeading && Gate() &&
+        Cfg().gamepadEnabled && (g_boundDll->game==0 || g_boundDll->game==1) &&
+        item==*Ptr<uint8_t*>(g_boundDll->laraItem) && LaraWaterStatus()==0 &&
+        *reinterpret_cast<int16_t*>(item+off::item_anim_state)==10 &&
+        *reinterpret_cast<int16_t*>(item+off::item_anim_number)==96 &&
+        !(*reinterpret_cast<uint32_t*>(item+0x1820)&8);
+    if (eligible) {
+        // Explicit stick movement, jump, roll or native modern Drop wins.
+        eligible=(*Ptr<uint64_t>(g_boundDll->input)&
+            (locomotion::Directions|0x10|0x100|0x1000))==0;
+    }
+    vr::HmdMatrix34_t head{},left{},right{};
+    eligible=eligible && VR().HeadPose(head) && VR().ControllerPose(0,left) && VR().ControllerPose(1,right);
+    const bool wasLatched=g_ledgePull.latched;
+    const bool pull=g_ledgePull.Update(eligible,now,head.m[1][3],left.m[1][3],right.m[1][3]);
+    if (pull && !wasLatched) Log("firstperson: two-hand ledge pull requested");
+    return pull;
+}
+
 void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     using namespace locomotion;
     g_dragPrevious = g_dragCurrent;
@@ -2118,7 +2143,27 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         }
     }
     if (g_groundMoveAction) PrepareGroundDirection(item,g_groundMoveAction);
+    const bool ledgePull=UpdateLedgePull(item,GetTickCount64());
+    uint64_t savedLedgeInput=0;
+    int16_t savedLedgeHeading=0;
+    if (ledgePull) {
+        auto& input=*Ptr<uint64_t>(g_boundDll->input);
+        savedLedgeInput=input;
+        input|=locomotion::Forward|0x40; // native Forward + Action/grab
+        auto* analog=Ptr<int16_t>(g_boundDll->analogInput);
+        savedLedgeHeading=analog[2];
+        // lara_as_hang remaps Forward by camTurn in modern controls. Make
+        // this request face the ledge regardless of HMD/chase-camera yaw.
+        analog[2]=reinterpret_cast<PHD_3DPOS*>(item+off::item_pos)->y_rot;
+    }
     g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
+    if (ledgePull) {
+        // No synthetic run/Action or camera heading leaks to later handlers.
+        auto& input=*Ptr<uint64_t>(g_boundDll->input);
+        constexpr uint64_t owned=locomotion::Directions|0x40;
+        input=(input&~owned)|(savedLedgeInput&owned);
+        Ptr<int16_t>(g_boundDll->analogInput)[2]=savedLedgeHeading;
+    }
     g_groundMoveAction = 0;
     g_stabilizeRoot=false;
     g_hardStopRoot=false;
@@ -2145,6 +2190,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         g_dragShown = shown;
     }
     if (!g_haveHeading || !sameBody || relocated) {
+        g_ledgePull.Reset();
         g_mountBodyTransition.Reset();
         g_renderTurn.Reset(); g_turnTrace={}; g_rootMotion.Reset();
         const float oldBase=g_headingBase;
@@ -2625,6 +2671,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         // equip gesture may leak out of swimming/cutscenes/menus into resumed play.
         g_gunTriggers.Reset();
         g_gunEquip.Reset();
+        g_ledgePull.Reset();
         // Keep item identity and last viewing heading across UI/cameras.
         g_haveManualInput = false;
         const int water=LaraWaterStatus();
@@ -3094,6 +3141,7 @@ void FirstPersonUpdate() {
 }
 
 void FirstPersonRecenter() {
+    g_ledgePull.Reset();
     g_renderTurn.Reset();
     g_turnTrace={};
     g_rootMotion.Reset();

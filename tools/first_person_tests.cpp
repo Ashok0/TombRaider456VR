@@ -1541,6 +1541,132 @@ int main() {
     g_hAnimateLara.m_trampoline = reinterpret_cast<void*>(&FakeAnimate);
     g_runtimeEnabled = g_active = g_haveHeading = true;
     g_headingItem = itemMemory; g_headingBase = 0.4f; Head(0.6f);
+    // Real tracking/input boundary plus time-controlled physical gesture cases.
+    {
+        firstperson::LedgePullGesture gesture;
+        const auto sample=[&](uint64_t t,float h,float l,float r,bool allowed=true) {
+            return gesture.Update(allowed,t,h,l,r);
+        };
+        for (int mode=0;mode<6;++mode) {
+            gesture.Reset();
+            for (int frame=0;frame<180;++frame) {
+                const float travel=frame*.004f;
+                float head=1.7f,left=1.5f,right=1.5f;
+                if (mode==0) left-=travel; // one hand only
+                if (mode==1) head-=travel,left-=travel,right-=travel; // crouch
+                if (mode==2) head+=travel; // rise, hands fixed
+                if (mode==3) left-=travel*.2f,right-=travel*.2f; // slow drift
+                if (mode==4) left+=.015f*std::sin(float(frame)),right-=.015f*std::sin(float(frame));
+                if (mode==5) { left-=std::min(.3f,travel); right-=std::max(0.f,travel-.4f); }
+                Check(!sample(1000+frame*17,head,left,right),
+                    "one hand, crouch, head-only rise, drift, jitter and separate pulls do not climb");
+            }
+        }
+        for (int hz:{30,60,90,120}) {
+            gesture.Reset(); bool fired=false; uint64_t firedAt=0;
+            for (int frame=0;frame<2*hz;++frame) {
+                const uint64_t now=2000+frame*1000/hz;
+                const float travel=std::min(.3f,float(frame)/hz*.6f);
+                const bool pull=sample(now,1.7f,1.5f-travel,1.48f-travel);
+                if (pull && !fired) { fired=true; firedAt=now; }
+                if (fired && now-firedAt<900) Check(pull,"native climb request persists for its dispatch window");
+                Check(sample(now,1.7f,1.5f-travel,1.48f-travel)==pull,"duplicate tracking poll is idempotent");
+            }
+            Check(fired,"coordinated arm pull works at different sampling rates");
+            for (int frame=0;frame<100;++frame)
+                Check(!sample(4000+frame*17,1.7f,1.2f,1.18f),"hands held low cannot repeat a blocked climb");
+            Check(!sample(5700,1.7f,1.5f,1.48f),"raising both hands rearms without climbing");
+            bool again=false;
+            for (int frame=1;frame<=20;++frame) again|=sample(5700+frame*17,1.7f,1.5f-frame*.015f,1.48f-frame*.015f);
+            Check(again,"a deliberate second pull can retry a blocked ledge");
+        }
+        gesture.Reset(); sample(1000,1.7f,1.5f,1.5f);
+        Check(!sample(1300,1.7f,1.2f,1.2f),"tracking gap cannot become an arm pull");
+        sample(1317,1.7f,1.2f,1.2f,false);
+        Check(!sample(1334,1.7f,.9f,.9f),"ineligible interval discards pre-gap gesture");
+        Check(!sample(1351,1.7f,NAN,.9f),"invalid tracking is rejected");
+        sample(1368,1.7f,1.5f,1.5f);
+        Check(!sample(1385,1.7f,.8f,.8f),"tracking discontinuity does not trigger climbing");
+
+        const auto savedConfig=config;
+        const int savedGame=dll.game;
+        const auto savedAnim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        const auto savedState=state;
+        const auto savedSpot=dll.useSpotCam;
+        dll.useSpotCam=rva(&spotCamera);
+        const auto savedGoal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        const auto savedPos=pos;
+        const bool savedMoves=nativeMoves;
+        nativeMoves=false; config.gamepadEnabled=true;
+        auto& anim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        const auto hands=[&](float height) {
+            for (int hand=0;hand<2;++hand) {
+                VR().m_controllerPoseValid[hand]=true;
+                VR().m_rawControllerPose[hand]=VR().m_rawHeadPose;
+                VR().m_rawControllerPose[hand].m[1][3]=height;
+            }
+        };
+        Head(.9f); const float headY=VR().m_rawHeadPose.m[1][3];
+        for (int targetGame:{0,1}) for (int modern:{0,1}) {
+            dll.game=targetGame;
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern ? 2 : 0;
+            for (int candidate=0;candidate<160;++candidate) {
+                state=int16_t(candidate); anim=96; goal=state; actionInput=0;
+                g_ledgePull.Reset(); hands(headY-.1f);
+                Check(!UpdateLedgePull(itemMemory,1000),"entry sample alone never mounts");
+                hands(headY-.4f);
+                Check(UpdateLedgePull(itemMemory,1200)==(candidate==10),
+                    "only stationary ledge hang accepts a pull; monkey bars, ladders, swimming, ground and jumps excluded");
+            }
+            state=10; goal=10; anim=96; pos={}; pos.y_rot=Angle(-1.8f);
+            for (uint64_t manual:{uint64_t(1),uint64_t(2),uint64_t(4),uint64_t(8),uint64_t(0x400),
+                                 uint64_t(0x800),uint64_t(0x10),uint64_t(0x100),uint64_t(0x1000)}) {
+                g_ledgePull.Reset(); actionInput=0; hands(headY-.1f); UpdateLedgePull(itemMemory,1000);
+                hands(headY-.4f); actionInput=manual;
+                Check(!UpdateLedgePull(itemMemory,1200),"manual movement and drop override gesture");
+            }
+            for (int guard=0;guard<9;++guard) {
+                actionInput=0; g_ledgePull.Reset(); hands(headY-.1f); UpdateLedgePull(itemMemory,1000);
+                hands(headY-.4f);
+                if (guard==0) g_active=false;
+                if (guard==1) VR().m_controllerPoseValid[0]=false;
+                if (guard==2) VR().m_controllerPoseValid[1]=false;
+                if (guard==3) water=4;
+                if (guard==4) anim=97;
+                if (guard==5) *reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points)=0;
+                if (guard==6) config.gamepadEnabled=false;
+                if (guard==7) spotCamera=1;
+                if (guard==8) *reinterpret_cast<uint32_t*>(itemMemory+0x1820)|=8;
+                Check(!UpdateLedgePull(itemMemory,1200),"view, tracking, water, animation, death, input, scene and gravity gates cancel pull");
+                g_active=true; hands(headY-.4f); water=0; anim=96;
+                *reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points)=1000;
+                config.gamepadEnabled=true; spotCamera=0;
+                *reinterpret_cast<uint32_t*>(itemMemory+0x1820)&=~8u;
+                Check(!UpdateLedgePull(itemMemory,1217),"resumption requires fresh gesture");
+            }
+            for (uint64_t original:{uint64_t(0),uint64_t(0x40),uint64_t(1)<<40}) {
+                actionInput=original; g_ledgePull.Reset(); hands(headY-.1f);
+                const uint64_t now=GetTickCount64();
+                UpdateLedgePull(itemMemory,now-200); hands(headY-.4f);
+                analogMemory[2]=Angle(1.3f); analogMemory[3]=Angle(.5f);
+                const auto bodyBefore=pos; const int ticks=simulationTicks;
+                Detour_LaraAboveWater(itemMemory,nullptr);
+                Check(simulationTicks==ticks+1 && seenInput==(original|0x41),"gesture reaches original movement once as Forward + Action");
+                Check(seenAnalog[2]==pos.y_rot && seenAnalog[3]==Angle(.5f),"native modern hang sees ledge-relative heading");
+                Check(actionInput==original && analogMemory[2]==Angle(1.3f),"synthetic input and heading are scoped to native call");
+                Check(state==10 && goal==10 && anim==96 && std::memcmp(&bodyBefore,&pos,sizeof(pos))==0,
+                    "a blocked native climb cannot be forced by position or animation writes");
+                FirstPersonRecenter();
+                Check(!g_ledgePull.latched && g_ledgePull.count==0,"System recenter cancels pending pull");
+            }
+        }
+        nativeMoves=savedMoves; state=savedState; anim=savedAnim; goal=savedGoal; pos=savedPos;
+        config=savedConfig; dll.game=savedGame; dll.useSpotCam=savedSpot; actionInput=0;
+        Head(.6f);
+        VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=false;
+        g_ledgePull.Reset();
+    }
     constexpr uint64_t preserved = (uint64_t(1) << 40) | 0x40; // high bits + Action
     struct Direction { float x, z; uint64_t action; float offset; int scale, gait; };
     const Direction dirs[] = {
@@ -3641,7 +3767,7 @@ int main() {
         stabilization::MountBodyTransition transition;
         transition.Begin();
         const locomotion::Vec residual{200,-120};
-        for (int frame=0;frame<hz;++frame) {
+        for (int frame=0;frame<2*hz;++frame) {
             const auto fix=transition.Correction(residual,-1600,frame/double(hz));
             Check(Near(fix.x,residual.x) && Near(fix.z,residual.z),
                   "unfinished climb pose keeps full correction independent of frame count");

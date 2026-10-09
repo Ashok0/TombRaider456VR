@@ -1,0 +1,19 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-ledge-gesture-20261009-161334",
+    "source_base":  "4399764345510a338da446376da7031c9dbc71e4",
+    "change":  "Ledge-only two-hand downward pull requests native first-person climb, with scoped ledge-relative input, tracking guards and bounded retry",
+    "dll_sha256":  "57208113BC602BC09BC6303F17040DB8A3747D02E1A547B2F4554DD84D7AACEC",
+    "previous_dll_sha256":  "C9EF20B4A1AC6A36690BAD9D130E77758FD05B65C74DB5F7445CE58FD6799995",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  1342030,
+    "dynamic_bones_integration_cases":  12,
+    "native_ledge_tables":  {
+                                "TR4":  40,
+                                "TR5":  15
+                            },
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}
