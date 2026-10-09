@@ -44,7 +44,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Dash | L3 |
 | Look | Right Stick (RS) |
 | Zoom | R3 |
-| Jump | A |
+| Jump | A; TR4/5 gives jump priority over ordinary walking/start/stop animations in both views |
 | Action | Y or LB + RB |
 | Toggle Classic Graphics | Y + RT |
 | Toggle First Person (TR1-5 only) | Y + LT |
@@ -76,10 +76,12 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 This summary covers the October 4 work, the rollback/redeploy after midnight,
 and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and gun haptics through October 9
-(America/New_York). Changes below apply to TR4/5 first person.
+(America/New_York). Changes below apply to TR4/5 first person unless noted;
+jump priority also applies in third person.
 
 | Change | Current status |
 |---|---|
+| A missed during walking/start/stop animations | October 9: port the TR1-3 jump-priority behavior to TR4/5 first and third person; retain quick taps until native simulation and restart ordinary gaits at standing jump dispatch. See [jump priority](#jump-priority-over-walking-animations-2026-10-09). |
 | LS left/right/back launching Lara during forward movement | Retained: apply movement only when the native gait matches stick intent; preserve native stored speed. The user confirmed the launch fix. See [gait handoff](#forward-to-sideback-animation-handoff-2026-10-03). |
 | Physical ledge pull-up | October 9: pull both hands downward while hanging still to request the native climb-up. Ledges only; no monkey-bar or ladder gesture. See [ledge gesture](#two-hand-ledge-pull-up-2026-10-09). |
 | Sprinting turns sideways instead of sidestepping | October 9: sprint now uses first-person direction mapping, body following and stable-eye handling; native sprint clips can immediately hand off to side/back gaits. See [sprint sidestepping](#first-person-sprint-to-sidestep-correction-2026-10-09). |
@@ -108,21 +110,66 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 9 current deployment:** Release/x64 from "Wrist fix"
-(`1f5d568`) plus jump-to-ledge grab haptics. Switch camera, Action alignment,
+**October 9 current deployment:** Release/x64 from "Add rumble to long distance ledge grabs"
+(`5bf5d5b`) plus jump priority in first and third person. Switch camera, Action alignment,
 landing-neck, monkey-bar and optional full-body centering fixes remain included.
 The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
 available, full-body IK is disabled. Personal settings and controller calibration
 were preserved. The earlier System-height calibration experiments are absent
-from this checkout. Automated checks pass; ledge-grab haptic feel, physical IK hand pivot alignment, ledge gesture feel, sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
+from this checkout. Automated checks pass; jump responsiveness, ledge-grab haptic feel, physical IK hand pivot alignment, ledge gesture feel, sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
 camera/interaction changes still need in-headset confirmation.
 
-- Installed DLL SHA-256: `9466E78489C339E09DB29C1B6BE62FF06F05EF93D3ECF36ACF88D28F93E2F133`.
-- Deployment record: [ledge-grab haptics manifest](build/ledge-grab-haptics-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-ledge-grab-haptics-20261009-163608/`.
+- Installed DLL SHA-256: `8A0F08B9D84C0B659A559093DA38EC7D1B13996B90FC263412870A54FA1D1AAF`.
+- Deployment record: [jump-priority manifest](build/jump-priority-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-jump-priority-20261009-171056/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### Jump priority over walking animations (2026-10-09)
+
+TR4/5 now uses the TR1-3 jump-priority behavior in **both first and third person**.
+Pressing A during ordinary forward walking, gait starts/stops, sidestepping or
+backpedaling enters the native standing-jump dispatcher on the next simulation
+tick instead of waiting for the outgoing walking animation. Brief grounded A
+taps are retained for up to **250 ms**, so releasing A between controller polling
+and game simulation does not lose the request. This is a maximum buffer lifetime,
+not an added delay. The active jump/compression state consumes the request; merely
+setting its goal does not.
+
+The final standing-entry frame also needs special handling. Installed TR4/5
+animation 11 dispatches to compression at frames 184-185, but native animation
+increments the current frame before checking the transition. A request on frame
+185 would otherwise miss that window. Restarting the verified standing entry at
+184 lets the original animation dispatcher perform the handoff. Third-person
+stereo draws preserve pending taps rather than clearing them with first-person
+camera state.
+
+The native running loop keeps its momentum and all-frame jump transitions;
+sprint retains its native jump/dive controls. The change preserves the 64-bit
+input mask, Action/Walk modifiers and native jump directions. Only synthetic
+Jump is removed after the native tick. Collision, clearance, compression,
+takeoff, gravity and landing remain native, with one animation/collision tick.
+Airborne states, ledges, authored step-up/down and landing clips, required
+interactions, switch alignment, vehicles, water, menus and scripted cameras are
+excluded. Level/body changes and invalid contexts clear pending taps. A press
+made in midair is not saved for landing.
+
+Validation: the regression reproduced the missed walking jump before the fix.
+**1,396,700 first-person regression checks** and **12 jiggle integration cases**
+pass. New coverage exercises both games, both camera/control modes, ordinary
+gaits, five directional inputs, held/released A, third-person eye renders,
+last-frame stop handoffs, native clearance rejection, running momentum, sprint
+exclusion, expired taps, press edges, context changes and invalid tables.
+`tools/verify_jump_priority.py` verifies the idle-entry compression destination,
+last-frame hazard and complete idle/run jump windows in **40 TR4 and 15 TR5
+installed animation tables**. Native standing/walking handlers were inspected
+in both PDB builds. Clean Release/x64 build and installed DLL/unchanged INI hash
+checks pass. Full-body IK remains disabled. Headset confirmation of jump feel
+is still pending; automated native consumers are stubbed.
+
+Logs: `build/jump-priority-before-tests.log`, `build/jump-priority-tests.log`,
+`build/jump-priority-native-tables.log` and `build/jump-priority-build.log`.
 
 ### Jump-to-ledge grab haptics (2026-10-09)
 

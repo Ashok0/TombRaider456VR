@@ -509,6 +509,7 @@ uint64_t GameDllBase() { return g_boundBase; }
 
 #include "unarmed_ik_regression.inl"
 #include "fullbody_ik_regression.inl"
+#include "jump_priority_regression.inl"
 
 int main() {
     // Haptic envelopes use elapsed time, not render frame count or trigger polls.
@@ -3959,6 +3960,7 @@ int main() {
             uint16_t(int(pos.y_rot)-int(before.y_rot))==uint16_t(rollYawDelta),
             "third person, camera takeovers, death, water and unrelated turns remain native");
     }
+    TestGroundJumpPriority();
     VR().m_system = nullptr;
     std::printf("OK: %d first-person regression checks passed.\n", checks);
     return 0;

@@ -1,0 +1,20 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-jump-priority-20261009-171056",
+    "source_base":  "5bf5d5b7468e683aa1e5c5de73d140ac97c0384e",
+    "change":  "Port TR1-3 ground jump priority to TR4/5 first and third person: retain short A taps for 250 ms and restart ordinary walking/start/stop gaits at native standing jump dispatch; preserve running momentum and sprint controls",
+    "dll_sha256":  "8A0F08B9D84C0B659A559093DA38EC7D1B13996B90FC263412870A54FA1D1AAF",
+    "previous_dll_sha256":  "9466E78489C339E09DB29C1B6BE62FF06F05EF93D3ECF36ACF88D28F93E2F133",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  1396700,
+    "dynamic_bones_integration_cases":  12,
+    "native_jump_tables":  {
+                               "TR4":  40,
+                               "TR5":  15
+                           },
+    "regression_reproduced_before_fix":  true,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}
