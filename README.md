@@ -69,10 +69,10 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
-### Session changes and current deployment (2026-10-04 to 2026-10-08)
+### Session changes and current deployment (2026-10-04 to 2026-10-09)
 
 This summary covers the October 4 work, the rollback/redeploy after midnight,
-and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections through October 8
+and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and gun haptics through October 9
 (America/New_York). Changes below apply to TR4/5 first person.
 
 | Change | Current status |
@@ -82,6 +82,7 @@ and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections thr
 | Slow backpedal startup | Retained: shorten the initial backward animation while preserving normal top speed. See [backpedal startup](#faster-backpedal-startup-2026-10-04). |
 | Unarmed Y intermittently fails at switches | October 8: first-person movement and head following now yield to native interaction alignment. Regression reproduced before the fix; headset confirmation pending. See [Action alignment](#first-person-y--switch-alignment-2026-10-08). |
 | Weapon equip and holster | Retained: press LT while unarmed to draw; releasing or pressing LT again never holsters. Y holsters. The draw squeeze cannot fire. See [bindings](#first-person-drawholster-bindings-2026-10-04). |
+| Gun controller rumble | October 9: confirmed tracked shots give the firing hand a strong 80 ms haptic burst; both guns and automatic fire are supported. See [gun haptics](#per-gun-controller-haptics-2026-10-09). |
 | Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
 | Unarmed hands in the forward view | Extended October 7: walking and running share controller arm IK and resting-hand meshes; wrist bends and roll are constrained and forearms absorb most roll. The prior look-down-only animation remains the fallback when IK is disabled or tracking is unavailable. See [wrist correction](#consistent-walkingrunning-ik-and-wrist-limits-2026-10-07). |
@@ -98,21 +99,50 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 8 current deployment:** Release/x64 from "Arm and Hand IK fixes"
-(`67bbb69`) plus temporary third person for switch-use animations and the
-native Action alignment and landing-neck camera fixes. The monkey-bar
-input and optional full-body centering updates remain included. The installed INI
-retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains available, full-body
-IK is disabled. Personal settings and controller calibration were preserved.
-The earlier System-height calibration experiments are absent from this checkout.
-Automated checks passed; in-headset landing-neck, switch Action, switch-camera, monkey-bar and full-body centering confirmation remains pending.
+**October 9 current deployment:** Release/x64 from "First person animation fixes"
+(`5237716`) plus per-gun controller haptics. Switch camera, Action alignment,
+landing-neck, monkey-bar and optional full-body centering fixes remain included.
+The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
+available, full-body IK is disabled. Personal settings and controller calibration
+were preserved. The earlier System-height calibration experiments are absent
+from this checkout. Automated checks pass; haptic strength and the remaining
+camera/interaction changes still need in-headset confirmation.
 
-- Installed DLL SHA-256: `93A3654418FF81B00BEE3EAC8586363388914FA1A114FF199C92CC0F8EC00B77`.
-- Deployment record: [landing-neck manifest](build/landing-neck-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-landing-neck-20261008-233608/`.
+- Installed DLL SHA-256: `E6AEAF41DF8740ACD273BFFA8659FE4373E2542F632E084894F286F2E18A0089`.
+- Deployment record: [gun haptics manifest](build/gun-haptics-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-gun-haptics-20261009-011630/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### Per-gun controller haptics (2026-10-09)
+
+TR4/5 tracked gunshots now give the firing VR controller a strong, short rumble:
+left gun to left controller, right gun to right controller, both for simultaneous
+shots. Holding either trigger refreshes the burst at the weapon's native firing
+cadence. Hits and misses both count as shots; empty-ammo attempts, consumed input
+polls and shots blocked by tracking loss do not start a burst.
+
+Long guns rumble the right controller. Shotgun pellets are aggregated into one
+burst per volley. Projectile weapons rumble on confirmed projectile creation;
+scoped revolver/Desert Eagle and HK shots use the native ammo-validated firing
+path, so merely aiming through a scope remains silent.
+
+The existing legacy OpenVR controller roles route 3,999 microsecond pulses over
+an 80 ms burst, serviced once per rendered frame with at least 5 ms between
+pulses on each hand. Bursts expire by elapsed time rather than accumulating a
+rumble backlog; disconnected controllers are skipped and shutdown clears pending
+feedback. No action bindings or INI changes are required. Full-body IK remains
+disabled in the installed settings.
+
+Validation: **1,256,966 first-person regression checks** and **12 jiggle
+integration cases** pass. Targeted checks cover hand routing, simultaneous fire,
+dry fire, tracking loss, pellet aggregation, projectile launches, scoped shots,
+aim-only polling, pulse spacing, expiry and repeated-fire renewal. Native TR4/5
+optic firing code was inspected for ammo/cadence validation. Clean Release/x64
+rebuild and installed DLL/unchanged INI hash verification passed. Logs:
+`build/gun-haptics-tests.log` and `build/gun-haptics-build.log`.
+Physical rumble strength still needs confirmation on the user's controllers.
 
 ### First-person landing neck tracking (2026-10-08)
 

@@ -189,6 +189,7 @@ bool VRSystem::Init() {
 }
 
 void VRSystem::Shutdown() {
+    m_gunHaptics.Reset();
     if (m_system && g_shutdownInternal) g_shutdownInternal();
     m_system     = nullptr;
     m_compositor = nullptr;
@@ -390,6 +391,13 @@ void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
 void VRSystem::BeginFrame() {
     m_controllerPoseValid[0] = m_controllerPoseValid[1] = false;
     if (!m_system) return;
+
+    m_gunHaptics.Update(GetTickCount64(),[&](int hand,unsigned short duration) {
+        const auto role=hand==0 ? vr::TrackedControllerRole_LeftHand : vr::TrackedControllerRole_RightHand;
+        const auto device=m_system->GetTrackedDeviceIndexForControllerRole(role);
+        if (device!=vr::k_unTrackedDeviceIndexInvalid && m_system->IsTrackedDeviceConnected(device))
+            m_system->TriggerHapticPulse(device,0,duration);
+    });
 
     vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
 
@@ -747,6 +755,10 @@ float VRSystem::HudNdcShiftX(Eye eye, float depthMetres) const {
 
     const float s = (idx == 0) ? 1.0f : -1.0f;
     return -p02 + s * p00 * halfSep / depthW;
+}
+
+void VRSystem::GunShotHaptic(int hand) {
+    if (m_system) m_gunHaptics.Shot(hand,GetTickCount64());
 }
 
 void VRSystem::ReadControllers(HandState out[2]) const {

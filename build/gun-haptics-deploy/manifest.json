@@ -1,0 +1,17 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-gun-haptics-20261009-011630",
+    "source_base":  "523771693a291c82abbac7c2cdfeb029d34969b9",
+    "change":  "Strong per-hand VR haptics on confirmed tracked shots, including automatic fire, long guns, projectiles and scoped hitscan shots",
+    "dll_sha256":  "E6AEAF41DF8740ACD273BFFA8659FE4373E2542F632E084894F286F2E18A0089",
+    "previous_dll_sha256":  "93A3654418FF81B00BEE3EAC8586363388914FA1A114FF199C92CC0F8EC00B77",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  1256966,
+    "dynamic_bones_integration_cases":  12,
+    "haptic_burst_ms":  80,
+    "haptic_pulse_microseconds":  3999,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

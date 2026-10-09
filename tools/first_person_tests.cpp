@@ -67,7 +67,7 @@ void Check(bool ok, const char* label) {
     if (!ok) { std::printf("FAIL: %s\n", label); std::exit(1); }
 }
 bool Near(float a, float b) { return std::fabs(a - b) < 0.002f; }
-int nativeShotCalls=0, nativeShotHand=-1, handDrawCalls=0;
+int nativeShotCalls=0, nativeShotHand=-1, handDrawCalls=0, nativeFireResult=-1;
 uint32_t handDrawMask=0;
 void __cdecl FakeHandJoint(uint8_t* item,tr::PHD_VECTOR* p,int joint,int) {
     Check(item==itemMemory && (joint==10 || joint==13),"tracked shot queries correct native wrist");
@@ -76,7 +76,7 @@ void __cdecl FakeHandJoint(uint8_t* item,tr::PHD_VECTOR* p,int joint,int) {
 }
 int32_t __cdecl FakeFire(int32_t,void*,void*,const int16_t*) {
     ++nativeShotCalls; nativeShotHand=tr::g_firingHand;
-    return -1; // A native miss is still a successfully fired shot.
+    return nativeFireResult; // A native miss (-1) is still a successfully fired shot.
 }
 int longCalls=0, pelletChecks=0, initCalls=0, opticMode=-1;
 tr::PHD_3DPOS crossbowArgument{};
@@ -102,6 +102,7 @@ void __cdecl FakeShotgun() {
         Check(tr::g_firingAim[0]==tr::g_longShot->baseAim[0] &&
               tr::g_firingAim[1]==tr::g_longShot->baseAim[1],
               "pellet spread is measured from volley base, not erased per pellet");
+        Check(!tr::VR().m_gunHaptics.until[0] && !tr::VR().m_gunHaptics.until[1],"pellets do not independently enqueue rumble");
         ++pelletChecks;
     }
 }
@@ -510,6 +511,23 @@ uint64_t GameDllBase() { return g_boundBase; }
 #include "fullbody_ik_regression.inl"
 
 int main() {
+    // Haptic envelopes use elapsed time, not render frame count or trigger polls.
+    for (uint64_t step:{1,7,11,16,33}) {
+        tr::GunHaptics h;int pulses[2]{};uint64_t last[2]{};
+        h.Shot(0,100);h.Shot(1,120);
+        for (uint64_t now=120;now<240;now+=step) h.Update(now,[&](int hand,int duration) {
+            Check(duration==3999 && now<h.until[hand],"strong pulses stop at the shot envelope deadline");
+            Check(!pulses[hand] || now-last[hand]>=5,"legacy haptic calls respect the per-hand 5 ms interval");
+            ++pulses[hand];last[hand]=now;
+        });
+        Check(pulses[0]>0 && pulses[1]>0,"both gun haptics can run independently");
+        h.Shot(0,250);h.Shot(0,300);
+        Check(h.until[0]==380,"automatic fire refreshes a short burst instead of accumulating a rumble tail");
+        h.Update(500,[&](int,int){Check(false,"stalled frames never replay expired haptics");});
+        h.Reset();h.Shot(-1,600);h.Shot(2,600);
+        Check(!h.until[0] && !h.until[1],"reset and invalid hand requests leave both controllers quiet");
+    }
+
     using namespace tr;
     config.firstPersonFullBodyIK=false; // Legacy presentation regressions; full-body has its own suite.
     // Native receiver coordinates are relative to the THIRD-PERSON camera.
@@ -1020,16 +1038,21 @@ int main() {
         g_gunTriggers.Reset(); g_gunTriggers.Update(true,true,false,false,0);
         g_gunTriggers.Update(true,true,true,false,1);
         g_gunTriggers.Update(true,true,false,false,2);
+        VR().m_gunHaptics.Reset();
         Check(FireWeaponForHand(1,1,nullptr,nullptr,aim)==0 && nativeShotCalls==0,
               "right native firing skipped for left-only tap");
         Check(FireWeaponForHand(0,1,nullptr,nullptr,aim)==-1 && nativeShotCalls==1 &&
               nativeShotHand==0,"left tap fires exactly the left native shot");
+        Check(VR().m_gunHaptics.until[0]>0 && !VR().m_gunHaptics.until[1],"left gun shot rumbles only left controller even on a miss");
         Check(FireWeaponForHand(0,1,nullptr,nullptr,aim)==0 && nativeShotCalls==1,
               "repeated simulation calls cannot duplicate a consumed tap");
+        VR().m_gunHaptics.Reset();
         g_gunTriggers.Update(true,true,false,true,3);
         Check(FireWeaponForHand(0,1,nullptr,nullptr,aim)==0 &&
               FireWeaponForHand(1,1,nullptr,nullptr,aim)==-1 &&
               nativeShotCalls==2 && nativeShotHand==1,"right tap fires only right native shot");
+        Check(!VR().m_gunHaptics.until[0] && VR().m_gunHaptics.until[1]>0,"right gun shot rumbles only right controller");
+        VR().m_gunHaptics.Reset();
         g_gunTriggers.Update(true,true,true,false,4);
         g_gunTriggers.Update(true,true,false,false,5);
         VR().m_controllerPoseValid[0]=false;
@@ -1038,6 +1061,13 @@ int main() {
         VR().m_controllerPoseValid[0]=true;
         Check(FireWeaponForHand(-1,1,nullptr,nullptr,aim)==-1 && nativeShotCalls==3,
               "unrecognized native firing caller is not suppressed");
+        Check(!VR().m_gunHaptics.until[0] && !VR().m_gunHaptics.until[1],"lost tracking and unknown callers cannot rumble a guessed hand");
+        nativeFireResult=0;g_gunTriggers.pending[0]=true;
+        Check(FireWeaponForHand(0,1,nullptr,nullptr,aim)==0 && !VR().m_gunHaptics.until[0],"empty-ammo native return cannot trigger haptics");
+        nativeFireResult=-1;
+        g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;
+        FireWeaponForHand(0,1,nullptr,nullptr,aim);FireWeaponForHand(1,1,nullptr,nullptr,aim);
+        Check(VR().m_gunHaptics.until[0]>0 && VR().m_gunHaptics.until[1]>0,"simultaneous actual shots rumble both controllers");
         g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeHandDraw);
         auto& meshBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
         const uint32_t savedBits=meshBits;
@@ -1254,7 +1284,8 @@ int main() {
                     Check(fire(leftCaller)==0,"LT release discards repeat queued during native recoil");
                 }
                 g_gunTriggers.Clear(0);
-                g_gunTriggers.Update(true,true,false,true,3);
+                VR().m_gunHaptics.Reset();
+        g_gunTriggers.Update(true,true,false,true,3);
                 const int beforeRight=nativeShotCalls;
                 if (dual) Check(fire(leftCaller)==0,"RT cannot fire left pistol/Uzi");
                 Check(fire(rightCaller)==-1 && nativeShotHand==1 && nativeShotCalls==beforeRight+1,
@@ -1304,7 +1335,9 @@ int main() {
         const auto savedBody=pos;
         int16_t savedArm[3]; std::memcpy(savedArm,laraMemory+off::lara_left_arm+12,sizeof(savedArm));
         const int beforeShots=nativeShotCalls;
+        VR().m_gunHaptics.Reset();
         g_gunTriggers.pending[1]=true; Detour_FireShotgun();
+        Check(!VR().m_gunHaptics.until[0] && VR().m_gunHaptics.until[1]>0,"shotgun volley queues one right-controller burst");
         Check(pelletChecks==6 && nativeShotCalls==beforeShots+6 && !g_gunTriggers.pending[1],
               "one RT request produces exactly six pellets and consumes one request");
         Detour_FireShotgun(); Check(longCalls==1,"no repeated volley after request consumed");
@@ -1314,7 +1347,9 @@ int main() {
         VR().m_controllerPoseValid[1]=false; g_gunTriggers.pending[1]=true;
         Detour_FireShotgun(); Check(longCalls==1,"lost right tracking blocks shotgun, not head fallback");
         VR().m_controllerPoseValid[1]=true;
+        VR().m_gunHaptics.Reset();
         dll.game=0; gun=5; Detour_FireGrenade();
+        Check(!VR().m_gunHaptics.until[0] && VR().m_gunHaptics.until[1]>0,"confirmed projectile launch rumbles the right controller");
         Check(initCalls==1 && *reinterpret_cast<int16_t*>(projectileMemory+off::item_room)==9,
               "grenade initialization keeps native physics and resolves muzzle room");
         Check(!std::memcmp(projectileMemory+off::item_pos,projectileMemory+off::item_pos_prev,sizeof(PHD_3DPOS)),
@@ -1346,6 +1381,19 @@ int main() {
         GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,1);
         Check(opticMode==0 && cameraStart.x==999 && cameraEnd.x==999,
               "revolver optic polling cannot duplicate shots or overwrite the camera");
+        for (int scopedWeapon:{2,5}) {
+            gun=int16_t(scopedWeapon);g_gunTriggers.pending[1]=true;VR().m_gunHaptics.Reset();
+            GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,1);
+            Check(!VR().m_gunHaptics.until[0] && VR().m_gunHaptics.until[1]>0,
+                  "confirmed scoped revolver/HK shots rumble the right controller");
+            VR().m_gunHaptics.Reset();
+            GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,1);
+            Check(!VR().m_gunHaptics.until[1],"repeated optic polling cannot rumble without another shot");
+            g_gunTriggers.pending[1]=true;
+            GetTargetOnLOSForCaller(0x12345,&cameraStart,&cameraEnd,1,0);
+            Check(!VR().m_gunHaptics.until[1],"optic aim-only and empty-ammo polling remain silent");
+        }
+        gun=2;
         g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeHandDraw);
         const int beforeCombined=handDrawCalls;
         meshBits=0x3600; Detour_DrawCreatureHD(itemMemory,1,0);

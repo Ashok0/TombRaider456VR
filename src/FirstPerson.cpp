@@ -640,6 +640,7 @@ struct LongShot {
     GunPose gun{};
     int16_t baseAim[2]{};
     bool projectile=false;
+    mutable bool fired=false; // Aggregate pellets/projectiles into one haptic burst.
 };
 const LongShot* g_longShot=nullptr;
 
@@ -1445,7 +1446,11 @@ int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
     if (separateTriggers && !tracked) return 0;
     const int32_t result = g_hFireWeapon.Original<Fn_FireWeapon>()(
         weapon, target, extra, aim);
-    if (tracked && result) g_handFired[hand]=true;
+    if (tracked && result) {
+        g_handFired[hand]=true;
+        if (longShot) g_longShot->fired=true;
+        else VR().GunShotHaptic(hand);
+    }
     if (tracked && g_motionShots[hand]<=100)
         LogF("firstperson: Touch %s shot target=%p assist=%d hp=%d->%d native=%d",
             hand ? "right" : "left",target,int(assisted),hpBefore,
@@ -1478,6 +1483,7 @@ void RunLongShot(int weapon, bool projectile, Fire fire) {
     const auto* previous=g_longShot;
     g_longShot=&shot;
     fire(&shot);
+    if (shot.fired) VR().GunShotHaptic(1);
     g_longShot=previous;
     std::memcpy(arm+off::arm_lock,saved,sizeof(saved));
 }
@@ -1549,6 +1555,7 @@ void __cdecl Detour_InitialiseProjectile(int16_t index) {
             const int expected=g_boundDll->game==1 ? 0x158 :
                 g_longShot->weapon==5 ? 0x16d : 0x168;
             if (object==expected) {
+                g_longShot->fired=true;
                 auto& pos=*reinterpret_cast<PHD_3DPOS*>(item+off::item_pos);
                 const auto muzzle=g_longShot->gun.muzzle;
                 if (g_boundDll->game==1) {
@@ -1618,6 +1625,11 @@ int32_t GetTargetOnLOSForCaller(uint64_t caller,PHD_VECTOR* source,PHD_VECTOR* d
         const int result=g_hGetTargetOnLOS.Original<Fn_GetTargetOnLOS>()(
             reinterpret_cast<PHD_VECTOR*>(&start),reinterpret_cast<PHD_VECTOR*>(&end),flags,mode);
         g_opticShot=previous;
+        // Native binocular code validates ammo/cadence before passing fire
+        // mode. Scoped revolver/HK shots bypass FireWeapon; a miss still fires.
+        // Launchers report successful creation through RunLongShot instead.
+        if (mode && (weapon==motiongun::Revolver || (g_boundDll->game==1 && weapon==5)))
+            VR().GunShotHaptic(1);
         // Do not overwrite the scene camera, whose vectors the native caller
         // passes directly. The native reticle uses its own LOS result.
         return result;
