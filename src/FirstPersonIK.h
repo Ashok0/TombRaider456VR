@@ -121,41 +121,65 @@ inline void ConstrainWrist(const Basis& reference,const Basis& target,Vec axis,
 // Unarmed hands alone use the anti-twist wrist constraints.
 inline bool SolveArm(const Frame (&native)[3], const Frame& target,
                      Vec preferredBend, Frame* corrections, ArmTwistState* twistState=nullptr,
-                     const Basis* neutralWrist=nullptr, bool constrainWrist=true) {
+                     const Basis* neutralWrist=nullptr, bool constrainWrist=true, Vec gripLocal={}) {
     const Vec upper=Sub(native[1].origin,native[0].origin);
     const Vec lower=Sub(native[2].origin,native[1].origin);
-    float a=std::sqrt(Dot(upper,upper)),b=std::sqrt(Dot(lower,lower));
-    if (!std::isfinite(a) || !std::isfinite(b) || a<1.e-3f || b<1.e-3f) return false;
-    const Vec delta=Sub(target.origin,native[0].origin);
-    const float distance=std::sqrt(Dot(delta,delta));
-    if (!std::isfinite(distance)) return false;
-    Vec direction{};
-    if (!Unit(delta,direction) && !Unit(Sub(native[2].origin,native[0].origin),direction))
-        direction={0,0,1};
-    Vec bend{};
-    if (!Unit(Sub(preferredBend,Scale(direction,Dot(preferredBend,direction))),bend))
-        Unit(Cross(direction,std::fabs(direction.x)<.8f ? Vec{1,0,0} : Vec{0,1,0}),bend);
-    // Preserve segment lengths within reach. Outside it, extend both segments
-    // proportionally so the wrist stays exactly at the calibrated controller.
-    if (distance>a+b) { const float stretch=distance/(a+b); a*=stretch; b*=stretch; }
-    if (distance<std::fabs(a-b)) a=b=(a+b)*.5f;
-    const float along=distance>1.e-4f ? (a*a-b*b+distance*distance)/(2*distance) : 0;
-    const float height=std::sqrt(std::max(0.f,a*a-along*along));
-    const Vec elbow=Add(native[0].origin,Add(Scale(direction,along),Scale(bend,height)));
-    const Vec points[3]={native[0].origin,elbow,target.origin};
+    const float upperLength=std::sqrt(Dot(upper,upper)),lowerLength=std::sqrt(Dot(lower,lower));
+    if (!std::isfinite(upperLength) || !std::isfinite(lowerLength) ||
+        upperLength<1.e-3f || lowerLength<1.e-3f) return false;
+    Vec points[3]{};
+    const auto placeBones=[&](Vec endpoint) {
+        float a=upperLength,b=lowerLength;
+        const Vec delta=Sub(endpoint,native[0].origin);
+        const float distance=std::sqrt(Dot(delta,delta));
+        if (!std::isfinite(distance)) return false;
+        Vec direction{};
+        if (!Unit(delta,direction) && !Unit(Sub(native[2].origin,native[0].origin),direction))
+            direction={0,0,1};
+        Vec bend{};
+        if (!Unit(Sub(preferredBend,Scale(direction,Dot(preferredBend,direction))),bend))
+            Unit(Cross(direction,std::fabs(direction.x)<.8f ? Vec{1,0,0} : Vec{0,1,0}),bend);
+        // Preserve lengths in reach, stretching only when necessary.
+        if (distance>a+b) { const float stretch=distance/(a+b); a*=stretch; b*=stretch; }
+        if (distance<std::fabs(a-b)) a=b=(a+b)*.5f;
+        const float along=distance>1.e-4f ? (a*a-b*b+distance*distance)/(2*distance) : 0;
+        const float height=std::sqrt(std::max(0.f,a*a-along*along));
+        points[0]=native[0].origin;
+        points[1]=Add(points[0],Add(Scale(direction,along),Scale(bend,height)));
+        points[2]=endpoint;
+        return true;
+    };
+    if (!placeBones(target.origin)) return false;
     ArmTwistState localTwist{};
     Basis wrist=target.basis,forearmRoll=IdentityBasis();
-    const Basis lowerSwing=Align(lower,Sub(points[2],points[1]));
+    Basis lowerSwing=Align(lower,Sub(points[2],points[1]));
     Vec lowerAxis{};
     if (!Unit(Sub(points[2],points[1]),lowerAxis)) return false;
     // A body-relative neutral wrist, independent of the animated hand pose,
     // makes the same controller pose produce the same result in walk and run.
     const Basis rest=neutralWrist ? *neutralWrist : GunBasis(IdentityBasis());
     const Vec restForward{rest.r[0][1],rest.r[1][1],rest.r[2][1]};
-    const Basis reference=Multiply(Align(restForward,lowerAxis),rest);
+    Basis reference=Multiply(Align(restForward,lowerAxis),rest);
     if (constrainWrist) {
         ConstrainWrist(reference,target.basis,lowerAxis,
                        twistState ? *twistState : localTwist,wrist,forearmRoll);
+        if (Dot(gripLocal,gripLocal)>0) {
+            // The gun target already puts this LOCAL grip point on the physical
+            // controller. Wrist limits change its rotation: keeping the old
+            // wrist origin would orbit the grip around the wrong pivot.
+            // Preserve the bounded hand orientation, then reconnect the bones
+            // to the wrist position that keeps that same grip point fixed.
+            const Vec grip=Transform(target,gripLocal);
+            if (!placeBones(Sub(grip,Transform(wrist,gripLocal))) ||
+                !Unit(Sub(points[2],points[1]),lowerAxis)) return false;
+            lowerSwing=Align(lower,Sub(points[2],points[1]));
+            reference=Multiply(Align(restForward,lowerAxis),rest);
+            // Distribute twist around the reconnected forearm's actual axis.
+            // Do not feed this second decomposition back into wrist history.
+            auto redistribution=twistState ? *twistState : localTwist;
+            Basis unused{};
+            ConstrainWrist(reference,wrist,lowerAxis,redistribution,unused,forearmRoll);
+        }
         // Remove native animation roll before adding controller roll. Otherwise
         // the running animation can reintroduce a knot even with wrist limits.
         const auto animated=RotationOf(Multiply(lowerSwing,native[2].basis));
@@ -164,7 +188,7 @@ inline bool SolveArm(const Frame (&native)[3], const Frame& target,
         forearmRoll=Multiply(forearmRoll,RotationMatrix(roll));
     }
     for (int i=0;i<3;++i) {
-        Frame desired{wrist,target.origin}, inv{};
+        Frame desired{wrist,points[2]}, inv{};
         if (i<2) {
             const Vec old=Sub(native[i+1].origin,native[i].origin);
             const Vec next=Sub(points[i+1],points[i]);

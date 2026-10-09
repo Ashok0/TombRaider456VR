@@ -161,8 +161,15 @@ void TestFullBodyIK() {
                 if(joint==10 || joint==13) {
                     Frame target{};Basis controller{};const int hand=joint==10 ? 1 : 0;
                     BuildControllerWrist(hand,target,controller);
-                    const auto expected=Sub(FullBodyGripState(itemMemory) ? bodyJointWorld[joint] : target.origin,camera);
-                    Check(nearVec(actual.origin,expected),"full-body hands match gun positions or preserve native ledge grips");
+                    if (FullBodyGripState(itemMemory)) {
+                        Check(nearVec(actual.origin,Sub(bodyJointWorld[joint],camera)),"full-body preserves native ledge grip positions");
+                    } else {
+                        const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
+                                                -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+                        Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),
+                              "full-body hands keep the same physical grip pivot as floating guns");
+                        if (armed) Check(nearVec(Add(actual.origin,camera),target.origin),"armed full-body wrist position remains unchanged");
+                    }
                     if(armed && !FullBodyGripState(itemMemory)) for(int r=0;r<3;++r) for(int c=0;c<3;++c)
                         Check(std::fabs(actual.basis.r[r][c]-target.basis.r[r][c])<.002f,"armed body wrist matches exact gun orientation without unarmed wrist limits");
                 }
@@ -231,8 +238,10 @@ void TestFullBodyIK() {
                     }
                     if(mapping[i]==10 || mapping[i]==13) {
                         Frame target{};Basis controller{};Check(BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller),"centered body wrist target available");
-                        Check(firstperson::Length(Sub(Add(joint.origin,camera),target.origin))<2,
-                              "centering body keeps controller hands within native integer-joint precision");
+                        const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
+                                                -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+                        Check(firstperson::Length(Sub(Add(Transform(joint,grip),camera),Transform(target,grip)))<2,
+                              "centering body keeps physical controller grip within native integer-joint precision");
                     }
                 }
                 Check(itemSnapshot==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)),"centering changes only render skeleton");

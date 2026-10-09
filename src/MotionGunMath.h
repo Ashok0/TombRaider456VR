@@ -191,11 +191,14 @@ inline Basis CalibratedController(const Basis& controller, const Calibration& c)
 // Calibrate the mesh's grip point, not a post-rotation world offset.
 // Native local +Y is barrel-forward. Mapping this local point to the tracked
 // controller keeps the visible grip stationary while the wrist rotates.
+inline Vec GripPointLocal(float gripForwardUnits, float raiseUnits=0, float rightUnits=0) {
+    return {-rightUnits,gripForwardUnits,-raiseUnits};
+}
 inline Frame GripFrame(const Basis& gun, Vec controllerPosition,
                        float gripForwardUnits, float raiseUnits=0, float rightUnits=0) {
     // Native +Z maps to controller-up. Negate the local grip Z to raise the
     // mesh while keeping the calibrated grip point on the controller.
-    return {gun, Sub(controllerPosition,Transform(gun,{-rightUnits,gripForwardUnits,-raiseUnits}))};
+    return {gun, Sub(controllerPosition,Transform(gun,GripPointLocal(gripForwardUnits,raiseUnits,rightUnits)))};
 }
 inline Vec MuzzleLocal(int weapon, int hand, int game=0) {
     // HD SetGunFlash offsets, shared by TR4/5 (hand 0=left, 1=right).

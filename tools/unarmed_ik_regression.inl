@@ -259,6 +259,56 @@ void TestUnarmedIK() {
             Check(std::fabs(forearm.basis.r[r][c]-baselineForearm.basis.r[r][c])<.002f,"running cannot add authored roll to the IK forearm");
         }
     }
+    // Rotate a controller about a fixed physical grip, not about the wrist.
+    // Nonzero side/up/forward calibration exposes the old lever-arm drift.
+    for (float scale:{.5f,1.f,2.f}) for (float side:{-1.f,1.f})
+    for (float yaw:{-170.f,-80.f,0.f,80.f,170.f})
+    for (float pitch:{-120.f,-45.f,0.f,45.f,120.f})
+    for (float roll:{-170.f,-90.f,0.f,90.f,170.f}) {
+        const Vec gripLocal=Scale(Vec{side*20,90,-35},scale);
+        const Vec physicalGrip=Scale(Vec{side*170,250,200},scale);
+        Frame chain[3]={restArm[0],restArm[1],restArm[2]};
+        for (auto& joint:chain) joint.origin=Scale(joint.origin,scale);
+        const auto orientation=motiongun::GunBasis(CalibratedController(identity,{0,0,0,pitch,yaw,roll}));
+        const Frame target{orientation,Sub(physicalGrip,Transform(orientation,gripLocal))};
+        Frame changes[3]{},oldChanges[3]{};
+        firstperson::ArmTwistState history{};
+        Check(firstperson::SolveArm(chain,target,{side,1,-.25f},oldChanges),"original wrist limit reference solves");
+        Check(firstperson::SolveArm(chain,target,{side,1,-.25f},changes,&history,nullptr,true,gripLocal),
+              "controller grip anchored IK solves across yaw/pitch/roll, hands and scales");
+        const auto wrist=Multiply(changes[2],chain[2]);
+        const auto bounded=Multiply(oldChanges[2],chain[2]);
+        Check(nearVec(Transform(wrist,gripLocal),physicalGrip),"rotation keeps calibrated grip exactly on controller");
+        Check(nearVec(Transform(changes[0],chain[0].origin),chain[0].origin),"pivot correction keeps shoulder anchored");
+        Check(nearVec(Transform(changes[0],chain[1].origin),Transform(changes[1],chain[1].origin)),
+              "pivot correction keeps elbow connected");
+        Check(nearVec(Transform(changes[1],chain[2].origin),wrist.origin),"pivot correction reconnects forearm to hand");
+        for (int r=0;r<3;++r) for (int c=0;c<3;++c)
+            Check(std::fabs(wrist.basis.r[r][c]-bounded.basis.r[r][c])<.002f,
+                  "grip correction preserves existing bounded hand orientation");
+        const float reach=firstperson::Length(Sub(wrist.origin,chain[0].origin));
+        const float upper=firstperson::Length(Sub(chain[1].origin,chain[0].origin));
+        const float lower=firstperson::Length(Sub(chain[2].origin,chain[1].origin));
+        if (reach>=std::fabs(upper-lower) && reach<=upper+lower) {
+            const Vec elbow=Transform(changes[1],chain[1].origin);
+            Check(std::fabs(firstperson::Length(Sub(elbow,chain[0].origin))-upper)<.04f &&
+                  std::fabs(firstperson::Length(Sub(wrist.origin,elbow))-lower)<.04f,
+                  "reachable grip correction preserves both bone lengths");
+        }
+        Frame repeated[3]{};
+        Check(firstperson::SolveArm(chain,target,{side,1,-.25f},repeated,&history,nullptr,true,gripLocal),"repeated eye pose solves");
+        for (int bone=0;bone<3;++bone) {
+            Check(nearVec(repeated[bone].origin,changes[bone].origin),"pivot solve cannot accumulate positional drift");
+            for (int r=0;r<3;++r) for (int c=0;c<3;++c)
+                Check(std::fabs(repeated[bone].basis.r[r][c]-changes[bone].basis.r[r][c])<.002f,
+                      "pivot solve cannot accumulate stereo wrist twist");
+        }
+        Check(firstperson::SolveArm(chain,target,{side,1,-.25f},changes,nullptr,nullptr,false,gripLocal),"armed wrist remains unconstrained");
+        const auto armed=Multiply(changes[2],chain[2]);
+        Check(nearVec(armed.origin,target.origin),"armed wrist position is unchanged by grip-aware solver");
+        for (int r=0;r<3;++r) for (int c=0;c<3;++c)
+            Check(std::fabs(armed.basis.r[r][c]-target.basis.r[r][c])<.002f,"armed rotation remains exact");
+    }
     Frame corrections[3]{}; Frame invalid[3]={arm[0],arm[0],arm[2]};
     Check(!firstperson::SolveArm(invalid,{identity,{1,2,3}},{0,1,0},corrections),"zero-length arm rejected");
     Check(!firstperson::SolveArm(arm,{identity,{NAN,2,3}},{0,1,0},corrections),"nonfinite target rejected");
@@ -327,8 +377,12 @@ void TestUnarmedIK() {
                 const int joint=mapping[i];
                 if(joint==10 || joint==13) {
                     const auto& gunPose=guns[joint==10 ? 1 : 0];
-                    nearFrame(Multiply(ReadRows(palette+i*12),bind[i]),
-                              {gunPose.desired,Sub(gunPose.trackedHand,cameraOrigin)});
+                    const auto rendered=Multiply(ReadRows(palette+i*12),bind[i]);
+                    const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
+                                            -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+                    const Frame floatingGun{gunPose.desired,Sub(gunPose.trackedHand,cameraOrigin)};
+                    Check(nearVec(Transform(rendered,grip),Transform(floatingGun,grip)),
+                          "IK and floating gun keep the same physical grip pivot after wrist constraints");
                 } else if(joint<8 || joint>13) {
                     Check(!std::memcmp(palette+i*12,baseline+i*12,12*sizeof(float)),"IK preserves torso, head and legs exactly");
                 }

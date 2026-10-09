@@ -90,6 +90,7 @@ and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and
 | Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
 | TR5 X-ray sequence flickers in first person | October 9: force native third person while the X-ray effect is active, then automatically resume first person. See [X-ray camera override](#third-person-during-tr5-x-ray-sequences-2026-10-09). |
+| IK hands rotate around the wrong physical point | October 9: preserve the floating-gun calibrated grip point after wrist constraints, then reconnect the arm to the corrected wrist. See [IK grip pivot](#ik-hand-grip-pivot-correction-2026-10-09). |
 | Wrists remain twisted until view toggle | October 9: reproduced full-turn accumulation in TR4/5 and replaced it with limits based on the current controller pose. See [wrist recovery](#persistent-wrist-twist-recovery-2026-10-09). |
 | Unarmed hands in the forward view | Extended October 7: walking and running share controller arm IK and resting-hand meshes; wrist bends and roll are constrained and forearms absorb most roll. The prior look-down-only animation remains the fallback when IK is disabled or tracking is unavailable. See [wrist correction](#consistent-walkingrunning-ik-and-wrist-limits-2026-10-07). |
 | Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
@@ -105,21 +106,52 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 9 current deployment:** Release/x64 from "Sprinting fix"
-(`4399764`) plus the two-hand ledge pull-up gesture. Switch camera, Action alignment,
+**October 9 current deployment:** Release/x64 from "Two handed pull gesture for mounting ledges"
+(`8a03ebc`) plus the IK hand grip-pivot correction. Switch camera, Action alignment,
 landing-neck, monkey-bar and optional full-body centering fixes remain included.
 The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
 available, full-body IK is disabled. Personal settings and controller calibration
 were preserved. The earlier System-height calibration experiments are absent
-from this checkout. Automated checks pass; ledge gesture feel, sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
+from this checkout. Automated checks pass; physical IK hand pivot alignment, ledge gesture feel, sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
 camera/interaction changes still need in-headset confirmation.
 
-- Installed DLL SHA-256: `57208113BC602BC09BC6303F17040DB8A3747D02E1A547B2F4554DD84D7AACEC`.
-- Deployment record: [ledge gesture manifest](build/ledge-gesture-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-ledge-gesture-20261009-161334/`.
+- Installed DLL SHA-256: `5B144F73D3E154D5368BB0CB32FBC2DC9E07A72E4563698635ED648AFFF96631`.
+- Deployment record: [IK grip pivot manifest](build/ik-grip-pivot-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-ik-grip-pivot-20261009-162624/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### IK hand grip pivot correction (2026-10-09)
+
+The floating guns already anchor a calibrated local grip point to each physical
+controller. Unarmed IK reused that wrist target, then constrained the hand's
+rotation without recalculating the wrist position. Rotating a hand therefore
+moved the visible grip off the controller, even though the wrist target still
+matched the gun wrist. A new integration test comparing the actual grip points
+reproduced the mismatch before the fix.
+
+IK now preserves that same calibrated grip point after applying the existing
+bounded hand orientation. It solves the elbow and forearm again for the corrected
+wrist position and distributes twist around the reconnected forearm axis. The
+shoulder stays anchored and reachable bone lengths are retained. Calibration is
+shared with floating guns, including forward, side and vertical offsets. The
+correction applies to arm-only IK and unarmed arms in optional full-body IK.
+Floating gun transforms, armed wrist orientation, native ledge grips, shadow
+palettes and the complete jiggle-physics skeleton retain their existing paths.
+Full-body IK remains disabled in the installed INI.
+
+Validation: **1,383,934 first-person regression checks** and **12 jiggle
+integration cases** pass, including the formerly failing grip comparison.
+New tests cover mirrored hands, yaw/pitch/roll sweeps, scale changes, connected
+shoulder/elbow/wrist endpoints, reachable segment lengths, retained bounded hand
+orientation, repeated eye draws, unchanged armed transforms, 15/33-joint palettes,
+nonidentity bindings, walk/run transitions and full-body roomscale movement.
+Clean Release/x64 rebuild and deployed DLL/unchanged INI hash verification pass.
+Physical pivot alignment still needs in-headset confirmation.
+
+Logs: `build/ik-grip-pivot-before-tests.log`, `build/ik-grip-pivot-tests.log`,
+and `build/ik-grip-pivot-build.log`.
 
 ### Two-hand ledge pull-up (2026-10-09)
 

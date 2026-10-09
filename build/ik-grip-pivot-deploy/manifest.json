@@ -1,0 +1,16 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-ik-grip-pivot-20261009-162624",
+    "source_base":  "8a03ebcb95600acbbd29cf21fcc29c6175584ab6",
+    "change":  "Anchor constrained IK hands at the same calibrated grip pivot as floating guns; reconnect arm geometry and redistribute forearm twist without altering bounded hand orientation",
+    "dll_sha256":  "5B144F73D3E154D5368BB0CB32FBC2DC9E07A72E4563698635ED648AFFF96631",
+    "previous_dll_sha256":  "57208113BC602BC09BC6303F17040DB8A3747D02E1A547B2F4554DD84D7AACEC",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  1383934,
+    "dynamic_bones_integration_cases":  12,
+    "regression_reproduced_before_fix":  true,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

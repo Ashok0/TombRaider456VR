@@ -859,7 +859,7 @@ GunVec JointPoint(uint8_t* item, int joint, int x, int y, int z) {
     return {float(p.x), float(p.y), float(p.z)};
 }
 
-bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller) {
+bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller, GunVec* gripLocal=nullptr) {
     if (hand < 0 || hand > 1) return false;
     if (const auto* reason=ControllerTrackingBlockedReason()) {
         g_gunPoseFailure[hand]=reason;
@@ -892,6 +892,8 @@ bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller)
         calibration.gripForwardMetres*scale,
         calibration.raiseMetres*scale,calibration.rightMetres*scale).origin;
 
+    if (gripLocal) *gripLocal=motiongun::GripPointLocal(calibration.gripForwardMetres*scale,
+        calibration.raiseMetres*scale,calibration.rightMetres*scale);
     motiongun::Frame inverse{};
     return motiongun::Inverse(out,inverse); // Reject invalid tracked rotations too.
 }
@@ -1103,8 +1105,9 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     for(int hand=0;hand<2;++hand) {
         const int first=hand ? 8 : 11;
         Frame chain[3]={posed[first],posed[first+1],posed[first+2]},changes[3]{},target=native[first+2];
+        GunVec gripLocal{};
         if(!grip) {
-            GunBasis controller{};if(!BuildControllerWrist(hand,target,controller)) return false;
+            GunBasis controller{};if(!BuildControllerWrist(hand,target,controller,&gripLocal)) return false;
             const auto wrist=JointPoint(item,first+2,0,0,0);
             target.origin=Add(native[first+2].origin,Sub(target.origin,wrist));
         }
@@ -1113,7 +1116,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
                  -side*.6f*std::sin(heading)-.25f*std::cos(heading)};
         if(grip) pole=Sub(native[first+1].origin,native[first].origin);
         const auto neutral=GunBasis(body);
-        if(!firstperson::SolveArm(chain,target,pole,changes,&twist[hand],&neutral,unarmed && !grip)) return false;
+        if(!firstperson::SolveArm(chain,target,pole,changes,&twist[hand],&neutral,unarmed && !grip,gripLocal)) return false;
         for(int i=0;i<3;++i) posed[first+i]=Multiply(changes[i],chain[i]);
     }
     // Validate every correction before touching a palette. Helpers sharing a
@@ -1150,8 +1153,8 @@ bool ApplyUnarmedIK(uint8_t* item, float* joints, int count) {
         motiongun::Frame native[3]{};
         for (int segment=0;segment<3;++segment)
             if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,first+segment,native[segment])) return false;
-        motiongun::Frame target{}; GunBasis controller{};
-        if (!BuildControllerWrist(hand,target,controller)) return false;
+        motiongun::Frame target{}; GunBasis controller{}; GunVec gripLocal{};
+        if (!BuildControllerWrist(hand,target,controller,&gripLocal)) return false;
         // Native palettes are camera-relative. Convert the shared gun world
         // target using the native wrist and undo the visible body's eye fit.
         const auto nativeWrist=JointPoint(item,first+2,0,0,0);
@@ -1170,7 +1173,7 @@ bool ApplyUnarmedIK(uint8_t* item, float* joints, int count) {
                                   {0,1,0},{-std::sin(heading),0,std::cos(heading)}}};
         const auto neutralWrist=motiongun::GunBasis(bodyBasis);
         if (!firstperson::SolveArm(native,target,pole,correction+hand*3,
-                                   hand ? &rightTwist : &leftTwist,&neutralWrist)) return false;
+                                   hand ? &rightTwist : &leftTwist,&neutralWrist,true,gripLocal)) return false;
     }
     g_unarmedTwist[0]=leftTwist;g_unarmedTwist[1]=rightTwist;
     // Commit only after both arms solve. Duplicate HD helper bones mapped to
