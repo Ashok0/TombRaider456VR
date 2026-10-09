@@ -1,0 +1,16 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-wrist-recovery-20261009-040740",
+    "source_base":  "60744a5a974bc1bab2df068c840619022730332c",
+    "change":  "Remove persistent full-turn accumulation from unarmed wrist limits; retain periodic seam continuity and immediate neutral-pose recovery",
+    "dll_sha256":  "4ACA9672E1C170777C5E914E1BDAE4681620E34D491DC916D51E9727FD634212",
+    "previous_dll_sha256":  "E6AEAF41DF8740ACD273BFFA8659FE4373E2542F632E084894F286F2E18A0089",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  1324607,
+    "dynamic_bones_integration_cases":  12,
+    "regression_reproduced_before_fix":  true,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

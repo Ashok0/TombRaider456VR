@@ -147,6 +147,24 @@ void TestUnarmedIK() {
     // wrist axes. This lets the test independently measure actual mesh twist.
     const Basis neutral=motiongun::GunBasis(identity);
     const Frame restArm[3]={{neutral,{0,0,0}},{neutral,{0,300,0}},{neutral,{0,300,200}}};
+    // Returning to the same physical pose after full turns must agree with
+    // a fresh solver. The old accumulator stayed clamped until FP was toggled.
+    for (int direction:{-1,1}) for (int turns:{1,3}) {
+        firstperson::ArmTwistState history{};
+        Basis wrist{},forearm{};
+        for (int degree=0;degree<=360*turns;++degree) {
+            const auto rotation=firstperson::RotationMatrix(firstperson::AxisRotation({0,0,1},
+                direction*degree*3.14159265358979323846f/180));
+            firstperson::ConstrainWrist(neutral,Multiply(rotation,neutral),{0,0,1},history,wrist,forearm);
+        }
+        for (int repeat=0;repeat<8;++repeat) {
+            firstperson::ConstrainWrist(neutral,neutral,{0,0,1},history,wrist,forearm);
+            Check(nearVec(Transform(wrist,{1,0,0}),Transform(neutral,{1,0,0})),
+                  "full controller turns return to neutral without toggling first person");
+            Check(nearVec(Transform(forearm,{1,0,0}),Vec{1,0,0}),
+                  "forearm cannot retain accumulated turns after returning to neutral");
+        }
+    }
     firstperson::ArmTwistState twistState{};
     Basis previous=neutral;bool havePrevious=false;
     auto testRoll=[&](float degrees) {
@@ -158,10 +176,13 @@ void TestUnarmedIK() {
         Check(firstperson::SolveArm(restArm,target,{0,1,0},changes,&twistState),"wrist-roll sweep solves through the 180-degree boundary");
         const auto wrist=Multiply(changes[2],restArm[2]);
         const auto forearm=Multiply(changes[1],restArm[1]);
-        const float limited=std::clamp(degrees,-90.f,90.f)*3.14159265358979323846f/180;
+        const float principal=std::remainder(degrees,360.f);
+        const float limited=std::clamp(principal,-90.f,90.f)*3.14159265358979323846f/180;
         const Vec expectedRight{std::cos(limited),std::sin(limited),0};
         const Vec right=Transform(wrist.basis,{1,0,0});
-        Check(nearVec(right,expectedRight),"hand roll is bounded at 90 degrees and unwinds continuously");
+        if (std::fabs(principal)<=135)
+            Check(nearVec(right,expectedRight),"reachable wrist roll and adjacent limit plateau follow the current pose");
+        Check(right.x>=-.001f,"wrist roll never exceeds its 90-degree bound");
         const Vec forearmRight=Transform(forearm.basis,{1,0,0});
         Check(Dot(right,forearmRight)>std::cos(18.1f*3.14159265358979323846f/180),
               "at most 18 degrees of roll remains across the wrist seam");
@@ -176,6 +197,39 @@ void TestUnarmedIK() {
     for(int angle=0;angle<=270;++angle) testRoll(float(angle));
     for(int angle=269;angle>=-270;--angle) testRoll(float(angle));
     for(int angle=-269;angle<=0;++angle) testRoll(float(angle));
+    // Moving Lara's facing/forearm reference must not create a persistent
+    // history offset either. Repeated stereo/material draws are idempotent.
+    for (float yaw:{0.f,.7f,-2.1f}) for (float bend:{-170.f,0.f,55.f,170.f}) {
+        firstperson::ArmTwistState history{};
+        const auto body=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},yaw));
+        const auto reference=Multiply(body,neutral);
+        const auto axis=Transform(body,{0,0,1});
+        const auto bendAxis=Transform(body,{1,0,0});
+        const auto swing=firstperson::AxisRotation(bendAxis,bend*3.14159265358979323846f/180);
+        for (int degree=-720;degree<=720;degree+=7) {
+            const auto twist=firstperson::AxisRotation(axis,degree*3.14159265358979323846f/180);
+            const auto target=Multiply(firstperson::RotationMatrix(firstperson::RotationProduct(swing,twist)),reference);
+            firstperson::ArmTwistState fresh{};Basis expected{},expectedForearm{};
+            firstperson::ConstrainWrist(reference,target,axis,fresh,expected,expectedForearm);
+            for (int draw=0;draw<3;++draw) {
+                Basis wrist{},forearm{};
+                firstperson::ConstrainWrist(reference,target,axis,history,wrist,forearm);
+                for (int row=0;row<3;++row) for (int col=0;col<3;++col)
+                    Check(std::fabs(wrist.r[row][col]-expected.r[row][col])<.002f &&
+                          std::fabs(forearm.r[row][col]-expectedForearm.r[row][col])<.002f,
+                          "defined wrist pose is independent of rotation history and repeated render draws");
+            }
+        }
+        // Undefined twist at an exact 180-degree swing may use the last
+        // sample, but the next defined pose must immediately recover.
+        Basis wrist{},forearm{};
+        const auto folded=Multiply(firstperson::RotationMatrix(firstperson::AxisRotation(bendAxis,3.14159265358979323846f)),reference);
+        firstperson::ConstrainWrist(reference,folded,axis,history,wrist,forearm);
+        firstperson::ConstrainWrist(reference,reference,axis,history,wrist,forearm);
+        for (int row=0;row<3;++row) for (int col=0;col<3;++col)
+            Check(std::fabs(wrist.r[row][col]-reference.r[row][col])<.002f,
+                  "singular arm pose cannot poison the next neutral wrist orientation");
+    }
     for(float bend:{-170.f,-120.f,-60.f,0.f,60.f,120.f,170.f}) {
         const float a=bend*3.14159265358979323846f/180;
         const Basis rotation{{{1,0,0},{0,std::cos(a),-std::sin(a)},{0,std::sin(a),std::cos(a)}}};

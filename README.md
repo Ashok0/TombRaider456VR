@@ -85,6 +85,7 @@ and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and
 | Gun controller rumble | October 9: confirmed tracked shots give the firing hand a strong 80 ms haptic burst; both guns and automatic fire are supported. See [gun haptics](#per-gun-controller-haptics-2026-10-09). |
 | Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
+| Wrists remain twisted until view toggle | October 9: reproduced full-turn accumulation in TR4/5 and replaced it with limits based on the current controller pose. See [wrist recovery](#persistent-wrist-twist-recovery-2026-10-09). |
 | Unarmed hands in the forward view | Extended October 7: walking and running share controller arm IK and resting-hand meshes; wrist bends and roll are constrained and forearms absorb most roll. The prior look-down-only animation remains the fallback when IK is disabled or tracking is unavailable. See [wrist correction](#consistent-walkingrunning-ik-and-wrist-limits-2026-10-07). |
 | Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
 | Floor shadow displaced/split in first person | User confirmed the intact silhouette, but the October 5 placement changes did not resolve displacement/HMD movement. October 6 corrects the shadow projection camera origin and isolates the light-camera pass from headset injection. Automated checks pass; headset confirmation pending. See [shadow projection](#first-person-shadow-projection-origin-2026-10-06). |
@@ -99,21 +100,52 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 9 current deployment:** Release/x64 from "First person animation fixes"
-(`5237716`) plus per-gun controller haptics. Switch camera, Action alignment,
+**October 9 current deployment:** Release/x64 from "Weapon rumble fix"
+(`60744a5`) plus the persistent wrist-twist correction. Switch camera, Action alignment,
 landing-neck, monkey-bar and optional full-body centering fixes remain included.
 The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
 available, full-body IK is disabled. Personal settings and controller calibration
 were preserved. The earlier System-height calibration experiments are absent
-from this checkout. Automated checks pass; haptic strength and the remaining
+from this checkout. Automated checks pass; wrist recovery, haptic strength and the remaining
 camera/interaction changes still need in-headset confirmation.
 
-- Installed DLL SHA-256: `E6AEAF41DF8740ACD273BFFA8659FE4373E2542F632E084894F286F2E18A0089`.
-- Deployment record: [gun haptics manifest](build/gun-haptics-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-gun-haptics-20261009-011630/`.
+- Installed DLL SHA-256: `4ACA9672E1C170777C5E914E1BDAE4681620E34D491DC916D51E9727FD634212`.
+- Deployment record: [wrist recovery manifest](build/wrist-recovery-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-wrist-recovery-20261009-040740/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### Persistent wrist-twist recovery (2026-10-09)
+
+A reported TR1?3 symptom also reproduced in the TR4/5 unarmed IK solver: after
+rotating through a full turn, the wrist could remain pinned at its roll limit
+although the controller had returned to neutral. Switching out of first person
+cleared the accumulated angle, explaining why toggling views restored the hand.
+
+TR4/5 still contained the full-turn accumulator. The local TR1?3 source already
+had a correction, which was ported into the shared arm solver here. Defined
+controller poses now use their current periodic twist rather than accumulated
+turns. Normal roll and the 90-degree limit plateau remain intact; only extreme
+135?180 degree twists soften toward zero to join continuously across the angle
+boundary. The 55-degree bend limit and 80/20 forearm/wrist roll split remain.
+The last twist is retained only where an exactly folded pose makes twist
+undefined; returning to a defined pose recovers immediately without a view toggle.
+
+Both unarmed arms use this correction, including the optional full-body solver.
+Armed gun orientation, hand positions, running hand meshes and calibration are
+unchanged. The installed INI is unchanged and full-body IK stays disabled.
+The TR1?3 checkout was inspected read-only; this deployment updates TR4/5.
+
+Validation: the new full-turn/neutral regression failed before the change.
+**1,324,607 first-person checks** and **12 jiggle integration cases** pass,
+including clockwise/counterclockwise repeated turns, immediate neutral recovery,
+angle-boundary continuity, fresh-versus-history pose equality, repeated render
+draws, different body reference orientations and recovery from a singular pose.
+Existing walk/run, hand attachment, full-body, shadow and jiggle checks pass.
+Clean Release/x64 rebuild and installed DLL/unchanged INI hash verification pass.
+Logs: `build/wrist-recovery-before-tests.log`, `build/wrist-recovery-tests.log`,
+and `build/wrist-recovery-build.log`. In-headset confirmation remains pending.
 
 ### Per-gun controller haptics (2026-10-09)
 
@@ -390,6 +422,8 @@ built and was deployed with DLL hash verification and the personal INI preserved
 In-headset confirmation of the resting-hand appearance remains pending.
 
 ### Consistent walking/running IK and wrist limits (2026-10-07)
+
+Extended October 9 by [persistent wrist recovery](#persistent-wrist-twist-recovery-2026-10-09), which removes accumulated full turns.
 
 Walking and running both retain controller-driven unarmed hands. Wrist orientation
 uses the same body-relative neutral reference for both gaits; the native running
