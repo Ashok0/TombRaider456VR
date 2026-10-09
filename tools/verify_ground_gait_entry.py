@@ -52,9 +52,15 @@ def verify(path):
                 **dict.fromkeys((1, 2, 3, 4, 5, 7, 9, 20, 21), 0),
                 **dict.fromkeys((11, 103), 2),
                 **dict.fromkeys((38, 39, 40, 41), 16),
-                65: 22, 66: 22, 67: 21, 68: 21}
+                65: 22, 66: 22, 67: 21, 68: 21, 223: 73, 224: 73, 225: 73}
     for index, expected_state in expected.items():
         assert anim(index)[0] == expected_state, (path, index, "unexpected gait state")
+    # Sprint is forward ground travel at native speed, not a sideways gait.
+    assert struct.unpack_from("<ii", tables["anims"], 223 * 40 + 8) == (82 << 16, 0)
+    for index in (223, 224, 225):
+        assert anim(index)[3] == 223, (path, index, "sprint loop/startup exit")
+    for index in (230, 231, 232):
+        assert anim(index)[0] == 74, (path, index, "sprint dive must remain excluded")
     state, first, last, jump, jump_frame, _, _, commands, _ = anim(41)
     assert state == 16 and last - first == 15 and commands == 0, (path, "backpedal startup")
     assert jump == 40 and anim(jump)[0] == 16, (path, "backpedal loop")
@@ -77,4 +83,4 @@ if __name__ == "__main__":
         assert paths, (game, "no PDP files")
         count = sum(verify(path) for path in paths)
         assert count, (game, "no Lara animation tables")
-        print(f"TR{game}: {count} tables verified: immediate forward/side/back entry and safe 4-tick backpedal startup")
+        print(f"TR{game}: {count} tables verified: immediate walk/run/sprint-to-side/back entry and safe 4-tick backpedal startup")

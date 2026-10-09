@@ -311,7 +311,7 @@ void __cdecl FakeGaitTransitionAnimate(uint8_t* item) {
     // Model the native ordering: select/advance animation, read its velocity,
     // then translate along lara.move_angle. The outgoing run has NOT become
     // a slow sidestep just because this tick's input asks for one.
-    const int16_t speed=state==1 ? 70 : state==0 ? 24 : state==2 ? 32 : 12;
+    const int16_t speed=state==73 ? 82 : state==1 ? 70 : state==0 ? 24 : state==2 ? 32 : 12;
     *reinterpret_cast<int16_t*>(item+tr::off::item_speed)=speed;
     auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
     const float angle=tr::Radians(*reinterpret_cast<int16_t*>(laraMemory+tr::off::lara_move_angle));
@@ -2713,7 +2713,7 @@ int main() {
     for (int which:{0,1}) for (bool smoothing:{false,true}) for (int modern:{0,1})
         for (float heading:{0.f,0.73f,-2.4f}) for (const auto& d:dirs) {
         if (d.action==locomotion::Forward) continue;
-        for (int oldAnim:{0,1,2,3,6,8,10,11,38,39,40,41,65,66,67,68,103}) {
+        for (int oldAnim:{0,1,2,3,6,8,10,11,38,39,40,41,65,66,67,68,103,223,224,225}) {
             game=dll.game=which; resetRoomscale(); physicalPose(heading); FirstPersonRecenter();
             config.firstPersonRoomscaleMove=false; config.firstPersonMovementStabilization=smoothing;
             *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern ? 2 : 0;
@@ -2722,12 +2722,12 @@ int main() {
             auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
             auto& required=*reinterpret_cast<int16_t*>(itemMemory+22);
             anim=int16_t(oldAnim); frame=5; required=0;
-            state=goal=oldAnim==11 || oldAnim==103 ? 2 : oldAnim>=65 && oldAnim<=66 ? 22 :
+            state=goal=oldAnim>=223 ? 73 : oldAnim==11 || oldAnim==103 ? 2 : oldAnim>=65 && oldAnim<=66 ? 22 :
                 oldAnim>=67 && oldAnim<=68 ? 21 : oldAnim>=38 && oldAnim<=41 ? 16 :
                 oldAnim>=1 && oldAnim<=3 ? 0 : 1;
             *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
             collisionPush={}; blockStableMotion=collisionStartsFall=blockGaitStart=false;
-            actionInput=0; animationNextState=-1; standingGaitChecks=0;
+            actionInput=oldAnim>=223 ? 0x4000000 : 0; animationNextState=-1; standingGaitChecks=0;
             dll.anims=rva(&immediateGaitTable);
             g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeGaitTransitionAnimate);
             g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeImmediateGaitAboveWater);
@@ -2823,6 +2823,51 @@ int main() {
               pos.x_pos==blocked.x_pos && pos.z_pos==blocked.z_pos,
               "instant forward entry preserves native wall collision");
         blockStableMotion=false;dll.anims=0;animationNextState=-1;goal=0;
+    }
+    // Forward sprint retains its full native speed. Goals can already say
+    // run/sprint before the animation switches; never splice those handoffs.
+    for (int which:{0,1}) for (bool stable:{false,true}) for (float heading:{0.f,.9f,-2.4f}) {
+        game=dll.game=which;resetRoomscale();physicalPose(heading);FirstPersonRecenter();
+        config.firstPersonRoomscaleMove=false;config.firstPersonMovementStabilization=stable;
+        auto& anim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        auto& frame=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number+2);
+        dll.anims=rva(&immediateGaitTable);
+        g_hAnimateLara.m_trampoline=reinterpret_cast<void*>(&FakeGaitTransitionAnimate);
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeImmediateGaitAboveWater);
+        blockStableMotion=collisionStartsFall=blockGaitStart=false;collisionPush={};
+        for (int current:{1,73}) for (int next:{1,73}) {
+            state=int16_t(current);goal=int16_t(next);anim=current==73 ? 223 : 0;frame=5;
+            *reinterpret_cast<int16_t*>(itemMemory+22)=0;
+            *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+            actionInput=0x4000000|locomotion::Forward;
+            float x=0,z=1,r=0;FirstPersonInput(x,z,r,false);
+            const int oldAnim=anim,checksBefore=standingGaitChecks;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(state==current && goal==next && anim==oldAnim && frame==6 && standingGaitChecks==checksBefore,
+                  "forward run/sprint goals retain native animation transitions instead of restarting standing");
+            Check(std::fabs(locomotion::Length(beforeNativeCollision)-(current==73 ? 82.f : 70.f))<2,
+                  "forward sprint retains full native speed without side-step scaling or zero-motion cancellation");
+            Check(std::fabs(Wrap(Radians(pos.y_rot)-heading))<.002f,
+                  "sprint body facing follows the FP viewing heading");
+        }
+        for (int clip:{223,224,225}) for (int guard=0;guard<5;++guard) {
+            state=goal=73;anim=int16_t(clip);frame=5;actionInput=locomotion::StepLeft;
+            *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+            *reinterpret_cast<int16_t*>(itemMemory+22)=0;
+            if (guard==0) goal=74; // Requested sprint dive is never converted to standing.
+            if (guard==1) { state=goal=74;anim=230; }
+            if (guard==2) *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=8;
+            if (guard==3) actionInput|=0x10;
+            if (guard==4) *reinterpret_cast<int16_t*>(itemMemory+22)=56;
+            const int oldState=state,oldGoal=goal,oldAnim=anim;
+            PrepareGroundDirection(itemMemory,locomotion::StepLeft);
+            Check(state==oldState && goal==oldGoal && anim==oldAnim && frame==5,
+                  "sprint correction preserves dives, gravity, jump requests and required interaction states");
+        }
+        *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+        *reinterpret_cast<int16_t*>(itemMemory+22)=0;
+        dll.anims=0;animationNextState=-1;state=goal=2;anim=11;
     }
     // Backpedal startup is a 16-frame, constant 2-unit crawl before the
     // 10-unit loop. Advance only that command-free clip four frames per tick.
@@ -3000,7 +3045,7 @@ int main() {
         collisionMode=0; gaitSway={}; fraction=256;
         dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
         Check(Anchor(camera),"stable-eye baseline captured from the native head");
-        for (int gait:{0,1,16,20,21,2}) {
+        for (int gait:{0,1,73,16,20,21,2}) {
             state=int16_t(gait);
             for (int tick=0;tick<24;++tick) {
                 prev=pos; pos.x_pos+=5; pos.z_pos+=9; pos.y_pos+=2;

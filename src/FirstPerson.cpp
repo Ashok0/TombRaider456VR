@@ -579,11 +579,12 @@ bool CanTurnBody(const uint8_t* item) {
     // head following, roomscale drag and FP gait overrides must all yield.
     if ((*Ptr<uint32_t>(g_boundDll->lara + off::lara_movement_flags) & 0x20) != 0)
         return false;
-    // Same ground states as TR1-3. Ladders, pickups, jumps and scripted
-    // interactions own their facing and must not be rotated out of alignment.
+    // Include TR4/5 sprint (73) in ground steering/body fitting. Otherwise
+    // native modern controls turn the sprinting body away from the FP view.
+    // Ladders, pickups, jumps and interactions retain their native facing.
     switch (*reinterpret_cast<const int16_t*>(item + off::item_anim_state)) {
     case 0: case 1: case 2: case 5: case 6: case 7:
-    case 16: case 20: case 21: case 22: return true;
+    case 16: case 20: case 21: case 22: case 73: return true;
     default: return false;
     }
 }
@@ -613,7 +614,7 @@ bool CanModifyGroundMotion(const uint8_t* item) {
     // before current_anim_state has caught up with goal_anim_state.
     switch (*reinterpret_cast<const int16_t*>(item+off::item_goal_state)) {
     case 0: case 1: case 2: case 5: case 6: case 7:
-    case 16: case 20: case 21: case 22: return true;
+    case 16: case 20: case 21: case 22: case 73: return true;
     default: return false;
     }
 }
@@ -1991,10 +1992,13 @@ void PrepareGroundDirection(uint8_t* item,uint64_t action) {
     const int animation=*reinterpret_cast<const int16_t*>(item+off::item_anim_number);
     const int goal=*reinterpret_cast<const int16_t*>(item+off::item_goal_state);
     const bool stopping=animation==38 || animation==39 || animation==66 || animation==68;
-    if (GroundGaitMatchesAction(state,action) && !stopping && goal==state) return;
+    // Run <-> sprint is still forward travel. Do not reset to standing while
+    // native control is entering/exiting sprint or it can never reach full speed.
+    if (GroundGaitMatchesAction(state,action) && !stopping && GroundGaitMatchesAction(goal,action)) return;
     const bool ordinary=(state==1 && (animation==0 || animation==6 || animation==8 || animation==10)) ||
         (state==0 && ((animation>=1 && animation<=5) || animation==7 || animation==9 || animation==20 || animation==21)) ||
         (state==2 && (animation==11 || animation==103)) ||
+        (state==73 && animation>=223 && animation<=225) || // native sprint loop/startups
         (state==16 && animation>=38 && animation<=41) ||
         (state==22 && (animation==65 || animation==66)) ||
         (state==21 && (animation==67 || animation==68));

@@ -78,6 +78,7 @@ and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and
 | Change | Current status |
 |---|---|
 | LS left/right/back launching Lara during forward movement | Retained: apply movement only when the native gait matches stick intent; preserve native stored speed. The user confirmed the launch fix. See [gait handoff](#forward-to-sideback-animation-handoff-2026-10-03). |
+| Sprinting turns sideways instead of sidestepping | October 9: sprint now uses first-person direction mapping, body following and stable-eye handling; native sprint clips can immediately hand off to side/back gaits. See [sprint sidestepping](#first-person-sprint-to-sidestep-correction-2026-10-09). |
 | Delay entering sidestep/backstep | Extended October 5 to include returning to forward movement: ordinary gait changes use the native standing dispatcher immediately, with native collision checks. See [responsive entry](#responsive-sidestepbackstep-entry-2026-10-04). |
 | Slow backpedal startup | Retained: shorten the initial backward animation while preserving normal top speed. See [backpedal startup](#faster-backpedal-startup-2026-10-04). |
 | Unarmed Y intermittently fails at switches | October 8: first-person movement and head following now yield to native interaction alignment. Regression reproduced before the fix; headset confirmation pending. See [Action alignment](#first-person-y--switch-alignment-2026-10-08). |
@@ -101,21 +102,53 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 9 current deployment:** Release/x64 from "Wrist fix"
-(`1790a4c`) plus automatic third person during TR5 X-ray sequences. Switch camera, Action alignment,
+**October 9 current deployment:** Release/x64 from "X-Ray Fix"
+(`0efbc3f`) plus first-person sprint steering and sidestep corrections. Switch camera, Action alignment,
 landing-neck, monkey-bar and optional full-body centering fixes remain included.
 The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
 available, full-body IK is disabled. Personal settings and controller calibration
 were preserved. The earlier System-height calibration experiments are absent
-from this checkout. Automated checks pass; X-ray presentation, wrist recovery, haptic strength and the remaining
+from this checkout. Automated checks pass; sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
 camera/interaction changes still need in-headset confirmation.
 
-- Installed DLL SHA-256: `B80F18E9BD48C58697B3BBC3A3846B63F489C3E3918B5E064EE441073EF9ACA6`.
-- Deployment record: [X-ray third-person manifest](build/xray-thirdperson-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-xray-thirdperson-20261009-153633/`.
+- Installed DLL SHA-256: `C9EF20B4A1AC6A36690BAD9D130E77758FD05B65C74DB5F7445CE58FD6799995`.
+- Deployment record: [sprint sidestep manifest](build/sprint-sidestep-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-sprint-sidestep-20261009-155304/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### First-person sprint-to-sidestep correction (2026-10-09)
+
+TR4/5 sprint state 73 was missing from the first-person ground-state handling.
+That bypassed stick-to-sidestep conversion, body following and stable-eye/body
+fitting. Native modern movement could therefore turn Lara sideways while the
+headset still looked forward. The reported log contains sprint frames with
+approximately 75 degrees of body/view divergence.
+
+Sprint now participates in first-person ground steering and rendering like
+ordinary forward running. Verified sprint loop/startup clips 223?225 can hand
+off immediately to native side/back gaits through the existing standing terrain
+checks. Forward walk/run/sprint goals count as the same travel direction, so
+native sprint entry, full speed and exit are preserved. Directional speed
+multiplication still applies only to a matching side/back gait, preventing
+sprint velocity from being multiplied into a sideways launch. Sprint dives,
+gravity, jump requests, required interactions and collision remain native.
+
+Validation: the extended gait test failed on the old sprint path.
+**1,337,891 first-person checks** and **12 jiggle integration cases** pass.
+Coverage includes sprint loop/startups into left/right/back while sprint is
+held, both games and input schemes, stabilized and legacy camera settings,
+heading changes, native forward sprint speed, run/sprint goal transitions,
+sprint-dive guards and stable camera anchoring during sprint animation sway.
+`tools/verify_ground_gait_entry.py` verifies the new clip whitelist, native
+82-unit sprint-loop speed and excluded dive clips across **40 TR4 and 15 TR5
+installed animation tables**. Clean Release/x64 rebuild and installed
+DLL/unchanged INI hash checks pass. Full-body IK remains disabled.
+Logs: `build/sprint-sidestep-before-tests.log`, `build/sprint-sidestep-tests.log`,
+`build/sprint-sidestep-native-tables.log`, and `build/sprint-sidestep-build.log`.
+The reported log is preserved at `build/sprint-sidestep-reported-session.log`.
+In-headset confirmation remains pending.
 
 ### Third person during TR5 X-ray sequences (2026-10-09)
 

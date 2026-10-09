@@ -143,7 +143,7 @@ inline bool GroundGaitMatchesAction(int state, uint64_t action) {
     // outgoing gait can persist after input changes; they must finish before
     // their velocity can be used along the newly requested direction.
     switch (action & Directions) {
-    case Forward: return state==0 || state==1; // walk/run
+    case Forward: return state==0 || state==1 || state==73; // walk/run/sprint
     case Back: return state==16;              // continuous backward walk
     case StepRight: return state==21;
     case StepLeft: return state==22;
