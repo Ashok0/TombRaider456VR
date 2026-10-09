@@ -7,7 +7,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 ## VR Mod Features
 
 * Native stereo with 6DOF
-* First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming and cutscenes dynamically toggle to third person.
+* First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming, cutscenes, and switch-use animations temporarily use third person.
 * Full-body VRIK in TR4/5 HD first person using headset and controllers: inferred torso/hips, leg IK on animated foot targets, and arms sharing the gun wrist calibration.
 * Culling fixes for VR
 * Camera fixes for VR
@@ -80,15 +80,17 @@ and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections thr
 | LS left/right/back launching Lara during forward movement | Retained: apply movement only when the native gait matches stick intent; preserve native stored speed. The user confirmed the launch fix. See [gait handoff](#forward-to-sideback-animation-handoff-2026-10-03). |
 | Delay entering sidestep/backstep | Extended October 5 to include returning to forward movement: ordinary gait changes use the native standing dispatcher immediately, with native collision checks. See [responsive entry](#responsive-sidestepbackstep-entry-2026-10-04). |
 | Slow backpedal startup | Retained: shorten the initial backward animation while preserving normal top speed. See [backpedal startup](#faster-backpedal-startup-2026-10-04). |
+| Unarmed Y intermittently fails at switches | October 8: first-person movement and head following now yield to native interaction alignment. Regression reproduced before the fix; headset confirmation pending. See [Action alignment](#first-person-y--switch-alignment-2026-10-08). |
 | Weapon equip and holster | Retained: press LT while unarmed to draw; releasing or pressing LT again never holsters. Y holsters. The draw squeeze cannot fire. See [bindings](#first-person-drawholster-bindings-2026-10-04). |
 | Trigger timing and repeated fire | Retained: LT/RT fire their respective guns on press; a tap no longer queues an extra RT shot. Holding either trigger repeats at native cadence and consumes normal ammunition. See [trigger behavior](#trigger-press-and-held-fire-2026-10-04). |
 | B during a jump | Retained: first-person view follows the native midair 180-degree turn. See [midjump reversal](#first-person-midjump-b-reversal-2026-10-04). |
 | Unarmed hands in the forward view | Extended October 7: walking and running share controller arm IK and resting-hand meshes; wrist bends and roll are constrained and forearms absorb most roll. The prior look-down-only animation remains the fallback when IK is disabled or tracking is unavailable. See [wrist correction](#consistent-walkingrunning-ik-and-wrist-limits-2026-10-07). |
 | Jiggle physics broken by arm hiding | Retained: physics reads the complete captured body skeleton rather than the visibility-masked palette. New integration tests reproduce the old failure and compare visible/hidden-arm jump and landing physics. Headset confirmation remains pending. |
 | Floor shadow displaced/split in first person | User confirmed the intact silhouette, but the October 5 placement changes did not resolve displacement/HMD movement. October 6 corrects the shadow projection camera origin and isolates the light-camera pass from headset injection. Automated checks pass; headset confirmation pending. See [shadow projection](#first-person-shadow-projection-origin-2026-10-06). |
-| Head visible during landing kneel | October 7: force head/hair hiding during the native hard-landing animation, including alternate head-only geometry. Normal visibility resumes on recovery; third person and shadow draws remain native. See [landing head visibility](#head-hiding-during-the-landing-kneel-2026-10-07). |
+| Neck/head visible during landings | October 8: follow the animated neck in all three axes during landing clips, bypass standing body fitting, and extend head/hair hiding to ordinary and running landings. Walking/running stabilization and native shadows remain intact. See [landing-neck camera](#first-person-landing-neck-tracking-2026-10-08). |
 | Full-body VRIK | October 8: optional full-body mode now anchors its rendered eye point to the headset and follows headset plus stick yaw; **disabled in the installed INI**. See [body centering](#optional-full-body-centering-2026-10-08). Original October 7: headset/controller-only torso and hip inference, leg IK preserving animated foot targets, controller arms through ordinary jumps, native ledge grips, and body visibility while armed. See [full-body VRIK](#full-body-vrik-with-headset-and-controllers-2026-10-07). |
 | Monkey-bar LS directions reversed | October 8: first-person stick intent reaches native hanging controls using the VR heading, with separate modern/tank mappings. See [monkey-bar input](#first-person-monkey-bar-stick-directions-2026-10-08). |
+| Switch-use animations in first person | October 8: temporarily use the native third-person camera and complete Lara mesh; resume first person automatically when the switch animation finishes. See [switch camera](#third-person-during-switch-use-2026-10-08). |
 | Camera jump after mounting crates | **Reverted:** the experimental 200 ms climb-to-standing camera transition was removed at the user's request. It is absent from current source and the redeployed DLL; the reported camera jump remains unresolved. |
 
 The earlier LT+Y equip experiment and idle-only camera-calibration attempts also
@@ -96,19 +98,107 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 8 current deployment:** Release/x64 built from the current "Arm and
-hand IK" checkout (`349dc68`) plus the monkey-bar input fix and optional full-body centering update. The installed INI
+**October 8 current deployment:** Release/x64 from "Arm and Hand IK fixes"
+(`67bbb69`) plus temporary third person for switch-use animations and the
+native Action alignment and landing-neck camera fixes. The monkey-bar
+input and optional full-body centering updates remain included. The installed INI
 retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains available, full-body
 IK is disabled. Personal settings and controller calibration were preserved.
 The earlier System-height calibration experiments are absent from this checkout.
-Automated checks passed; in-headset monkey-bar and full-body centering confirmation remains pending.
+Automated checks passed; in-headset landing-neck, switch Action, switch-camera, monkey-bar and full-body centering confirmation remains pending.
 
-- Installed DLL SHA-256: `BAD23E2C279EF22BA8223B8961F6D821D7ABEAFBD65F946BFE42CD3B514B7411`.
-- Deployment record: [optional body-centering manifest](build/body-centering-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-body-centering-20261008-041341/`.
+- Installed DLL SHA-256: `93A3654418FF81B00BEE3EAC8586363388914FA1A114FF199C92CC0F8EC00B77`.
+- Deployment record: [landing-neck manifest](build/landing-neck-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-landing-neck-20261008-233608/`.
 - Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+
+### First-person landing neck tracking (2026-10-08)
+
+The hard-landing camera previously followed only vertical neck movement, while
+ordinary landing clips could retain the standing eye position. The standing
+body-fit translation could also shift the rendered neck away from the animated
+camera. Together these could expose Lara's neck during the impact/recovery pose.
+
+TR4/5 first-person landing clips now use the interpolated animated head/neck
+anchor in all three axes and bypass standing body fitting for their duration.
+Headset look/lean remain active, and floor/wall/ceiling clearance still applies.
+The standing eye reference is retained without capturing a kneeling pose;
+normal walking/running stabilization resumes after recovery. The landing
+head/hair override now covers these clips as well, including alternate head-only
+geometry, while native third-person and shadow rendering remain unchanged.
+
+Recognition matches both state and animation for clips 13, 24, 31, 82, 92 and
+99. Clip 99 is a death animation in most TR5 levels but a landing in JOBY4, so
+its state is essential. The installed INI and controller calibration were
+preserved; full-body IK remains disabled. Switch camera and Action-alignment
+fixes are included in this deployment.
+
+Validation: a camera regression reproduced the separation before the fix.
+**1,256,763 first-person checks** and **12 jiggle integration cases** pass,
+covering full neck translation, standing-reference retention, physical ducking,
+collision clearance, recovery, all landing clips, alternate head geometry,
+third-person isolation and native shadow draws. The read-only
+`tools/verify_landing_camera.py` check verified **40 TR4 and 15 TR5 installed
+animation tables**, including native jump/fall exits and the clip-99 variants.
+Clean Release/x64 rebuild and installed DLL/unchanged INI hash checks passed.
+Logs: `build/landing-neck-before-tests.log`, `build/landing-neck-tests.log`,
+`build/landing-neck-native-tables.log`, and `build/landing-neck-build.log`.
+In-headset visual confirmation remains pending.
+
+### First-person Y / switch alignment (2026-10-08)
+
+Unarmed Y already reaches native Action, but first-person head following and
+locomotion could rotate or move Lara away while the game was automatically
+aligning her to a switch. This can prevent the interaction from completing,
+which looks like an ignored button press. The alignment can run while Lara's
+animation state still says standing, walking or running.
+
+First-person body turning, roomscale root movement and ground stick overrides
+now yield while native `lara.IsMoving` owns interaction alignment, then resume
+when it clears. Action and native steering inputs pass through unchanged. This
+also respects other interactions using the same native alignment mechanism.
+The existing temporary third-person switch animation behavior is retained.
+Weapon equip/holster controls and view/graphics chords are unchanged; the
+installed INI is unchanged and full-body IK remains disabled.
+
+Validation: the new alignment regression failed before the fix and passes after
+it in TR4 and TR5. **806,426 first-person checks** and **12 jiggle integration
+cases** pass, including unarmed/hand-busy Y presses across both input schemes
+and weapon styles, alignment during six ground states, stale input polling,
+roomscale movement and resuming head following. Native switch collision and
+alignment code were inspected in both games. Clean Release/x64 rebuild and
+installed DLL/INI hash verification passed. Logs:
+`build/action-alignment-before-tests.log`, `build/action-alignment-tests.log`,
+and `build/action-alignment-build.log`. In-headset confirmation remains pending.
+
+### Third person during switch use (2026-10-08)
+
+TR4/5 temporarily suspend first person while Lara performs a native switch-use
+animation. This includes ordinary on/off switches, jump/crowbar/block switches,
+turn wheels, cog switches, rail levers and pulleys, plus TR5's crow/dove switch.
+Underwater switches already use the swimming camera rule. The camera gate checks
+the current animation state, so merely approaching a switch does not change the
+view, and queuing the exit state cannot return first person before the animation
+finishes. Native switch logic, animation timing and activation remain untouched.
+
+The temporary view uses the native camera and restores Lara's full body/head/hair.
+Pending first-person shots, equip gestures and movement are cleared through the
+existing suspension path. First person resumes after the interaction, preserving
+viewing heading with any native body turn. A player already using third person
+stays in third person. No new INI setting is required; full-body IK stays disabled
+in the installed personal settings.
+
+Validation: new switch regression reproduced the previous failure; **806,134
+first-person checks** and **12 jiggle integration cases** pass. Tests cover both
+games, each switch state, early exit goals, repeated animation frames, restored
+mesh/camera, cleared inputs, automatic return and third-person preference. Native
+PDB control tables and switch collision routines were inspected for the state
+IDs, including the TR5-specific switch. Clean Release/x64 rebuild and installed
+DLL hash verification passed. Logs: `build/switch-thirdperson-before-tests.log`,
+`build/switch-thirdperson-tests.log`, and `build/switch-thirdperson-build.log`.
+In-headset confirmation remains pending.
 
 ### First-person monkey-bar stick directions (2026-10-08)
 
@@ -224,6 +314,8 @@ Logs: `build/fullbody-tests.log`, `build/fullbody-selftest.log`,
 particularly outfit deformation, deep crouches, jump/ledge transitions and scopes.
 
 ### Head hiding during the landing kneel (2026-10-07)
+
+Extended October 8 by [landing-neck tracking](#first-person-landing-neck-tracking-2026-10-08); the original implementation is recorded below.
 
 TR4/5 first person now explicitly hides Lara's head and hair during the native
 hard-landing kneel (STOP state 2, animation 24), even if general head hiding is
@@ -779,6 +871,8 @@ Deployment manifest: `build/mount-torso-deploy/manifest.json`. The active INI is
 unchanged, including `FirstPersonAnchorZ=144` and the known-good hand calibration.
 
 ### Hard-landing camera dip ported from TR1-3 (2026-10-03)
+
+Extended October 8 by [landing-neck tracking](#first-person-landing-neck-tracking-2026-10-08); the original implementation is recorded below.
 
 After a large survivable fall, TR4/5 first person now follows Lara's animated
 neck height through the impact kneel and recovery. Native `lara_col_fastfall`

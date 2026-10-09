@@ -48,6 +48,16 @@ inline bool IsHardLanding(int state,int animation) {
     // hard fall, just like TR1-3. Stop alone also includes idle and vault exits.
     return state==2 && animation==24;
 }
+inline bool IsLandingAnimation(int game,int state,int animation) {
+    // Native TR4/5 PDP jump/fall exits: hard fall, vertical/drop landing,
+    // ordinary jump landing and landing into a run. Match state AND clip so
+    // ordinary STOP/RUN animation keeps its stable eye. Clip 99 is a death
+    // in most TR5 levels but a landing in JOBY4; its state disambiguates it.
+    if (game!=0 && game!=1) return false;
+    return IsHardLanding(state,animation) || (state==7 && animation==13) ||
+        (state==2 && (animation==31 || animation==82 || animation==99)) ||
+        (state==1 && animation==92);
+}
 inline bool IsJumpRollAnimation(int state,int animation) {
     // Installed TR4/5 Lara tables: forward flips 207/210 and backflip 212
     // contain turn180_effect. Ordinary jumps and wall deflections do not.

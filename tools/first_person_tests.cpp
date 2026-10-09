@@ -1421,6 +1421,18 @@ int main() {
             lt=rt=0; UpdateGunTriggers(lt,rt,true,10080);
             Check(!g_gunTriggers.WantsShot(),"draw squeeze held through readiness never fires on release");
         }
+        // A plain Y press/hold/release must stay native Action while Lara is
+        // unarmed or her hands are busy aligning/performing an interaction.
+        for(int which:{0,1}) for(int scheme:{0,1}) for(uint8_t style:{uint8_t(0),uint8_t(1)})
+            for(int unarmedStatus:{0,1}) {
+            dll.game=which;appMemory[0x9e4]=uint8_t(1|(scheme<<1));appMemory[0x9ec+scheme]=style;
+            gun=lastGun=1;status=int16_t(unarmedStatus);g_gunEquip.Reset();g_gunTriggers.Reset();
+            for(bool action:{false,true,true,false,true}) {
+                lt=rt=0;
+                Check(!UpdateGunTriggers(lt,rt,true,0,action),"unarmed and hands-busy Y remains native Action on every press and hold");
+                Check(!lt && !rt && !g_gunTriggers.WantsShot(),"unarmed Action cannot equip or shoot");
+            }
+        }
         // Equip/holster remains available without tracked guns or HD graphics.
         for (bool tracked:{false,true}) for (uint8_t hd:{uint8_t(0),uint8_t(1)}) {
             config.firstPersonMotionGuns=tracked; appMemory[0x9e4]=hd; appMemory[0x9ec]=1;
@@ -1882,6 +1894,34 @@ int main() {
         state = 2; Detour_LaraAboveWater(itemMemory, nullptr);
         Check(collisionCalls == 0, "interaction displacement cannot queue a walk on release");
 
+        // Native MoveLaraPosition owns yaw/position while IsMoving is set,
+        // even though the animation still says stop/walk/run. HMD follow and
+        // roomscale drag must not pull Lara back out of an interaction.
+        for(int aligningState:{0,1,2,16,21,22}) for(int status:{0,1}) {
+            resetRoomscale();state=int16_t(aligningState);
+            const auto oldStatus=*reinterpret_cast<int16_t*>(laraMemory+2);
+            *reinterpret_cast<int16_t*>(laraMemory+2)=int16_t(status);
+            auto& movementFlags=*reinterpret_cast<uint32_t*>(laraMemory+0x44);
+            const auto oldFlags=movementFlags;movementFlags|=0x20;
+            pos.y_rot=Angle(-.5f);physicalPose(1.f,.2f,.15f);g_headingBase=.3f;
+            const auto nativePose=pos;
+            TurnBodyToHead(itemMemory,1.f/60);
+            Check(pos.y_rot==nativePose.y_rot,"head following cannot rotate Lara away from native Action alignment");
+            float x=.7f,z=.8f,r=0;FirstPersonInput(x,z,r,false);
+            Check(!g_haveManualInput,"native alignment suppresses FP gait ownership despite grounded animation");
+            // An input poll can precede the object collision that sets IsMoving.
+            g_haveManualInput=true;g_manualLocal={.7f,.8f};g_manualWorld={.7f,.8f};
+            actionInput=preserved|locomotion::Forward;analogMemory[0]=111;analogMemory[1]=222;analogMemory[2]=333;analogMemory[3]=444;
+            const int collisions=collisionCalls;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(!std::memcmp(&pos,&nativePose,sizeof(pos)) && collisionCalls==collisions,
+                  "FP stick and roomscale cannot move Lara while native interaction alignment owns her root");
+            Check(seenInput==actionInput && seenAnalog[0]==111 && seenAnalog[1]==222 && seenAnalog[2]==333 && seenAnalog[3]==444,
+                  "native alignment receives original Action and steering without FP rewrites");
+            movementFlags=oldFlags;state=2;TurnBodyToHead(itemMemory,1.f/60);
+            Check(pos.y_rot!=nativePose.y_rot,"normal head following resumes after alignment clears");
+            *reinterpret_cast<int16_t*>(laraMemory+2)=oldStatus;
+        }
         // Resume a temporary camera/menu interruption at the last head-world
         // heading, but real relocations and explicit toggles align to Lara.
         resetRoomscale(); physicalPose(0.7f); g_headingBase = 0.4f;
@@ -1924,6 +1964,45 @@ int main() {
             UpdateSceneCamera(camera);
             Check(g_active && std::fabs(Wrap(g_lastHeadWorld-resumeHeading))<0.002f, "resuming FP includes scripted body turn in preserved heading");
         }
+        // Switch animations temporarily use the full native camera/body and
+        // resume FP without toggling the player's preference or leaking input.
+        for(int other:{2,39,42,94,98,103,105,125,127})
+            Check(!firstperson::SwitchUsesThirdPerson(which,other),"unrelated states are not switch-camera states");
+        Check(!firstperson::SwitchUsesThirdPerson(0,126) && !firstperson::SwitchUsesThirdPerson(2,40),
+              "TR5-specific switch and TR6 state meanings stay isolated");
+        for(int switchState:{40,41,95,96,97,104,126}) {
+            if(switchState==126 && which==0) continue; // Crow/dove switch is TR5 only.
+            resetRoomscale();physicalPose(.7f);g_headingBase=.4f;UpdateSceneCamera(camera);
+            const float headingBefore=g_lastHeadWorld;
+            auto& goal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+            goal=int16_t(switchState);
+            Check(Gate(),"approaching a switch keeps FP until its animation actually starts");
+            state=int16_t(switchState);goal=2; // Exit goal may be set before animation completes.
+            auto& switchBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
+            RestoreHeadMesh();switchBits=0x7fff;SetMeshVisibility(true,false);
+            g_gunTriggers.active=true;g_gunTriggers.pending[0]=g_gunTriggers.pending[1]=true;g_gunEquip.pending=true;
+            const PHD_3DPOS nativeCamera{100,200,300,10,20,30,0};camera=nativeCamera;
+            UpdateSceneCamera(camera);
+            Check(!g_active && !g_haveHeading && !g_scenePoseValid && g_runtimeEnabled,
+                  "switch use suspends first person while preserving its enabled preference");
+            Check(!std::memcmp(&camera,&nativeCamera,sizeof(camera)) && switchBits==0x7fff && !g_headHidden,
+                  "switch animation uses untouched native camera and complete Lara mesh");
+            Check(!g_gunTriggers.WantsShot() && !g_gunEquip.pending && !g_haveManualInput,
+                  "switch suspension clears pending FP firing equip and movement");
+            const int beforeDraw=draws,beforeHair=hairs;
+            Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+            Check(draws==beforeDraw+1 && hairs==beforeHair+1,"switch body and hair follow native third-person draws");
+            for(int frame=0;frame<3;++frame) { camera=nativeCamera;UpdateSceneCamera(camera);
+                Check(!g_active && !std::memcmp(&camera,&nativeCamera,sizeof(camera)),"third person persists until switch state ends"); }
+            state=goal=2;physicalPose(-.4f);UpdateSceneCamera(camera);
+            Check(g_active && g_runtimeEnabled && Near(Wrap(g_lastHeadWorld-headingBefore),0),
+                  "switch completion automatically restores FP and viewing heading");
+            g_runtimeEnabled=false;state=int16_t(switchState);camera=nativeCamera;UpdateSceneCamera(camera);
+            state=2;UpdateSceneCamera(camera);
+            Check(!g_active && !g_runtimeEnabled && !std::memcmp(&camera,&nativeCamera,sizeof(camera)),
+                  "switch completion cannot enable FP for a third-person player");
+        }
+        resetRoomscale();
         cutseqTransition=4; cutseqNumber=0;
         Check(!ScriptedCameraActive() && Gate(),"stale cutscene transition without an ID does not lock FP off");
         cutseqTransition=0;
@@ -2104,14 +2183,15 @@ int main() {
             int32_t headMapping[33];std::fill_n(headMapping,33,14);
             int32_t bodyMapping[33];for(int i=0;i<33;++i) bodyMapping[i]=i%15;
             *reinterpret_cast<void**>(geom+off::geom_mesh)=heads+off::geom_stride;
-            for(int which:{0,1}) for(bool hide:{false,true}) for(int joints:{1,15,33}) {
+            for(int which:{0,1}) for(bool hide:{false,true}) for(int joints:{1,15,33})
+            for(int clip:{13,24,31,82,92,99}) {
                 game=dll.game=which;vehicle=which==0 ? -1 : 0;config.firstPersonHideHead=hide;
-                RestoreHeadMesh();bits=0x7fff;state=2;landingAnim=24;
+                RestoreHeadMesh();bits=0x7fff;state=clip==92 ? 1 : clip==13 ? 7 : 2;landingAnim=int16_t(clip);
                 *reinterpret_cast<int32_t*>(geom+28)=joints;
                 *reinterpret_cast<int32_t**>(geom+48)=headMapping;
                 UpdateSceneCamera(camera);
                 Check(g_active && HideLandingHead(itemMemory) && g_headHidden && !(bits&kHeadMeshBit),
-                      "hard landing forces head hiding even when the general head setting is off");
+                      "all landing clips force head hiding even when the general head setting is off");
                 Check(!DrawingLaraHead(itemMemory) && DrawingLaraHead(itemMemory,true),
                       "landing recognizes alternate head-only geometry outside the native face list");
                 for(int pass:{0,1,2}) for(int masked:{0,1}) {
@@ -2136,11 +2216,11 @@ int main() {
                 Check(draws==shadowBefore+1 && hairs==shadowHair+1 && drawnUseBits==0,
                       "kneeling shadow keeps native head and hair geometry");
                 g_shadowDll=oldShadow;
-                landingAnim=103;UpdateSceneCamera(camera);
+                state=2;landingAnim=103;UpdateSceneCamera(camera);
                 Check(!HideLandingHead(itemMemory) && g_headHidden==hide && bool(bits&kHeadMeshBit)==!hide,
                       "standing recovery releases only the landing-specific head override");
                 // Third-person landing remains completely native.
-                g_active=false;landingAnim=24;
+                g_active=false;state=clip==92 ? 1 : clip==13 ? 7 : 2;landingAnim=int16_t(clip);
                 const int thirdBefore=draws,thirdHair=hairs;
                 Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
                 Check(!HideLandingHead(itemMemory) && draws==thirdBefore+1 && hairs==thirdHair+1 && drawnUseBits==0,
@@ -3444,9 +3524,10 @@ int main() {
         Check(locomotion::Length(transition.Correction(residual,-1600,3))==0,
               "camera/session reset discards stale mount correction");
     }
-    // Native hard landing is STOP + animation 24, not a dedicated state.
-    // Use the production camera path, including floor clearance and calibration.
+    // Landing clips can use STOP or RUN as well as LAND. Exercise the full
+    // animated anchor, body fit, floor clearance and standing reference together.
     for (int which:{0,1}) for (bool stable:{false,true}) for (bool calibrated:{false,true})
+    for (int clip:{13,24,31,82,92,99})
     for (float heading:{0.f,.7f,-1.9f}) for (float duck:{0.f,-.2f}) {
         game=dll.game=which;resetRoomscale();ResetMovementStabilization();
         config.firstPersonMovementStabilization=stable;config.firstPersonHeadTranslation=true;
@@ -3459,8 +3540,8 @@ int main() {
         if (!calibrated) g_groundEye.Reset();
         const auto saved=g_groundEye;
         physicalPose(0,0,0,duck);const float neutral=VR().m_firstPersonNeutral[1];
-        state=2;animation=24;
-        Check(UseHardLandingCamera(itemMemory),"TR4/5 live hard landing recognized by state and animation");
+        state=clip==92 ? 1 : clip==13 ? 7 : 2;animation=int16_t(clip);
+        Check(UseLandingCamera(itemMemory),"TR4/5 landing recognized by state and animation");
         for (int height:{-700,-600,-400,-200,-80,50,-80,-200,-400,-600,-700}) {
             gaitSway={30,height+700,-20};
             for (int f:{0,64,128,192,256}) {
@@ -3472,21 +3553,24 @@ int main() {
                 Check(g_groundEye.valid==saved.valid && g_groundEye.local.x==saved.local.x &&
                       g_groundEye.local.y==saved.local.y && g_groundEye.local.z==saved.local.z,
                       "landing never captures kneeling height or replaces standing calibration");
-                if (stable && calibrated && height+tracking < -65) {
-                    const auto flat=locomotion::Rotate({saved.local.x,saved.local.z},g_headingBase);
-                    Check(std::fabs(camera.x_pos-flat.x)<1.1f && std::fabs(camera.z_pos-flat.z)<1.1f,
-                          "landing preserves stable horizontal anchor despite animated sway");
+                if (height+tracking < -65) {
+                    PHD_VECTOR animated{config.firstPersonAnchorX,config.firstPersonAnchorY,config.firstPersonAnchorZ};
+                    FakeGaitJoint(itemMemory,&animated,14,f);
+                    Check(std::fabs(camera.x_pos-animated.x)<1.1f && std::fabs(camera.z_pos-animated.z)<1.1f,
+                          "landing camera follows forward and sideways neck movement, not the standing anchor");
+                    Check(locomotion::Length(g_bodyVisualOffset)<.001f,
+                          "standing body fit cannot move landing neck away from the animated camera");
                 }
                 Check(VR().m_firstPersonNeutral[1]==neutral && pos.y_pos==0 && camera.x_rot==0 && camera.z_rot==0,
                       "landing preserves HMD neutral, collision root and head-controlled rotation");
             }
         }
-        animation=0;gaitSway={};physicalPose(0);fraction=256;UpdateSceneCamera(camera);
+        state=2;animation=0;gaitSway={};physicalPose(0);fraction=256;UpdateSceneCamera(camera);
         Check(camera.y_pos==-700 && (!stable || g_groundEye.valid),
               "settled standing restores normal height even after entering FP mid-kneel");
         for (int other:{0,11,27,42,50,51,103}) {
             animation=int16_t(other);gaitSway={0,200,0};UpdateSceneCamera(camera);
-            Check(!UseHardLandingCamera(itemMemory) && (!stable || camera.y_pos==-700),
+            Check(!UseLandingCamera(itemMemory) && (!stable || camera.y_pos==-700),
                   "idle, ordinary landing and vault animations keep existing standing stabilization");
         }
         state=2;animation=24;hp=0;
@@ -3497,6 +3581,11 @@ int main() {
     }
     for (int other:{1,3,8,9,19,23,28,45,54})
         Check(!locomotion::IsHardLanding(other,24),"landing exception does not include unrelated states");
+    for (int gameId:{-1,0,1,2}) for (int clip:{13,24,31,82,92,99})
+    for (int unrelated:{0,3,8,9,19,23,28,45,54})
+        Check(!locomotion::IsLandingAnimation(gameId,unrelated,clip),
+              "landing camera excludes death, airborne, climbing and unrelated animation states");
+    Check(!locomotion::IsLandingAnimation(1,8,99),"TR5 death variant never becomes a landing override");
     // Native turns outside an eligible FP ground/jump roll must stay native.
     for (int clip:{37,207,212}) for (int guard=0;guard<11;++guard) {
         resetRoomscale();config.firstPersonMovementStabilization=true;physicalPose(0);

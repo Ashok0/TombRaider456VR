@@ -1,0 +1,20 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-landing-neck-20261008-233608",
+    "source_base":  "67bbb69d2a94371846256fefad42401c78319fcc",
+    "change":  "Follow full animated neck during landing clips; bypass standing camera/body fit and extend landing head hiding; retain Action alignment and switch third-person fixes",
+    "dll_sha256":  "93A3654418FF81B00BEE3EAC8586363388914FA1A114FF199C92CC0F8EC00B77",
+    "previous_dll_sha256":  "2B9561CA4B2952AA85F6C768E2B28205BD69C4062A8E851B6757EB3F17DE7DB8",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  1256763,
+    "dynamic_bones_integration_cases":  12,
+    "native_landing_tables":  {
+                                  "TR4":  40,
+                                  "TR5":  15
+                              },
+    "regression_reproduced_before_fix":  true,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

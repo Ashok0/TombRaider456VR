@@ -1,0 +1,16 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-switch-thirdperson-20261008-231205",
+    "source_base":  "67bbb69d2a94371846256fefad42401c78319fcc",
+    "change":  "Temporarily use native third person during switch animations, automatically resuming first person",
+    "dll_sha256":  "F64D533555693A24F0652CC34ED7F84EFD3FEBA4041DF9D64422D5146AC862E9",
+    "previous_dll_sha256":  "BAD23E2C279EF22BA8223B8961F6D821D7ABEAFBD65F946BFE42CD3B514B7411",
+    "ini_sha256":  "1575354EA99B40780744EAA5926CE9CE823425089CC59A7D91CB97FF61BA8067",
+    "build":  "Clean rebuild Release x64",
+    "regression_checks":  806134,
+    "dynamic_bones_integration_cases":  12,
+    "regression_reproduced_before_fix":  true,
+    "full_body_ik_enabled":  false,
+    "headset_verified":  false
+}

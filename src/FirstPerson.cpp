@@ -65,7 +65,7 @@ constexpr uint32_t lara_torso_z_rot = 234;
 constexpr uint32_t lara_turn_rate   = 220;
 constexpr uint32_t lara_move_angle  = 222;
 constexpr uint32_t lara_vehicle     = 38;
-constexpr uint32_t lara_movement_flags = 68; // CanMonkeySwing is bit 6.
+constexpr uint32_t lara_movement_flags = 68; // IsMoving is bit 5; CanMonkeySwing is bit 6.
 constexpr uint32_t camera_type      = 32;
 constexpr uint32_t object_stride    = 3792;
 constexpr uint32_t object_geom      = 112;
@@ -391,6 +391,12 @@ bool Gate() {
     const auto* item=*Ptr<uint8_t*>(dll.laraItem);
     if (!item || !firstperson::UseHeadCamera(
         *reinterpret_cast<const int16_t*>(item+off::item_hit_points))) return false;
+    // Read the active animation state, not its goal: native switches can
+    // request STOP before the interaction animation has finished. Suspending
+    // through Gate restores the camera, full mesh and input together; it does
+    // not toggle the user's first-person preference.
+    if(firstperson::SwitchUsesThirdPerson(dll.game,
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_state))) return false;
     const int water=LaraWaterStatus();
     // Suspend the whole FP path, not just its camera or body mask. Wading
     // remains eligible; native surface/underwater swimming uses third person.
@@ -562,6 +568,11 @@ bool CanTurnBody(const uint8_t* item) {
     if (g_boundDll->game == 0 &&
         *Ptr<int16_t>(g_boundDll->lara + off::lara_vehicle) >= 0)
         return false;
+    // MoveLaraPosition owns root/yaw while auto-aligning to a switch or
+    // other interaction. The state can still be stop/walk/run at this point;
+    // head following, roomscale drag and FP gait overrides must all yield.
+    if ((*Ptr<uint32_t>(g_boundDll->lara + off::lara_movement_flags) & 0x20) != 0)
+        return false;
     // Same ground states as TR1-3. Ladders, pickups, jumps and scripted
     // interactions own their facing and must not be rotated out of alignment.
     switch (*reinterpret_cast<const int16_t*>(item + off::item_anim_state)) {
@@ -578,15 +589,15 @@ bool CanSteerMonkeyBars(const uint8_t* item) {
         (*Ptr<uint32_t>(g_boundDll->lara+off::lara_movement_flags)&0x40)!=0;
 }
 
-bool UseHardLandingCamera(const uint8_t* item) {
-    return item && CanTurnBody(item) && locomotion::IsHardLanding(
+bool UseLandingCamera(const uint8_t* item) {
+    return item && CanTurnBody(item) && locomotion::IsLandingAnimation(g_boundDll->game,
         *reinterpret_cast<const int16_t*>(item+off::item_anim_state),
         *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
 }
 
 bool HideLandingHead(const uint8_t* item) {
     return g_active && g_boundDll && g_boundBase && item &&
-        item==*Ptr<uint8_t*>(g_boundDll->laraItem) && UseHardLandingCamera(item);
+        item==*Ptr<uint8_t*>(g_boundDll->laraItem) && UseLandingCamera(item);
 }
 
 bool CanModifyGroundMotion(const uint8_t* item) {
@@ -2210,7 +2221,7 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     // amount here so both rendered eyes remain on the clear side of the wall.
     pose.x_pos = eye[0] - offsetX;
     pose.z_pos = eye[2] - offsetZ;
-    if (roll || UseHardLandingCamera(item)) {
+    if (roll || UseLandingCamera(item)) {
         // The rendered headset can be lower than the scene anchor (ducking).
         // Query the final horizontal eye, then keep that rendered centre clear
         // of floor/ceiling without changing Lara, tracking neutral or calibration.
@@ -2289,6 +2300,9 @@ void TraceForwardCamera(const uint8_t* item, const float body[3],
 void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose,const PHD_VECTOR& animatedHead) {
     using namespace locomotion;
     g_bodyVisualOffset={};
+    // The landing camera already follows the animated neck in all axes.
+    // Standing body fitting would translate that same neck a second time.
+    if (UseLandingCamera(item)) { g_mountBodyTransition.Reset(); return; }
     if (!CanTurnBody(item)) {
         const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
         if (IsLedgeMountState(state)) g_mountBodyTransition.Begin();
@@ -2376,20 +2390,21 @@ bool Anchor(PHD_3DPOS& pose) {
         const auto flat=locomotion::Rotate({local.x,local.z},g_headingBase);
         pose.x_pos=int32_t(std::lround(body[0]+flat.x));
         pose.z_pos=int32_t(std::lround(body[2]+flat.z));
-    } else if (Cfg().firstPersonMovementStabilization && CanTurnBody(item)) {
+    } else if (Cfg().firstPersonMovementStabilization && CanTurnBody(item) && !UseLandingCamera(item)) {
         // Physical head yaw rotates Lara, not the scene-camera origin. Only
         // artificial yaw changes this reference frame; HMD pose is applied
         // separately, identically for both eyes, culling and tracked guns.
         const auto eye=g_groundEye.Apply({body[0],body[1],body[2]},g_headingBase,
             {float(head.x),float(head.y),float(head.z)},
-            Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t,
-            UseHardLandingCamera(item));
+            Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t);
         pose.x_pos=int32_t(std::lround(eye.x));
         pose.y_pos=int32_t(std::lround(eye.y));
         pose.z_pos=int32_t(std::lround(eye.z));
     } else if (!Cfg().firstPersonMovementStabilization) g_groundEye.Reset();
-    // Other non-ground states use the native animated eye, but retain the standing
-    // reference. On vault/pull-up completion the cached skeleton can still be
+    // Landings and non-ground states use the full native animated eye, while
+    // retaining the standing reference. Never pin the camera above/beside a
+    // bending neck or save a kneeling pose as normal standing height.
+    // On vault/pull-up completion the cached skeleton can still be
     // from the climb while Lara's root has moved onto the crate. Recapturing
     // then locks that transient high/sideways offset into every standing frame.
     // Item/level changes and explicit view toggles discard this calibration.

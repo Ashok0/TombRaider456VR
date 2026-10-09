@@ -8,6 +8,18 @@ constexpr uint32_t ArmMeshBits = 0x3f00u;
 
 inline bool UseHeadCamera(int hitPoints) { return hitPoints > 0; }
 
+inline bool SwitchUsesThirdPerson(int game,int state) {
+    if(game!=0 && game!=1) return false;
+    // Native TR4/5 switch-use states: on/off (also jump/crowbar/block
+    // switches), turn wheel, cog, rail lever and pulley. Underwater switches
+    // already use the swimming camera gate. Crow/dove is specific to TR5.
+    switch(state) {
+    case 40: case 41: case 95: case 96: case 97: case 104: return true;
+    case 126: return game==1;
+    default: return false;
+    }
+}
+
 // Unarmed ground-movement arms are revealed only by looking down. Separate
 // show/hide thresholds avoid flickering at the edge of a downward glance.
 struct UnarmedArmVisibility {
