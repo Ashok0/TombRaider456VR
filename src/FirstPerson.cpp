@@ -172,6 +172,8 @@ struct GroundJumpIntent {
     }
 } g_groundJump;
 uint64_t g_groundMoveAction = 0; // Scoped stick intent, not the active native gait.
+bool g_crouchDrive=false;
+float g_crouchTravelYaw=0;
 bool g_stabilizeRoot=false;
 bool g_hardStopRoot=false; // Scoped to one ordinary above-water simulation tick.
 uint64_t g_stabilizeAction=0;
@@ -180,6 +182,7 @@ firstperson::LedgePullGesture g_ledgePull;
 firstperson::LedgeGrabFeedback g_ledgeGrab;
 stabilization::RootMotion g_rootMotion;
 stabilization::GroundEye g_groundEye;
+stabilization::StanceEye g_stanceEye;
 stabilization::MountBodyTransition g_mountBodyTransition;
 locomotion::Vec g_bodyVisualOffset{};
 float g_lastBodyYaw=0;
@@ -192,6 +195,7 @@ uint64_t g_bodySkinMask=0;
 int g_bodySkinCount=0;
 
 void ResetMovementStabilization() {
+    g_crouchDrive=false;
     g_groundJump.Reset();
     g_ledgePull.Reset(); g_ledgeGrab.Reset();
     g_renderTurn.Reset();
@@ -201,6 +205,7 @@ void ResetMovementStabilization() {
     g_groundMoveAction=0;
     g_rootMotion.Reset();
     g_groundEye.Reset();
+    g_stanceEye.Reset();
     g_mountBodyTransition.Reset();
     g_bodyVisualOffset={};
 }
@@ -243,6 +248,24 @@ constexpr MotionDll kMotionDlls[] = {
      0x133A0, 0x5C759, 0x5C7F0, 0x8DAA0, 0x1B2AC8, 0x30B23, 0x30BD6, 0x5C320, 0x12500, 0x58710, 0x9D300, 0x65ABD2, 0x66D0E8},
 };
 const MotionDll* g_motionDll = nullptr;
+struct CrouchGunDll { uint32_t timestamp, gun; uint8_t prologue[11]; };
+constexpr CrouchGunDll kCrouchGunDlls[] = {
+    {0x696B4999,0x5CF80,{0x48,0x83,0xEC,0x28,0x0F,0xB7,0x05,0xB9,0x5F,0x49,0x00}},
+    {0x696B499C,0x5A2A0,{0x48,0x83,0xEC,0x28,0x0F,0xB7,0x05,0x99,0x45,0x49,0x00}},
+    {0x68C12FDA,0x5CC80,{0x48,0x83,0xEC,0x28,0x0F,0xB7,0x05,0xF9,0x71,0x49,0x00}},
+    {0x68C12FE9,0x5AFF0,{0x48,0x83,0xEC,0x28,0x0F,0xB7,0x05,0x89,0x37,0x49,0x00}},
+};
+// Outer DrawLara__HD owns the camera-inside-body rejection, before the
+// existing DrawLaraHD jiggle scope or any per-hand DrawCreatureHD passes.
+struct CrouchDrawDll { uint32_t timestamp, draw; };
+constexpr CrouchDrawDll kCrouchDrawDlls[] = {
+    {0x696B4999,0x1AE60}, {0x696B499C,0x17360},
+    {0x68C12FDA,0x1AB40}, {0x68C12FE9,0x17490},
+};
+hook::InlineHook g_hCrouchDraw;
+hook::InlineHook g_hCrouchGun;
+bool g_crouchGunsReady=false;
+
 // DrawLaraHD selects HAND_*_RUN (2/32/62) independently of the joint pose.
 // Verified against both PDB and retail renderers and HAND_NAMES in the PDBs.
 struct UnarmedHandDll { uint32_t timestamp, hands; };
@@ -529,7 +552,8 @@ uint32_t VisibleMeshBits(uint32_t base, bool head, bool roll, bool crouch, bool 
 }
 
 void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
-                       bool ledgeArms = false, bool hideUnderwater = false, bool hideArms = false) {
+                       bool ledgeArms = false, bool hideUnderwater = false, bool hideArms = false,
+                       bool trackedHands = false) {
     if ((!hideHead && !hideRoll && !hideCrouch && !ledgeArms && !hideUnderwater && !hideArms) || !g_boundDll || !g_boundBase) {
         RestoreHeadMesh();
         return;
@@ -568,6 +592,13 @@ void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
     g_ledgeArmsOnly = ledgeArms;
     g_unarmedArmsHidden=hideArms;
     bits = VisibleMeshBits(g_meshBaseBits,hideHead,hideRoll,hideCrouch,ledgeArms,hideUnderwater,hideArms);
+    // LaraDrawPhase rejects a ZERO item mask before DrawLara__HD or any of
+    // our hand-pass hooks run. Keep only real hand bits for tracked weapons;
+    // DrawCreatureHD still suppresses the body and renders each gun separately.
+    // Hidden stances own the complete mask, so the original snapshot above is
+    // retained across armed/unarmed changes and restored on leaving crouch.
+    if(hideCrouch && !hideRoll && !hideUnderwater && trackedHands)
+        bits=g_meshBaseBits&0x2400u;
 }
 
 bool IsCrouchState(const uint8_t* item) {
@@ -579,6 +610,35 @@ bool IsCrouchState(const uint8_t* item) {
     case 105: case 106: return true;
     default: return false;
     }
+}
+
+bool CanUseCrouchCamera(const uint8_t* item) {
+    return IsCrouchState(item) && LaraWaterStatus()==0 &&
+        *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0 &&
+        !(*reinterpret_cast<const uint32_t*>(item+0x1820)&8) &&
+        !(*Ptr<uint32_t>(g_boundDll->lara+off::lara_movement_flags)&0x20) &&
+        (g_boundDll->game!=0 || *Ptr<int16_t>(g_boundDll->lara+off::lara_vehicle)<0);
+}
+
+bool CanSteerCrouch(const uint8_t* item) {
+    if(!CanUseCrouchCamera(item) || *reinterpret_cast<const int16_t*>(item+22)!=0) return false;
+    // Required interactions and crawl-to-hang/roll transitions stay native.
+    switch(*reinterpret_cast<const int16_t*>(item+off::item_goal_state)) {
+    case 2: case 71: case 80: case 81: case 84: case 85: case 86:
+    case 105: case 106: return true;
+    default:return false;
+    }
+}
+
+void ApplyCrouchTravelHeading(uint8_t* item) {
+    if(!g_crouchDrive || item!=g_headingItem || !CanSteerCrouch(item)) return;
+    const bool backward=*reinterpret_cast<const int16_t*>(item+off::item_anim_state)==86;
+    // Crawl-back clips have NEGATIVE velocity; their collision samples behind
+    // Lara. Animate along body yaw, then let negative speed move her backward.
+    const int16_t facing=Angle(g_crouchTravelYaw+(backward ? kPi : 0));
+    reinterpret_cast<PHD_3DPOS*>(item+off::item_pos)->y_rot=facing;
+    *Ptr<int16_t>(g_boundDll->lara+off::lara_move_angle)=facing;
+    *Ptr<int16_t>(g_boundDll->lara+off::lara_turn_rate)=0;
 }
 
 bool IsRollState(const uint8_t* item) {
@@ -750,6 +810,68 @@ bool WeaponControlMode() {
     int gun=*Ptr<int16_t>(g_boundDll->lara+4);
     if (!gun) gun=*Ptr<int16_t>(g_boundDll->lara+8);
     return MotionWeaponSupported(gun);
+}
+
+bool CrouchWeaponsEligible(const uint8_t* item) {
+    if(!g_crouchGunsReady || item!=g_headingItem || !CanSteerCrouch(item) ||
+       ControllerTrackingBlockedReason()) return false;
+    int gun=CurrentMotionWeapon();
+    const int requested=*Ptr<int16_t>(g_boundDll->lara+6);
+    if(!gun) gun=*Ptr<int16_t>(g_boundDll->lara+8);
+    if(!MotionWeaponSupported(gun) || (requested && !MotionWeaponSupported(requested))) return false;
+    vr::HmdMatrix34_t pose{};
+    return VR().ControllerPose(1,pose) && (!motiongun::DualWeapon(gun) || VR().ControllerPose(0,pose));
+}
+
+// Crawl controls need free hands, but independently tracked guns do not use
+// Lara's crawling arm animation. Restore the real weapon state BEFORE LaraGun,
+// which native LaraAboveWater calls once, after movement and collision.
+struct CrouchWeaponScope;
+CrouchWeaponScope* g_crouchWeaponScope=nullptr;
+struct CrouchWeaponScope {
+    uint8_t* item=nullptr;
+    int16_t status=0;
+    uint64_t input=0,mask=0;
+    bool active=false;
+    CrouchWeaponScope(uint8_t* candidate) {
+        if(!CrouchWeaponsEligible(candidate)) return;
+        item=candidate;status=*Ptr<int16_t>(g_boundDll->lara+2);
+        if(status<0 || status>4) return;
+        // Status 1 is the native hands-busy flag in ordinary crawling only.
+        if(status==1 && !IsCrouchState(item)) return;
+        active=true;g_crouchWeaponScope=this;
+        input=*Ptr<uint64_t>(g_boundDll->input);
+        mask=0x20 | (status>=2 ? 0x40 : 0); // Equip/fire must not become crawl interactions.
+        *Ptr<uint64_t>(g_boundDll->input)&=~mask;
+        *Ptr<int16_t>(g_boundDll->lara+2)=0;
+    }
+    void Finish() {
+        if(!active) return;
+        active=false;g_crouchWeaponScope=nullptr;
+        auto& nativeStatus=*Ptr<int16_t>(g_boundDll->lara+2);
+        // Preserve native busy/death/airborne transitions out of ordinary crawl.
+        const bool ordinary=CanSteerCrouch(item) || (CanTurnBody(item) &&
+            *reinterpret_cast<int16_t*>(item+22)==0);
+        if(ordinary && nativeStatus<=1) nativeStatus=status==1 ? 0 : status;
+        auto& nativeInput=*Ptr<uint64_t>(g_boundDll->input);
+        nativeInput=(nativeInput&~mask)|(input&mask);
+    }
+    ~CrouchWeaponScope() { Finish(); }
+};
+
+void __cdecl Detour_CrouchGun() {
+    if(g_crouchWeaponScope) g_crouchWeaponScope->Finish();
+    auto original=g_hCrouchGun.Original<void (__cdecl*)()>();
+    auto* item=g_boundDll && g_boundBase ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
+    if(!CrouchWeaponsEligible(item)) { original();return; }
+    auto& state=*reinterpret_cast<int16_t*>(item+off::item_anim_state);
+    const auto saved=state;
+    // Only the weapon dispatcher sees standing state. The actual crouch clip,
+    // root, collision, camera and render state remain crouched. This removes
+    // native long-gun draw restrictions while retaining ammo/recoil/fire rate.
+    state=2;
+    original();
+    state=saved;
 }
 
 const char* g_gunPoseFailure[2] = {"not-built","not-built"};
@@ -1957,7 +2079,28 @@ void __cdecl Detour_AnimateLara(uint8_t* item) {
     const bool hardStop=g_hardStopRoot && groundMotion;
     if (!action && !stabilize && !hardStop) {
         if (g_stabilizeRoot) g_rootMotion.Reset();
+        // Native control can apply residual turn-rate before AnimateLara.
+        // Align BEFORE animation displacement and AFTER any gait transition,
+        // so the following native collision uses that same travel direction.
+        const bool crawl=g_crouchDrive && item==g_headingItem && CanSteerCrouch(item);
+        PHD_3DPOS before{};
+        if(crawl) before=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+        ApplyCrouchTravelHeading(item);
         original(item);
+        if(crawl && CanSteerCrouch(item)) {
+            auto& pos=*reinterpret_cast<PHD_3DPOS*>(item+off::item_pos);
+            const float dx=float(int64_t(pos.x_pos)-before.x_pos),dz=float(int64_t(pos.z_pos)-before.z_pos);
+            const float distance=std::hypot(dx,dz);
+            // Crawl-back stopping clips 277/279 are state 80 but still have
+            // negative velocity. Animation can change state/sign this tick.
+            // Preserve its actual distance and Y, orienting XZ BEFORE native
+            // collision. Never multiply speed or touch relocation commands.
+            if(distance>0 && distance<=128) {
+                pos.x_pos=before.x_pos+int32_t(std::lround(std::sin(g_crouchTravelYaw)*distance));
+                pos.z_pos=before.z_pos+int32_t(std::lround(std::cos(g_crouchTravelYaw)*distance));
+            }
+        }
+        ApplyCrouchTravelHeading(item);
         return;
     }
     auto& pos = *reinterpret_cast<PHD_3DPOS*>(item + off::item_pos);
@@ -2139,6 +2282,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     using namespace locomotion;
     GroundJumpInputScope jumpInput(item,TurnTime());
     g_dragPrevious = g_dragCurrent;
+    g_crouchDrive=false;
     g_groundMoveAction = 0;
     g_stabilizeRoot=false;
     g_hardStopRoot=false;
@@ -2147,6 +2291,22 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         const bool ground = CanTurnBody(item);
         const bool jump = IsJumpSteeringState(state) && LaraWaterStatus() == 0 &&
             *reinterpret_cast<int16_t*>(item + off::item_hit_points) > 0;
+        if(CanSteerCrouch(item) && g_haveManualInput && !g_shifted && Length(g_manualLocal)>0) {
+            const float head=Wrap(g_headingBase+VR().HeadYawRadians());
+            const Vec world=Cfg().firstPersonMoveWithHead ? Rotate(g_manualLocal,head) : g_manualWorld;
+            g_crouchDrive=true;g_crouchTravelYaw=std::atan2(world.x,world.z);
+            ApplyCrouchTravelHeading(item);
+            auto* analog=Ptr<int16_t>(g_boundDll->analogInput);
+            const float magnitude=std::min(32767.f,Length(g_manualLocal)*32767.f);
+            const Vec decoded=SimulationStick(world,head,magnitude);
+            analog[0]=int16_t(std::round(decoded.x));analog[1]=int16_t(std::round(decoded.z));
+            analog[2]=analog[3]=Angle(head);
+            // Duck/all4s require Forward or Back to enter a crawl. Side-turn
+            // bits alone rotate in place. Use native crawl along the LS vector,
+            // preserving Duck/Action and every other non-direction input bit.
+            auto& input=*Ptr<uint64_t>(g_boundDll->input);
+            input=(input&~Directions)|(state==86 ? Back : Forward);
+        }
         if (CanSteerMonkeyBars(item) && g_haveManualInput && !g_shifted && Length(g_manualLocal)>0) {
             // Native monkey controls read camTurn even though the rendered VR
             // camera is decoupled from it. Rebuild their inputs AFTER native
@@ -2260,7 +2420,10 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
             (*reinterpret_cast<uint32_t*>(item+0x1820)&8)!=0,
             {float(position.x_pos),float(position.y_pos),float(position.z_pos)});
     } else g_ledgeGrab.Reset();
-    g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
+    {
+        CrouchWeaponScope crouchWeapons(item);
+        g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
+    }
     if (grabFeedback && g_ledgeGrab.Finish(Gate() && LaraWaterStatus()==0,
             *reinterpret_cast<int16_t*>(item+off::item_anim_state),
             (*reinterpret_cast<uint32_t*>(item+0x1820)&8)!=0))
@@ -2272,6 +2435,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         input=(input&~owned)|(savedLedgeInput&owned);
         Ptr<int16_t>(g_boundDll->analogInput)[2]=savedLedgeHeading;
     }
+    g_crouchDrive=false;
     g_groundMoveAction = 0;
     g_stabilizeRoot=false;
     g_hardStopRoot=false;
@@ -2308,6 +2472,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
             ? Wrap(g_lastHeadWorld+bodyTurn) : Radians(pos.y_rot);
         g_headingBase = Wrap(facing - VR().HeadYawRadians());
         g_groundEye.Resume(sameBody,oldBase,g_headingBase,bodyTurn);
+        g_stanceEye.Reset();
         g_headingLevel=level;
         g_cameraMotionTrace = {};
         g_haveHeading = true;
@@ -2337,6 +2502,8 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
 void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     if (!g_boundDll->getCollisionInfo) return;
     const bool ground = CanTurnBody(item);
+    const bool crouch = CanUseCrouchCamera(item);
+    const int capsuleHeight=crouch ? 400 : 762;
     const int state = *reinterpret_cast<const int16_t*>(item + off::item_anim_state);
     // Ground rolls also need a sweep around their stable eye. Interactions
     // use the retracted anchor instead, and third person never reaches here.
@@ -2346,7 +2513,7 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
          (state >= 25 && state <= 29));
     const bool roll=locomotion::IsGroundRollState(state) && LaraWaterStatus()==0 &&
         *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0;
-    if (!ground && !jump && !roll) return;
+    if (!ground && !jump && !roll && !crouch) return;
 
     const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
     const auto& prev = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos_prev);
@@ -2378,6 +2545,34 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation && !VR().headAtCamera())
         eyeY+=VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre();
     if (!std::isfinite(eyeY) || std::fabs(eyeY-pose.y_pos)>4096) return;
+    auto clampVertical=[&](int32_t x,int32_t z) {
+        // The rendered headset can be lower than the scene anchor (ducking).
+        // Query the final horizontal eye, then keep that rendered centre clear
+        // of floor/ceiling without changing Lara, tracking neutral or calibration.
+        RoomCollision coll{};
+        coll.radius=64; coll.badPos=4096; coll.badNeg=-4096;
+        coll.old[0]=x; coll.old[1]=body[1]; coll.old[2]=z;
+        coll.facing=Angle(g_lastHeadWorld);
+        reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase+g_boundDll->getCollisionInfo)(
+            &coll,x,body[1],z,room,capsuleHeight);
+        if (coll.floorSamples[0]!=-32512 && coll.floorSamples[1]!=-32512) {
+            const double floor=double(body[1])+coll.floorSamples[0];
+            const double ceiling=double(body[1])-capsuleHeight+coll.floorSamples[1];
+            if (floor>ceiling) {
+                // Stay strictly inside the horizontal sweep's 64-unit test.
+                const double margin=std::min(crouch ? 65.0 : 64.0,(floor-ceiling)*0.5);
+                const double corrected=std::clamp(eyeY,ceiling+margin,floor-margin);
+                const double anchor=pose.y_pos+corrected-eyeY;
+                if (anchor>=INT32_MIN && anchor<=INT32_MAX) {
+                    pose.y_pos=int32_t(std::lround(anchor));
+                    eyeY=corrected;
+                }
+            }
+        }
+    };
+    // A stance transition/physical rise under a low ceiling must lower the
+    // eye before the horizontal sweep, not retract it to Lara then pop forward.
+    if(crouch) clampVertical(body[0],body[2]);
     firstperson::ClampEyeToWall(body, eye,
         [&](int32_t x, int32_t z, int32_t clearX, int32_t clearZ) {
             RoomCollision coll{};
@@ -2389,8 +2584,8 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
             coll.old[0] = clearX; coll.old[1] = body[1]; coll.old[2] = clearZ;
             coll.facing = Angle(std::atan2(float(x - clearX), float(z - clearZ)));
             reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase + g_boundDll->getCollisionInfo)(
-                &coll, x, body[1], z, room, 762);
-            return firstperson::EyeBlocked(coll.floorSamples,body[1],eyeY,coll.hitStatic!=0) ||
+                &coll, x, body[1], z, room, capsuleHeight);
+            return firstperson::EyeBlocked(coll.floorSamples,body[1],eyeY,coll.hitStatic!=0,capsuleHeight) ||
                 coll.type == 8 || coll.type == 16 || coll.type == 32 ||
                 coll.shift[0] || coll.shift[2];
         });
@@ -2398,28 +2593,7 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     // amount here so both rendered eyes remain on the clear side of the wall.
     pose.x_pos = eye[0] - offsetX;
     pose.z_pos = eye[2] - offsetZ;
-    if (roll || UseLandingCamera(item)) {
-        // The rendered headset can be lower than the scene anchor (ducking).
-        // Query the final horizontal eye, then keep that rendered centre clear
-        // of floor/ceiling without changing Lara, tracking neutral or calibration.
-        RoomCollision coll{};
-        coll.radius=64; coll.badPos=4096; coll.badNeg=-4096;
-        coll.old[0]=eye[0]; coll.old[1]=body[1]; coll.old[2]=eye[2];
-        coll.facing=Angle(g_lastHeadWorld);
-        reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase+g_boundDll->getCollisionInfo)(
-            &coll,eye[0],body[1],eye[2],room,762);
-        if (coll.floorSamples[0]!=-32512 && coll.floorSamples[1]!=-32512) {
-            const double floor=double(body[1])+coll.floorSamples[0];
-            const double ceiling=double(body[1])-762+coll.floorSamples[1];
-            if (floor>ceiling) {
-                const double margin=std::min(64.0,(floor-ceiling)*0.5);
-                const double corrected=std::clamp(eyeY,ceiling+margin,floor-margin);
-                const double anchor=pose.y_pos+corrected-eyeY;
-                if (anchor>=INT32_MIN && anchor<=INT32_MAX)
-                    pose.y_pos=int32_t(std::lround(anchor));
-            }
-        }
-    }
+    if (roll || crouch || UseLandingCamera(item)) clampVertical(eye[0],eye[2]);
 }
 
 // Diagnostic only: distinguish animated lateral sway from actual root motion
@@ -2567,6 +2741,15 @@ bool Anchor(PHD_3DPOS& pose) {
         const auto flat=locomotion::Rotate({local.x,local.z},g_headingBase);
         pose.x_pos=int32_t(std::lround(body[0]+flat.x));
         pose.z_pos=int32_t(std::lround(body[2]+flat.z));
+    } else if (Cfg().firstPersonMovementStabilization && CanUseCrouchCamera(item)) {
+        // Native crouch/crawl turns swing the animated head around Lara. Keep
+        // the eye in the artificial-yaw frame, inside the 400-unit crouch hull.
+        const auto flat=locomotion::Rotate(g_groundEye.valid ?
+            locomotion::Vec{g_groundEye.local.x,g_groundEye.local.z} :
+            locomotion::Vec{float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorZ)},g_headingBase);
+        pose.x_pos=int32_t(std::lround(body[0]+flat.x));
+        pose.y_pos=int32_t(std::lround(body[1]-336)); // 64 units below capsule top.
+        pose.z_pos=int32_t(std::lround(body[2]+flat.z));
     } else if (Cfg().firstPersonMovementStabilization && CanTurnBody(item) && !UseLandingCamera(item)) {
         // Physical head yaw rotates Lara, not the scene-camera origin. Only
         // artificial yaw changes this reference frame; HMD pose is applied
@@ -2585,6 +2768,10 @@ bool Anchor(PHD_3DPOS& pose) {
     // from the climb while Lara's root has moved onto the crate. Recapturing
     // then locks that transient high/sideways offset into every standing frame.
     // Item/level changes and explicit view toggles discard this calibration.
+    if(Cfg().firstPersonMovementStabilization &&
+       (CanUseCrouchCamera(item) || (CanTurnBody(item) && !UseLandingCamera(item))))
+        pose.y_pos=int32_t(std::lround(body[1]+g_stanceEye.Apply(float(pose.y_pos)-body[1],CanUseCrouchCamera(item),TurnTime())));
+    else g_stanceEye.Reset();
     ClampRenderedHeadToCollision(item, pose);
     FitBodyToRenderedEye(item,pose,head);
     TraceForwardCamera(item, body, head, frac, GetTickCount64(), &pose);
@@ -2668,6 +2855,23 @@ public:
     UnarmedRestHandScope(const UnarmedRestHandScope&)=delete;
     UnarmedRestHandScope& operator=(const UnarmedRestHandScope&)=delete;
 };
+
+void __cdecl Detour_CrouchDraw(uint8_t* item,int32_t drawType) {
+    const auto original=g_hCrouchDraw.Original<void (__cdecl*)(uint8_t*,int32_t)>();
+    if(DrawingNativeShadow() || !g_crouchHidden || g_rollHidden ||
+       item!=g_headingItem || !IsCrouchState(item) || !MotionReady()) {
+        original(item,drawType);return;
+    }
+    auto* app=*Ptr<uint8_t*>(g_motionDll->app);
+    auto& flags=*reinterpret_cast<uint32_t*>(app+drva::app_off::cfgFlags);
+    const uint32_t modern=flags&2u;
+    // This render-only routine gates its proximity rejection on modern
+    // controls. Skip that branch, retaining the HD bit and every other flag.
+    // The actual crouch pose and the existing body/hand masks stay untouched.
+    flags&=~2u;
+    original(item,drawType);
+    flags=(flags&~2u)|modern;
+}
 
 void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
                                    int32_t renderPass) {
@@ -2799,6 +3003,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         ++g_skipped;
         g_cameraMotionTrace = {};
     }
+    if (!g_active) g_stanceEye.Reset();
     if (wasActive && !g_active) VR().RecenterThirdPersonHead();
     const auto* item = g_boundDll && g_boundBase
         ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
@@ -2816,7 +3021,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
                       g_active && !fullBodyIK && item && (locomotion::IsLedgeHangState(
                           *reinterpret_cast<const int16_t*>(item+off::item_anim_state)) ||
                           locomotion::IsLedgeMountState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state))),
-                      g_active && item && LaraWaterStatus()==1,hideUnarmedArms); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
+                      g_active && item && LaraWaterStatus()==1,hideUnarmedArms,MotionReady()); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
 }
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {
@@ -3056,10 +3261,26 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             Log("firstperson: Touch additional weapon hooks unavailable; dual guns preserved");
         }
     }
+    if(g_motionHooksReady) for(const auto& entry:kCrouchDrawDlls) if(entry.timestamp==d.timestamp) {
+        const uint8_t prologue[]={0x48,0x8B,0xC4,0x48,0x89,0x58,0x08};
+        if(!g_hCrouchDraw.Install(reinterpret_cast<void*>(base+entry.draw),
+            reinterpret_cast<void*>(&Detour_CrouchDraw),7,prologue,7,"CrouchTrackedHandVisibility"))
+            Log("firstperson: crouched hand visibility hook unavailable");
+    }
+    if(g_motionHooksReady) for(const auto& entry:kCrouchGunDlls) if(entry.timestamp==d.timestamp) {
+        const int ripOffset=7;
+        g_crouchGunsReady=g_hCrouchGun.Install(reinterpret_cast<void*>(base+entry.gun),
+            reinterpret_cast<void*>(&Detour_CrouchGun),11,entry.prologue,11,
+            "CrouchMotionGuns",&ripOffset,1);
+        Log(g_crouchGunsReady ? "firstperson: crouched tracked weapons enabled" :
+            "firstperson: crouched tracked weapons unavailable; native restrictions retained");
+    }
     return true;
 }
 
 void Remove() {
+    g_hCrouchDraw.Remove();
+    g_crouchGunsReady=false;g_crouchWeaponScope=nullptr;g_hCrouchGun.Remove();
     g_hDrawActionIndicators.Remove();
     g_actionIconDll=nullptr;
     g_loggedActionIcon=false;
@@ -3359,7 +3580,10 @@ void FirstPersonInput(float& leftX, float& leftY, float& rightX, bool shifted,
     const int state = *reinterpret_cast<int16_t*>(item + off::item_anim_state);
     const bool jump = IsJumpSteeringState(state) && LaraWaterStatus() == 0 &&
         *reinterpret_cast<int16_t*>(item + off::item_hit_points) > 0;
-    if (!CanTurnBody(item) && !jump && !CanSteerMonkeyBars(item)) return;
+    // VR already integrates RS above. Do not also send it to native crouch
+    // steering, which rotates the body/camera a second time.
+    if(CanUseCrouchCamera(item)) rightX=0;
+    if (!CanTurnBody(item) && !jump && !CanSteerMonkeyBars(item) && !CanSteerCrouch(item)) return;
     rightX = 0.0f;
     const float headWorld = Wrap(g_headingBase + VR().HeadYawRadians());
     g_lastHeadWorld = headWorld;

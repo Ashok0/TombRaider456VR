@@ -1,0 +1,16 @@
+{
+  "status": "deployed-and-hash-verified",
+  "source_base": "befbeb59bad4f2765201ac08e254c84ccfa7bd1f",
+  "change": "Stable crouched camera with wall/floor/ceiling clearance and smooth stance transitions; discarded IK changes remain reverted; both IK settings disabled",
+  "dll_sha256": "0D8A9937C1AEAA67B38C794B575CA1791F4E8D905558E01D6017D6BE7DF8AD32",
+  "previous_dll_sha256": "CB6F754F8C427B4160D56423E2D0761EC11121448EE172B447A71181BE3A5076",
+  "ini_sha256": "905AACA93289A985E011C5B7BED7DB09B5D92894695112F3CF29B5D7642266EE",
+  "previous_ini_sha256": "0C68EFF8591852E397F56F0A98AE65B908005BBB1F58080C7F2DBFE5504E329C",
+  "backup": "C:\\dev\\TombRaider456VR\\build\\before-crouch-camera-20261009-231046",
+  "regression_checks": 1418421,
+  "jiggle_integration_cases": 12,
+  "fullbody_enabled": false,
+  "unarmed_ik_enabled": false,
+  "headset_verified": false,
+  "deployed_at": "2026-10-09T23:10:46.672122-04:00"
+}

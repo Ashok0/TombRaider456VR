@@ -224,3 +224,63 @@ for path, stamp, joints, fire, view_ret, right_ret, left_ret, w2v, pistol, *_ in
     }
     assert (animate,spheres,active,items) == expected[stamp], path
     print(f'{path}: controller target acquisition and AnimatePistols verified')
+
+# Crouch weapon dispatcher: exact prologue and relocated RIP-relative flash
+# counter load must match each supported image before the optional hook installs.
+table = source.split('constexpr CrouchGunDll kCrouchGunDlls[] = {', 1)[1].split('\n};', 1)[0]
+for path, stamp, *_ in builds:
+    values = next([int(v,16) for v in re.findall(r'0x[0-9A-Fa-f]+', row)]
+                  for row in table.splitlines() if f'0x{stamp:08X}' in row)
+    _, gun, *prologue = values
+    assert gun == lara_gun_builds[path], (path, 'LaraGun RVA')
+    data = pefile.PE(str(root / path)).get_memory_mapped_image()
+    assert data[gun:gun+11] == bytes(prologue), (path, 'crouch gun hook prologue')
+    instructions = list(decoder.disasm(data[gun:gun+11], gun))
+    assert [i.size for i in instructions] == [4,7], (path, 'whole stolen instructions')
+    load = instructions[1]
+    assert load.mnemonic == 'movzx' and load.disp_offset == 3 and load.disp_size == 4
+    lara_match = re.search(rf'0x{stamp:08X}, L"tomb[45]\.dll", "[^"]+",\s*'
+                          r'/\* lara\s*\*/\s*(0x[0-9A-F]+)', game_source)
+    assert load.address + load.size + load.disp == int(lara_match[1],16) + 0x104
+    print(f'{path}: crouched weapon hook and RIP relocation verified')
+
+# DrawLara__HD skips the entire renderer when the modern-control camera lies
+# inside a Lara sphere. Verify the outer hook, its gate, and actual hand-draw
+# entry independently of the lower DrawCreatureHD hook tests.
+table = source.split('constexpr CrouchDrawDll kCrouchDrawDlls[] = {',1)[1].split('\n};',1)[0]
+rows = [tuple(int(v,16) for v in re.findall(r'0x[0-9A-Fa-f]+', row))
+        for row in re.findall(r'\{([^{}]+)\}', table)]
+expected_draws = {'PDB/tomb4.dll':(0x1AE60,0xC40F0),'PDB/tomb5.dll':(0x17360,0xB8C50),
+                  'retail/tomb4.dll':(0x1AB40,0xC4D20),'retail/tomb5.dll':(0x17490,0xB8FB0)}
+for path, stamp, *_ in builds:
+    wrapper = dict(rows)[stamp]
+    expected, draw = expected_draws[path]
+    assert wrapper == expected, (path,'outer Lara renderer')
+    data = pefile.PE(str(root/path)).get_memory_mapped_image()
+    assert data[wrapper:wrapper+7] == bytes.fromhex('48 8b c4 48 89 58 08'), path
+    prologue = list(decoder.disasm(data[wrapper:wrapper+7],wrapper))
+    assert [i.size for i in prologue] == [3,4], (path,'whole position-independent instructions')
+    code = list(decoder.disasm(data[wrapper:wrapper+500],wrapper))
+    gate = next(n for n,i in enumerate(code) if i.mnemonic=='test' and '0x9e4], 2' in i.op_str)
+    branch = code[gate+1]
+    assert branch.mnemonic=='je', (path,'modern-only proximity check')
+    skip = branch.operands[0].imm
+    assert any(i.mnemonic=='jl' and i.operands[0].imm>skip for i in code[gate+2:] if i.address<skip), (path,'inside-sphere early exit')
+    assert any(i.mnemonic=='call' and i.operands[0].imm==draw and i.address>=skip for i in code), (path,'HD render after proximity check')
+    print(f'{path}: outer renderer proximity gate and downstream DrawLaraHD verified')
+
+# The earlier LaraDrawPhase rejects mesh_bits == 0 before either HD hook.
+# Locate it independently through the already-verified muzzle-flash callsite.
+for path, stamp, joints, fire, view_ret, right_ret, left_ret, w2v, pistol, *_ in builds:
+    pe = pefile.PE(str(root/path));data=pe.get_memory_mapped_image()
+    flash_return=flash_builds[path][2]
+    # TR5 splits its unwind ranges; the range containing the flash call is
+    # not the entry. Exact paired function streams retain these call offsets.
+    phase=flash_return-(0x1A3 if 'tomb4' in path else 0x2F3)
+    assert any(e.struct.BeginAddress==phase for e in pe.DIRECTORY_ENTRY_EXCEPTION), (path,'phase entry')
+    code=list(decoder.disasm(data[phase:phase+128],phase))
+    mask=next(n for n,i in enumerate(code) if i.mnemonic=='cmp' and
+              'dword ptr [' in i.op_str and '+ 0xc], 0' in i.op_str)
+    branch=next(i for i in code[mask+1:mask+3] if i.mnemonic=='je')
+    assert branch.operands[0].imm > phase+128, (path,'zero mask bypasses Lara draw')
+    print(f'{path}: LaraDrawPhase zero-mesh-mask rejection verified at {code[mask].address:#x}')

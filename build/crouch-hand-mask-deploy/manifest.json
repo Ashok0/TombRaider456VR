@@ -1,0 +1,16 @@
+{
+  "status": "deployed-and-hash-verified",
+  "source_base": "befbeb59bad4f2765201ac08e254c84ccfa7bd1f",
+  "change": "Preserve tracked hand visibility bits while crouched so LaraDrawPhase does not skip all rendering; keep crouched body hidden and retain prior movement/firing/proximity corrections",
+  "dll_sha256": "6B745590E120DBB2B52B29DDC3A012D9D4703FE8B3111DFE34D274B0D1DB2669",
+  "previous_dll_sha256": "2E323AB4A27862A0B8E5F7344FD3DB31F963446834531CBAF92EB1967436AE1F",
+  "ini_sha256": "905AACA93289A985E011C5B7BED7DB09B5D92894695112F3CF29B5D7642266EE",
+  "backup": "C:\\dev\\TombRaider456VR\\build\\before-crouch-hand-mask-20261010-001136",
+  "regression_checks": 1468557,
+  "jiggle_integration_cases": 12,
+  "verified_motion_gun_dlls": 4,
+  "fullbody_enabled": false,
+  "unarmed_ik_enabled": false,
+  "headset_verified": false,
+  "deployed_at": "2026-10-10T00:11:36.009088-04:00"
+}

@@ -81,6 +81,7 @@ jump priority also applies in third person.
 
 | Change | Current status |
 |---|---|
+| Crouched sideways clipping and bouncy movement | October 9: stable low eye, crouch-height wall/floor/ceiling clearance and smooth stance changes. Both IK modes disabled following rollback. See [crouch camera](#crouched-camera-collision-and-smooth-movement-2026-10-09). |
 | A missed during walking/start/stop animations | October 9: port the TR1-3 jump-priority behavior to TR4/5 first and third person; retain quick taps until native simulation and restart ordinary gaits at standing jump dispatch. See [jump priority](#jump-priority-over-walking-animations-2026-10-09). |
 | LS left/right/back launching Lara during forward movement | Retained: apply movement only when the native gait matches stick intent; preserve native stored speed. The user confirmed the launch fix. See [gait handoff](#forward-to-sideback-animation-handoff-2026-10-03). |
 | Physical ledge pull-up | October 9: pull both hands downward while hanging still to request the native climb-up. Ledges only; no monkey-bar or ladder gesture. See [ledge gesture](#two-hand-ledge-pull-up-2026-10-09). |
@@ -110,21 +111,167 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 9 current deployment:** Release/x64 from "Add rumble to long distance ledge grabs"
-(`5bf5d5b`) plus jump priority in first and third person. Switch camera, Action alignment,
-landing-neck, monkey-bar and optional full-body centering fixes remain included.
-The installed INI retains `FirstPersonFullBodyIK=0`: arm-and-hand IK remains
-available, full-body IK is disabled. Personal settings and controller calibration
-were preserved. The earlier System-height calibration experiments are absent
-from this checkout. Automated checks pass; jump responsiveness, ledge-grab haptic feel, physical IK hand pivot alignment, ledge gesture feel, sprint sidestepping, X-ray presentation, wrist recovery, haptic strength and the remaining
-camera/interaction changes still need in-headset confirmation.
+**October 10 current deployment:** Release/x64 from "Allow jump between other animation frames"
+(`befbeb5`) plus the crouch camera, LS steering, floating-weapon and hand-visibility changes below. The subsequent IK, height
+calibration and physical ladder experiments were discarded and remain reverted.
+Both `FirstPersonFullBodyIK=0` and `FirstPersonUnarmedIK=0` are now set in the
+repository and deployed INIs. Other installed settings and gun calibration are
+preserved. Existing gun motion controls, jump priority, ledge gesture/haptics,
+shadows, switches and monkey-bar corrections remain part of this checkout.
 
-- Installed DLL SHA-256: `8A0F08B9D84C0B659A559093DA38EC7D1B13996B90FC263412870A54FA1D1AAF`.
-- Deployment record: [jump-priority manifest](build/jump-priority-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-jump-priority-20261009-171056/`.
-- Earlier rollback: [reverted redeploy manifest](build/reverted-redeploy/manifest.json).
+- Installed DLL SHA-256: `6B745590E120DBB2B52B29DDC3A012D9D4703FE8B3111DFE34D274B0D1DB2669`.
+- Deployment record: [crouch hand mask manifest](build/crouch-hand-mask-deploy/manifest.json).
+- Previous installed DLL and INI backup: `build/before-crouch-hand-mask-20261010-001136/`.
 - Current regression runner: `build\run_first_person_tests.cmd`, including
-  `tools/dynamic_bones_regression.cpp`. Per-change validation is recorded below.
+  `tools/dynamic_bones_regression.cpp`. In-headset confirmation is pending.
+
+### Crouched gun visibility: draw-phase mask correction (2026-10-10)
+
+The first visibility patch did not solve the reported invisible guns. The next
+log confirmed that its hook installed but tracked hand draws stayed at zero.
+An earlier native `LaraDrawPhase` check rejects the entire draw when Lara's
+persistent mesh mask is zero. Crouch body hiding set exactly that zero mask, so
+execution never reached the proximity override or the hand renderer.
+
+While crouched with ready tracked weapons, the visibility update now retains
+only the original hand bits (`0x2400`). The body/head remain hidden by the
+existing per-pass filtering. The original full-body visibility snapshot survives
+repeated frames and crouched equip/holster changes; standing/third person restores
+it normally. Unarmed crouching and rolls still use a zero mask. Firing controls,
+movement, animation, jiggle physics and disabled IK settings are unchanged.
+
+Validation now starts at the **native zero-mask draw-phase guard**, then passes
+through the outer proximity gate and actual modded hand-pass filtering. The
+fixture reproduces zero draws with the old mask and both tracked hands with the
+new mask, in both games and control schemes across all crouch states. It also
+covers rearming, holstering, rolls, original-mask restoration and body hiding.
+**1,468,557 regression checks**, **12 jiggle integration cases**, Release/x64 build
+and all four DLL address/branch checks passed. The installed DLL hash matches
+the build and the installed INI is byte-for-byte unchanged. Native rendering is
+stubbed in tests; in-headset confirmation of this correction remains pending.
+
+### Crouched camera proximity override (2026-10-10)
+
+This first visibility fix was insufficient on its own; see the draw-phase mask
+correction above. It remains necessary once drawing reaches the HD renderer.
+
+The October 9 firing change worked, but the hands could still be invisible.
+The gameplay log showed ready tracked weapons and successful shots with zero
+tracked-arm draws. Native `DrawLara__HD` performs a modern-control camera/body
+proximity test before calling `DrawLaraHD`: a camera inside a body sphere rejects
+the entire HD draw, including the floating hands. The lowered crouch eye triggers
+this check before the existing hand-pass visibility logic can run.
+
+A hook around this outer render routine now bypasses that proximity test only
+for crouched first-person Lara with ready tracked weapons. It temporarily clears
+the modern-control bit for this render call and restores it immediately afterward;
+HD graphics and other flags remain intact. The crouched body remains hidden and
+the normal hand/gun passes use their existing tracked transforms. Simulation,
+crouch animation, input handling and the existing jiggle-render scope are unchanged.
+Third person, unarmed, standing, rolls, tracking loss and native shadow passes
+retain the normal rendering path.
+
+Validation: **1,468,333 regression checks**, **12 jiggle integration cases**, and
+Release/x64 build passed. The new test models the outer camera/body rejection
+before submitting hand passes, covering both games, all crouch states, both
+control schemes, restored flags/body memory and excluded render contexts.
+`tools/verify_motion_guns.py` verifies the outer hook prologue, proximity branch
+and downstream HD call against all four supported DLLs. Deployment hashes match;
+the installed INI is unchanged and both IK settings remain disabled. Native game
+calls are stubbed in tests; in-headset confirmation remains pending.
+
+### Floating weapons while crouched (2026-10-09)
+
+First-person floating weapons can now draw, fire and holster while crouched or
+crawling in TR4/5 remastered graphics. Existing controls apply: LT equips from
+unarmed, Y holsters, and equipped dual guns use their matching triggers for a
+single press or held repeat. Single weapons use RT. Native ammunition, recoil,
+fire cadence, controller aiming and firing haptics remain in effect.
+
+The native crawl controller requires free hands and writes a hands-busy status;
+the weapon dispatcher also restricts long-gun drawing in crouch states. A scoped
+override lets movement/collision see free hands, then restores weapon status and
+equip/fire input before the native weapon update runs once. Only that weapon
+update sees a temporary standing state. Crouch animation, camera, root and
+collision stay crouched. Equip/fire input cannot accidentally request a crawl
+interaction during the movement pass. Native draw/holster results persist.
+
+This requires valid controller tracking and the floating-gun hooks. Third person,
+classic graphics, flares/torches, required interactions and crawl-to-hang or
+airborne transitions retain native restrictions. No IK is required or enabled.
+
+Validation: **1,468,135 regression checks**, including crouched per-hand shots,
+held repeats, no duplicate tap shots, draw/holster persistence, native movement
+state preservation and excluded contexts; **12 jiggle integration cases**; and
+Release/x64 build passed. `tools/verify_motion_guns.py` verifies the new hook's
+exact prologue and RIP-relative relocation against all four supported DLLs.
+Deployment hashes match and the installed INI is unchanged. Hook tests stub the
+native engine; an in-headset gameplay check is still pending.
+
+### Crouched camera collision and smooth movement (2026-10-09)
+
+Crouch/crawl states bypassed the first-person eye's wall-clearance sweep and
+standing movement stabilization. The view followed the animated head directly,
+so native sideways turns could swing it outside Lara's collision bounds and
+through a wall, while crawl animations added camera bob. Right-stick input also
+continued to native crouch steering after the VR turn was already sampled.
+
+Crouched first person now anchors the view to Lara's interpolated root in the
+VR turning frame. It uses a fixed low eye height, 336 game units above the root,
+inside the native 400-unit crouch collision height. Crouching/standing height
+changes are rate-limited independently of headset movement. Native head sway
+and body yaw no longer orbit the camera; real headset movement remains immediate.
+
+Wall sweeps now include crouch/crawl and use the correct crouched capsule height.
+Floor and ceiling clearance also includes the physical headset offset. Under a
+low ceiling, vertical clearance is resolved before the horizontal sweep so
+raising the headset cannot retract the view and then pop it forward. VR consumes
+right-stick turning once. The standing sidestep multiplier is not applied to
+crouched movement. Standing calibration, shadows and jiggle physics are retained.
+The follow-up LS correction below replaces the original native-only crouch
+input path, which still stalled and steered against the old camera angle.
+
+Validation: **1,418,421 regression checks** and **12 jiggle integration cases**
+pass, plus Release/x64 build and installed DLL/INI hash verification. Crouch,
+crawl, backward crawl and turn fixtures cover both games, violent head sway,
+sideways wall contact, low ceilings, physical headset movement, 60/90/120 Hz
+stance transitions and duplicate eye draws. Native collision fixtures verify
+no speed boost and no movement after wall resolution. Tests stub native game
+and renderer calls; the headset result still requires confirmation.
+
+### Crouched LS stalls and incorrect direction while turning (2026-10-09)
+
+The camera correction alone left crouch/crawl outside first-person LS steering.
+It returned before capturing stick intent, leaving native controls to use the
+old chase-camera heading. Sideways crouch inputs also requested turn animations
+instead of the Forward/Back command needed to enter or sustain crawling.
+
+Crouched LS now records the full stick vector, including diagonals. At each
+simulation tick it rebuilds native steering from the current VR heading, so
+headset or stick rotation between polling and simulation cannot leave movement
+at an old angle. It selects native forward crawling along the requested vector;
+an already-playing backward crawl retains its native Back command. Right-stick
+turning is consumed once. Head-relative movement remains configurable through
+`FirstPersonMoveWithHead`; the opt-out retains native camera-relative intent.
+
+Native backward crawl clips have negative speed, including stopping clips 277
+and 279 whose state is already crawl-idle. Steering accounts for this facing
+convention and redirects the actual horizontal animation distance before the
+native collision pass. It preserves vertical motion and native speed, does not
+advance animation twice, and does not add movement after collision. Large
+relocations, airborne transitions, required interactions, shifted controls and
+third person bypass this correction. Native crawl-start clearance and animation
+transition requirements remain in effect.
+
+Validation: **1,463,925 regression checks**, **12 jiggle integration cases** and
+Release/x64 build passed. New hook fixtures cover eight stick directions, both
+games, modern/tank controls, stale camera angles, rotation between poll and
+simulation, signed animation speed, wall stops and excluded contexts.
+`tools/verify_crouch_controls.py` verifies forward/backward and stopping-clip
+velocities and bounds against all **55 installed TR4/5 animation tables**.
+The installed DLL hash matches the build; the installed INI is byte-for-byte
+unchanged, with both IK options disabled. Native calls are stubbed in the hook
+tests; in-headset confirmation remains pending.
 
 ### Jump priority over walking animations (2026-10-09)
 

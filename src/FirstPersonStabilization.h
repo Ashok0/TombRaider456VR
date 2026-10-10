@@ -92,6 +92,26 @@ inline void OffsetBodyPalette(float* palette,int count,locomotion::Vec offset) {
         bone[3]+=offset.x; bone[11]+=offset.z;
     }
 }
+// Smooth only the stance-height change, never physical tracking or collision
+// movement. Crouched animation bob is replaced by a fixed low eye height.
+struct StanceEye {
+    bool valid=false,transition=false;
+    float height=0;
+    double time=0;
+    void Reset() { *this={}; }
+    float Apply(float target,bool crouched,double now) {
+        if(!valid || !std::isfinite(now) || now<time) {
+            valid=true;height=target;time=now;transition=crouched;return height;
+        }
+        if(crouched || transition) {
+            const float step=float(std::clamp(now-time,0.0,.05))*3000.f;
+            height+=std::clamp(target-height,-step,step);
+            transition=crouched || height!=target;
+        } else height=target;
+        time=now;return height;
+    }
+};
+
 struct GroundEye {
     bool valid = false;
     Point local{};
