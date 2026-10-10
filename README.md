@@ -44,7 +44,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Dash | L3 |
 | Look | Right Stick (RS) |
 | Zoom | R3 |
-| Jump | A; TR4/5 gives jump priority over ordinary walking/start/stop animations in both views |
+| Jump | A |
 | Action | Y or LB + RB |
 | Toggle Classic Graphics | Y + RT |
 | Toggle First Person (TR1-5 only) | Y + LT |
@@ -58,7 +58,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Photo Mode | L3 + R3 |
 | Photo Mode Select | R3 (Dpad) + LS |
 | Ledge Grab | RT |
-| Mount Ledge (First Person; TR4/5 only) | While hanging still, pull both controllers down together about 22 cm / 9 inches; keep LS neutral |
+| Mount Ledge (First Person; TR1-5 only) | Pull both controllers down together |
 | Ledge Drop | B |
 | Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
 | 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
