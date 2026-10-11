@@ -68,6 +68,8 @@ void Check(bool ok, const char* label) {
 }
 bool Near(float a, float b) { return std::fabs(a - b) < 0.002f; }
 int nativeShotCalls=0, nativeShotHand=-1, handDrawCalls=0, nativeFireResult=-1;
+int armedBodyDrawCalls=0;
+int armedForearmDrawCalls=0;
 uint32_t handDrawMask=0;
 void __cdecl FakeHandJoint(uint8_t* item,tr::PHD_VECTOR* p,int joint,int) {
     Check(item==itemMemory && (joint==10 || joint==13),"tracked shot queries correct native wrist");
@@ -154,6 +156,19 @@ int32_t __cdecl FakeOptic(tr::PHD_VECTOR* start,tr::PHD_VECTOR* end,int32_t,int3
 }
 void __cdecl FakeHandDraw(uint8_t* item,int32_t useBits,int32_t) {
     Check(tr::FirstPersonTrackedHandJoint()==-1,"each hand draw starts without a stale wrist shader index");
+    if (tr::g_renderArm<0) {
+        const auto bits=*reinterpret_cast<uint32_t*>(item+tr::off::item_mesh_bits);
+        if (bits && !(bits&~0x1200u)) {
+            ++armedForearmDrawCalls;
+            Check(useBits==1 && tr::g_bodySkinScope,
+                  "weapon-mesh forearms render with articulated IK and full skin palette");
+            return;
+        }
+        ++armedBodyDrawCalls;
+        Check(useBits==1 && (bits&0x1bffu)==0x1bffu && !(bits&0x6400u) && tr::g_bodySkinScope,
+              "armed body keeps torso legs and both arm chains without duplicate hands/head");
+        return;
+    }
     ++handDrawCalls;
     handDrawMask=*reinterpret_cast<uint32_t*>(item+tr::off::item_mesh_bits);
     Check(useBits==1 && ((tr::g_renderArm==1 && handDrawMask==0x400) ||
@@ -1144,23 +1159,24 @@ int main() {
         auto& meshBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
         const uint32_t savedBits=meshBits;
         meshBits=0x7fff; Detour_DrawCreatureHD(itemMemory,0,0);
-        Check(handDrawCalls==0 && meshBits==0x7fff,"body/upper-arm pass completely skipped");
+        Check(armedBodyDrawCalls==1 && handDrawCalls==0 && meshBits==0x7fff,"armed body and IK arm pass survives with full-body IK off");
         for (uint32_t mask:{0x600u,0x3000u}) {
             meshBits=mask; Detour_DrawCreatureHD(itemMemory,1,0);
             Check(meshBits==mask && g_renderArm==-1,"native mesh mask and arm scope restored after draw");
         }
         Check(handDrawCalls==2,"exactly two hand-only draws");
+        Check(armedForearmDrawCalls==2,"both native weapon meshes retain their IK forearms before rigid gun hands");
         g_crouchHidden=true;
         const int beforeCrouchedHands=handDrawCalls;
         meshBits=0; Detour_DrawCreatureHD(itemMemory,0,0);
-        Check(handDrawCalls==beforeCrouchedHands,"crouched body stays hidden with motion guns");
+        Check(armedBodyDrawCalls==2 && handDrawCalls==beforeCrouchedHands,"crouched body renders separately from exact tracked guns");
         for (uint32_t mask:{0x600u,0x3000u}) {
             meshBits=mask; Detour_DrawCreatureHD(itemMemory,1,0);
             Check(meshBits==mask,"crouched hand draw restores native gun mask");
         }
         Check(handDrawCalls==beforeCrouchedHands+2,"crouched motion guns retain both hands");
         g_rollHidden=true; Detour_DrawCreatureHD(itemMemory,1,0);
-        Check(handDrawCalls==beforeCrouchedHands+2,"roll still hides hands as well as body");
+        Check(handDrawCalls==beforeCrouchedHands+3,"tracked hand stays visible despite stale roll hiding");
         g_rollHidden=false;
         {
             const auto oldDraw=g_hCrouchDraw.m_trampoline;
@@ -1178,8 +1194,8 @@ int main() {
                 Check(meshBits==0 && handDrawCalls==hiddenHands && crouchOuterDrawCalls==hiddenCalls,
                       "zero crouch mask reproduces missing hands before the previous visibility hook can run");
                 SetMeshVisibility(true,false,true,false,false,false,MotionReady());
-                Check(meshBits==0x2400 && g_meshBaseBits==0x7fff,
-                      "armed crouch keeps only native hand bits without losing the original body mask");
+                Check(meshBits==0x3fff && g_meshBaseBits==0x7fff,
+                      "armed crouch keeps the complete body and arms without losing the original mask");
                 const auto before=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
                 const int hands=handDrawCalls,calls=crouchOuterDrawCalls;
                 FakeLaraDrawPhase(itemMemory,17);
@@ -1188,13 +1204,13 @@ int main() {
                 Check(flags==savedFlags && before==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)),
                       "outer visibility override restores control settings and leaves body/animation/masks unchanged");
                 SetMeshVisibility(true,false,true,false,false,false,true);
-                Check(meshBits==0x2400 && g_meshBaseBits==0x7fff,"repeated crouch render cannot corrupt saved visibility");
+                Check(meshBits==0x3fff && g_meshBaseBits==0x7fff,"repeated crouch render cannot corrupt saved visibility");
                 status=0;SetMeshVisibility(true,false,true,false,false,false,MotionReady());
                 Check(meshBits==0,"holstering returns crouched body and unarmed hands to hidden");
                 status=4;SetMeshVisibility(true,false,true,false,false,false,MotionReady());
-                Check(meshBits==0x2400,"rearming while still crouched restores floating hand visibility");
+                Check(meshBits==0x3fff,"rearming while still crouched restores body and tracked hand visibility");
                 SetMeshVisibility(true,true,true,false,false,false,true);
-                Check(meshBits==0,"rolling still hides the whole body even if tracked guns are ready");
+                Check(meshBits==0x3fff && !g_rollHidden && !g_crouchHidden,"tracked guns retain body and arms during rolls");
                 RestoreHeadMesh();Check(meshBits==0x7fff,"leaving crouch restores original full body mask");
             }
             g_crouchHidden=true;
@@ -1208,8 +1224,8 @@ int main() {
                 state=excluded==4 ? 2 : 80;
                 const int hands=handDrawCalls;
                 Detour_CrouchDraw(itemMemory,29);
-                Check(handDrawCalls==hands && flags==3,
-                      "native proximity hiding remains for third person/unarmed/shadow/roll/standing paths");
+                Check(handDrawCalls==hands+(excluded>=3 ? 2 : 0) && flags==3,
+                      "all tracked stances bypass proximity hiding; third person unarmed and shadow stay native");
             }
             g_active=true;status=4;g_rollHidden=false;g_shadowDll=oldShadow;
             state=oldState;game=dll.game=oldGame;flags=oldFlags;

@@ -14,6 +14,10 @@ void __cdecl ObserveFullBodyDraw(uint8_t* item,int32_t masked,int32_t) {
     Check(masked==1,"full-body eye passes use an explicit visibility mask");
     const auto bits=*reinterpret_cast<uint32_t*>(item+off::item_mesh_bits);
     if(g_renderArm<0) {
+        if(bits && !(bits&~0x1200u)) {
+            Check(g_bodySkinScope,"separate weapon forearms retain their own IK skin palette");
+            return;
+        }
         ++fullBodyDraws;
         Check((bits&0xff)==0xff && (bits&0x1b00)==0x1b00 && !(bits&0x6400),
               "armed body includes torso legs and arm chains, excludes head and duplicate gun hands");
@@ -141,7 +145,7 @@ void TestFullBodyIK() {
             Check(FullBodyIKReady(),"full-body available in both games, grounded, airborne and native grip states");
             if(!armed && !FullBodyGripState(itemMemory)) Check(UnarmedIKReady(),"free jumps retain controller hands");
             config.firstPersonFullBodyIK=config.firstPersonUnarmedIK=false;
-            Detour_GetJoints(itemMemory,baseline,0);
+            status=0;Detour_GetJoints(itemMemory,baseline,0);status=armed ? 4 : 0;
             config.firstPersonFullBodyIK=config.firstPersonUnarmedIK=true;
             // Call explicitly as well: fallback arms must not conceal a failed body solve.
             std::memcpy(palette,baseline,count*12*sizeof(float));
@@ -157,11 +161,11 @@ void TestFullBodyIK() {
             Check(render && !std::memcmp(render,palette,count*12*sizeof(float)),"skinning uploads the full-body pose without physics overwriting it");
             for(int i=0;i<count;++i) {
                 const int joint=mapping[i];const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
-                if((joint==3 || joint==6) && FullBodyGripState(itemMemory)) Check(nearVec(actual.origin,Sub(bodyJointWorld[joint],camera)),"constrained grip keeps native animated feet");
+                if((joint==3 || joint==6) && FullBodyGripState(itemMemory) && !armed) Check(nearVec(actual.origin,Sub(bodyJointWorld[joint],camera)),"constrained grip keeps native animated feet");
                 if(joint==10 || joint==13) {
                     Frame target{};Basis controller{};const int hand=joint==10 ? 1 : 0;
                     BuildControllerWrist(hand,target,controller);
-                    if (FullBodyGripState(itemMemory)) {
+                    if (FullBodyGripState(itemMemory) && !armed) {
                         Check(nearVec(actual.origin,Sub(bodyJointWorld[joint],camera)),"full-body preserves native ledge grip positions");
                     } else {
                         const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
@@ -170,7 +174,7 @@ void TestFullBodyIK() {
                               "full-body hands keep the same physical grip pivot as floating guns");
                         if (armed) Check(nearVec(Add(actual.origin,camera),target.origin),"armed full-body wrist position remains unchanged");
                     }
-                    if(armed && !FullBodyGripState(itemMemory)) for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                    if(armed) for(int r=0;r<3;++r) for(int c=0;c<3;++c)
                         Check(std::fabs(actual.basis.r[r][c]-target.basis.r[r][c])<.002f,"armed body wrist matches exact gun orientation without unarmed wrist limits");
                 }
             }
@@ -303,6 +307,14 @@ void TestFullBodyIK() {
     Detour_DrawCreatureHD(itemMemory,0,0);bits=0x3600;Detour_DrawCreatureHD(itemMemory,1,0);
     Check(fullBodyDraws==1 && fullBodyGunDraws==2 && bits==0x3600 && g_renderArm==-1,
           "armed renderer adds one body draw, preserves both gun draws and restores native masks");
+    for (bool full:{false,true}) for (int stance:{1,2,3,45,71,80,86}) {
+        config.firstPersonFullBodyIK=full;config.firstPersonUnarmedIK=false;
+        state=int16_t(stance);status=4;fullBodyDraws=fullBodyGunDraws=0;
+        bits=0x3fff;Detour_DrawCreatureHD(itemMemory,0,0);
+        bits=0x3600;Detour_DrawCreatureHD(itemMemory,1,0);
+        Check(fullBodyDraws==1 && fullBodyGunDraws==2 && bits==0x3600 && g_renderArm==-1,
+              "tracked guns never disable body and arms, regardless of full-body/unarmed IK options or stance");
+    }
     skinFixture=nullptr;skinFixtureCount=0;g_bodySkinScope=g_bodySkinReady=false;
     g_hGetJoints.m_trampoline=getJoints;g_hDrawCreatureHD.m_trampoline=draw;g_shadowDll=shadowDll;
     g_scenePose=savedPose;g_headingBase=savedHeading;g_bodyVisualOffset=savedOffset;

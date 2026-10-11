@@ -210,4 +210,29 @@ inline bool SolveArm(const Frame (&native)[3], const Frame& target,
     }
     return true;
 }
+
+// Controller arms use the exact wrist, including roll beyond +/-90 degrees.
+// Match forearm roll to the hand through the mesh's REST joint relationship,
+// not through an animated gun/recoil pose or an assumed shared local axis.
+// Apply only twist around elbow->wrist: it cannot move either endpoint, change
+// reach, accumulate turns, or redirect the gun. Native feet/grips use SolveArm.
+inline bool SolveTrackedArm(const Frame (&native)[3],const Frame& target,
+                            Vec pole,const Frame (&bind)[3],Frame* corrections) {
+    if(!SolveArm(native,target,pole,corrections,nullptr,nullptr,false)) return false;
+    const auto forearm=Multiply(corrections[1],native[1]);
+    Vec axis{};if(!Unit(Sub(target.origin,forearm.origin),axis)) return false;
+    const auto restRelation=RotationProduct(RotationInverse(RotationOf(bind[2].basis)),
+                                            RotationOf(bind[1].basis));
+    const auto desired=RotationProduct(RotationOf(target.basis),restRelation);
+    const auto delta=RotationProduct(desired,RotationInverse(RotationOf(forearm.basis)));
+    const ArmRotation twist{delta.w,Scale(axis,Dot(delta.v,axis))};
+    // Exact 180-degree swing has no defined twist. Keep the positional solve
+    // there; any defined controller pose immediately determines its own roll.
+    if(twist.w*twist.w+Dot(twist.v,twist.v)>1.e-10f) {
+        const auto roll=RotationMatrix(twist);
+        const Frame aboutElbow{roll,Sub(forearm.origin,Transform(roll,forearm.origin))};
+        corrections[1]=Multiply(aboutElbow,corrections[1]);
+    }
+    return true;
+}
 } // namespace tr::firstperson

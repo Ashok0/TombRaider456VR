@@ -188,6 +188,7 @@ locomotion::Vec g_bodyVisualOffset{};
 float g_lastBodyYaw=0;
 int g_headingLevel=-1;
 bool g_bodySkinScope=false, g_bodySkinReady=false;
+unsigned g_armIKSolved=0, g_armIKFailed=0;
 float g_bodySkinPalette[33*12]{};
 float g_bodyRenderPalette[33*12]{};
 firstperson::ArmTwistState g_unarmedTwist[2]{};
@@ -554,6 +555,10 @@ uint32_t VisibleMeshBits(uint32_t base, bool head, bool roll, bool crouch, bool 
 void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
                        bool ledgeArms = false, bool hideUnderwater = false, bool hideArms = false,
                        bool trackedHands = false) {
+    // Tracked guns now retain the animated body and controller-driven arms in
+    // every first-person stance. Keep the native visibility snapshot so an
+    // equip/holster transition can still restore the correct unarmed mask.
+    if (trackedHands) hideRoll=hideCrouch=ledgeArms=hideArms=false;
     if ((!hideHead && !hideRoll && !hideCrouch && !ledgeArms && !hideUnderwater && !hideArms) || !g_boundDll || !g_boundBase) {
         RestoreHeadMesh();
         return;
@@ -592,13 +597,6 @@ void SetMeshVisibility(bool hideHead, bool hideRoll, bool hideCrouch = false,
     g_ledgeArmsOnly = ledgeArms;
     g_unarmedArmsHidden=hideArms;
     bits = VisibleMeshBits(g_meshBaseBits,hideHead,hideRoll,hideCrouch,ledgeArms,hideUnderwater,hideArms);
-    // LaraDrawPhase rejects a ZERO item mask before DrawLara__HD or any of
-    // our hand-pass hooks run. Keep only real hand bits for tracked weapons;
-    // DrawCreatureHD still suppresses the body and renders each gun separately.
-    // Hidden stances own the complete mask, so the original snapshot above is
-    // retained across armed/unarmed changes and restored on leaving crouch.
-    if(hideCrouch && !hideRoll && !hideUnderwater && trackedHands)
-        bits=g_meshBaseBits&0x2400u;
 }
 
 bool IsCrouchState(const uint8_t* item) {
@@ -988,6 +986,10 @@ void ReportMotionActivity() {
              g_motionShots[0], g_motionShots[1]);
     }
     g_motionArmDraws[0] = g_motionArmDraws[1] = 0;
+    if (g_armIKSolved || g_armIKFailed)
+        LogF("firstperson: arm IK palettes solved=%u failed=%u unarmed-enabled=%d",
+             g_armIKSolved,g_armIKFailed,Cfg().firstPersonUnarmedIK ? 1 : 0);
+    g_armIKSolved=g_armIKFailed=0;
     g_motionShots[0] = g_motionShots[1] = 0;
     g_headAimFallbacks[0] = g_headAimFallbacks[1] = 0;
     g_motionReportTime = now;
@@ -1179,19 +1181,28 @@ bool BodyVisualOffsetApplies(const uint8_t* item) {
         CanTurnBody(item);
 }
 
+bool ReadIKBind(const uint8_t* obj,int count,int bones,const int32_t* mapping,
+                const float* poses,int joint,motiongun::Frame& bind) {
+    int pivot=-1;
+    for(int i=0;i<count;++i) if((mapping ? mapping[i] : i)==joint) { pivot=i;break; }
+    motiongun::Frame inverseBind{};
+    if(bones>0 && pivot>=0) inverseBind=motiongun::HdInverseBind(motiongun::ReadRows(poses+pivot*12));
+    else {
+        // The canonical 15-joint bind remains available when a separate HD
+        // body/hand mesh omits a joint from its own palette.
+        const auto* p=reinterpret_cast<const float*>(obj+1676)+joint*16;
+        for(int row=0;row<3;++row) for(int col=0;col<3;++col) inverseBind.basis.r[row][col]=p[col*4+row];
+        inverseBind.origin={p[12],p[13],p[14]};
+    }
+    return motiongun::Inverse(inverseBind,bind);
+}
 bool ReadIKJoint(const uint8_t* obj,const float* joints,int count,int bones,
                  const int32_t* mapping,const float* poses,int joint,motiongun::Frame& frame) {
     int pivot=-1;
     for(int i=0;i<count;++i) if((mapping ? mapping[i] : i)==joint) { pivot=i;break; }
     if(pivot<0) return false;
-    motiongun::Frame inverseBind{},bind{};
-    if(bones>0) inverseBind=motiongun::HdInverseBind(motiongun::ReadRows(poses+pivot*12));
-    else {
-        const auto* p=reinterpret_cast<const float*>(obj+1676)+pivot*16;
-        for(int row=0;row<3;++row) for(int col=0;col<3;++col) inverseBind.basis.r[row][col]=p[col*4+row];
-        inverseBind.origin={p[12],p[13],p[14]};
-    }
-    if(!motiongun::Inverse(inverseBind,bind)) return false;
+    motiongun::Frame bind{};
+    if(!ReadIKBind(obj,count,bones,mapping,poses,joint,bind)) return false;
     frame=motiongun::Multiply(motiongun::ReadRows(joints+pivot*12),bind);
     return firstperson::Finite(frame);
 }
@@ -1207,10 +1218,11 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
     const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
     if(bones>0 && (bones!=count || !mapping || !poses)) return false;
-    Frame original[15]{},native[15]{},posed[15]{},correction[15]{};
+    Frame original[15]{},native[15]{},posed[15]{},correction[15]{},bind[15]{};
     const Vec fit=BodyVisualOffsetApplies(item) ? Vec{g_bodyVisualOffset.x,0,g_bodyVisualOffset.z} : Vec{};
     for(int joint=0;joint<15;++joint) {
         if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,joint,original[joint])) return false;
+        if(!ReadIKBind(obj,count,bones,mapping,poses,joint,bind[joint])) return false;
         native[joint]=original[joint];native[joint].origin=Sub(native[joint].origin,fit);
     }
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
@@ -1227,7 +1239,8 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     const auto& previous=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
     const float fraction=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256)/256.f;
     const float nativeHeading=Radians(previous.y_rot)+Wrap(Radians(current.y_rot)-Radians(previous.y_rot))*fraction;
-    const bool grip=FullBodyGripState(item),unarmed=*Ptr<int16_t>(g_boundDll->lara+2)==0;
+    const bool unarmed=*Ptr<int16_t>(g_boundDll->lara+2)==0;
+    const bool grip=FullBodyGripState(item) && unarmed;
     const float heading=grip ? nativeHeading : Wrap(g_headingBase+VR().HeadYawRadians());
     const Basis body{{{std::cos(heading),0,std::sin(heading)},{0,1,0},{-std::sin(heading),0,std::cos(heading)}}};
     Frame inverseBody{};Inverse({body,{}},inverseBody);
@@ -1246,13 +1259,11 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         if(!firstperson::SolveBodyAtEye(native,joint,anchorInPalette,Add(anchorInPalette,headDelta),
             Wrap(heading-nativeHeading),headRotation,forward,posed)) return false;
     }
-    firstperson::ArmTwistState twist[2]={g_unarmedTwist[0],g_unarmedTwist[1]};
     for(int hand=0;hand<2;++hand) {
         const int first=hand ? 8 : 11;
         Frame chain[3]={posed[first],posed[first+1],posed[first+2]},changes[3]{},target=native[first+2];
-        GunVec gripLocal{};
         if(!grip) {
-            GunBasis controller{};if(!BuildControllerWrist(hand,target,controller,&gripLocal)) return false;
+            GunBasis controller{};if(!BuildControllerWrist(hand,target,controller)) return false;
             const auto wrist=JointPoint(item,first+2,0,0,0);
             target.origin=Add(native[first+2].origin,Sub(target.origin,wrist));
         }
@@ -1260,8 +1271,9 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         Vec pole{side*.6f*std::cos(heading)-.25f*std::sin(heading),1.f,
                  -side*.6f*std::sin(heading)-.25f*std::cos(heading)};
         if(grip) pole=Sub(native[first+1].origin,native[first].origin);
-        const auto neutral=GunBasis(body);
-        if(!firstperson::SolveArm(chain,target,pole,changes,&twist[hand],&neutral,unarmed && !grip,gripLocal)) return false;
+        const Frame armBind[3]={bind[first],bind[first+1],bind[first+2]};
+        if(grip ? !firstperson::SolveArm(chain,target,pole,changes,nullptr,nullptr,false)
+                : !firstperson::SolveTrackedArm(chain,target,pole,armBind,changes)) return false;
         for(int i=0;i<3;++i) posed[first+i]=Multiply(changes[i],chain[i]);
     }
     // Validate every correction before touching a palette. Helpers sharing a
@@ -1275,14 +1287,14 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         const int joint=mapping ? mapping[i] : i;
         if(joint>=0 && joint<15) WriteRows(Multiply(correction[joint],ReadRows(joints+i*12)),joints+i*12);
     }
-    if(unarmed && !grip) { g_unarmedTwist[0]=twist[0];g_unarmedTwist[1]=twist[1]; }
     return true;
 }
 
 // Work only on the eye-view skinning palette. Native simulation joints and
 // the separately captured physics palette retain the original animation.
-bool ApplyUnarmedIK(uint8_t* item, float* joints, int count) {
-    if (!UnarmedIKReady() || count<15 || count>33) return false;
+bool ApplyArmIK(uint8_t* item, float* joints, int count) {
+    const bool armed=MotionReady();
+    if ((!armed && !UnarmedIKReady()) || count<15 || count>33) return false;
     const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
     if (object<0) return false;
     const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
@@ -1292,14 +1304,35 @@ bool ApplyUnarmedIK(uint8_t* item, float* joints, int count) {
     const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
     if (bones>0 && (bones!=count || !mapping || !poses)) return false;
     motiongun::Frame correction[6]{};
-    auto leftTwist=g_unarmedTwist[0],rightTwist=g_unarmedTwist[1];
+    bool solved[2]{};
     for (int hand=0;hand<2;++hand) {
         const int first=hand ? 8 : 11;
         motiongun::Frame native[3]{};
-        for (int segment=0;segment<3;++segment)
-            if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,first+segment,native[segment])) return false;
-        motiongun::Frame target{}; GunBasis controller{}; GunVec gripLocal{};
-        if (!BuildControllerWrist(hand,target,controller,&gripLocal)) return false;
+        bool present[3]{};int reference=-1;
+        for (int segment=0;segment<3;++segment) {
+            motiongun::Frame inverse{};
+            present[segment]=ReadIKJoint(obj,joints,count,bones,mapping,poses,
+                first+segment,native[segment]) && motiongun::Inverse(native[segment],inverse);
+            if (present[segment]) reference=segment;
+        }
+        // Attachment palettes can contain only forearm/wrist bones. Body
+        // palettes can omit the separate hands. Recover missing chain points
+        // from native animation in the same camera-relative frame; never
+        // require an unrelated mesh to contain a complete arm skeleton.
+        if (reference<0) continue;
+        if (!present[0] || !present[1] || !present[2]) {
+            const auto worldReference=JointPoint(item,first+reference,0,0,0);
+            for(int segment=0;segment<3;++segment) if(!present[segment])
+                native[segment]={firstperson::IdentityBasis(),Add(native[reference].origin,
+                    Sub(JointPoint(item,first+segment,0,0,0),worldReference))};
+        }
+        motiongun::Frame target{}; GunBasis controller{};
+        if (!BuildControllerWrist(hand,target,controller)) {
+            // Single weapons require only the right controller. Losing the
+            // other controller must not detach the tracked right wrist.
+            if (armed && hand==0 && !motiongun::DualWeapon(CurrentMotionWeapon())) continue;
+            return false;
+        }
         // Native palettes are camera-relative. Convert the shared gun world
         // target using the native wrist and undo the visible body's eye fit.
         const auto nativeWrist=JointPoint(item,first+2,0,0,0);
@@ -1314,23 +1347,24 @@ bool ApplyUnarmedIK(uint8_t* item, float* joints, int count) {
         const float side=hand ? 1.f : -1.f;
         const GunVec pole{side*.6f*std::cos(heading)-.25f*std::sin(heading),
                           1.f,-side*.6f*std::sin(heading)-.25f*std::cos(heading)};
-        const GunBasis bodyBasis{{{std::cos(heading),0,std::sin(heading)},
-                                  {0,1,0},{-std::sin(heading),0,std::cos(heading)}}};
-        const auto neutralWrist=motiongun::GunBasis(bodyBasis);
-        if (!firstperson::SolveArm(native,target,pole,correction+hand*3,
-                                   hand ? &rightTwist : &leftTwist,&neutralWrist,true,gripLocal)) return false;
+        motiongun::Frame bind[3]{};
+        // Only forearm/wrist bind rotations are needed for roll. The upper
+        // arm retains the positional solver's shoulder and elbow bending.
+        for(int segment=1;segment<3;++segment)
+            if(!ReadIKBind(obj,count,bones,mapping,poses,first+segment,bind[segment])) return false;
+        if (!firstperson::SolveTrackedArm(native,target,pole,bind,correction+hand*3)) return false;
+        solved[hand]=true;
     }
-    g_unarmedTwist[0]=leftTwist;g_unarmedTwist[1]=rightTwist;
     // Commit only after both arms solve. Duplicate HD helper bones mapped to
     // a segment receive the same correction, preserving blended vertices.
     for (int i=0;i<count;++i) {
         const int joint=mapping ? mapping[i] : i;
         const int index=joint>=11 && joint<=13 ? joint-11 :
                         joint>=8 && joint<=10 ? joint-8+3 : -1;
-        if (index>=0) motiongun::WriteRows(motiongun::Multiply(correction[index],
+        if (index>=0 && solved[index/3]) motiongun::WriteRows(motiongun::Multiply(correction[index],
             motiongun::ReadRows(joints+i*12)),joints+i*12);
     }
-    return true;
+    return solved[0] || solved[1];
 }
 
 int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
@@ -1358,7 +1392,10 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
                 g_bodySkinCount=count; g_bodySkinReady=true;
             }
         }
-        if(!ApplyFullBodyIK(item,joints,count)) ApplyUnarmedIK(item,joints,count);
+        if(!ApplyFullBodyIK(item,joints,count) && (MotionReady() || UnarmedIKReady())) {
+            if (ApplyArmIK(item,joints,count)) ++g_armIKSolved;
+            else ++g_armIKFailed;
+        }
         if (g_bodySkinReady) std::memcpy(g_bodyRenderPalette,joints,count*12*sizeof(float));
     }
     if (g_renderArm < 0 || count < 15 || !joints || !MotionReady() ||
@@ -2858,8 +2895,7 @@ public:
 
 void __cdecl Detour_CrouchDraw(uint8_t* item,int32_t drawType) {
     const auto original=g_hCrouchDraw.Original<void (__cdecl*)(uint8_t*,int32_t)>();
-    if(DrawingNativeShadow() || !g_crouchHidden || g_rollHidden ||
-       item!=g_headingItem || !IsCrouchState(item) || !MotionReady()) {
+    if(DrawingNativeShadow() || item!=g_headingItem || (!MotionReady() && !UnarmedIKReady())) {
         original(item,drawType);return;
     }
     auto* app=*Ptr<uint8_t*>(g_motionDll->app);
@@ -2867,7 +2903,8 @@ void __cdecl Detour_CrouchDraw(uint8_t* item,int32_t drawType) {
     const uint32_t modern=flags&2u;
     // This render-only routine gates its proximity rejection on modern
     // controls. Skip that branch, retaining the HD bit and every other flag.
-    // The actual crouch pose and the existing body/hand masks stay untouched.
+    // Tracked first-person hands and their attached arms must not disappear
+    // when any animation brings the camera inside the native proximity sphere.
     flags&=~2u;
     original(item,drawType);
     flags=(flags&~2u)|modern;
@@ -2886,7 +2923,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         g_bodySkinScope=previousScope;
         return;
     }
-    if (g_active && g_rollHidden && g_boundDll && g_boundBase &&
+    if (g_active && g_rollHidden && !MotionReady() && g_boundDll && g_boundBase &&
         item == *Ptr<uint8_t*>(g_boundDll->laraItem)) return;
     bool lara = false;
     if (g_active && item && g_boundDll) {
@@ -2902,16 +2939,16 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
     }
     const bool motion = lara && MotionReady();
     const bool fullBody = lara && FullBodyIKReady();
-    // Hide crouched/prone/submerged geometry, but retain the existing tracked-hand/gun
-    // passes when available. Rolls still suppress everything above.
+    // Untracked hidden stances retain their fallback. Tracked weapons keep the
+    // body and arms; submerged geometry remains subject to the swimming gate.
     if (lara && (g_crouchHidden || g_underwaterHidden) && !motion && !fullBody) return;
     if (motion) {
-        // Full-body mode adds the torso/legs/arm chains; the two gun passes
+        // Keep torso/legs/IK arm chains even with full-body IK disabled. Gun passes
         // still contain only hands and guns, avoiding duplicate forearms.
         // Keep the complete skeleton so wrist pivot and gun placement stay put.
         auto& bits = *reinterpret_cast<uint32_t*>(item + off::item_mesh_bits);
         if (!useMeshBits) {
-            if(fullBody) {
+            if(!g_underwaterHidden) {
                 const auto savedBits=bits;const int previousArm=g_renderArm;
                 bits=UINT32_MAX & ~firstperson::HeadMeshBit & ~0x2400u;
                 g_renderArm=-1;g_bodySkinScope=true;g_bodySkinReady=false;
@@ -2925,6 +2962,17 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         const uint32_t savedMotionBits=bits;
         const int previousArm=g_renderArm;
         const int previousHandJoint=g_renderHandJoint;
+        // Native hand/weapon geometry also owns the forearms (0x600/0x3000).
+        // The main body pass cannot restore vertices from a different mesh.
+        // Render those forearms with the articulated IK palette before the
+        // existing rigid hand/gun passes, using the original skin weights.
+        const uint32_t forearms=bits&0x1200u;
+        if (forearms && !g_underwaterHidden) {
+            bits=forearms;g_renderArm=-1;g_renderHandJoint=-1;
+            g_bodySkinScope=true;g_bodySkinReady=false;
+            g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
+            g_bodySkinScope=g_bodySkinReady=false;
+        }
         // Long guns can put both hands in one native mesh pass. Split it
         // before applying the two independent wrist transforms.
         for (int hand=0;hand<2;++hand) {
@@ -3021,7 +3069,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
                       g_active && !fullBodyIK && item && (locomotion::IsLedgeHangState(
                           *reinterpret_cast<const int16_t*>(item+off::item_anim_state)) ||
                           locomotion::IsLedgeMountState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state))),
-                      g_active && item && LaraWaterStatus()==1,hideUnarmedArms,MotionReady()); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
+                      g_active && item && LaraWaterStatus()==1,hideUnarmedArms,MotionReady() || unarmedIK); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
 }
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {

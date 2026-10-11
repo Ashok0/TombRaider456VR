@@ -1,0 +1,16 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T00:34:37.6747284-04:00",
+    "base_commit":  "7de949d860a6080cc5b01a21d892ed15bf762317",
+    "dll_sha256":  "8A4717CE2035ABA0C89D187E70A57AD3FD202408140C9E3725CDBC5EC5277BC6",
+    "ini_sha256":  "905AACA93289A985E011C5B7BED7DB09B5D92894695112F3CF29B5D7642266EE",
+    "previous_dll_sha256":  "8432AF2191F572DC13FCAEE83B0B7CC2BCD03F6B64DB69FEBBBFF6F4DB97293D",
+    "backup":  "build/before-armed-body-20261011-003436",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  1524030,
+    "jiggle_integration_cases":  12,
+    "hardware_verified":  false,
+    "build_log":  "build/armed-body-build.log",
+    "test_log":  "build/armed-body-tests.log",
+    "address_log":  "build/armed-body-addresses.log"
+}

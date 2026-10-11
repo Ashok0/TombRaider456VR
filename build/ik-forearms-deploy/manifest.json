@@ -1,0 +1,16 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T00:50:15.8922261-04:00",
+    "dll_sha256":  "1DCC62D3FAA31CA8811FFD92E519FE6C8E645E38B0781E80CEFCB4FC142C8502",
+    "ini_sha256":  "79AAF86409D2C4B39E4E0DB92EB7C1AB7E543CA61BFAE9F83D89D9CFF7A4E4B8",
+    "backup":  "build/before-ik-forearms-20261011-005015",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "FirstPersonUnarmedIK=1; full-body remains disabled; all other settings preserved",
+    "regression_checks":  1539541,
+    "jiggle_integration_cases":  12,
+    "gpu_checks":  3226,
+    "hardware_verified":  false,
+    "build_log":  "build/ik-forearms-build.log",
+    "test_log":  "build/ik-forearms-tests.log",
+    "gpu_log":  "build/ik-forearms-gl.log"
+}

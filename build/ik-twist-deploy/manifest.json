@@ -1,0 +1,15 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T01:04:42.3592302-04:00",
+    "dll_sha256":  "6A6D73B0DFB5B3F9EE394E7E0419414A229C2F05A8794959979EF547672588EA",
+    "ini_sha256":  "79AAF86409D2C4B39E4E0DB92EB7C1AB7E543CA61BFAE9F83D89D9CFF7A4E4B8",
+    "backup":  "build/before-ik-twist-20261011-010442",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1541041,
+    "jiggle_integration_cases":  12,
+    "hardware_verified":  false,
+    "build_log":  "build/ik-twist-build.log",
+    "test_log":  "build/ik-twist-tests.log",
+    "reproduction_log":  "build/ik-twist-before.log"
+}

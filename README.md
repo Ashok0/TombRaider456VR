@@ -72,15 +72,17 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
-### Session changes and current deployment (2026-10-04 to 2026-10-09)
+### Session changes and current deployment (2026-10-04 to 2026-10-11)
 
 This summary covers the October 4 work, the rollback/redeploy after midnight,
-and the subsequent shadow, zigzag, controller-arm and monkey-bar corrections and gun haptics through October 9
+and the subsequent shadow, zigzag, controller-arm, monkey-bar, gun haptics and armed body corrections through October 11
 (America/New_York). Changes below apply to TR4/5 first person unless noted;
 jump priority also applies in third person.
 
 | Change | Current status |
 |---|---|
+| Natural controller wrist rotation | October 11: tracked arms now follow full controller roll using the mesh's rest-pose forearm/hand relationship. The previous clamp and return toward neutral are bypassed for both armed and holstered arms. See [natural wrist rotation](#natural-controller-wrist-rotation-2026-10-11). |
+| Body and IK arms with tracked guns | October 11: retain body and controller arms, including the forearms in separate weapon meshes. Gun position, rotation and pivot stay unchanged. Unarmed IK is enabled so holstering retains controller hands; full-body IK stays off. See [forearm and holster correction](#ik-forearm-rendering-and-holstered-hands-2026-10-11). |
 | Crouched sideways clipping and bouncy movement | October 9: stable low eye, crouch-height wall/floor/ceiling clearance and smooth stance changes. Both IK modes disabled following rollback. See [crouch camera](#crouched-camera-collision-and-smooth-movement-2026-10-09). |
 | A missed during walking/start/stop animations | October 9: port the TR1-3 jump-priority behavior to TR4/5 first and third person; retain quick taps until native simulation and restart ordinary gaits at standing jump dispatch. See [jump priority](#jump-priority-over-walking-animations-2026-10-09). |
 | LS left/right/back launching Lara during forward movement | Retained: apply movement only when the native gait matches stick intent; preserve native stored speed. The user confirmed the launch fix. See [gait handoff](#forward-to-sideback-animation-handoff-2026-10-03). |
@@ -111,21 +113,123 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 10 current deployment:** Release/x64 from "Allow jump between other animation frames"
-(`befbeb5`) plus the crouch camera, LS steering, floating-weapon and hand-visibility changes below. The subsequent IK, height
-calibration and physical ladder experiments were discarded and remain reverted.
-Both `FirstPersonFullBodyIK=0` and `FirstPersonUnarmedIK=0` are now set in the
-repository and deployed INIs. Other installed settings and gun calibration are
+**October 11 current deployment:** Release/x64 from `7de949d` plus the armed body
+and controller-arm IK/forearm rendering and natural wrist rotation below. The earlier height calibration and
+physical ladder experiments remain reverted. `FirstPersonFullBodyIK=0`
+and `FirstPersonUnarmedIK=1` are set in the repository and deployed INIs;
+armed arm IK now activates automatically with ready tracked weapons.
+Other installed settings and gun calibration are
 preserved. Existing gun motion controls, jump priority, ledge gesture/haptics,
 shadows, switches and monkey-bar corrections remain part of this checkout.
 
-- Installed DLL SHA-256: `6B745590E120DBB2B52B29DDC3A012D9D4703FE8B3111DFE34D274B0D1DB2669`.
-- Deployment record: [crouch hand mask manifest](build/crouch-hand-mask-deploy/manifest.json).
-- Previous installed DLL and INI backup: `build/before-crouch-hand-mask-20261010-001136/`.
+- Installed DLL SHA-256: `A7E7B09FA6AFA677BE29EAB634D5E0554820843240D18CE1F29610D4611E8F82`.
+- Deployment record and previous DLL/INI backup location: [natural wrist rotation manifest](build/ik-natural-deploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. In-headset confirmation is pending.
 
+### Natural controller wrist rotation (2026-10-11)
+
+The preceding twist correction made the reported behavior worse and has been
+superseded. Tracked arms now use a separate solve that preserves the controller's
+full wrist orientation and calibrated position, for both armed and holstered
+hands. It does not clamp roll at 90 degrees or turn the hand back toward neutral
+at 135–180 degrees.
+
+Forearm rotation follows the hand using the actual rest-pose relationship
+between their joint axes. It rotates around the elbow-to-wrist axis, preserving
+both endpoints and the elbow bend. The solve uses the current controller pose
+without accumulating turns or borrowing independent gun/recoil animation roll.
+Partial HD meshes recover missing rest bindings from the canonical skeleton.
+Native ledge grips and leg IK retain their existing positional solve. The
+floating gun transforms, firing, shadows and pre-IK jiggle skeleton are unchanged.
+
+Validation passed **1,594,271 regression checks**, including mirrored arms,
+different body headings/rest axes, continuous repeated full wrist turns,
+partial meshes, gun position/pivot checks and **12 jiggle integration cases**,
+plus the Release/x64 build. In-headset validation remains pending. The installed
+INI is unchanged: arm IK is enabled and full-body IK is disabled.
+
+### IK forearm twist correction (2026-10-11)
+
+**Superseded:** the user reported worse results. Tracked arms now use the natural
+controller rotation solve above; this earlier limiter correction was reverted.
+
+The unarmed wrist limiter untwisted the forearm using the native hand's
+rotation. Those two joints can rotate independently, and a missing hand joint
+in a partial mesh is reconstructed with identity axes. Applying that hand's
+inverse roll to the forearm could rotate it in the wrong direction and collapse
+the blended wrist geometry into a knot. The correction now removes the
+forearm's own animated roll before distributing the bounded controller twist.
+
+A new regression reproduces the failure with independent native forearm and
+hand rotations, including opposing rotations, and checks both the resulting
+forearm orientation and wrist cross-section. **1,541,041 regression checks**,
+including the existing repeated full-turn, gun position/pivot and **12 jiggle
+integration cases**, passed alongside the Release/x64 build. Armed gun-hand
+transforms are unchanged. The deployed INI is preserved: unarmed arm IK stays
+enabled and full-body IK stays disabled. In-headset confirmation is pending.
+
+### IK forearm rendering and holstered hands (2026-10-11)
+
+The first armed-body change left unarmed IK disabled, so holstering restored
+native animated arms. `FirstPersonUnarmedIK=1` now enables the existing unarmed
+controller arms, resting hands and wrist safeguards. `FirstPersonFullBodyIK=0`
+remains unchanged. Active unarmed IK also bypasses the native camera/body
+proximity rejection, just like armed tracked hands.
+
+Native weapon meshes contain forearms as well as hands. The previous tracked
+hand-only draw discarded those forearm vertices; restoring the main body draw
+could not restore a separate mesh. The renderer now draws those forearms with
+the articulated IK palette, then uses the unchanged rigid hand/gun passes.
+The arm solve also handles partial body/attachment skeletons by recovering
+missing shoulder, elbow or wrist points from native animation. Gun positions,
+rotations, calibrated pivots and firing transforms remain unchanged. Periodic
+logs now report actual arm IK palette successes and failures separately from
+tracked gun draws.
+
+Validation: **1,539,541 first-person regression checks**, **12 jiggle integration
+cases**, **3,226 GPU shader checks** (including 480 compatible shipped shader
+pairs), and the Release/x64 build passed. Added tests exercise the actual
+forearm/hand draw split, partial skeletons and repeated equip/holster transitions.
+Native game rendering is stubbed in the first-person tests; headset confirmation
+is still needed. Deployment changes only the DLL and the unarmed IK setting;
+other installed settings and gun calibration are preserved.
+
+### Armed body and exact controller-arm IK (2026-10-11)
+
+This initial deployment was followed by the forearm/holster correction above.
+
+Ready tracked weapons now keep Lara's body and IK arms visible in TR4/5 HD first
+person, including crouching and rolls. The native camera/body proximity test is
+bypassed during armed first-person rendering so it cannot intermittently hide
+the body and hands. Head hiding and native shadow rendering remain intact.
+
+Arms reach the same calibrated wrist position, orientation and grip pivot as
+the existing floating gun hands. Armed wrists bypass the unarmed wrist limits;
+the separate floating hand/gun renderer, gun calibration and muzzle/aim transforms
+are unchanged. Optional full-body IK also uses this exact armed wrist target
+through traversal states. Unarmed ledge grips retain their native animation.
+Arm reach follows the controller even beyond the natural reach of the rig.
+
+This armed arm solve does not require enabling `FirstPersonUnarmedIK` or
+`FirstPersonFullBodyIK`. Both remain disabled in the installed INI, which was
+preserved byte-for-byte. Arm-only IK leaves the animated torso/legs in place,
+and jiggle physics continues to read the complete pre-IK skeleton.
+
+Validation passed: **1,524,030 regression checks**, **12 jiggle integration
+cases**, the Release/x64 rebuild and address checks across all four supported
+game DLLs. Tests compare the actual armed IK wrist palette against the floating
+hand palette in both games, all six weapons, standing/running/jumping/crouching/
+rolling/traversal states, wide controller rotations and reaches, and 15/33-joint
+rigs. They also check calibrated pivots, unchanged gun poses and physics palettes,
+body/hand visibility, and right-hand-only tracking for single weapons. Native
+rendering is stubbed in these tests; in-headset confirmation remains pending.
+The installed DLL hash matches the build.
+
 ### Crouched gun visibility: draw-phase mask correction (2026-10-10)
+
+The October 11 armed-body change supersedes the hand-only visibility mask
+described below: ready tracked weapons now retain the body and IK arms as well.
 
 The first visibility patch did not solve the reported invisible guns. The next
 log confirmed that its hook installed but tracked hand draws stayed at zero.
