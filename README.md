@@ -778,6 +778,44 @@ Logs: `build/landing-neck-before-tests.log`, `build/landing-neck-tests.log`,
 `build/landing-neck-native-tables.log`, and `build/landing-neck-build.log`.
 In-headset visual confirmation remains pending.
 
+### Physical wall switches in VR (2026-10-11)
+
+In TR4/5 first person, holster your weapons, stand within normal switch-use
+range, and bring the right controller near an ordinary wall lever. Press and
+hold **Right Grip**, then move your hand along the lever's arc to the opposite
+end stop. Lara's grip stays attached to the selected point on the lever.
+You can stop or reverse partway through the pull. Release Grip before grabbing again.
+Right Grip keeps its Walk binding when no eligible switch is within reach.
+
+The controller selects the lever's pose directly; there is no timed lever
+playback or Lara switch-use animation on this path. The native poses define
+its mechanical travel, and the nearest pose to your hand is displayed. Releasing
+early restores its starting position without activating anything. At the end
+stop, native activation and completion commands run once in the same tick,
+preserving level triggers and switch control without replaying the motion.
+This supports ordinary wall levers, including compatible TR5 type-4 levers.
+Wheels, pulleys, underwater switches, independent HD animation skeletons and
+special animation-command variants retain their existing controls.
+Using Y also retains the existing native interaction and camera behavior.
+No held-camera switch logic is restored.
+
+Grab detection requires a fresh nearby collision candidate, native spatial
+reach, and tracked hand proximity. The grip point follows a moving lever joint;
+the arm IK uses that same point. Moving over 25 cm away from its path, loss of
+eligibility, tracking jumps and stale samples cancel the pull.
+The native handler retains activation, sounds and level-specific callbacks;
+only its Lara alignment and animation changes are suppressed during a physical
+commit. Native switch control runs once to retain code bits and timer handling;
+the remaining animation commands are consumed without further timer ticks.
+Hook and pose-function entry bytes are checked for each supported TR4/5 build.
+
+Validation covers both directions and games, partial holds, reversal, grip
+attachment, cancellation, native completion and timer behavior, viewport state,
+grab distance, native body reach, backside rejection, special-switch fallback,
+input priority and unchanged Lara/camera state. The actual pose-path builder
+also passes 38 installed wall-lever animation paths; 16 special variants/states
+retain native controls. Headset confirmation is still pending.
+
 ### First-person Y / switch alignment (2026-10-08)
 
 Unarmed Y already reaches native Action, but first-person head following and

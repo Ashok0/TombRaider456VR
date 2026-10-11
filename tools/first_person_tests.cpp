@@ -610,6 +610,7 @@ uint64_t GameDllBase() { return g_boundBase; }
 #include "unarmed_ik_regression.inl"
 #include "fullbody_ik_regression.inl"
 #include "jump_priority_regression.inl"
+#include "physical_switch_regression.inl"
 
 int main() {
     // Haptic envelopes use elapsed time, not render frame count or trigger polls.
@@ -2197,6 +2198,7 @@ int main() {
         physicalPose(0); FirstPersonRecenter();
         physicalPose(0, 0.2f, 0, -0.1f);
     };
+    TestPhysicalSwitch(resetRoomscale,rva,physicalPose);
     for (int which : {0, 1}) {
         game = dll.game = which;
         resetRoomscale();

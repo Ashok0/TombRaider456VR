@@ -136,6 +136,8 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
     const VRSystem::HandState& L = h[0];
     const VRSystem::HandState& R = h[1];
     touchGripAction = gameplay && L.grip > 0.5f && R.grip > 0.5f;
+    const bool switchGrip = FirstPersonSwitchGrip(R.grip > 0.5f,
+        gameplay && R.valid && !touchGripAction && !L.btnUpper);
 
     // Set once the Menu chord fires, and honoured where the triggers are
     // written further down. Declared here because that assignment happens after
@@ -236,7 +238,7 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
     const bool rightGrip = R.grip > 0.5f;
     const bool sneakChord = rightGrip && L.btnUpper && !touchGripAction &&
         !(gameplay && FirstPersonActive());
-    if (rightGrip && !touchGripAction) b |= XB_X;
+    if (rightGrip && !touchGripAction && !switchGrip) b |= XB_X;
     if (sneakChord) {
         b &= static_cast<uint16_t>(~(XB_X | XB_Y));
         b |= XB_RIGHT_SHOULDER;

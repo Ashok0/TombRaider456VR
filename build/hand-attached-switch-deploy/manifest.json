@@ -1,0 +1,17 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T17:30:36.1228966-04:00",
+    "base_commit":  "16e46ed",
+    "dll_sha256":  "CA1A41DA7FF53F7B955DDD3DBEDF57E8F84218CE47D1611EC3D644FAD4971B4E",
+    "ini_sha256":  "79AAF86409D2C4B39E4E0DB92EB7C1AB7E543CA61BFAE9F83D89D9CFF7A4E4B8",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-hand-attached-switch-20261011-173035",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1690413,
+    "debug_regression_checks":  1690413,
+    "asset_pose_paths_passed":  38,
+    "asset_special_variant_fallbacks":  16,
+    "native_binary_checks":  "TR4/TR5 reference and retail: signatures, native calls, tables, viewport state",
+    "interaction":  "hand-driven pose with attached right grip; native completion at endpoint without timed playback",
+    "hardware_verified":  false
+}

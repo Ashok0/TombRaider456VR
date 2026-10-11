@@ -15,6 +15,7 @@
 #include "FirstPersonBodyIK.h"
 #include "MotionGunInput.h"
 #include "LedgePullGesture.h"
+#include "SwitchPosePath.h"
 #include "LedgeGrabFeedback.h"
 
 #include <windows.h>
@@ -1022,6 +1023,8 @@ GunVec JointPoint(uint8_t* item, int joint, int x, int y, int z) {
     return {float(p.x), float(p.y), float(p.z)};
 }
 
+void AttachPhysicalSwitchHand(int hand,motiongun::Frame& wrist,motiongun::Vec trackedGrip);
+
 bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller, GunVec* gripLocal=nullptr) {
     if (hand < 0 || hand > 1) return false;
     if (const auto* reason=ControllerTrackingBlockedReason()) {
@@ -1051,12 +1054,14 @@ bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller,
     // local gun space so that point, rather than a displaced wrist origin,
     // stays on the tracked controller through wrist and physical body turns.
     out.basis = motiongun::GunBasis(controller);
+    const auto trackedGrip=out.origin;
     out.origin = motiongun::GripFrame(out.basis, out.origin,
         calibration.gripForwardMetres*scale,
         calibration.raiseMetres*scale,calibration.rightMetres*scale).origin;
 
     if (gripLocal) *gripLocal=motiongun::GripPointLocal(calibration.gripForwardMetres*scale,
         calibration.raiseMetres*scale,calibration.rightMetres*scale);
+    AttachPhysicalSwitchHand(hand,out,trackedGrip);
     motiongun::Frame inverse{};
     return motiongun::Inverse(out,inverse); // Reject invalid tracked rotations too.
 }
@@ -2373,6 +2378,8 @@ struct GroundJumpInputScope {
     }
 };
 
+#include "PhysicalSwitch.inl"
+
 bool UpdateLedgePull(uint8_t* item, uint64_t now) {
     // IsLedgeHangState is a visibility group which also includes monkey bars.
     // Native TR4/5 lara_col_hang mounts from AS_HANG (10), animation 96 only.
@@ -3429,10 +3436,12 @@ bool Install(const GameDllLayout& d, uint64_t base) {
         Log(g_crouchGunsReady ? "firstperson: crouched tracked weapons enabled" :
             "firstperson: crouched tracked weapons unavailable; native restrictions retained");
     }
+    InstallPhysicalSwitches(d,base);
     return true;
 }
 
 void Remove() {
+    RemovePhysicalSwitches();
     g_hCrouchDraw.Remove();
     g_crouchGunsReady=false;g_crouchWeaponScope=nullptr;g_hCrouchGun.Remove();
     g_hDrawActionIndicators.Remove();
@@ -3626,6 +3635,7 @@ void FirstPersonUpdate() {
 }
 
 void FirstPersonRecenter() {
+    ResetPhysicalSwitch();
     g_groundJump.Reset();
     g_ledgePull.Reset(); g_ledgeGrab.Reset();
     g_renderTurn.Reset();
@@ -3646,6 +3656,7 @@ void FirstPersonTrackingOriginChanged(float yawCorrection) {
 }
 
 void FirstPersonToggle() {
+    ResetPhysicalSwitch();
     g_unarmedArmVisibility={};
     g_unarmedTwist[0]=g_unarmedTwist[1]={};
     ResetMovementStabilization();
@@ -3705,6 +3716,10 @@ const float* FirstPersonBodyPalette(uint64_t& mask,int& count) {
 }
 const float* FirstPersonRenderBodyPalette(uint64_t& mask,int& count) {
     return FirstPersonBodyPalette(mask,count) ? g_bodyRenderPalette : nullptr;
+}
+
+bool FirstPersonSwitchGrip(bool down, bool allowed) {
+    return UpdatePhysicalSwitchGrip(down,allowed,GetTickCount64());
 }
 
 bool FirstPersonActive() {

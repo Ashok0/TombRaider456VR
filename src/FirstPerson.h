@@ -11,6 +11,8 @@ void FirstPersonRecenter();
 void FirstPersonTrackingOriginChanged(float yawCorrection);
 void FirstPersonShutdown();
 bool FirstPersonActive();
+// Consume Right Grip only while a nearby physical wall lever is grabbed.
+bool FirstPersonSwitchGrip(bool down, bool allowed);
 // True only while the native light camera draws its shadow map.
 bool FirstPersonShadowPass();
 // Unmasked palette only within Lara's first-person body draw.
