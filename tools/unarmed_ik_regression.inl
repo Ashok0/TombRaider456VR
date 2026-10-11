@@ -122,6 +122,7 @@ void TestUnarmedIK() {
     const auto savedPose=g_scenePose;const auto savedHeading=g_headingBase;
     const auto savedOffset=g_bodyVisualOffset;
     const auto savedWall=g_bodyWallOffset;
+    const auto savedLadder=g_ladderTorsoOffset;
     const auto savedLeftTwist=g_unarmedTwist[0],savedRightTwist=g_unarmedTwist[1];
     const auto savedGetJoints=g_hGetJoints.m_trampoline;
     const auto savedShadow=g_shadowDll;
@@ -628,6 +629,66 @@ void TestUnarmedIK() {
                 Check(std::fabs(gaitPalette[i]-palette[i])<.003f,"walk/run state change cannot switch or twist tracked hands");
         }
         TestDynamicBonesVisibility(palette);
+        // Ladder camera clearance retains the full body, with feet/pelvis and
+        // wrist grips at their authored positions. Exercise real bind helpers.
+        {
+            const auto oldFit=g_bodyVisualOffset,oldWall=g_bodyWallOffset;
+            g_bodyVisualOffset=g_bodyWallOffset={};status=1;
+            for(int which:{0,1}) for(int climb:{56,57,58,59,60,61})
+            for(float yaw:{0.f,.8f,-1.9f}) {
+                dll.game=which;*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=int16_t(climb);
+                g_ladderTorsoOffset=locomotion::Rotate({0,-128},yaw);
+                float climbPalette[33*12]{};Detour_GetJoints(itemMemory,climbPalette,0);
+                const Vec offset{g_ladderTorsoOffset.x,0,g_ladderTorsoOffset.z};
+                for(int i=0;i<count;++i) {
+                    const auto original=Multiply(ReadRows(fixture+i*12),bind[i]);
+                    const auto actual=Multiply(ReadRows(climbPalette+i*12),bind[i]);
+                    const int joint=mapping[i];
+                    if(joint<7)
+                        Check(!std::memcmp(fixture+i*12,climbPalette+i*12,12*sizeof(float)),
+                              "ladder torso clearance leaves pelvis feet and leg animation native");
+                    if(joint==7 || joint==14 || joint==8 || joint==11)
+                        Check(nearVec(actual.origin,Add(original.origin,offset)),
+                              "ladder torso and shoulders keep the same safe camera clearance");
+                    if(joint==10 || joint==13) {
+                        Check(nearVec(actual.origin,original.origin),"ladder hand remains on its authored rung");
+                        for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                            Check(std::fabs(actual.basis.r[r][c]-original.basis.r[r][c])<.003f,
+                                  "ladder clearance cannot twist the native rung grip");
+                    }
+                }
+            }
+            if(count==33) {
+                int32_t savedMapping[33];std::memcpy(savedMapping,mapping,sizeof(mapping));
+                float complete[33*12]{};Detour_GetJoints(itemMemory,complete,0);
+                for(int hand=0;hand<2;++hand) for(bool attachment:{false,true}) {
+                    const int first=hand ? 8 : 11;
+                    for(int i=0;i<count;++i) {
+                        const int joint=savedMapping[i];
+                        mapping[i]=attachment ? (joint==first+1 || joint==first+2 ? joint : -1)
+                            : (joint==10 || joint==13 ? -1 : joint);
+                    }
+                    float partial[33*12]{};Detour_GetJoints(itemMemory,partial,0);
+                    for(int i=0;i<count;++i) if(mapping[i]>=first && mapping[i]<=first+2) {
+                        const auto expected=Multiply(ReadRows(complete+i*12),bind[i]);
+                        const auto actual=Multiply(ReadRows(partial+i*12),bind[i]);
+                        Check(firstperson::Length(Sub(actual.origin,expected.origin))<1.5f,
+                              "separate ladder arm meshes retain their native rung grip and shoulder seam");
+                    }
+                }
+                std::memcpy(mapping,savedMapping,sizeof(mapping));
+                Detour_GetJoints(itemMemory,complete,0);
+            }
+            TestDynamicBonesVisibility();
+            // Shadows keep the native torso even while the eye sees clearance.
+            ShadowDll shadow{};static int ladderPass=4;shadow.renderPass=rva(&ladderPass);
+            const auto oldShadow=g_shadowDll;g_shadowDll=&shadow;
+            float shadowPalette[33*12]{};Detour_GetJoints(itemMemory,shadowPalette,0);
+            Check(!std::memcmp(shadowPalette,fixture,count*12*sizeof(float)),"ladder shadow stays native");
+            g_shadowDll=oldShadow;g_ladderTorsoOffset={};
+            g_bodyVisualOffset=oldFit;g_bodyWallOffset=oldWall;status=0;
+            *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=2;
+        }
         // Missing input and native interactions cannot leave stale IK behind.
         const auto heldWall=g_bodyWallOffset;
         for(int reason=0;reason<10;++reason) {
@@ -668,6 +729,7 @@ void TestUnarmedIK() {
     g_hGetJoints.m_trampoline=savedGetJoints;g_shadowDll=savedShadow;
     g_scenePose=savedPose;g_headingBase=savedHeading;g_bodyVisualOffset=savedOffset;
     g_bodyWallOffset=savedWall;
+    g_ladderTorsoOffset=savedLadder;
     std::memcpy(VR().m_rawControllerPose,controllers,sizeof(controllers));
     std::memcpy(itemMemory,savedItem.data(),sizeof(itemMemory));std::memcpy(laraMemory,savedLara.data(),sizeof(laraMemory));
     config=settings;dll=savedDll;testCalibration=savedCalibration;

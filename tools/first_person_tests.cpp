@@ -448,6 +448,19 @@ void __cdecl FakeGaitJoint(uint8_t* item,tr::PHD_VECTOR* v,int joint,int frac) {
         int32_t(std::lround(old.y_pos+(p.y_pos-old.y_pos)*t-700+gaitSway.y)),
         int32_t(std::lround(old.z_pos+(p.z_pos-old.z_pos)*t+flat.z))};
 }
+float ladderHeadPitch=0;
+void __cdecl FakeLadderHead(uint8_t* item,tr::PHD_VECTOR* v,int joint,int frac) {
+    Check(joint==14,"ladder camera queries the native head");
+    const auto& p=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    const auto& prev=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos_prev);
+    const float t=frac/256.f;
+    const float yaw=tr::Radians(prev.y_rot)+tr::Wrap(tr::Radians(p.y_rot)-tr::Radians(prev.y_rot))*t;
+    const float c=std::cos(ladderHeadPitch),s=std::sin(ladderHeadPitch);
+    const auto flat=tr::locomotion::Rotate({float(v->x),v->y*s+v->z*c},yaw);
+    *v={int32_t(std::lround(prev.x_pos+(p.x_pos-prev.x_pos)*t+flat.x)),
+        int32_t(std::lround(prev.y_pos+(p.y_pos-prev.y_pos)*t-700+v->y*c-v->z*s)),
+        int32_t(std::lround(prev.z_pos+(p.z_pos-prev.z_pos)*t+flat.z))};
+}
 void __cdecl FakeAboveWater(uint8_t* item, void*) {
     ++simulationTicks;
     seenInput = actionInput;
@@ -3845,6 +3858,46 @@ int main() {
         config.firstPersonBodyFollowsHead=true;
     }
     config.firstPersonAnchorZ=144;
+    // Ladder camera retraction must be paired with upper-body clearance,
+    // independently of head animation pitch and without moving through rungs.
+    {
+        const auto savedSettings=config;const auto savedJoint=dll.getJointAbsPositionLerp;
+        for(int which:{0,1}) for(float heading:{0.f,.8f,-1.9f}) for(int anchor:{80,140,220}) {
+            game=dll.game=which;resetRoomscale();ResetMovementStabilization();
+            config.firstPersonBodyFollowsHead=false;config.firstPersonAnchorZ=anchor;
+            config.firstPersonInteractionAnchorZ=16;
+            physicalPose(0);FirstPersonRecenter();g_headingBase=heading;
+            pos.y_rot=prev.y_rot=Angle(heading);fraction=256;gaitSway={};
+            dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+            Check(Anchor(camera),"ladder fixture starts with standing calibration");
+            const auto calibration=g_groundEye.local;
+            dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeLadderHead));
+            for(int climb:{56,57,58,59,60,61}) for(float pitch:{-1.2f,-.3f,.7f})
+            for(int f:{0,64,128,256}) {
+                state=int16_t(climb);fraction=f;ladderHeadPitch=pitch;
+                Head(.3f,-1.5f);
+                const auto before=pos;
+                Check(Anchor(camera),"ladder camera stays first person through rung strokes");
+                PHD_VECTOR native{config.firstPersonAnchorX,config.firstPersonAnchorY,16};
+                FakeLadderHead(itemMemory,&native,14,f);
+                Check(camera.x_pos==native.x && camera.y_pos==native.y && camera.z_pos==native.z,
+                      "ladder clearance does not push the viewpoint through the rung wall");
+                PHD_VECTOR neck{0,config.firstPersonAnchorY,0};FakeLadderHead(itemMemory,&neck,14,f);
+                const auto eyeFromTorso=locomotion::Rotate(
+                    {camera.x_pos-neck.x-g_ladderTorsoOffset.x,camera.z_pos-neck.z-g_ladderTorsoOffset.z},
+                    -Radians(pos.y_rot));
+                Check(std::fabs(eyeFromTorso.z-std::max(anchor,140))<.01f,
+                      "ladder torso stays behind the eye through animation pitch and downward HMD gaze");
+                Check(!std::memcmp(&pos,&before,sizeof(pos)) &&
+                      !std::memcmp(&g_groundEye.local,&calibration,sizeof(calibration)),
+                      "ladder clearance cannot alter native climb root or standing calibration");
+            }
+            state=2;dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));Anchor(camera);
+            Check(g_ladderTorsoOffset.x==0 && g_ladderTorsoOffset.z==0,
+                  "leaving ladder releases only ladder torso correction");
+        }
+        config=savedSettings;dll.getJointAbsPositionLerp=savedJoint;
+    }
     // Compare actual camera-relative rendered bones AND deformed chest, not
     // just the world-space fitting variable: the eye retracts at a wall.
     {

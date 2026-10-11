@@ -186,6 +186,7 @@ stabilization::StanceEye g_stanceEye;
 stabilization::MountBodyTransition g_mountBodyTransition;
 locomotion::Vec g_bodyVisualOffset{};
 locomotion::Vec g_bodyWallOffset{};
+locomotion::Vec g_ladderTorsoOffset{};
 float g_lastBodyYaw=0;
 int g_headingLevel=-1;
 bool g_bodySkinScope=false, g_bodySkinReady=false;
@@ -211,6 +212,7 @@ void ResetMovementStabilization() {
     g_mountBodyTransition.Reset();
     g_bodyVisualOffset={};
     g_bodyWallOffset={};
+    g_ladderTorsoOffset={};
 }
 
 bool g_meshOverride = false;
@@ -1388,6 +1390,58 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count) {
     return solved[0] || solved[1];
 }
 
+// Ladder eyes use the short interaction anchor to stay outside the wall.
+// Move only the upper body behind that eye; keep the pelvis/feet authored and
+// reconnect both arms to their original rung grips, without controller IK.
+bool ApplyLadderTorsoClearance(uint8_t* item,float* joints,int count) {
+    using namespace motiongun;
+    if (!locomotion::IsLadderState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state)) ||
+        (g_ladderTorsoOffset.x==0 && g_ladderTorsoOffset.z==0) || count<15 || count>33) return false;
+    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
+    if(object<0) return false;
+    const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+    const auto* geom=obj+off::object_geom;
+    const int bones=*reinterpret_cast<const int32_t*>(geom+28);
+    const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+    const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+    if(bones>0 && (bones!=count || !mapping || !poses)) return false;
+    const Frame shift{firstperson::IdentityBasis(),{g_ladderTorsoOffset.x,0,g_ladderTorsoOffset.z}};
+    Frame corrections[6]{};
+    for(int hand=0;hand<2;++hand) {
+        const int first=hand ? 8 : 11;
+        Frame original[3]{},chain[3]{},changes[3]{};
+        bool present[3]{};int reference=-1;
+        for(int i=0;i<3;++i) {
+            Frame inverse{};
+            present[i]=ReadIKJoint(obj,joints,count,bones,mapping,poses,first+i,original[i]) &&
+                Inverse(original[i],inverse);
+            if(present[i]) reference=i;
+        }
+        if(reference<0) continue; // This attachment may contain only one arm.
+        if(!present[0] || !present[1] || !present[2]) {
+            const auto world=JointPoint(item,first+reference,0,0,0);
+            for(int i=0;i<3;++i) if(!present[i])
+                original[i]={firstperson::IdentityBasis(),Add(original[reference].origin,
+                    Sub(JointPoint(item,first+i,0,0,0),world))};
+        }
+        for(int i=0;i<3;++i) chain[i]=Multiply(shift,original[i]);
+        if(!firstperson::SolveArm(chain,original[2],Sub(original[1].origin,original[0].origin),
+                                 changes,nullptr,nullptr,false)) return false;
+        for(int i=0;i<3;++i) corrections[hand*3+i]=Multiply(changes[i],shift);
+    }
+    for(int i=0;i<count;++i) {
+        const int joint=mapping ? mapping[i] : i;
+        if(joint<7 || joint>14) continue;
+        const float* b=joints+i*12;
+        if(b[0]==0 && b[1]==0 && b[2]==0 && b[4]==0 && b[5]==0 && b[6]==0 &&
+           b[8]==0 && b[9]==0 && b[10]==0) continue;
+        const Frame& correction=joint>=11 && joint<=13 ? corrections[joint-11] :
+            joint>=8 && joint<=10 ? corrections[joint-8+3] : shift;
+        WriteRows(Multiply(correction,ReadRows(joints+i*12)),joints+i*12);
+    }
+    return true;
+}
+
 int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     g_renderHandJoint = -1;
     g_bodySkinReady=false;
@@ -1401,6 +1455,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
         item==*Ptr<uint8_t*>(g_boundDll->laraItem)) {
         if (BodyVisualOffsetApplies(item))
             stabilization::OffsetBodyPalette(joints,count,BodyRenderOffset());
+        ApplyLadderTorsoClearance(item,joints,count);
         const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
         if (g_bodySkinScope && object>=0) {
             const auto* geom=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride+off::object_geom;
@@ -2751,6 +2806,7 @@ void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose,const PHD_VE
 
 bool Anchor(PHD_3DPOS& pose) {
     g_bodyWallOffset={};
+    g_ladderTorsoOffset={};
     uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
     if (!item) return false;
     const int joint = Cfg().firstPersonJoint;
@@ -2791,6 +2847,17 @@ bool Anchor(PHD_3DPOS& pose) {
     pose.z_pos = head.z;
     pose.x_rot = 0;
     UpdateLocomotion(pose);
+    if (locomotion::IsLadderState(state)) {
+        // The native head can pitch through a rung stroke. Define clearance
+        // in Lara's facing frame, not that pitching head frame or HMD gaze.
+        PHD_VECTOR neck{0,Cfg().firstPersonAnchorY,0};
+        reinterpret_cast<Fn_GetJointAbsPositionLerp>(
+            g_boundBase+g_boundDll->getJointAbsPositionLerp)(item,&neck,joint,frac);
+        const float yaw=Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t;
+        const auto safe=locomotion::Rotate({float(Cfg().firstPersonAnchorX),
+            float(std::max(Cfg().firstPersonAnchorZ,140))},yaw);
+        g_ladderTorsoOffset={head.x-neck.x-safe.x,head.z-neck.z-safe.z};
+    }
     if (locomotion::IsGroundRollState(state) && LaraWaterStatus()==0) {
         // Keep the horizontal anchor in the new facing direction, but retain
         // the animated head height so the view drops with the roll. Clearance
@@ -3078,6 +3145,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         if (!g_runtimeEnabled || !Cfg().firstPerson) g_groundEye.Reset();
         g_bodyVisualOffset={};
         g_bodyWallOffset={};
+        g_ladderTorsoOffset={};
         g_mountBodyTransition.Reset();
         g_bodyTime = {};
         g_dragPrevious = g_dragCurrent = g_dragShown = {};

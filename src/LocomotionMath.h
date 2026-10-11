@@ -86,6 +86,9 @@ inline bool IsLedgeHangState(int state) {
 inline bool IsLedgeMountState(int state) {
     return state==19 || state==54; // pull-up/vault and gymnast pull-up
 }
+inline bool IsLadderState(int state) {
+    return state>=56 && state<=61; // stance, up, left, end, right, down
+}
 inline bool IsConstrainedInteractionState(int state) {
     // Classic states retained by TR4/5: hang/pull-up, push/pull, climb.
     // Do not carry over TR3-only hang-turn state numbers.
