@@ -7,6 +7,8 @@ namespace tr {
 void FirstPersonUpdate();
 void FirstPersonToggle();
 void FirstPersonRecenter();
+// Runtime System recenter changed the tracking basis; preserve world heading.
+void FirstPersonTrackingOriginChanged(float yawCorrection);
 void FirstPersonShutdown();
 bool FirstPersonActive();
 // True only while the native light camera draws its shadow map.

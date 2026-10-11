@@ -63,7 +63,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
 | 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
 | Swan Dive | Jump (A) + Move (LS) + Roll (B) |
-| Recenter Camera | System (Hold) |
+| Recenter Camera + Calibrate First-Person Height | Right System (hold for the runtime recenter) |
 | Adjust Camera Pitch | RT + RB + RS |
 | Menu | X |
 | Change Ammo  | X + Weapon equipped |
@@ -81,6 +81,8 @@ jump priority also applies in third person.
 
 | Change | Current status |
 |---|---|
+| Looking straight down rotates the torso | October 11: hold the last reliable headset heading near vertical, with hysteresis when looking back up. Full camera pitch/roll tracking remains active. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
+| Right System recenter height calibration | October 11: runtime seated/standing origin resets now recalibrate the shared headset/controller neutral, compensate origin yaw and preserve the standing body anchor. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
 | Natural controller wrist rotation | October 11: tracked arms now follow full controller roll using the mesh's rest-pose forearm/hand relationship. The previous clamp and return toward neutral are bypassed for both armed and holstered arms. See [natural wrist rotation](#natural-controller-wrist-rotation-2026-10-11). |
 | Body and IK arms with tracked guns | October 11: retain body and controller arms, including the forearms in separate weapon meshes. Gun position, rotation and pivot stay unchanged. Unarmed IK is enabled so holstering retains controller hands; full-body IK stays off. See [forearm and holster correction](#ik-forearm-rendering-and-holstered-hands-2026-10-11). |
 | Crouched sideways clipping and bouncy movement | October 9: stable low eye, crouch-height wall/floor/ceiling clearance and smooth stance changes. Both IK modes disabled following rollback. See [crouch camera](#crouched-camera-collision-and-smooth-movement-2026-10-09). |
@@ -114,7 +116,8 @@ reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
 **October 11 current deployment:** Release/x64 from `7de949d` plus the armed body
-and controller-arm IK/forearm rendering and natural wrist rotation below. The earlier height calibration and
+and controller-arm IK/forearm rendering, natural wrist rotation, vertical-view
+heading and runtime System height calibration below. Earlier height-scaling and
 physical ladder experiments remain reverted. `FirstPersonFullBodyIK=0`
 and `FirstPersonUnarmedIK=1` are set in the repository and deployed INIs;
 armed arm IK now activates automatically with ready tracked weapons.
@@ -122,10 +125,35 @@ Other installed settings and gun calibration are
 preserved. Existing gun motion controls, jump priority, ledge gesture/haptics,
 shadows, switches and monkey-bar corrections remain part of this checkout.
 
-- Installed DLL SHA-256: `A7E7B09FA6AFA677BE29EAB634D5E0554820843240D18CE1F29610D4611E8F82`.
-- Deployment record and previous DLL/INI backup location: [natural wrist rotation manifest](build/ik-natural-deploy/manifest.json).
+- Installed DLL SHA-256: `07CE6CC9B2E3A6F63FCAAA5649DAADA3000BEDFE39095F9406B341B90976BF78`.
+- Deployment record and previous DLL/INI backup location: [heading and height manifest](build/fp-heading-height-deploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. In-headset confirmation is pending.
+
+### Vertical-view heading and System height calibration (2026-10-11)
+
+The horizontal projection of the headset's forward vector becomes unreliable
+when looking straight down and reverses after crossing vertical. Body following
+previously used that heading directly. It now holds the last reliable heading
+within roughly 20 degrees of vertical and resumes after moving farther away
+from vertical. Separate entry/exit thresholds prevent boundary flicker. This
+affects body/locomotion heading; the camera retains the full tracked orientation
+and deliberate stick turning remains available.
+
+The right System button's runtime recenter now also calibrates first-person
+height. The mod listens for OpenVR seated/standing tracking-origin reset events,
+waits for a valid pose in the new origin, and captures a common neutral for the
+head and controllers. It compensates the origin's yaw change and preserves the
+standing eye anchor, so recalibration does not turn Lara or move her body root.
+World scale, gun calibration and the installed INI are unchanged. A short System
+press that only opens/closes the runtime dashboard does not recalibrate height.
+
+Validation passed **1,594,536 regression checks**, including steep pitch and
+heading noise, looking back up, both runtime reset events, delayed valid tracking,
+unchanged body/standing anchor, preserved world-space hand offsets, continued
+physical height tracking, and **12 jiggle integration cases**, plus Release/x64.
+The runtime event/pose tests use stubs; physical System-button and in-headset
+confirmation remain pending.
 
 ### Natural controller wrist rotation (2026-10-11)
 

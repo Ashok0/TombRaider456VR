@@ -3528,7 +3528,15 @@ void FirstPersonRecenter() {
     g_cameraMotionTrace = {};
     VR().RecenterFirstPersonHead();
     g_dragPrevious = g_dragCurrent = g_dragShown = {};
-    Log("firstperson: head position recentered; world heading preserved");
+    Log("firstperson: head position and height recalibrated; shared controller neutral; world heading preserved");
+}
+
+void FirstPersonTrackingOriginChanged(float yawCorrection) {
+    const float oldBase=g_headingBase;
+    g_headingBase=Wrap(g_headingBase+yawCorrection);
+    g_groundEye.Resume(true,oldBase,g_headingBase,0);
+    FirstPersonRecenter();
+    g_lastHeadWorld=Wrap(g_headingBase+VR().HeadYawRadians());
 }
 
 void FirstPersonToggle() {

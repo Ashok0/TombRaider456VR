@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T08:53:39.4237273-04:00",
+    "dll_sha256":  "07CE6CC9B2E3A6F63FCAAA5649DAADA3000BEDFE39095F9406B341B90976BF78",
+    "ini_sha256":  "79AAF86409D2C4B39E4E0DB92EB7C1AB7E543CA61BFAE9F83D89D9CFF7A4E4B8",
+    "backup":  "build/before-fp-heading-height-20261011-085339",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1594536,
+    "jiggle_integration_cases":  12,
+    "hardware_verified":  false,
+    "build_log":  "build/fp-heading-height-build.log",
+    "test_log":  "build/fp-heading-height-tests.log"
+}

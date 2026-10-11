@@ -195,6 +195,8 @@ void VRSystem::Shutdown() {
     m_compositor = nullptr;
     m_loggedTr6Origin = false;
     m_poseValid = false;
+    m_headingYawValid=m_headingYawVertical=false;
+    m_runtimeRecenterPending=m_runtimeRecenterHadYaw=false;
     m_controllerPoseValid[0] = m_controllerPoseValid[1] = false;
     m_firstPersonNeutralValid = false;
     m_thirdPersonNeutralValid = m_thirdPersonRecenterPending = false;
@@ -391,6 +393,10 @@ void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
 void VRSystem::BeginFrame() {
     m_controllerPoseValid[0] = m_controllerPoseValid[1] = false;
     if (!m_system) return;
+    // The right System button is normally owned by the runtime. Observe its
+    // tracking-origin reset, rather than attempting to remap that button.
+    vr::VREvent_t event{};
+    while(m_system->PollNextEvent(&event,sizeof(event))) HandleRuntimeEvent(event);
 
     m_gunHaptics.Update(GetTickCount64(),[&](int hand,unsigned short duration) {
         const auto role=hand==0 ? vr::TrackedControllerRole_LeftHand : vr::TrackedControllerRole_RightHand;
@@ -455,6 +461,8 @@ void VRSystem::BeginFrame() {
 
         // mDeviceToAbsoluteTracking is head->tracking; we want tracking->head.
         m_headFromTracking = InvertRigid(FromHmd(pose));
+        ApplyRuntimeRecenter();
+        HeadYawRadians(); // Keep the last reliable heading even between FP draws.
         // Recenter must capture this pose's yaw, not the last valid frame's.
         if (FirstPersonActive() && (!wasValid || !m_firstPersonNeutralValid))
             FirstPersonRecenter();
@@ -490,8 +498,46 @@ void VRSystem::BeginFrame() {
 float VRSystem::HeadYawRadians() const {
     if (!m_system) return 0.0f;
     if (!m_poseValid) return 0.0f;
-    return std::atan2(-m_headFromTracking.r[2][0],
-                       m_headFromTracking.r[2][2]);
+    const float x=-m_headFromTracking.r[2][0],z=m_headFromTracking.r[2][2];
+    const float horizontal=std::hypot(x,z);
+    if(!std::isfinite(horizontal)) return m_headingYawValid ? m_headingYaw : 0;
+    // Yaw from a nearly vertical forward vector is undefined/noisy. Freeze
+    // the locomotion/body heading, not the full tracked camera orientation.
+    // Hysteresis prevents repeated lock/unlock while nodding at the boundary.
+    if(!m_headingYawValid) {
+        m_headingYaw=horizontal>=.35f ? std::atan2(x,z)
+            : std::atan2(m_rawHeadPose.m[2][0],m_rawHeadPose.m[0][0]);
+        m_headingYawValid=true;
+    }
+    if(horizontal<.35f) m_headingYawVertical=true;
+    else if(horizontal>.45f) m_headingYawVertical=false;
+    if(!m_headingYawVertical) m_headingYaw=std::atan2(x,z);
+    return m_headingYaw;
+}
+
+void VRSystem::HandleRuntimeEvent(const vr::VREvent_t& event) {
+    if(event.eventType!=vr::VREvent_SeatedZeroPoseReset &&
+       event.eventType!=vr::VREvent_StandingZeroPoseReset) return;
+    if(!m_runtimeRecenterPending) {
+        m_runtimeRecenterHadYaw=m_poseValid;
+        m_runtimeRecenterYaw=HeadYawRadians();
+    }
+    m_runtimeRecenterPending=true;
+}
+
+void VRSystem::ApplyRuntimeRecenter() {
+    if(!m_runtimeRecenterPending || !m_poseValid) return;
+    m_runtimeRecenterPending=false;
+    m_headingYawValid=m_headingYawVertical=false;
+    const float yaw=HeadYawRadians();
+    if(FirstPersonActive()) {
+        FirstPersonTrackingOriginChanged(m_runtimeRecenterHadYaw ? m_runtimeRecenterYaw-yaw : 0);
+        Log("vr: runtime System recenter applied; first-person height recalibrated");
+    } else {
+        m_recentreRequested=true;
+        if(CurrentGame()==0 || CurrentGame()==1) RecenterThirdPersonHead();
+    }
+    m_runtimeRecenterHadYaw=false;
 }
 
 float VRSystem::HeadPitchRadians() const {

@@ -1042,6 +1042,31 @@ int main() {
     TurnBodyToHead(itemMemory, 1.0f / 60);
     Check(Near(Wrap(Radians(pos.y_rot) + 179 * kPi / 180), 0), "body turns short way across yaw wrap");
     Head(0); pos.y_rot = 0; g_headingBase = 0;
+    {
+        const auto savedVR=VR();
+        for(float heading:{-2.f,0.f,1.1f}) {
+            Head(heading);VR().HeadYawRadians();pos.y_rot=Angle(heading);
+            for(float pitch:{-70.f,-80.f,-89.9f,-90.f,-90.1f,-100.f,-89.f}) {
+                Head(heading,pitch*kPi/180);
+                TurnBodyToHead(itemMemory,1.f/60);
+                Check(std::fabs(Wrap(Radians(pos.y_rot)-heading))<.001f,
+                      "looking through vertical cannot turn Lara's torso by 180 degrees");
+                Check(std::fabs(Wrap(VR().HeadYawRadians()-heading))<.001f,
+                      "vertical view retains locomotion and body heading");
+            }
+            for(int jitter=0;jitter<30;++jitter) {
+                Head(heading+float(jitter%5-2),(-90.f+float(jitter%3-1)*.01f)*kPi/180);
+                TurnBodyToHead(itemMemory,1.f/60);
+                Check(std::fabs(Wrap(Radians(pos.y_rot)-heading))<.001f,
+                      "headset heading noise near straight down never spins the body");
+                Check(VR().HeadPitchRadians()<-1.56f,"heading lock retains actual camera pitch");
+            }
+            Head(heading+.2f,-50*kPi/180);TurnBodyToHead(itemMemory,1);
+            Check(std::fabs(Wrap(Radians(pos.y_rot)-heading-.2f))<.001f,
+                  "ordinary head yaw resumes after looking back up");
+        }
+        VR()=savedVR;Head(0);pos.y_rot=0;
+    }
     const auto renderStickFrame=[]() {
         g_renderTurn.frameTime=TurnTime()-1.0/60;
         AdvanceStickTurn(TurnTime());
@@ -2475,6 +2500,55 @@ int main() {
               Near(g_dragCurrent.x, 0) && Near(g_dragShown.x, 0), "End recenter preserves heading and clears counters");
         g_dragCurrent = {0.1f, 0}; VR().RecentreOffset();
         Check(Near(g_dragCurrent.x, 0), "Numpad recenter uses the same FP counter reset");
+        {
+            const auto savedVR=VR();const auto savedEye=g_groundEye;
+            const float savedBase=g_headingBase,savedWorld=g_lastHeadWorld;
+            const auto savedPosition=pos;
+            for(uint32_t reset:{uint32_t(vr::VREvent_SeatedZeroPoseReset),uint32_t(vr::VREvent_StandingZeroPoseReset)}) {
+                Head(.8f);g_headingBase=.4f;VR().m_poseValid=true;
+                VR().RecenterFirstPersonHead();
+                g_groundEye.valid=true;g_groundEye.local={10,-700,20};
+                const auto eyeBefore=locomotion::Rotate({10,20},g_headingBase);
+                vr::VREvent_t event{};event.eventType=vr::VREvent_DashboardDeactivated;
+                VR().HandleRuntimeEvent(event);
+                Check(!VR().m_runtimeRecenterPending,"closing dashboard alone does not recalibrate height");
+                event.eventType=reset;VR().HandleRuntimeEvent(event);VR().HandleRuntimeEvent(event);
+                VR().m_poseValid=false;VR().ApplyRuntimeRecenter();
+                Check(VR().m_runtimeRecenterPending,"runtime recenter waits for a valid new-origin pose");
+                Head(0);VR().m_rawHeadPose.m[0][3]=-3;VR().m_rawHeadPose.m[1][3]=.9f;VR().m_rawHeadPose.m[2][3]=4;
+                VR().m_poseValid=true;
+                for(int hand=0;hand<2;++hand) {
+                    const auto offset=locomotion::Rotate({hand ? .25f : -.25f,.3f},-.8f);
+                    VR().m_rawControllerPose[hand]=VR().m_rawHeadPose;
+                    VR().m_rawControllerPose[hand].m[0][3]+=offset.x;
+                    VR().m_rawControllerPose[hand].m[1][3]-=.4f;
+                    VR().m_rawControllerPose[hand].m[2][3]-=offset.z;
+                    VR().m_controllerPoseValid[hand]=true;
+                }
+                VR().m_headFromTracking=InvertRigid(FromHmd(VR().m_rawHeadPose));
+                VR().ApplyRuntimeRecenter();
+                Check(!VR().m_runtimeRecenterPending && Near(VR().FirstPersonVerticalOffset(),0),
+                      "System runtime reset immediately calibrates current head height");
+                Check(Near(Wrap(g_headingBase+VR().HeadYawRadians()),1.2f),
+                      "runtime tracking-origin rotation preserves world-facing heading");
+                const auto eyeAfter=locomotion::Rotate({g_groundEye.local.x,g_groundEye.local.z},g_headingBase);
+                Check(Near(eyeAfter.x,eyeBefore.x) && Near(eyeAfter.z,eyeBefore.z) &&
+                      g_groundEye.local.y==-700 && !std::memcmp(&pos,&savedPosition,sizeof(pos)),
+                      "System height calibration keeps the body root and standing eye anchor unchanged");
+                for(int hand=0;hand<2;++hand) {
+                    float right,down,forward;
+                    Check(VR().FirstPersonControllerOffset(hand,right,down,forward),"recalibrated controller offset available");
+                    const auto world=locomotion::Rotate({right,forward},g_headingBase);
+                    const auto expected=locomotion::Rotate({hand ? .25f : -.25f,.3f},.4f);
+                    Check(Near(world.x,expected.x) && Near(world.z,expected.z) && Near(down,.4f),
+                          "height calibration and origin yaw preserve both hand offsets in world space");
+                }
+                VR().m_rawHeadPose.m[1][3]+=.15f;
+                Check(Near(std::fabs(VR().FirstPersonVerticalOffset()),.15f),
+                      "physical height changes remain tracked after System calibration");
+            }
+            VR()=savedVR;g_groundEye=savedEye;g_headingBase=savedBase;g_lastHeadWorld=savedWorld;
+        }
 
         const auto visibilityGunStatus=*reinterpret_cast<int16_t*>(laraMemory+2);
         *reinterpret_cast<int16_t*>(laraMemory+2)=4; // Existing armed/head/interaction coverage.
