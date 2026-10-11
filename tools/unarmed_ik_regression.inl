@@ -400,6 +400,11 @@ void TestUnarmedIK() {
     Frame corrections[3]{}; Frame invalid[3]={arm[0],arm[0],arm[2]};
     Check(!firstperson::SolveArm(invalid,{identity,{1,2,3}},{0,1,0},corrections),"zero-length arm rejected");
     Check(!firstperson::SolveArm(arm,{identity,{NAN,2,3}},{0,1,0},corrections),"nonfinite target rejected");
+    const Frame extended[3]={{identity,{0,0,0}},{identity,{0,0,100}},{identity,{0,0,200}}};
+    Check(firstperson::ArmClearanceFraction(extended,{0,0,-64})==0,
+          "a fully extended ladder arm cannot pull its shoulder farther from the rung");
+    Check(firstperson::ArmClearanceFraction(extended,{0,0,0})==1,
+          "zero ladder displacement leaves native shoulder unchanged");
     const auto& body=*reinterpret_cast<const PHD_3DPOS*>(itemMemory+off::item_pos);
     const Vec root{float(body.x_pos),float(body.y_pos),float(body.z_pos)};
     const Vec cameraOrigin{root.x+300,root.y-200,root.z-500};
@@ -635,9 +640,9 @@ void TestUnarmedIK() {
             const auto oldFit=g_bodyVisualOffset,oldWall=g_bodyWallOffset;
             g_bodyVisualOffset=g_bodyWallOffset={};status=1;
             for(int which:{0,1}) for(int climb:{56,57,58,59,60,61})
-            for(float yaw:{0.f,.8f,-1.9f}) {
+            for(float yaw:{0.f,.8f,-1.9f}) for(float depth:{64.f,128.f,512.f}) {
                 dll.game=which;*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=int16_t(climb);
-                g_ladderTorsoOffset=locomotion::Rotate({0,-128},yaw);
+                g_ladderTorsoOffset=locomotion::Rotate({0,-depth},yaw);
                 float climbPalette[33*12]{};Detour_GetJoints(itemMemory,climbPalette,0);
                 const Vec offset{g_ladderTorsoOffset.x,0,g_ladderTorsoOffset.z};
                 for(int i=0;i<count;++i) {
@@ -647,15 +652,30 @@ void TestUnarmedIK() {
                     if(joint<7)
                         Check(!std::memcmp(fixture+i*12,climbPalette+i*12,12*sizeof(float)),
                               "ladder torso clearance leaves pelvis feet and leg animation native");
-                    if(joint==7 || joint==14 || joint==8 || joint==11)
+                    if(joint==7 || joint==14)
                         Check(nearVec(actual.origin,Add(original.origin,offset)),
-                              "ladder torso and shoulders keep the same safe camera clearance");
+                              "ladder torso keeps safe camera clearance independently of arm reach");
                     if(joint==10 || joint==13) {
                         Check(nearVec(actual.origin,original.origin),"ladder hand remains on its authored rung");
                         for(int r=0;r<3;++r) for(int c=0;c<3;++c)
                             Check(std::fabs(actual.basis.r[r][c]-original.basis.r[r][c])<.003f,
                                   "ladder clearance cannot twist the native rung grip");
                     }
+                }
+                for(int hand=0;hand<2;++hand) {
+                    const int first=hand ? 8 : 11;
+                    Frame original[3]{},actual[3]{};
+                    for(int i=0;i<count;++i) if(mapping[i]>=first && mapping[i]<=first+2) {
+                        const int segment=mapping[i]-first;
+                        original[segment]=Multiply(ReadRows(fixture+i*12),bind[i]);
+                        actual[segment]=Multiply(ReadRows(climbPalette+i*12),bind[i]);
+                    }
+                    for(int segment=0;segment<2;++segment)
+                        Check(std::fabs(firstperson::Length(Sub(actual[segment+1].origin,actual[segment].origin))-
+                              firstperson::Length(Sub(original[segment+1].origin,original[segment].origin)))<.01f,
+                              "ladder clearance cannot stretch upper arm or forearm to reach the rung");
+                    Check(firstperson::Length(Sub(actual[0].origin,original[0].origin))<=firstperson::Length(offset)+.01f,
+                          "ladder shoulder moves no farther than the torso clearance");
                 }
             }
             if(count==33) {

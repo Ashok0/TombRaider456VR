@@ -3886,7 +3886,7 @@ int main() {
                 const auto eyeFromTorso=locomotion::Rotate(
                     {camera.x_pos-neck.x-g_ladderTorsoOffset.x,camera.z_pos-neck.z-g_ladderTorsoOffset.z},
                     -Radians(pos.y_rot));
-                Check(std::fabs(eyeFromTorso.z-std::max(anchor,140))<.01f,
+                Check(std::fabs(eyeFromTorso.z-80.f)<.01f,
                       "ladder torso stays behind the eye through animation pitch and downward HMD gaze");
                 Check(!std::memcmp(&pos,&before,sizeof(pos)) &&
                       !std::memcmp(&g_groundEye.local,&calibration,sizeof(calibration)),

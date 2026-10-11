@@ -1424,10 +1424,14 @@ bool ApplyLadderTorsoClearance(uint8_t* item,float* joints,int count) {
                 original[i]={firstperson::IdentityBasis(),Add(original[reference].origin,
                     Sub(JointPoint(item,first+i,0,0,0),world))};
         }
-        for(int i=0;i<3;++i) chain[i]=Multiply(shift,original[i]);
+        // Keep the chest clear, but do not drag shoulders beyond the arms'
+        // native reach. Moving a nearly straight arm back used to stretch it.
+        const Frame armShift{shift.basis,Scale(shift.origin,
+            firstperson::ArmClearanceFraction(original,shift.origin))};
+        for(int i=0;i<3;++i) chain[i]=Multiply(armShift,original[i]);
         if(!firstperson::SolveArm(chain,original[2],Sub(original[1].origin,original[0].origin),
                                  changes,nullptr,nullptr,false)) return false;
-        for(int i=0;i<3;++i) corrections[hand*3+i]=Multiply(changes[i],shift);
+        for(int i=0;i<3;++i) corrections[hand*3+i]=Multiply(changes[i],armShift);
     }
     for(int i=0;i<count;++i) {
         const int joint=mapping ? mapping[i] : i;
@@ -2854,8 +2858,9 @@ bool Anchor(PHD_3DPOS& pose) {
         reinterpret_cast<Fn_GetJointAbsPositionLerp>(
             g_boundBase+g_boundDll->getJointAbsPositionLerp)(item,&neck,joint,frac);
         const float yaw=Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t;
-        const auto safe=locomotion::Rotate({float(Cfg().firstPersonAnchorX),
-            float(std::max(Cfg().firstPersonAnchorZ,140))},yaw);
+        // Ladder-specific clearance: the standing 140+ unit offset pulled
+        // the torso unnecessarily far from the wall and extended both arms.
+        const auto safe=locomotion::Rotate({float(Cfg().firstPersonAnchorX),80.f},yaw);
         g_ladderTorsoOffset={head.x-neck.x-safe.x,head.z-neck.z-safe.z};
     }
     if (locomotion::IsGroundRollState(state) && LaraWaterStatus()==0) {

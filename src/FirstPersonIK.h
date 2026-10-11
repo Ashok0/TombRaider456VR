@@ -117,6 +117,20 @@ inline void ConstrainWrist(const Basis& reference,const Basis& target,Vec axis,
     wrist=RotationMatrix(RotationProduct(RotationProduct(swing,AxisRotation(axis,roll)),referenceRotation));
 }
 
+// Largest fraction of a shoulder translation that retains the native arm's
+// reach to its fixed grip. Use double precision near a fully extended arm.
+inline float ArmClearanceFraction(const Frame (&arm)[3],Vec offset) {
+    const Vec reach=Sub(arm[2].origin,arm[0].origin);
+    const Vec upper=Sub(arm[1].origin,arm[0].origin),lower=Sub(arm[2].origin,arm[1].origin);
+    const double length=std::sqrt(double(Dot(upper,upper)))+std::sqrt(double(Dot(lower,lower)));
+    const double reach2=Dot(reach,reach);
+    const double radius2=std::max(reach2,length*length*.99*.99);
+    const double a=Dot(offset,offset),b=-2.0*Dot(reach,offset),c=reach2-radius2;
+    if(a<1.e-8) return 1.f;
+    if(!std::isfinite(a+b+c)) return 0.f;
+    return float(std::clamp((-b+std::sqrt(std::max(0.0,b*b-4*a*c)))/(2*a),0.0,1.0));
+}
+
 // Feet, ledge grips and armed wrists preserve the exact target orientation.
 // Unarmed hands alone use the anti-twist wrist constraints.
 inline bool SolveArm(const Frame (&native)[3], const Frame& target,

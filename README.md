@@ -81,7 +81,7 @@ jump priority also applies in third person.
 
 | Change | Current status |
 |---|---|
-| Chest obstructs the view while climbing rungs | October 11: keep upper-torso clearance behind the ladder eye while retaining native hand grips, pelvis and legs. Body stays visible; no full-body IK setting change. See [ladder clearance](#ladder-torso-clearance-2026-10-11). |
+| Chest obstructs the view while climbing rungs | October 11: use a closer 80-unit ladder clearance and limit shoulder displacement to native arm reach. Keep native rung grips without stretching arm bones. Body stays visible; no full-body IK setting change. See [ladder clearance](#ladder-torso-clearance-2026-10-11). |
 | Torso/chest obstructs the view near walls | October 11 follow-up: preserve the rendered body relative to the collision-adjusted eye. The first attempt kept world placement fixed and let the camera retreat into the torso; it is superseded. See [wall proximity](#first-person-torso-at-walls-2026-10-11). |
 | Looking straight down rotates the torso | October 11: hold the last reliable headset heading near vertical, with hysteresis when looking back up. Full camera pitch/roll tracking remains active. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
 | Right System recenter height calibration | October 11: runtime seated/standing origin resets now recalibrate the shared headset/controller neutral, compensate origin yaw and preserve the standing body anchor. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
@@ -117,8 +117,8 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 11 current deployment:** Release/x64 from `11b4d6d` plus the ladder
-torso-clearance correction below. This includes the wall-proximity correction,
+**October 11 current deployment:** Release/x64 from `1f53e04` plus the closer
+ladder stance and arm-reach limit below. This includes the wall-proximity correction,
 armed body/controller-arm IK, forearm
 rendering, natural wrist rotation, vertical-view heading and runtime System
 height calibration. Earlier height-scaling and
@@ -129,8 +129,8 @@ Other installed settings and gun calibration are
 preserved. Existing gun motion controls, jump priority, ledge gesture/haptics,
 shadows, switches and monkey-bar corrections remain part of this checkout.
 
-- Installed DLL SHA-256: `E65C156373B01DB385A5F058865A8E0345D980BC5507B9761A0C2B9B361961A3`.
-- Deployment record and previous DLL/INI backup location: [ladder clearance manifest](build/fp-ladder-clearance-deploy/manifest.json).
+- Installed DLL SHA-256: `D9CA427317BB7A9FB209F87885DFE19DF069FE2A499870CEB18BDA88A0BEE49F`.
+- Deployment record and previous DLL/INI backup location: [ladder reach manifest](build/fp-ladder-reach-deploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. In-headset confirmation is pending.
 
@@ -138,10 +138,17 @@ shadows, switches and monkey-bar corrections remain part of this checkout.
 
 Ladder states use the short interaction camera anchor (normally 16 units),
 which can put the viewpoint inside the normally positioned upper torso.
-The eye-view upper torso and shoulders now compensate for that retraction,
-keeping at least the normal 140-unit forward eye clearance in Lara's facing
-frame. Native head-animation pitch and looking down cannot rotate that
-clearance into her chest. The camera retains its original ladder position.
+The eye-view upper torso compensates for that retraction. The first version's
+140-unit clearance prevented the chest obstruction but pulled Lara too far
+from the wall and stretched her arms. Ladder clearance is now 80 units in
+Lara's facing frame: roughly half the previous torso setback with the default
+interaction anchor. Head-animation pitch does not rotate this clearance into
+her chest, and the camera retains its original ladder position.
+
+Shoulder displacement is separately limited to each arm's native reach before
+reconnecting to the rung. A fully extended arm keeps its original shoulder
+position; a bent arm uses only its available reach. Upper-arm and forearm
+lengths remain unchanged, rather than stretching to accommodate torso clearance.
 
 Both arm chains reconnect to their exact authored rung grips, preserving wrist
 position and rotation, including separate hand meshes. Pelvis, feet and legs
@@ -149,10 +156,11 @@ retain their native climbing animation. Body visibility, chest physics and
 native shadows remain active; the correction is scoped to ladder states 56–61
 and clears on exit. This does not enable full-body IK or change the INI.
 
-Validation: **1,682,677 first-person regression checks**, including **14 jiggle
+Validation: **1,690,239 first-person regression checks**, including **14 jiggle
 integration cases**, and Release/x64 passed. Tests cover TR4/5, all six ladder
 states, animated head pitch, looking down, multiple headings/anchors, entry/exit,
-15/33-joint and partial hand meshes, exact rung grips, unchanged legs/shadows,
+15/33-joint and partial hand meshes, exact rung grips, unchanged arm-segment
+lengths at normal and extreme requested offsets, fully extended arms, unchanged legs/shadows,
 and the existing wall, controller and camera regressions. Engine/VR calls are
 stubbed; in-headset confirmation remains pending.
 
