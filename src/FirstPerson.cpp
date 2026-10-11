@@ -185,6 +185,7 @@ stabilization::GroundEye g_groundEye;
 stabilization::StanceEye g_stanceEye;
 stabilization::MountBodyTransition g_mountBodyTransition;
 locomotion::Vec g_bodyVisualOffset{};
+locomotion::Vec g_bodyWallOffset{};
 float g_lastBodyYaw=0;
 int g_headingLevel=-1;
 bool g_bodySkinScope=false, g_bodySkinReady=false;
@@ -209,6 +210,7 @@ void ResetMovementStabilization() {
     g_stanceEye.Reset();
     g_mountBodyTransition.Reset();
     g_bodyVisualOffset={};
+    g_bodyWallOffset={};
 }
 
 bool g_meshOverride = false;
@@ -647,8 +649,8 @@ bool IsRollState(const uint8_t* item) {
     }
 }
 
-bool CanTurnBody(const uint8_t* item) {
-    if (*reinterpret_cast<const int16_t*>(item + off::item_hit_points) <= 0 ||
+bool GroundBodyAvailable(const uint8_t* item) {
+    if (!item || *reinterpret_cast<const int16_t*>(item + off::item_hit_points) <= 0 ||
         LaraWaterStatus() != 0)
         return false;
     // Vehicle is an active item index / -1 sentinel ONLY in TR4. TR5 retains
@@ -663,6 +665,11 @@ bool CanTurnBody(const uint8_t* item) {
     // head following, roomscale drag and FP gait overrides must all yield.
     if ((*Ptr<uint32_t>(g_boundDll->lara + off::lara_movement_flags) & 0x20) != 0)
         return false;
+    return true;
+}
+
+bool CanTurnBody(const uint8_t* item) {
+    if (!GroundBodyAvailable(item)) return false;
     // Include TR4/5 sprint (73) in ground steering/body fitting. Otherwise
     // native modern controls turn the sprinting body away from the FP view.
     // Ladders, pickups, jumps and interactions retain their native facing.
@@ -671,6 +678,13 @@ bool CanTurnBody(const uint8_t* item) {
     case 16: case 20: case 21: case 22: case 73: return true;
     default: return false;
     }
+}
+
+bool CanFitStandingBody(const uint8_t* item) {
+    // Wall impacts retain the standing render frame. They must not drop the
+    // torso offset for one animation, but native collision still owns steering.
+    return CanTurnBody(item) || (GroundBodyAvailable(item) && g_groundEye.valid &&
+        *reinterpret_cast<const int16_t*>(item + off::item_anim_state)==12);
 }
 
 bool CanSteerMonkeyBars(const uint8_t* item) {
@@ -1178,7 +1192,11 @@ bool DrawingNativeShadow() {
 bool BodyVisualOffsetApplies(const uint8_t* item) {
     return g_active && g_scenePoseValid && g_boundDll && g_boundBase &&
         item && item==g_headingItem && item==*Ptr<uint8_t*>(g_boundDll->laraItem) &&
-        CanTurnBody(item);
+        (CanFitStandingBody(item) || g_bodyWallOffset.x!=0 || g_bodyWallOffset.z!=0);
+}
+
+locomotion::Vec BodyRenderOffset() {
+    return g_bodyVisualOffset+g_bodyWallOffset;
 }
 
 bool ReadIKBind(const uint8_t* obj,int count,int bones,const int32_t* mapping,
@@ -1219,7 +1237,8 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
     if(bones>0 && (bones!=count || !mapping || !poses)) return false;
     Frame original[15]{},native[15]{},posed[15]{},correction[15]{},bind[15]{};
-    const Vec fit=BodyVisualOffsetApplies(item) ? Vec{g_bodyVisualOffset.x,0,g_bodyVisualOffset.z} : Vec{};
+    const auto offset=BodyRenderOffset();
+    const Vec fit=BodyVisualOffsetApplies(item) ? Vec{offset.x,0,offset.z} : Vec{};
     for(int joint=0;joint<15;++joint) {
         if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,joint,original[joint])) return false;
         if(!ReadIKBind(obj,count,bones,mapping,poses,joint,bind[joint])) return false;
@@ -1341,8 +1360,10 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count) {
             std::fabs(nativeWrist.y-body.y_pos)>4096 ||
             std::fabs(nativeWrist.z-body.z_pos)>4096) return false;
         target.origin=Add(native[2].origin,Sub(target.origin,nativeWrist));
-        if (BodyVisualOffsetApplies(item))
-            target.origin=Sub(target.origin,{g_bodyVisualOffset.x,0,g_bodyVisualOffset.z});
+        if (BodyVisualOffsetApplies(item)) {
+            const auto offset=BodyRenderOffset();
+            target.origin=Sub(target.origin,{offset.x,0,offset.z});
+        }
         const float heading=Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
         const float side=hand ? 1.f : -1.f;
         const GunVec pole{side*.6f*std::cos(heading)-.25f*std::sin(heading),
@@ -1379,7 +1400,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
         g_boundDll && item && item==g_headingItem &&
         item==*Ptr<uint8_t*>(g_boundDll->laraItem)) {
         if (BodyVisualOffsetApplies(item))
-            stabilization::OffsetBodyPalette(joints,count,g_bodyVisualOffset);
+            stabilization::OffsetBodyPalette(joints,count,BodyRenderOffset());
         const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
         if (g_bodySkinScope && object>=0) {
             const auto* geom=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride+off::object_geom;
@@ -2691,7 +2712,7 @@ void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose,const PHD_VE
     // The landing camera already follows the animated neck in all axes.
     // Standing body fitting would translate that same neck a second time.
     if (UseLandingCamera(item)) { g_mountBodyTransition.Reset(); return; }
-    if (!CanTurnBody(item)) {
+    if (!CanFitStandingBody(item)) {
         const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
         if (IsLedgeMountState(state)) g_mountBodyTransition.Begin();
         else g_mountBodyTransition.Reset();
@@ -2706,8 +2727,9 @@ void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose,const PHD_VE
         VR().HeadFloorOffset(floor.x,floor.z);
     }
     const float bodyYaw=Radians(prev.y_rot)+Wrap(Radians(pos.y_rot)-Radians(prev.y_rot))*(frac/256.f);
-    const Vec eyeFromRoot{float(pose.x_pos-int32_t(prev.x_pos+(int64_t(pos.x_pos)-prev.x_pos)*frac/256)),
-                          float(pose.z_pos-int32_t(prev.z_pos+(int64_t(pos.z_pos)-prev.z_pos)*frac/256))};
+    const Vec eyeFromRoot=CanTurnBody(item) ? Vec{float(pose.x_pos-int32_t(prev.x_pos+(int64_t(pos.x_pos)-prev.x_pos)*frac/256)),
+                          float(pose.z_pos-int32_t(prev.z_pos+(int64_t(pos.z_pos)-prev.z_pos)*frac/256))}
+        : Rotate({g_groundEye.local.x,g_groundEye.local.z},g_headingBase);
     g_bodyVisualOffset=g_groundEye.BodyOffsetAtEye(g_headingBase,bodyYaw,
         view,floor,LiveWorldUnitsPerMetre(),eyeFromRoot);
     if (Cfg().firstPersonMovementStabilization && g_groundEye.valid) {
@@ -2728,6 +2750,7 @@ void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose,const PHD_VE
 }
 
 bool Anchor(PHD_3DPOS& pose) {
+    g_bodyWallOffset={};
     uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
     if (!item) return false;
     const int joint = Cfg().firstPersonJoint;
@@ -2787,13 +2810,14 @@ bool Anchor(PHD_3DPOS& pose) {
         pose.x_pos=int32_t(std::lround(body[0]+flat.x));
         pose.y_pos=int32_t(std::lround(body[1]-336)); // 64 units below capsule top.
         pose.z_pos=int32_t(std::lround(body[2]+flat.z));
-    } else if (Cfg().firstPersonMovementStabilization && CanTurnBody(item) && !UseLandingCamera(item)) {
+    } else if (Cfg().firstPersonMovementStabilization && CanFitStandingBody(item) && !UseLandingCamera(item)) {
         // Physical head yaw rotates Lara, not the scene-camera origin. Only
         // artificial yaw changes this reference frame; HMD pose is applied
         // separately, identically for both eyes, culling and tracked guns.
         const auto eye=g_groundEye.Apply({body[0],body[1],body[2]},g_headingBase,
             {float(head.x),float(head.y),float(head.z)},
-            Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t);
+            Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t,
+            !CanTurnBody(item)); // Wall impact keeps native neck height.
         pose.x_pos=int32_t(std::lround(eye.x));
         pose.y_pos=int32_t(std::lround(eye.y));
         pose.z_pos=int32_t(std::lround(eye.z));
@@ -2809,8 +2833,13 @@ bool Anchor(PHD_3DPOS& pose) {
        (CanUseCrouchCamera(item) || (CanTurnBody(item) && !UseLandingCamera(item))))
         pose.y_pos=int32_t(std::lround(body[1]+g_stanceEye.Apply(float(pose.y_pos)-body[1],CanUseCrouchCamera(item),TurnTime())));
     else g_stanceEye.Reset();
-    ClampRenderedHeadToCollision(item, pose);
+    // Keep standing calibration separate from clearance. The rendered body
+    // must accompany camera retraction: a world-fixed torso would move into
+    // the eye as the camera backs up. Native collision/shadows remain fixed.
     FitBodyToRenderedEye(item,pose,head);
+    const locomotion::Vec unclampedEye{float(pose.x_pos),float(pose.z_pos)};
+    ClampRenderedHeadToCollision(item, pose);
+    g_bodyWallOffset=locomotion::Vec{float(pose.x_pos),float(pose.z_pos)}-unclampedEye;
     TraceForwardCamera(item, body, head, frac, GetTickCount64(), &pose);
     pose.z_rot = 0;
     if (!g_loggedFirst) {
@@ -2895,16 +2924,19 @@ public:
 
 void __cdecl Detour_CrouchDraw(uint8_t* item,int32_t drawType) {
     const auto original=g_hCrouchDraw.Original<void (__cdecl*)(uint8_t*,int32_t)>();
-    if(DrawingNativeShadow() || item!=g_headingItem || (!MotionReady() && !UnarmedIKReady())) {
+    if(DrawingNativeShadow() || !g_active || !g_scenePoseValid || !g_boundDll ||
+       !g_boundBase || !g_motionDll || item!=*Ptr<uint8_t*>(g_boundDll->laraItem)) {
         original(item,drawType);return;
     }
     auto* app=*Ptr<uint8_t*>(g_motionDll->app);
+    if(!app) { original(item,drawType);return; }
     auto& flags=*reinterpret_cast<uint32_t*>(app+drva::app_off::cfgFlags);
     const uint32_t modern=flags&2u;
     // This render-only routine gates its proximity rejection on modern
     // controls. Skip that branch, retaining the HD bit and every other flag.
-    // Tracked first-person hands and their attached arms must not disappear
-    // when any animation brings the camera inside the native proximity sphere.
+    // This is a first-person visibility policy, independent of IK readiness:
+    // wall impacts and temporarily missing controller poses must not bring
+    // proximity hiding back. Explicit stance masks and shadow rendering remain.
     flags&=~2u;
     original(item,drawType);
     flags=(flags&~2u)|modern;
@@ -3045,6 +3077,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         g_renderTurn.Reset(); g_turnTrace={}; g_rootMotion.Reset();
         if (!g_runtimeEnabled || !Cfg().firstPerson) g_groundEye.Reset();
         g_bodyVisualOffset={};
+        g_bodyWallOffset={};
         g_mountBodyTransition.Reset();
         g_bodyTime = {};
         g_dragPrevious = g_dragCurrent = g_dragShown = {};

@@ -121,6 +121,7 @@ void TestUnarmedIK() {
     const auto savedLara=std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory));
     const auto savedPose=g_scenePose;const auto savedHeading=g_headingBase;
     const auto savedOffset=g_bodyVisualOffset;
+    const auto savedWall=g_bodyWallOffset;
     const auto savedLeftTwist=g_unarmedTwist[0],savedRightTwist=g_unarmedTwist[1];
     const auto savedGetJoints=g_hGetJoints.m_trampoline;
     const auto savedShadow=g_shadowDll;
@@ -446,6 +447,7 @@ void TestUnarmedIK() {
             dll.game=which;g_headingBase=step*.3f;
             testCalibration={.04f,-.06985f,.2032f,-30.f,float(step*3),float(-step*4)};
             g_bodyVisualOffset={float(step*5-25),float(80-step*9)};
+            g_bodyWallOffset={float(-step*11),float(-step*17)};
             for(int hand=0;hand<2;++hand) {
                 auto& m=VR().m_rawControllerPose[hand];
                 const float yaw=step*.2f*(hand ? 1.f : -1.f);
@@ -494,6 +496,7 @@ void TestUnarmedIK() {
         {
             const auto oldHeading=g_headingBase;const auto oldCalibration=testCalibration;
             const auto oldFit=g_bodyVisualOffset;
+            const auto oldWall=g_bodyWallOffset;
             const bool oldLong=g_longGunHooksReady;
             vr::HmdMatrix34_t oldHands[2];std::memcpy(oldHands,VR().m_rawControllerPose,sizeof(oldHands));
             g_longGunHooksReady=true;config.firstPersonUnarmedIK=false;
@@ -502,6 +505,7 @@ void TestUnarmedIK() {
                 dll.game=which;gun=int16_t(weapon);
                 *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=int16_t(stance);
                 g_headingBase=step*.75f;g_bodyVisualOffset={float(step*21-40),float(20-step*19)};
+                g_bodyWallOffset={float(-step*53),float(-step*37)};
                 testCalibration={.04f,-.06985f,.2032f,-30.f,13,-9};
                 for(int hand=0;hand<2;++hand) {
                     const auto basis=CalibratedController(identity,{0,0,0,float(step*65),float(step*-83),float(step*97)});
@@ -571,6 +575,7 @@ void TestUnarmedIK() {
             VR().m_controllerPoseValid[0]=true;g_longGunHooksReady=oldLong;
             std::memcpy(VR().m_rawControllerPose,oldHands,sizeof(oldHands));
             g_headingBase=oldHeading;g_bodyVisualOffset=oldFit;testCalibration=oldCalibration;
+            g_bodyWallOffset=oldWall;
             config.firstPersonUnarmedIK=true;status=0;gun=1;
             *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=2;
             Detour_GetJoints(itemMemory,palette,0);
@@ -624,7 +629,10 @@ void TestUnarmedIK() {
         }
         TestDynamicBonesVisibility(palette);
         // Missing input and native interactions cannot leave stale IK behind.
+        const auto heldWall=g_bodyWallOffset;
         for(int reason=0;reason<10;++reason) {
+            // Anchor clears clearance on entry to the native ledge camera.
+            g_bodyWallOffset=reason==7 ? locomotion::Vec{} : heldWall;
             status=0;gun=1;g_active=true;appMemory[0x9e4]=1;config.firstPersonUnarmedIK=true;
             *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=2;
             VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
@@ -659,6 +667,7 @@ void TestUnarmedIK() {
     skinFixture=nullptr;skinFixtureCount=0;g_bodySkinScope=g_bodySkinReady=false;
     g_hGetJoints.m_trampoline=savedGetJoints;g_shadowDll=savedShadow;
     g_scenePose=savedPose;g_headingBase=savedHeading;g_bodyVisualOffset=savedOffset;
+    g_bodyWallOffset=savedWall;
     std::memcpy(VR().m_rawControllerPose,controllers,sizeof(controllers));
     std::memcpy(itemMemory,savedItem.data(),sizeof(itemMemory));std::memcpy(laraMemory,savedLara.data(),sizeof(laraMemory));
     config=settings;dll=savedDll;testCalibration=savedCalibration;

@@ -27,6 +27,7 @@
 // Separate translation unit executes the real dynamic-bone observer/solver.
 void TestDynamicBonesVisibility(const float* rendered=nullptr);
 void TestDynamicBonesNativeDraws();
+void TestDynamicBonesChestPosition(float out[3]);
 
 namespace {
 tr::Config config;
@@ -1250,9 +1251,33 @@ int main() {
                 const int hands=handDrawCalls;
                 Detour_CrouchDraw(itemMemory,29);
                 Check(handDrawCalls==hands+(excluded>=3 ? 2 : 0) && flags==3,
-                      "all tracked stances bypass proximity hiding; third person unarmed and shadow stay native");
+                      "tracked stances bypass proximity hiding; third person shadow and explicit crouch mask stay native");
             }
             g_active=true;status=4;g_rollHidden=false;g_shadowDll=oldShadow;
+            // Losing IK permission on a wall impact (or tracking dropout) must
+            // never re-enable native camera-proximity body rejection.
+            const auto oldInnerDraw=g_hDrawCreatureHD.m_trampoline;
+            g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeDraw);
+            const bool oldCrouch=g_crouchHidden;
+            g_crouchHidden=false;g_headHidden=true;flags=3;meshBits=0x7fff;
+            for(int which:{0,1}) for(int wallState:{1,12,2}) for(int weaponStatus:{0,4})
+            for(bool tracked:{false,true}) {
+                game=dll.game=which;state=int16_t(wallState);status=int16_t(weaponStatus);
+                VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=tracked;
+                for(int pass:{0,4}) {
+                    g_shadowDll=&shadow;crouchRenderPass=pass;
+                    for(bool first:{false,true}) {
+                        g_active=first;const int before=draws;
+                        Detour_CrouchDraw(itemMemory,29);
+                        Check((draws>before)==(first && pass==0),
+                              "wall proximity cannot hide FP body with holstered guns paused IK or missing tracking; TP and shadows unchanged");
+                        Check(flags==3 && meshBits==0x7fff,"wall visibility restores native config and mesh mask");
+                    }
+                }
+            }
+            g_hDrawCreatureHD.m_trampoline=oldInnerDraw;
+            VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+            g_active=true;status=4;g_crouchHidden=oldCrouch;g_shadowDll=oldShadow;
             state=oldState;game=dll.game=oldGame;flags=oldFlags;
             g_hCrouchDraw.m_trampoline=oldDraw;
         }
@@ -3818,6 +3843,90 @@ int main() {
         g_runtimeEnabled=false; UpdateSceneCamera(camera);
         Check(!g_groundEye.valid,"FP exit still discards the saved standing reference");
         config.firstPersonBodyFollowsHead=true;
+    }
+    config.firstPersonAnchorZ=144;
+    // Compare actual camera-relative rendered bones AND deformed chest, not
+    // just the world-space fitting variable: the eye retracts at a wall.
+    {
+    const auto wallSettings=config;
+    const auto wallObjects=dll.objects;
+    const auto wallObject=*reinterpret_cast<int16_t*>(itemMemory+off::item_object);
+    const auto wallJointHook=g_hGetJoints.m_trampoline;
+    alignas(16) static uint8_t wallObjectInfo[off::object_stride]{};
+    dll.objects=rva(wallObjectInfo);*reinterpret_cast<int16_t*>(itemMemory+off::item_object)=0;
+    g_hGetJoints.m_trampoline=reinterpret_cast<void*>(&FakeSkinJoints);
+    config.firstPersonMotionGuns=config.firstPersonUnarmedIK=config.firstPersonFullBodyIK=false;
+    auto captureWallBody=[&](float* rendered,float* chest) {
+        float native[15*12]{};
+        // Native GetJoints stores world-axis bones relative to the scene eye.
+        for(int joint=0;joint<15;++joint) {
+            float* b=native+joint*12;b[0]=b[5]=b[10]=1;
+            b[3]=joint*30.f-camera.x_pos;b[7]=-joint*40.f-camera.y_pos;
+            b[11]=joint*20.f-camera.z_pos;
+        }
+        skinFixture=native;skinFixtureCount=15;g_bodySkinScope=true;g_renderArm=-1;
+        *reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits)=0x3fff;
+        Check(Detour_GetJoints(itemMemory,rendered,0)==15,"wall eye draws the complete body palette");
+        TestDynamicBonesChestPosition(chest);
+        skinFixture=nullptr;skinFixtureCount=0;g_bodySkinScope=false;
+    };
+    for(int which:{0,1}) for(float heading:{0.f,.8f,-1.9f}) for(int anchor:{100,144,220}) {
+        game=dll.game=which;resetRoomscale();ResetMovementStabilization();
+        g_scenePoseValid=true;
+        config.firstPersonMovementStabilization=true;config.firstPersonRoomscaleMove=false;
+        config.firstPersonBodyFollowsHead=false;config.firstPersonAnchorZ=anchor;
+        physicalPose(0);Head(0);FirstPersonRecenter();
+        pos.y_rot=prev.y_rot=Angle(heading);fraction=256;gaitSway={};
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+        collisionMode=0;Check(Anchor(camera),"wall fixture captures valid standing anchor");
+        // Turn the body relative to the tracking frame so dropping its fit on
+        // AS_SPLAT would be visible even without camera collision.
+        pos.y_rot=prev.y_rot=Angle(heading+.6f);
+        impactNormalX=std::sin(g_headingBase);impactNormalZ=std::cos(g_headingBase);
+        const auto rootBefore=pos,prevBefore=prev;
+        const auto eyeReference=g_groundEye.local;
+        float neutral[3];std::copy(VR().m_firstPersonNeutral,VR().m_firstPersonNeutral+3,neutral);
+        for(float lean:{0.f,.08f,.2f}) {
+            Head(0);VR().m_rawHeadPose.m[2][3]=neutral[2]-lean;
+            state=1;collisionMode=0;Anchor(camera);
+            const auto freeFit=g_bodyVisualOffset;
+            const auto freeCamera=camera;
+            float referencePalette[15*12]{},referenceChest[3]{};
+            captureWallBody(referencePalette,referenceChest);
+            for(int wallState:{1,12,2,12,1}) for(int mode:{14,0,14}) {
+                state=int16_t(wallState);collisionMode=mode;Anchor(camera);
+                Check(locomotion::Length(g_bodyVisualOffset-freeFit)<1.5f,
+                      "wall approach release and impact cannot alter standing calibration fit");
+                float rendered[15*12]{},chest[3]{};captureWallBody(rendered,chest);
+                for(int joint=0;joint<15;++joint) for(int axis=0;axis<3;++axis)
+                    Check(std::fabs(rendered[joint*12+axis*4+3]-referencePalette[joint*12+axis*4+3])<1.5f,
+                          "wall retraction cannot push rendered torso or other body bones toward the eye");
+                for(int axis=0;axis<3;++axis)
+                    Check(std::fabs(chest[axis]-referenceChest[axis])<1.5f,
+                          "deformed chest stays attached and at the same eye-relative position near walls");
+                Check(BodyVisualOffsetApplies(itemMemory),"wall impact retains standing torso fit");
+                if(wallState==12) Check(!CanTurnBody(itemMemory),"wall impact rendering does not enable gameplay steering");
+                if(mode==14) {
+                    const auto physical=locomotion::Rotate({0,lean*1000},g_headingBase);
+                    Check((camera.x_pos+physical.x)*impactNormalX+(camera.z_pos+physical.z)*impactNormalZ<101.5f,
+                          "body stability retains eye wall collision");
+                    const float freeForward=(freeCamera.x_pos+physical.x)*impactNormalX+(freeCamera.z_pos+physical.z)*impactNormalZ;
+                    if(freeForward>120 && wallState!=12)
+                        Check(std::hypot(float(camera.x_pos-freeCamera.x_pos),float(camera.z_pos-freeCamera.z_pos))>10,
+                              "wall fixture actually retracts the camera while preserving eye-relative torso placement");
+                }
+                Check(!std::memcmp(&pos,&rootBefore,sizeof(pos)) && !std::memcmp(&prev,&prevBefore,sizeof(prev)),
+                      "wall torso correction never changes native collision root");
+                Check(!std::memcmp(neutral,VR().m_firstPersonNeutral,sizeof(neutral)) &&
+                      !std::memcmp(&eyeReference,&g_groundEye.local,sizeof(eyeReference)),
+                      "wall torso correction preserves height and tracking calibration");
+            }
+        }
+        config.firstPersonBodyFollowsHead=true;collisionMode=0;impactNormalX=0;impactNormalZ=1;
+    }
+    config=wallSettings;dll.objects=wallObjects;
+    *reinterpret_cast<int16_t*>(itemMemory+off::item_object)=wallObject;
+    g_hGetJoints.m_trampoline=wallJointHook;g_bodyWallOffset={};
     }
     config.firstPersonAnchorZ=144;
     // Run -> wall impact (AS_SPLAT=12) -> stop. Raised crate floors must

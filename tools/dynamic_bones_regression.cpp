@@ -111,3 +111,33 @@ void TestDynamicBonesNativeDraws() {
     Require(!DynamicBonesRenderBody(),"two-joint attachments must not receive chest physics");
     g_inLara=false;ResetSolver();g_boundDll=oldBound;
 }
+
+// Project an actual FP torso capture plus the shader's chest displacement.
+// Re-run identical spring history so a camera-space change cannot be mistaken
+// for a different phase of jiggle. Caller compares clear and wall-blocked eyes.
+void TestDynamicBonesChestPosition(float out[3]) {
+    using namespace tr;
+    uint64_t mask=0;int count=0;
+    const float* full=FirstPersonBodyPalette(mask,count);
+    Require(full && count==15,"wall fixture supplies production body capture");
+    const auto oldBound=g_boundDll;g_boundDll=GameDllBound();
+    renderState.joints=const_cast<float*>(full);renderState.num_joints=count;renderState.shader=20;
+    g_inLara=true;worldPass=true;ResetSolver();
+    for(int frame=0;frame<90;++frame) {
+        g_haveBest=g_haveThis=false;g_bestScore=-1;g_candCount=0;
+        DynamicBonesObserveDraw();
+        Require(DynamicBonesRenderBody() && g_haveThis,"wall torso retains chest solver");
+        Solve(1.f/90.f);
+    }
+    float displacement[3]{};
+    Require(DynamicBonesWorldOffset(displacement),"wall torso retains shader displacement");
+    const float* posed=FirstPersonRenderBodyPalette(mask,count);
+    Require(posed!=nullptr,"chest rendering uses this draw's posed body palette");
+    // Fully torso-weighted chest vertex. This is the same order as BoneSkin:
+    // skin with posed joint 7, then add weighted uDynBone in that same space.
+    const float* torso=posed+7*12;
+    for(int axis=0;axis<3;++axis)
+        out[axis]=torso[axis*4+1]*-170.f+torso[axis*4+2]*45.f+torso[axis*4+3]
+            +displacement[axis]*Cfg().dynamicBonesChestStrength;
+    g_inLara=false;ResetSolver();g_boundDll=oldBound;
+}

@@ -81,6 +81,7 @@ jump priority also applies in third person.
 
 | Change | Current status |
 |---|---|
+| Torso/chest obstructs the view near walls | October 11 follow-up: preserve the rendered body relative to the collision-adjusted eye. The first attempt kept world placement fixed and let the camera retreat into the torso; it is superseded. See [wall proximity](#first-person-torso-at-walls-2026-10-11). |
 | Looking straight down rotates the torso | October 11: hold the last reliable headset heading near vertical, with hysteresis when looking back up. Full camera pitch/roll tracking remains active. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
 | Right System recenter height calibration | October 11: runtime seated/standing origin resets now recalibrate the shared headset/controller neutral, compensate origin yaw and preserve the standing body anchor. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
 | Natural controller wrist rotation | October 11: tracked arms now follow full controller roll using the mesh's rest-pose forearm/hand relationship. The previous clamp and return toward neutral are bypassed for both armed and holstered arms. See [natural wrist rotation](#natural-controller-wrist-rotation-2026-10-11). |
@@ -115,9 +116,10 @@ remain reverted. Y+LT remains the view-toggle chord. The existing standing-eye
 reference preservation and render-only mount body-fit correction remain in
 place; those are separate from the reverted 200 ms camera transition.
 
-**October 11 current deployment:** Release/x64 from `7de949d` plus the armed body
-and controller-arm IK/forearm rendering, natural wrist rotation, vertical-view
-heading and runtime System height calibration below. Earlier height-scaling and
+**October 11 current deployment:** Release/x64 from `3f0da87` plus the wall-proximity
+torso correction below. This includes armed body/controller-arm IK, forearm
+rendering, natural wrist rotation, vertical-view heading and runtime System
+height calibration. Earlier height-scaling and
 physical ladder experiments remain reverted. `FirstPersonFullBodyIK=0`
 and `FirstPersonUnarmedIK=1` are set in the repository and deployed INIs;
 armed arm IK now activates automatically with ready tracked weapons.
@@ -125,10 +127,43 @@ Other installed settings and gun calibration are
 preserved. Existing gun motion controls, jump priority, ledge gesture/haptics,
 shadows, switches and monkey-bar corrections remain part of this checkout.
 
-- Installed DLL SHA-256: `07CE6CC9B2E3A6F63FCAAA5649DAADA3000BEDFE39095F9406B341B90976BF78`.
-- Deployment record and previous DLL/INI backup location: [heading and height manifest](build/fp-heading-height-deploy/manifest.json).
+- Installed DLL SHA-256: `E162D98F8FEAB8D4FE2A114CF3EF25C31BEBE2D218398295264EEDC08DCDD9F2`.
+- Deployment record and previous DLL/INI backup location: [wall eye/body manifest](build/fp-wall-eye-deploy/manifest.json).
 - Current regression runner: `build\run_first_person_tests.cmd`, including
   `tools/dynamic_bones_regression.cpp`. In-headset confirmation is pending.
+
+### First-person torso at walls (2026-10-11)
+
+The first attempt kept body placement fixed while wall clearance pulled the
+camera backward. That let the eye retreat into the torso, leaving the chest
+obstructing the view once proximity hiding was bypassed. Its world-offset test
+missed the changing camera-to-body relationship. That attempt is superseded.
+
+Standing calibration remains separate from collision clearance, but the entire
+eye-view body now receives the same horizontal retraction as the scene camera.
+The torso and chest therefore retain their distance from the eye at walls.
+The correction is shared by all body bones, the chest's physics/render
+palettes and attached IK arms; wrist conversion subtracts it so tracked hands
+and guns retain their exact common position and pivot. Native gameplay roots,
+wall collision and shadows are unchanged. Wall-impact animations retain the
+stable horizontal eye/body reference while following native neck height.
+
+The outer HD renderer's camera-proximity rejection is now bypassed throughout
+active first person, independently of weapon state and controller/IK readiness.
+Holstering, a tracking dropout or wall impact cannot restore that whole-body
+hiding branch. Explicit animation visibility, third person and native shadows
+retain their existing behavior. Gun/wrist calibration and the installed INI
+are unchanged; unarmed arm IK stays enabled and full-body IK stays disabled.
+
+Validation: the camera-relative regression fails when wall retraction is
+omitted from the rendered body, reproducing the first attempt's mistake.
+The updated implementation passes **1,667,440 first-person regression checks**,
+including **12 jiggle integration cases**, plus Release/x64. The wall tests now
+run production joint capture and chest physics, comparing the actual rendered
+bones and deformed chest relative to clear/blocked cameras. Coverage includes
+contact/release, impact/stop, varied headings/anchors, physical lean and exact
+armed/holstered wrist-to-gun alignment with wall offsets. These use engine/VR
+stubs; in-headset confirmation remains pending.
 
 ### Vertical-view heading and System height calibration (2026-10-11)
 

@@ -1,0 +1,17 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T10:04:28.8508935-04:00",
+    "base_commit":  "3f0da87",
+    "dll_sha256":  "E162D98F8FEAB8D4FE2A114CF3EF25C31BEBE2D218398295264EEDC08DCDD9F2",
+    "ini_sha256":  "79AAF86409D2C4B39E4E0DB92EB7C1AB7E543CA61BFAE9F83D89D9CFF7A4E4B8",
+    "backup":  "build/before-fp-wall-eye-20261011-100428",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1667440,
+    "jiggle_integration_cases":  12,
+    "hardware_verified":  false,
+    "build_log":  "build/fp-wall-eye-build.log",
+    "test_log":  "build/fp-wall-eye-tests.log",
+    "missing_compensation_reproduction":  "build/fp-wall-eye-before.log",
+    "supersedes":  "build/fp-wall-body-deploy/manifest.json"
+}
