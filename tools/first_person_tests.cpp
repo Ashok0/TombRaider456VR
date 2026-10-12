@@ -611,8 +611,10 @@ uint64_t GameDllBase() { return g_boundBase; }
 #include "fullbody_ik_regression.inl"
 #include "jump_priority_regression.inl"
 #include "physical_switch_regression.inl"
+#include "physical_holster_regression.inl"
 
 int main() {
+    TestHolsterGestures();
     // Haptic envelopes use elapsed time, not render frame count or trigger polls.
     for (uint64_t step:{1,7,11,16,33}) {
         tr::GunHaptics h;int pulses[2]{};uint64_t last[2]{};
@@ -1700,6 +1702,7 @@ int main() {
         }
         config.firstPersonMotionGuns=true;
         lastGun=savedLastGun;
+        TestPhysicalHolsters(rva);
         {
             VRSystem::HandState hands[2]{};
             hands[0].btnUpper=true; hands[1].grip=1;

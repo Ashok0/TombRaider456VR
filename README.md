@@ -6715,6 +6715,23 @@ build\hk_scope_gl_tests.exe
 
 #### Independent motion-gun triggers
 
+First-person HD mode also supports physical weapon holsters on Lara's visible
+mesh. At either hip, squeeze that hand's **Grip**, then pull at least 8 cm out
+of the grab zone (about 18 cm from its centre). **Each hand controls its own
+pistol or Uzi**. To put a gun away, bring it to its matching hip while holding
+Grip and release Grip there. Releasing away from the holster keeps it equipped.
+The revolver/Desert Eagle uses the right hip; long weapons use the upper back
+mount with Right Grip. Put away held guns before changing weapon types.
+
+Grab zones follow the rendered body, including body fitting and IK. Only a
+claimed holster consumes its Grip binding; other grips retain Walk/Duck and
+two-grip Action. A holstered gun cannot fire. After a transfer, release the
+trigger before firing again. LT still draws normally and Y puts away the pair.
+Tracking loss or stale body poses cancel unfinished grabs. Native inventory,
+ammo, firing cadence and equip state remain authoritative. These interactions
+have automated regression coverage; controller reach/fit still needs headset
+testing.
+
 In first-person remastered/HD motion-gun mode:
 
 - Press LT while unarmed: begin drawing immediately, with no hold or toggle.

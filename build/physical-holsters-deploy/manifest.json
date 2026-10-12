@@ -1,0 +1,16 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T20:00:48.1573974-04:00",
+    "base_commit":  "4c29839",
+    "dll_sha256":  "B5FB34ACED8A50426734AAB0170AD5A7AE617AD2EA5D1759334CEDDC9E2100F7",
+    "ini_sha256":  "79AAF86409D2C4B39E4E0DB92EB7C1AB7E543CA61BFAE9F83D89D9CFF7A4E4B8",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-physical-holsters-20261011-200047",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1690527,
+    "debug_regression_checks":  1690527,
+    "native_binary_checks":  "TR4/TR5 reference and retail selectors, outfit gates and mesh IDs",
+    "asset_checks":  "Nine shipped weapon attachment models; canonical joints and grab bounds",
+    "interaction":  "Independent left/right pistol and Uzi hip holsters; right-hand single weapons; upper-back long weapons",
+    "hardware_verified":  false
+}

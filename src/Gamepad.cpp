@@ -135,9 +135,11 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
 
     const VRSystem::HandState& L = h[0];
     const VRSystem::HandState& R = h[1];
-    touchGripAction = gameplay && L.grip > 0.5f && R.grip > 0.5f;
+    const unsigned holsterGrips=FirstPersonHolsterGrips(L.grip>.5f,R.grip>.5f,L.valid,R.valid,
+        gameplay && !L.btnUpper);
+    touchGripAction = gameplay && !holsterGrips && L.grip > 0.5f && R.grip > 0.5f;
     const bool switchGrip = FirstPersonSwitchGrip(R.grip > 0.5f,
-        gameplay && R.valid && !touchGripAction && !L.btnUpper);
+        gameplay && R.valid && !(holsterGrips&2) && !touchGripAction && !L.btnUpper);
 
     // Set once the Menu chord fires, and honoured where the triggers are
     // written further down. Declared here because that assignment happens after
@@ -228,7 +230,7 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
     // Both grips hold Action during gameplay. Their individual Duck/Walk bits
     // must not interrupt a block push. In menus their normal bindings remain.
     const bool leftGrip = L.grip > 0.5f;
-    if (leftGrip && !touchGripAction) b |= XB_LEFT_SHOULDER;
+    if (leftGrip && !touchGripAction && !(holsterGrips&1)) b |= XB_LEFT_SHOULDER;
 
     // Right grip is the physical VR "RB" and normally emits only XInput X,
     // which is Walk. TR6 binds Sneak to XInput RIGHT_SHOULDER. Holding Y with
@@ -238,7 +240,7 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
     const bool rightGrip = R.grip > 0.5f;
     const bool sneakChord = rightGrip && L.btnUpper && !touchGripAction &&
         !(gameplay && FirstPersonActive());
-    if (rightGrip && !touchGripAction && !switchGrip) b |= XB_X;
+    if (rightGrip && !touchGripAction && !switchGrip && !(holsterGrips&2)) b |= XB_X;
     if (sneakChord) {
         b &= static_cast<uint16_t>(~(XB_X | XB_Y));
         b |= XB_RIGHT_SHOULDER;

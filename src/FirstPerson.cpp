@@ -14,6 +14,7 @@
 #include "FirstPersonIK.h"
 #include "FirstPersonBodyIK.h"
 #include "MotionGunInput.h"
+#include "PhysicalHolster.h"
 #include "LedgePullGesture.h"
 #include "SwitchPosePath.h"
 #include "LedgeGrabFeedback.h"
@@ -313,6 +314,7 @@ motiongun::Frame g_hkScopeInverseBind{};
 const uint8_t* g_hkScopeBindItem=nullptr;
 motiongun::TriggerInput g_gunTriggers;
 motiongun::EquipInput g_gunEquip;
+motiongun::HolsterInput g_holsters;
 bool g_handFired[2]{};
 int g_firingHand = -1;
 int16_t g_firingAim[2] = {};
@@ -793,7 +795,9 @@ const char* MotionBlockedReason() {
     const uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
     const int16_t status = *reinterpret_cast<const int16_t*>(lara + 2);
     const int16_t gun = *reinterpret_cast<const int16_t*>(lara + 4);
-    if (status != 4) return "guns-not-ready";
+    const bool physicalTransition=g_holsters.active && gun==g_holsters.weapon &&
+        (status==2 || status==3);
+    if (status != 4 && !physicalTransition) return "guns-not-ready";
     if (!MotionWeaponSupported(gun)) return "weapon-not-supported";
     vr::HmdMatrix34_t pose{};
     if (motiongun::DualWeapon(gun) && !VR().ControllerPose(0,pose))
@@ -1232,6 +1236,8 @@ bool ReadIKJoint(const uint8_t* obj,const float* joints,int count,int bones,
     return firstperson::Finite(frame);
 }
 
+#include "PhysicalHolster.inl"
+
 bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
     if(!FullBodyIKReady() || count<15 || count>33) return false;
@@ -1462,6 +1468,8 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     if (g_renderArm<0 && joints && count>0 && count<=33 && g_active &&
         g_boundDll && item && item==g_headingItem &&
         item==*Ptr<uint8_t*>(g_boundDll->laraItem)) {
+        motiongun::Vec holsterCamera{};
+        const bool captureHolsters=HolsterCameraOffset(item,joints,count,holsterCamera);
         if (BodyVisualOffsetApplies(item))
             stabilization::OffsetBodyPalette(joints,count,BodyRenderOffset());
         ApplyLadderTorsoClearance(item,joints,count);
@@ -1482,6 +1490,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
             else ++g_armIKFailed;
         }
         if (g_bodySkinReady) std::memcpy(g_bodyRenderPalette,joints,count*12*sizeof(float));
+        if (captureHolsters) CaptureHolsterAnchors(item,joints,count,holsterCamera);
     }
     if (g_renderArm < 0 || count < 15 || !joints || !MotionReady() ||
         item != *Ptr<uint8_t*>(g_boundDll->laraItem)) return count;
@@ -1681,6 +1690,9 @@ int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
                          const int16_t* aim) {
     const bool longShot=g_longShot && g_longShot->weapon==weapon && hand==1;
     const bool separateTriggers=!longShot && hand>=0 && g_gunTriggers.active && MotionTriggerMode();
+    if(hand>=0 && g_active && g_holsters.active && weapon==g_holsters.weapon &&
+       (!g_holsters.Has(hand) || g_holsters.hand[hand].blockTrigger ||
+        g_holsters.hand[hand].claimed)) return 0;
     // Native return 0 skips ammo/hits, muzzle flash, shell, sound and shot stats.
     // Keep unknown callers and non-motion modes entirely native.
     if (separateTriggers && !g_gunTriggers.pending[hand]) return 0;
@@ -1745,6 +1757,8 @@ int32_t FireWeaponForHand(int hand, int32_t weapon, void* target, void* extra,
 template<class Fire>
 void RunLongShot(int weapon, bool projectile, Fire fire) {
     if (CurrentMotionWeapon()!=weapon || !MotionTriggerMode()) { fire(nullptr); return; }
+    if(g_holsters.active && weapon==g_holsters.weapon && (!g_holsters.Has(1) || g_holsters.hand[1].claimed ||
+       g_holsters.hand[1].blockTrigger)) return;
     if (g_gunTriggers.active && !g_opticShot && !g_gunTriggers.pending[1]) return;
     LongShot shot{};
     shot.weapon=weapon; shot.projectile=projectile;
@@ -3017,6 +3031,7 @@ void __cdecl Detour_CrouchDraw(uint8_t* item,int32_t drawType) {
     // wall impacts and temporarily missing controller poses must not bring
     // proximity hiding back. Explicit stance masks and shadow rendering remain.
     flags&=~2u;
+    const HolsterRenderScope holsters(item,app);
     original(item,drawType);
     flags=(flags&~2u)|modern;
 }
@@ -3069,6 +3084,14 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
             return;
         }
         const uint32_t handMask=motiongun::HandOnlyMask(bits);
+        if(!handMask && bits && !(bits&~0x92u)) {
+            // Hip and back weapon meshes share the body's fitted/IK skeleton.
+            const bool previousScope=g_bodySkinScope;
+            g_bodySkinScope=true;g_bodySkinReady=false;
+            g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
+            g_bodySkinScope=previousScope;g_bodySkinReady=false;
+            return;
+        }
         if (!handMask) return;
         const uint32_t savedMotionBits=bits;
         const int previousArm=g_renderArm;
@@ -3441,6 +3464,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
 }
 
 void Remove() {
+    ResetPhysicalHolsters();
     RemovePhysicalSwitches();
     g_hCrouchDraw.Remove();
     g_crouchGunsReady=false;g_crouchWeaponScope=nullptr;g_hCrouchGun.Remove();
@@ -3514,11 +3538,31 @@ bool UpdateGunTriggers(uint8_t& left, uint8_t& right, bool enabled, uint64_t now
     const bool holdMode=app[0x9ec+controlScheme]==0;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool rawLeft=left>30;
+    if(y || (status==0 && rawLeft && !g_gunEquip.leftHeld)) ResetPhysicalHolsters();
+    if(g_holsters.active) {
+        if((status==4 && weapon!=g_holsters.weapon) ||
+           (g_holsterWasReady && status==0 && g_holsters.mask) ||
+           (g_holsterRequestTime && now-g_holsterRequestTime>3000 && status!=4 && g_holsters.mask)) {
+            ResetPhysicalHolsters();
+        } else {
+            if(status==4) g_holsterWasReady=true;
+            if(!g_holsters.mask && status==0) g_holsterWasReady=false;
+            if(g_holsters.request) {
+                if(g_holsters.mask) *Ptr<int16_t>(g_boundDll->lara+6)=int16_t(g_holsters.weapon);
+                g_gunEquip.desiredArmed=g_holsters.mask!=0;g_gunEquip.pending=true;
+                g_holsters.request=false;g_holsterRequestTime=now;
+            }
+        }
+    }
     const bool nativeEquip=g_gunEquip.Update(holdMode,status,rawLeft,y);
     const bool motion=MotionTriggerMode();
-    g_gunTriggers.Update(motion,motion && MotionReady() && g_gunEquip.desiredArmed && !g_gunEquip.consumeY,
+    g_gunTriggers.Update(motion,motion && status==4 && MotionReady() && g_gunEquip.desiredArmed && !g_gunEquip.consumeY,
         rawLeft && !g_gunEquip.blockLeft,right>30,now);
     if (!motiongun::DualWeapon(weapon)) g_gunTriggers.Clear(0);
+    if(g_holsters.active) {
+        if(!g_holsters.CanFire(0,rawLeft)) g_gunTriggers.Clear(0);
+        if(!g_holsters.CanFire(1,right>30)) g_gunTriggers.Clear(1);
+    }
     left=nativeEquip ? 255 : 0;
     // RT also owns native grab/Action while the guns are away or Lara's hands
     // are busy. Keep its analog value AND hold duration in those states.
@@ -3543,6 +3587,7 @@ int FirstPersonTrackedHandJoint() {
 }
 
 bool FirstPersonHKScopePose(motiongun::Frame& lens, motiongun::Frame& camera,float* radiusMetres) {
+    if(g_holsters.active && !g_holsters.Has(1)) return false;
     if (!Cfg().firstPersonHKScope || !g_boundDll || g_boundDll->game!=1 ||
         CurrentMotionWeapon()!=5 || !MotionReady() || IsOpticsZoomed() ||
         Cfg().monoTracking || !Cfg().duplicateDraws || Cfg().eyeOffsetMode!=3 ||
@@ -3635,6 +3680,7 @@ void FirstPersonUpdate() {
 }
 
 void FirstPersonRecenter() {
+    CancelHolsterTracking();
     ResetPhysicalSwitch();
     g_groundJump.Reset();
     g_ledgePull.Reset(); g_ledgeGrab.Reset();
@@ -3648,6 +3694,7 @@ void FirstPersonRecenter() {
 }
 
 void FirstPersonTrackingOriginChanged(float yawCorrection) {
+    CancelHolsterTracking();
     const float oldBase=g_headingBase;
     g_headingBase=Wrap(g_headingBase+yawCorrection);
     g_groundEye.Resume(true,oldBase,g_headingBase,0);
@@ -3656,6 +3703,7 @@ void FirstPersonTrackingOriginChanged(float yawCorrection) {
 }
 
 void FirstPersonToggle() {
+    ResetPhysicalHolsters();
     ResetPhysicalSwitch();
     g_unarmedArmVisibility={};
     g_unarmedTwist[0]=g_unarmedTwist[1]={};
@@ -3720,6 +3768,12 @@ const float* FirstPersonRenderBodyPalette(uint64_t& mask,int& count) {
 
 bool FirstPersonSwitchGrip(bool down, bool allowed) {
     return UpdatePhysicalSwitchGrip(down,allowed,GetTickCount64());
+}
+
+unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightValid,bool allowed) {
+    DWORD process=0;GetWindowThreadProcessId(GetForegroundWindow(),&process);
+    return UpdatePhysicalHolsterGrips(left,right,leftValid,rightValid,
+        allowed && process==GetCurrentProcessId(),GetTickCount64());
 }
 
 bool FirstPersonActive() {

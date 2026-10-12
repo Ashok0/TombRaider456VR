@@ -13,6 +13,8 @@ void FirstPersonShutdown();
 bool FirstPersonActive();
 // Consume Right Grip only while a nearby physical wall lever is grabbed.
 bool FirstPersonSwitchGrip(bool down, bool allowed);
+// Bit 0/1 consume left/right Grip only during a physical holster transfer.
+unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightValid,bool allowed);
 // True only while the native light camera draws its shadow map.
 bool FirstPersonShadowPass();
 // Unmasked palette only within Lara's first-person body draw.
