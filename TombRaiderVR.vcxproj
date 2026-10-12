@@ -176,6 +176,7 @@
     <ClInclude Include="src\LocomotionMath.h" />
     <ClInclude Include="src\MotionGunInput.h" />
     <ClInclude Include="src\PhysicalHolster.h" />
+    <ClInclude Include="src\BodyFollower.h" />
     <ClInclude Include="src\PhysicalHolster.inl" />
     <ClInclude Include="src\LedgePullGesture.h" />
     <ClInclude Include="src\LedgeGrabFeedback.h" />

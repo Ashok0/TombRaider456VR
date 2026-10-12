@@ -27,6 +27,11 @@ void __cdecl ObserveFullBodyDraw(uint8_t* item,int32_t masked,int32_t) {
 void TestFullBodyIK() {
     using namespace tr;using namespace tr::motiongun;
     const auto settings=config;const auto savedDll=dll;const auto calibration=testCalibration;
+    const auto savedFollower=g_bodyFollower;const auto savedSerial=VR().m_poseSerial;
+    const auto savedBodySize=g_bodySize;const int savedSizeObject=g_bodySizeObject;
+    const float savedNeckHeight=VR().m_firstPersonNeutralEyeNeckY;
+    const auto savedHeightCrouch=g_heightCrouch;const bool savedPhysicalCamera=g_physicalCrouchCamera;
+    g_bodyFollower.Reset();
     const auto savedItem=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
     const auto savedLara=std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory));
     const auto savedPose=g_scenePose;const auto savedHeading=g_headingBase;const auto savedOffset=g_bodyVisualOffset;
@@ -38,6 +43,7 @@ void TestFullBodyIK() {
     alignas(16) static uint8_t objectInfo[off::object_stride]{};
     dll.objects=rva(objectInfo);dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeBodyJoint));dll.gLaraHeads=0;
     config.firstPersonFullBodyIK=config.firstPersonUnarmedIK=true;
+    config.firstPersonBodyScale=1; // Existing geometry invariants use native size.
     config.firstPersonAnchorX=config.firstPersonAnchorY=config.firstPersonAnchorZ=config.firstPersonInteractionAnchorZ=0;
     config.firstPersonJoint=14;
     auto& state=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state);
@@ -45,6 +51,20 @@ void TestFullBodyIK() {
     auto& bits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
     *reinterpret_cast<int16_t*>(itemMemory+off::item_object)=0;
     state=2;status=0;gun=1;bits=0x3fff;
+    {
+        const float height=VR().m_rawHeadPose.m[1][3];
+        config.firstPersonPhysicalCrouch=true;
+        VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-.36f;
+        Check(FirstPersonPhysicalCrouch(true),"calibrated HMD height can request native crouch");
+        VRSystem::HandState hands[2]{};XState input{};bool shifted=false,action=false;
+        BuildStateFromHands(hands,input,shifted,true,action);
+        Check((input.Gamepad.wButtons&XB_LEFT_SHOULDER)!=0,"physical crouch uses the game's existing Duck binding");
+        VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-.28f;
+        Check(FirstPersonPhysicalCrouch(true),"head height inside hysteresis band keeps native crouch held");
+        Check(!FirstPersonPhysicalCrouch(false),"menus release physical crouch input");
+        config.firstPersonPhysicalCrouch=false;VR().m_rawHeadPose.m[1][3]=height;
+        g_heightCrouch={};g_physicalCrouchCamera=false;
+    }
     g_hGetJoints.m_trampoline=reinterpret_cast<void*>(&FakeSkinJoints);
     g_renderArm=-1;g_bodySkinScope=true;g_shadowDll=nullptr;
     const auto identity=firstperson::IdentityBasis();
@@ -108,6 +128,9 @@ void TestFullBodyIK() {
     Frame broken[15];std::memcpy(broken,native,sizeof(broken));broken[2]=broken[1];
     Check(!firstperson::SolveBody(broken,{},identity,{0,0,1},1000,crouched),"degenerate leg safely rejects full-body solve");
     Check(!firstperson::SolveBody(native,{NAN,0,0},identity,{0,0,1},1000,crouched),"invalid head cannot poison skeleton");
+    // Authored spines are not a straight arm chain: retain this curvature in
+    // the actual render-hook fixtures as well as the standalone solver tests.
+    native[7].origin.z=-60;
     const auto& rootPose=*reinterpret_cast<const PHD_3DPOS*>(itemMemory+off::item_pos);
     const Vec root{float(rootPose.x_pos),float(rootPose.y_pos),float(rootPose.z_pos)},camera=Add(root,{300,-200,-500});
     for(int j=0;j<15;++j) bodyJointWorld[j]=Add(root,native[j].origin);
@@ -189,6 +212,7 @@ void TestFullBodyIK() {
             const auto oldPos=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
             const auto oldPrev=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos_prev);
             const int oldFraction=fraction;
+            const float oldNeckHeight=VR().m_firstPersonNeutralEyeNeckY;
             float unturned[33*12]{};std::memcpy(unturned,fixture,sizeof(fixture));
             float neutral[3],neck[2];std::memcpy(neutral,VR().m_firstPersonNeutral,sizeof(neutral));
             std::memcpy(neck,VR().m_firstPersonNeutralNeck,sizeof(neck));
@@ -199,7 +223,93 @@ void TestFullBodyIK() {
             auto& previous=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos_prev);
             current.y_rot=previous.y_rot=0;
             Head(0);VR().RecenterFirstPersonHead();
+            {
+                const auto beforeScene=g_scenePose;const auto beforeFit=g_bodyVisualOffset;
+                const bool beforeManual=g_haveManualInput;
+                const auto beforeStance=g_stanceEye;
+                g_haveManualInput=false;g_bodyVisualOffset={};g_headingBase=0;g_bodyFollower.Reset();
+                config.firstPersonBodyScale=0;g_bodySize.Reset();g_stanceEye={};
+                g_scenePose.x_pos=int(bodyJointWorld[14].x+config.firstPersonAnchorX);
+                g_scenePose.y_pos=int(bodyJointWorld[14].y+config.firstPersonAnchorY+160);
+                g_scenePose.z_pos=int(bodyJointWorld[14].z+config.firstPersonAnchorZ);
+                for(int hand=0;hand<2;++hand) {
+                    auto& m=VR().m_rawControllerPose[hand];m=VR().m_rawHeadPose;
+                    m.m[0][3]+=(hand ? .25f : -.25f);m.m[1][3]-=.3f;m.m[2][3]-=.4f;
+                }
+                state=3;++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+                Check(!g_bodySize.valid,"jump poses cannot become standing size calibration");
+                state=2;++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+                Check(g_bodySize.valid && g_bodySize.factor<.85f,
+                      "real render hook automatically sizes an oversized body to the comfortable eye height");
+                const float calibratedSize=g_bodySize.factor;
+                Frame fitted[15]{};
+                for(int i=0;i<count;++i) fitted[mapping[i]]=Multiply(ReadRows(baseline+i*12),bind[i]);
+                for(int first:{1,4}) {
+                    const float length=firstperson::Length(Sub(fitted[first+1].origin,fitted[first].origin))+
+                        firstperson::Length(Sub(fitted[first+2].origin,fitted[first+1].origin));
+                    Check(firstperson::Length(Sub(fitted[first+2].origin,fitted[first].origin))/length>.999f &&
+                          firstperson::KneeBendDegrees(fitted,first)<2,
+                          "actual rendered upright knees are within two degrees of straight");
+                    Check(std::fabs(fitted[first+2].origin.y-(bodyJointWorld[first+2].y-camera.y))<.1f,
+                          "rendered calibrated feet stay at the original floor height");
+                }
+                for(float yaw:{-.35f,-.15f,.15f,.35f}) for(float pitch:{-.2f,0.f,.2f}) {
+                    Head(yaw,pitch);++VR().m_poseSerial;
+                    Detour_GetJoints(itemMemory,palette,0);
+                    for(int i=0;i<count;++i) {
+                        const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                        const auto neutralJoint=Multiply(ReadRows(baseline+i*12),bind[i]);
+                        if(mapping[i]==0 || mapping[i]==7) {
+                            Check(nearVec(actual.origin,neutralJoint.origin),
+                                  "real render hook holds chest and hips fixed during small head turns with stationary controllers");
+                            for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                                Check(std::fabs(actual.basis.r[r][c]-neutralJoint.basis.r[r][c])<.001f,
+                                      "real render hook never follows small head rotations with the torso");
+                        }
+                        if(mapping[i]==14) {
+                            const Vec eye{float(g_scenePose.x_pos),float(g_scenePose.y_pos),float(g_scenePose.z_pos)};
+                            Check(nearVec(Add(Transform(actual,{11,-32,144}),camera),eye),
+                                  "real render hook keeps configured eye on camera while chest stays fixed");
+                        }
+                        if(mapping[i]==10 || mapping[i]==13) {
+                            Frame target{};Basis controller{};BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller);
+                            const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
+                                                    -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),
+                                  "automatic body scaling preserves physical controller grip alignment");
+                        }
+                    }
+                }
+                for(float pitch:{-.35f,-.7f,-1.1f}) {
+                    Head(0,pitch);
+                    const auto& h=VR().m_rawHeadPose;
+                    VR().m_rawHeadPose.m[1][3]+=.08f*h.m[1][1]-.12f*h.m[1][2]-VR().m_firstPersonNeutralEyeNeckY;
+                    Check(VR().FirstPersonHeightDrop()>.03f && std::fabs(VR().FirstPersonPostureDrop())<.0001f,
+                          "looking down around a stationary neck is not a physical crouch");
+                    ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                    Frame looking[15]{};
+                    for(int i=0;i<count;++i) looking[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                    Check(firstperson::KneeBendDegrees(looking,1)<2 && firstperson::KneeBendDegrees(looking,4)<2,
+                          "looking down at the legs retains straight upright knees in the real renderer");
+                    const Vec eye{float(g_scenePose.x_pos),float(g_scenePose.y_pos)+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre(),float(g_scenePose.z_pos)};
+                    Check(nearVec(Add(Transform(looking[14],{11,-32,144}),camera),eye),
+                          "neck-arc posture compensation does not modify the rendered eye target");
+                }
+                Head(0);VR().m_rawHeadPose.m[1][3]-=.2f;state=1;
+                ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                Check(g_bodySize.factor==calibratedSize,"walking and physical crouch cannot rescale the rendered body");
+                state=2;
+                ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                Frame ducked[15]{};
+                for(int i=0;i<count;++i) ducked[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                Check(firstperson::KneeBendDegrees(ducked,1)>20 && firstperson::KneeBendDegrees(ducked,4)>20,
+                      "real physical crouch releases upright legs even while native animation remains standing idle");
+                Head(0);g_scenePose=beforeScene;g_bodyVisualOffset=beforeFit;g_haveManualInput=beforeManual;
+                g_stanceEye=beforeStance;config.firstPersonBodyScale=1;g_bodySize.Reset();
+                g_bodyFollower.Reset();
+            }
             for(int which:{0,1}) for(int armed:{0,1}) for(int step=0;step<48;++step) {
+                ++VR().m_poseSerial;
                 dll.game=which;state=2;status=armed ? 4 : 0;
                 const float phase=step*6.2831853f/47;
                 Head(phase,.35f*std::sin(phase));g_headingBase=-phase*.65f;
@@ -237,8 +347,8 @@ void TestFullBodyIK() {
                     }
                     if(mapping[i]==0) {
                         const Vec forward=Transform(joint.basis,{0,0,1});
-                        Check(Near(Wrap(std::atan2(forward.x,forward.z)-g_headingBase-phase),0),
-                              "enabled pelvis follows physical plus stick yaw without native-body lag");
+                        Check(std::fabs(Wrap(std::atan2(forward.x,forward.z)-g_bodyFollower.yaw))<.003f,
+                              "pelvis retains persistent body yaw while torso and neck absorb the head twist");
                     }
                     if(mapping[i]==10 || mapping[i]==13) {
                         Frame target{};Basis controller{};Check(BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller),"centered body wrist target available");
@@ -254,6 +364,7 @@ void TestFullBodyIK() {
                     "repeated eye draws do not accumulate full-body offsets or rotations");
             }
             fraction=oldFraction;std::memcpy(fixture,unturned,sizeof(fixture));bodyJointRotation=identity;
+            VR().m_firstPersonNeutralEyeNeckY=oldNeckHeight;
             for(int i=0;i<15;++i) bodyJointWorld[i]=Add(root,native[i].origin);
             config=savedSettings;VR().m_rawHeadPose=oldHead;VR().m_headFromTracking=oldView;g_scenePose=oldScene;
             g_headingBase=oldBase;g_bodyVisualOffset=oldFit;current=oldPos;previous=oldPrev;
@@ -264,6 +375,7 @@ void TestFullBodyIK() {
         // solver delta. A physical crouch must lower the pelvis, keeping feet.
         const auto sceneBefore=g_scenePose;const float headY=VR().m_rawHeadPose.m[1][3];
         const bool flipBefore=config.flipViewY;config.flipViewY=true;
+        g_bodyFollower.Reset();++VR().m_poseSerial;
         g_scenePose.y_pos=int(bodyJointWorld[14].y);
         VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1];
         Detour_GetJoints(itemMemory,baseline,0);
@@ -321,5 +433,9 @@ void TestFullBodyIK() {
     VR().m_rawHeadPose=savedHead;std::memcpy(VR().m_rawControllerPose,controllers,sizeof(controllers));
     std::memcpy(itemMemory,savedItem.data(),sizeof(itemMemory));std::memcpy(laraMemory,savedLara.data(),sizeof(laraMemory));
     config=settings;dll=savedDll;testCalibration=calibration;g_unarmedTwist[0]=savedLeft;g_unarmedTwist[1]=savedRight;
+    g_bodyFollower=savedFollower;VR().m_poseSerial=savedSerial;
+    g_bodySize=savedBodySize;g_bodySizeObject=savedSizeObject;
+    VR().m_firstPersonNeutralEyeNeckY=savedNeckHeight;
+    g_heightCrouch=savedHeightCrouch;g_physicalCrouchCamera=savedPhysicalCamera;
 }
 }

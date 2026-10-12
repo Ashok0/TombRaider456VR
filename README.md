@@ -896,9 +896,107 @@ Clean Release/x64 rebuild and installed-DLL hash verification pass. Logs:
 `build/monkey-input-tests.log`, `build/monkey-input-before-tests.log`,
 `build/monkey-native-audit.log`, and `build/monkey-input-build.log`.
 
-### Optional full-body centering (2026-10-08)
+### Full-body follow with yaw and lean slack (2026-10-11)
 
-**Full-body IK remains disabled in the installed INI (`FirstPersonFullBodyIK=0`).**
+The current full-body mode uses a persistent pelvis facing and footprint,
+separate from the headset. It supersedes the direct head-following centering
+described in the historical October 8 section below. Enable it with
+`FirstPersonFullBodyIK=1`; tracked unarmed hands also require
+`FirstPersonUnarmedIK=1`. Stand normally and recenter to calibrate eye height.
+
+Body size now calibrates on the first ordinary standing frame. The solver fits
+the model's near-straight standing stature to the available rendered eye-to-foot
+height, preserving the comfortable camera position. It scales the mesh and
+bone spacing together about the feet before applying IK. Previously a tall
+model had to lower its pelvis and keep its knees bent just to reach the eye.
+The fitted size stays fixed while walking, leaning and crouching; it resets on
+recenter, a new body/camera session, outfit object change or world-scale change.
+It does not use a seated tracking origin as a floor measurement or change world
+scale. Native collision, third-person models and shadows keep their usual size;
+controller grips retain their existing calibration and holsters use the fitted
+body palette. Native constrained-grip interactions retain their prior solver.
+
+`FirstPersonBodyScale=0` selects automatic sizing (the default). Positive values
+from 0.5 to 1.5 override it; 1 restores the original model size. Automatic sizing
+waits for standing idle and will not capture a jump, crawl, landing or physical
+crouch as standing stature. The chosen factor is written to the game log as
+`standing body scale=...` to support further headset tuning.
+
+Upright idle now explicitly supports the pelvis at nearly full leg extension.
+The prior 99% reach target plus neck-height allowance still left a visible
+standing knee bend; calibration now targets 99.995% reach and the standing
+constraint prevents the neck allowance from lowering the hips. Tests require
+less than two degrees of knee bend for symmetric standing contacts. Uneven
+contacts use the lower feasible pelvis height so neither leg stretches.
+Support is full within 3 cm of inferred upright posture and fades out by a
+10 cm physical drop; locomotion and inferred steps release it. Looking down
+subtracts an estimated neck-to-eye arc from this **posture decision only**,
+so inspecting the legs need not trigger a crouch. The camera and tracked eye
+remain unchanged. Extreme manual sizing has a torso-clearance limit. With drift
+logging on, `body stance` entries report posture drop, support weight and the
+two solved knee angles for headset diagnosis.
+
+At rest, the neck owns the first 30 degrees of head turn; the torso only shares
+excess twist. Head turns up to 45 degrees leave the hips fixed. Beyond that,
+facing catches up at up to 120 degrees/second and settles
+inside a 30-degree release margin. Stick turns rotate the body about the headset
+with the player. Locomotion follows HMD facing when `FirstPersonMoveWithHead=1`,
+or movement direction otherwise. Two raised controllers held and aimed forward
+in the **body's** frame hold the chest facing steady and suppress idle hip
+catch-up until an 80-degree head turn. Moving or lowering the hands releases
+that support. Movement still overrides it; the optional hand weight supplies a
+small facing bias during locomotion. Hands at the holsters do not steer the body.
+
+Horizontal displacement within 15 cm is treated as leaning. Beyond it,
+collision-checked room-scale movement catches up at up to 0.9 m/s until the
+remaining offset is about 9 cm. The rendered footprint follows with the same
+slack and speed limit. Small alternating IK steps accompany catch-up and
+turning; ordinary stick locomotion retains the native walking/running stride.
+These are inferred steps, without foot trackers or individual terrain probes.
+
+Small positional changes (4 cm horizontally, 1.5 cm vertically) are absorbed by
+the sparse neck rather than shifting the torso. Larger lean applies a bounded
+20-degree bend to the authored spine shape. Head orientation is excluded from
+this posture calculation: rotating the eye-to-neck offset cannot make the chest
+fold toward the camera. The previous two-bone spine solve could reverse an
+authored spine curve and put the chest into the view; it has been removed.
+
+Physical lowering lowers the pelvis and bends the knees while
+keeping reachable foot contacts planted. The eye remains exactly at the tracked
+target; extreme poses may need supporting hip movement or release foot contact
+instead of stretching legs. Lara has one torso joint and a head joint, so small
+neck translations substitute for the missing neck chain. Arms and guns
+retain their existing controller targets, and holsters follow the solved hips.
+Ledges, climbing, swimming, vehicles, scripted interactions and native shadows
+retain their existing state-specific handling.
+
+`FirstPersonPhysicalCrouch=1` optionally sends native Duck after lowering 35 cm
+below calibration, releasing above the 23 cm threshold. Its camera path avoids
+adding the game's crouch height drop on top of the physical HMD drop. This option
+defaults off; physical crouching still bends the rendered body with it disabled.
+
+| Setting | Default |
+|---|---:|
+| `FirstPersonBodyYawSlackDegrees` | 45 |
+| `FirstPersonBodyYawSpeedDegrees` | 120 |
+| `FirstPersonBodyLeanRadiusMetres` | 0.15 |
+| `FirstPersonBodyFollowSpeedMetres` | 0.9 |
+| `FirstPersonBodyHandYawWeight` | 0.15 (0 disables controller support and hint) |
+| `FirstPersonBodyScale` | 0 (automatic standing fit) |
+| `FirstPersonPhysicalCrouch` | 0 |
+
+State advances once per tracked pose, shared by both eyes and all skin/weapon
+passes. Recenter, view/level changes and tracking gaps reset stale state.
+Regression coverage checks deadzones, hysteresis, frame rates, artificial-turn
+pivots, collision rejection, eye/controller alignment with real eye offsets,
+fixed torso during small head motion with forward hands, curved authored spines,
+leg lengths, standing size mismatch and knee extension, fixed size through
+crouching/walking, planted feet, native crouch input, shadows and jiggle. Headset fit remains a
+required practical check.
+
+### Optional full-body centering (2026-10-08, historical)
+
+**At this update, full-body IK remained disabled (`FirstPersonFullBodyIK=0`).**
 Arm-and-hand IK and the monkey-bar fix remain available. This update changes the
 rendered body only when full-body IK is enabled; no setting was switched on.
 
@@ -6717,12 +6815,16 @@ build\hk_scope_gl_tests.exe
 
 First-person HD mode also supports physical weapon holsters on Lara's visible
 mesh. At either hip, squeeze that hand's **Grip**, then pull at least 8 cm out
-of the grab zone (about 18 cm from its centre). **Each hand controls its own
+of the grab zone (about 27 cm from its centre). **Each hand controls its own
 pistol or Uzi**. To put a gun away, bring it to its matching hip while holding
 Grip and release Grip there. Releasing away from the holster keeps it equipped.
 The revolver/Desert Eagle uses the right hip; long weapons use the upper back
 mount with Right Grip. Put away held guns before changing weapon types.
 
+Grab zones allow 22 cm (about 9 inches) of distance from each holster grip,
+for both drawing and returning guns. The matching controller gently rumbles
+while inside a usable zone; moving away, losing tracking or opening a menu
+stops that feedback. A stronger burst confirms a completed draw or return.
 Grab zones follow the rendered body, including body fitting and IK. Only a
 claimed holster consumes its Grip binding; other grips retain Walk/Duck and
 two-grip Action. A holstered gun cannot fire. After a transfer, release the

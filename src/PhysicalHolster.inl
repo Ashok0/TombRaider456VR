@@ -13,6 +13,7 @@ uint64_t g_holsterSeen=0,g_holsterRequestTime=0;
 bool g_holsterRenderScope=false,g_holsterWasReady=false;
 
 void ResetPhysicalHolsters() {
+    VR().HolsterHoverHaptic(0,false);VR().HolsterHoverHaptic(1,false);
     g_holsters.Reset();g_holsterItem=nullptr;g_holsterLevel=-1;
     g_holsterSeen=g_holsterRequestTime=0;g_holsterWasReady=false;
     for(auto& a:g_holsterAnchor) a={};
@@ -20,6 +21,7 @@ void ResetPhysicalHolsters() {
     for(auto& visible:g_holsterVisible) visible=false;
 }
 void CancelHolsterTracking() {
+    VR().HolsterHoverHaptic(0,false);VR().HolsterHoverHaptic(1,false);
     g_holsterSeen=0;
     for(int hand=0;hand<2;++hand) g_holsters.Cancel(hand,true);
 }
@@ -165,6 +167,7 @@ unsigned UpdatePhysicalHolsterGrips(bool left,bool right,bool leftValid,bool rig
             if(g_holsters.active && candidate==HolsterSlot(hand,g_holsters.weapon) &&
                (hand==1 || motiongun::DualWeapon(g_holsters.weapon))) gun=g_holsters.weapon;
             if(!MotionWeaponSupported(gun)) continue;
+            if(!grip.claimed && !g_holsters.WeaponEligible(hand,gun,status,weapon)) continue;
             const auto delta=Sub(point,g_holsterAnchor[candidate].point);
             const float d=std::sqrt(motiongun::Dot(delta,delta))/scale;
             if(std::isfinite(d) && d<distance) { distance=d;slot=candidate;available=gun; }
@@ -173,6 +176,8 @@ unsigned UpdatePhysicalHolsterGrips(bool left,bool right,bool leftValid,bool rig
         const bool wasActive=g_holsters.active;
         if(g_holsters.Poll(hand,down[hand],tracked && slot>=0,slot,available,distance,status,weapon))
             consumed|=1u<<hand;
+        VR().HolsterHoverHaptic(hand,tracked &&
+            g_holsters.Hover(hand,slot,available,distance,status,weapon));
         if(wasActive!=g_holsters.active || oldMask!=g_holsters.mask) {
             g_gunTriggers.Clear(hand);VR().GunShotHaptic(hand);
             LogF("firstperson: physical holster weapon=%d hands=%u",g_holsters.weapon,g_holsters.mask);

@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cwchar>
 #include <algorithm>
+#include <cmath>
 
 namespace tr {
 namespace {
@@ -343,6 +344,15 @@ void LoadConfig(const wchar_t* ini) {
         L"FirstPersonMotionGuns", g_cfg.firstPersonMotionGuns, ini);
     g_cfg.firstPersonFullBodyIK = GetBool(
         L"FirstPersonFullBodyIK", g_cfg.firstPersonFullBodyIK, ini);
+    g_cfg.firstPersonBodyYawSlackDegrees=std::clamp(GetFloat(L"FirstPersonBodyYawSlackDegrees",45,ini),10.f,70.f);
+    g_cfg.firstPersonBodyYawSpeedDegrees=std::clamp(GetFloat(L"FirstPersonBodyYawSpeedDegrees",120,ini),30.f,360.f);
+    g_cfg.firstPersonBodyLeanRadiusMetres=std::clamp(GetFloat(L"FirstPersonBodyLeanRadiusMetres",.15f,ini),.05f,.3f);
+    g_cfg.firstPersonBodyFollowSpeedMetres=std::clamp(GetFloat(L"FirstPersonBodyFollowSpeedMetres",.9f,ini),.2f,2.f);
+    g_cfg.firstPersonBodyHandYawWeight=std::clamp(GetFloat(L"FirstPersonBodyHandYawWeight",.15f,ini),0.f,.35f);
+    g_cfg.firstPersonBodyScale=GetFloat(L"FirstPersonBodyScale",0,ini);
+    if(!std::isfinite(g_cfg.firstPersonBodyScale) || g_cfg.firstPersonBodyScale<=0) g_cfg.firstPersonBodyScale=0;
+    else g_cfg.firstPersonBodyScale=std::clamp(g_cfg.firstPersonBodyScale,.5f,1.5f);
+    g_cfg.firstPersonPhysicalCrouch=GetBool(L"FirstPersonPhysicalCrouch",false,ini);
     g_cfg.firstPersonUnarmedIK = GetBool(
         L"FirstPersonUnarmedIK", g_cfg.firstPersonUnarmedIK, ini);
     g_cfg.firstPersonMotionGunGripForwardMetres = GetFloat(

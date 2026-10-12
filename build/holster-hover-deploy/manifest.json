@@ -1,0 +1,17 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T21:56:41.3623938-04:00",
+    "base_commit":  "898efed",
+    "dll_sha256":  "774E1F1D314532836C406715FAD15E5E50E8F8A486EDEA08213A6A1C6F219D94",
+    "ini_sha256":  "79AAF86409D2C4B39E4E0DB92EB7C1AB7E543CA61BFAE9F83D89D9CFF7A4E4B8",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-holster-hover-20261011-215641",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1690657,
+    "debug_regression_checks":  1690657,
+    "interaction":  "22 cm draw/stow radius; per-hand gentle hover rumble; strong transfer confirmation retained",
+    "hover_pulse_microseconds":  700,
+    "hover_interval_ms":  60,
+    "hover_expiry_ms":  100,
+    "hardware_verified":  false
+}

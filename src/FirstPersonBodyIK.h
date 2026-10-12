@@ -13,6 +13,21 @@ inline bool Finite(const Frame& f) {
     for (const auto& row:f.basis.r) for(float value:row) if(!std::isfinite(value)) return false;
     return true;
 }
+inline void ScaleBody(const Frame (&native)[15],float factor,Frame (&sized)[15]) {
+    // The lower foot supplies the floor during a stride. Averaging with the
+    // swinging foot would make the planted foot rise as the other knee lifts.
+    const Vec pivot{native[0].origin.x,std::max(native[3].origin.y,native[6].origin.y),native[0].origin.z};
+    for(int j=0;j<15;++j) {
+        sized[j]=native[j];sized[j].origin=Add(pivot,Scale(Sub(native[j].origin,pivot),factor));
+        for(auto& row:sized[j].basis.r) for(auto& v:row) v*=factor;
+    }
+}
+inline float KneeBendDegrees(const Frame (&pose)[15],int first) {
+    const Vec a=Sub(pose[first+1].origin,pose[first].origin);
+    const Vec b=Sub(pose[first+2].origin,pose[first+1].origin);
+    const float lengths=Length(a)*Length(b);
+    return lengths>1.e-6f ? std::acos(std::clamp(Dot(a,b)/lengths,-1.f,1.f))*57.29577951f : 0;
+}
 inline Basis LimitRotation(Basis rotation,float radians) {
     auto q=RotationOf(rotation);
     if(q.w<0) { q.w=-q.w;q.v=Scale(q.v,-1); }
@@ -134,6 +149,111 @@ inline bool SolveBodyAtEye(const Frame (&native)[15],int anchorJoint,Vec anchor,
         if(Length(pole)<(upper+lower)*.05f) pole=forward;
         if(!SolveArm(chain,foot,pole,correction,nullptr,nullptr,false)) return false;
         for(int i=0;i<3;++i) posed[first+i]=Multiply(correction[i],chain[i]);
+        posed[first+2]=foot;
+    }
+    for(const auto& joint:posed) if(!Finite(joint)) return false;
+    return true;
+}
+// Lazy pelvis/footprint with a hard eye target. Preserve the authored torso
+// shape with bounded leaning; sparse neck joints absorb small head movement.
+// Hands are solved separately.
+inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,float yawDelta,
+                               const Basis& headRotation,Vec forward,float scale,Vec rootOffset,
+                               float headTwist,bool grounded,float stepPhase,float stepWeight,
+                               Frame (&posed)[15],float standingWeight=0) {
+    if(!std::isfinite(scale) || scale<=1 || !Finite({headRotation,eye}) ||
+       !Finite({IdentityBasis(),rootOffset})) return false;
+    for(const auto& joint:native) { Frame inverse{};if(!Finite(joint) || !Inverse(joint,inverse)) return false; }
+    Frame inverseHead{};Inverse(native[14],inverseHead);
+    const Vec localEye=Transform(inverseHead,anchor);
+    const Basis yaw=RotationMatrix(AxisRotation({0,1,0},yawDelta));
+    const Frame turn{yaw,Sub(Add(native[0].origin,rootOffset),Transform(yaw,native[0].origin))};
+    Frame footprint[15]{};
+    for(int j=0;j<15;++j) footprint[j]=posed[j]=Multiply(turn,native[j]);
+    Frame head{Multiply(headRotation,footprint[14].basis),{}};
+    head.origin=Sub(eye,Transform(head.basis,localEye));
+    // Position drives posture; orientation drives only the head. Rotating the
+    // eye-to-neck offset must not masquerade as a lean/crouch and bend the chest.
+    const Vec postureHead=Sub(eye,Transform(footprint[14].basis,localEye));
+    const Vec displacement=Sub(postureHead,footprint[14].origin);
+    const Vec spine=Sub(footprint[14].origin,footprint[0].origin);
+    if(Length(spine)<.001f) return false;
+    Vec lean{displacement.x,0,displacement.z};
+    const float distance=Length(lean),neckSlack=.04f*scale;
+    lean=distance>neckSlack ? Scale(lean,(distance-neckSlack)/distance) : Vec{};
+    // Lara has one torso joint, not a multi-bone human spine. A two-bone arm
+    // solve folds this chest like an elbow and can lift it into the camera.
+    // Preserve the authored spine shape and apply a bounded coherent lean.
+    const Basis bend=LimitRotation(Align(spine,Add(spine,lean)),.34906585f);
+    const float heightShift=std::copysign(std::max(0.f,std::fabs(displacement.y)-.015f*scale),displacement.y);
+    Vec pelvisShift{0,heightShift,0};
+    const Vec bentHead=Add(footprint[0].origin,Transform(bend,spine));
+    const Vec residual=Sub(postureHead,Add(bentHead,pelvisShift));
+    // Absorb small movements in the neck; only an exhausted lean pulls the
+    // hips under the head. Keep head position exact even at extreme tracking.
+    const float residualLength=Length(residual);
+    if(residualLength>neckSlack) pelvisShift=Add(pelvisShift,
+        Scale(residual,(residualLength-neckSlack)/residualLength));
+    posed[0].origin=Add(footprint[0].origin,pelvisShift);
+    posed[0].basis=footprint[0].basis;
+    posed[7].origin=Add(posed[0].origin,Transform(bend,Sub(footprint[7].origin,footprint[0].origin)));
+    posed[7].basis=Multiply(bend,footprint[7].basis);
+    posed[14]=head;
+    // Caller supplies the chest contribution after neck slack/controller
+    // support. Twist around the torso axis, keeping its pivot and hips fixed.
+    Vec spineAxis{};if(!Unit(Transform(bend,spine),spineAxis)) return false;
+    const Basis twist=RotationMatrix(AxisRotation(spineAxis,-std::clamp(headTwist,-.34906585f,.34906585f)));
+    posed[7].basis=Multiply(twist,posed[7].basis);
+    if(grounded && standingWeight>0) {
+        // Idle upright stance is a leg constraint, not a consequence of the
+        // eye/neck deadzone. Raise the hips to almost full knee extension;
+        // keep the tracked head exact and let the sparse neck absorb the
+        // small remaining height difference. Choose the lower of the two
+        // feasible hip heights so neither leg stretches on uneven contacts.
+        float standingY=-INFINITY;
+        bool reachable=true;
+        for(int first:{1,4}) {
+            const float a=Length(Sub(footprint[first+1].origin,footprint[first].origin));
+            const float b=Length(Sub(footprint[first+2].origin,footprint[first+1].origin));
+            const Vec hipOffset=Sub(footprint[first].origin,footprint[0].origin);
+            const Vec hip=Add(posed[0].origin,hipOffset),foot=footprint[first+2].origin;
+            const float horizontal=(hip.x-foot.x)*(hip.x-foot.x)+(hip.z-foot.z)*(hip.z-foot.z);
+            const float reach=(a+b)*.99995f;
+            if(horizontal>=reach*reach) { reachable=false;break; }
+            standingY=std::max(standingY,foot.y-std::sqrt(reach*reach-horizontal)-hipOffset.y);
+        }
+        if(reachable) {
+            // The size fit normally leaves only millimetres to correct. Do
+            // not pull the torso into the eye for an extreme manual scale.
+            const float neckClearance=std::fabs(footprint[7].origin.y-footprint[14].origin.y)*.35f;
+            const float maxRaise=std::clamp(posed[7].origin.y-head.origin.y-neckClearance,0.f,scale*.25f);
+            const float lift=std::clamp(standingY-posed[0].origin.y,-maxRaise,scale*.10f)*
+                std::clamp(standingWeight,0.f,1.f);
+            posed[0].origin.y+=lift;posed[7].origin.y+=lift;pelvisShift.y+=lift;
+        }
+    }
+    Frame chestInverse{},pelvisInverse{};Inverse(footprint[7],chestInverse);Inverse(footprint[0],pelvisInverse);
+    const Frame chest=Multiply(posed[7],chestInverse),pelvis=Multiply(posed[0],pelvisInverse);
+    for(int j=8;j<14;++j) posed[j]=Multiply(chest,footprint[j]);
+    for(int leg=0;leg<2;++leg) {
+        const int first=1+leg*3;
+        Frame chain[3]={Multiply(pelvis,footprint[first]),Multiply(pelvis,footprint[first+1]),
+                        Multiply(pelvis,footprint[first+2])},correction[3]{};
+        Frame foot=footprint[first+2];
+        if(!grounded) foot.origin=Add(foot.origin,pelvisShift);
+        else {
+            const float wave=std::sin(stepPhase+leg*3.14159265359f);
+            foot.origin=Add(foot.origin,Scale(forward,wave*.055f*scale*stepWeight));
+            foot.origin.y-=std::max(0.f,wave)*.035f*scale*stepWeight;
+        }
+        const float a=Length(Sub(chain[1].origin,chain[0].origin)),b=Length(Sub(chain[2].origin,chain[1].origin));
+        if(a<.001f || b<.001f) return false;
+        Vec direction{};const Vec toFoot=Sub(foot.origin,chain[0].origin);
+        const float length=Length(toFoot);if(!Unit(toFoot,direction)) direction={0,1,0};
+        const float feasible=std::clamp(length,std::fabs(a-b)+.001f,a+b-.001f);
+        foot.origin=Add(chain[0].origin,Scale(direction,feasible));
+        if(!SolveArm(chain,foot,forward,correction,nullptr,nullptr,false)) return false;
+        for(int j=0;j<3;++j) posed[first+j]=Multiply(correction[j],chain[j]);
         posed[first+2]=foot;
     }
     for(const auto& joint:posed) if(!Finite(joint)) return false;

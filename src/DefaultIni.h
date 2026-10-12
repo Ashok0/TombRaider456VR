@@ -859,6 +859,18 @@ FirstPersonBodyTurnDegreesPerFrame=4
 FirstPersonHeadAim=1
 ; Controller tracking enabled to match the known-good Steam profile.
 FirstPersonMotionGuns=1
+; Body yaw/position use slack and smoothed catch-up; head and hands stay tracked.
+FirstPersonFullBodyIK=1
+FirstPersonBodyYawSlackDegrees=45
+FirstPersonBodyYawSpeedDegrees=120
+FirstPersonBodyLeanRadiusMetres=0.15
+FirstPersonBodyFollowSpeedMetres=0.9
+FirstPersonBodyHandYawWeight=0.15
+; 0 calibrates body size to standing eye/floor height. 1 keeps native size.
+; Positive values override calibration (0.5 to 1.5). Recenter standing upright.
+FirstPersonBodyScale=0
+; Optional native Duck: enter at 35 cm below calibration, release at 23 cm.
+FirstPersonPhysicalCrouch=0
 ; Mesh grip calibration: positive pulls the gun back along its barrel axis.
 ; This local grip point stays on the controller as the gun rotates.
 ; Known-good fit: 0.2032 = 8 inches back; raise -0.06985 = 2.75 inches down.

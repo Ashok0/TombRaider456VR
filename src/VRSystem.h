@@ -30,6 +30,9 @@ public:
     // Blocks until the compositor says it is time to render, then latches the
     // HMD pose for this frame. Call once per frame, at the frame boundary.
     void BeginFrame();
+    uint64_t PoseSerial() const { return m_poseSerial; }
+    float FirstPersonHeightDrop() const;
+    float FirstPersonPostureDrop() const; // Standing/crouch inference only; never changes the eye.
 
     // Eye transform in ENGINE view space, ready to be composed onto the game's
     // view matrix:   finalView = EyeView(eye) * gameView
@@ -93,6 +96,8 @@ public:
     void ReadControllers(HandState out[2]) const;
     // Queue a strong, bounded burst for a confirmed shot (0=left, 1=right).
     void GunShotHaptic(int hand);
+    // Refresh or stop gentle proximity feedback for this hand's holster.
+    void HolsterHoverHaptic(int hand,bool active);
     // Both hands catch the ledge: one maximum-strength 80 ms burst.
     void LedgeGrabHaptic();
     // Frame-latched tracking-space poses, matching the HMD sample used by
@@ -159,6 +164,7 @@ public:
     void RecentreOffset();
 
 private:
+    uint64_t m_poseSerial=0;
     GunHaptics m_gunHaptics;
     vr::IVRSystem*     m_system     = nullptr;
     vr::IVRCompositor* m_compositor = nullptr;
@@ -170,6 +176,7 @@ private:
     bool m_controllerPoseValid[2] = {};
     float m_firstPersonNeutral[3] = {};
     float m_firstPersonNeutralNeck[2] = {};
+    float m_firstPersonNeutralEyeNeckY = .08f;
     bool m_firstPersonNeutralValid = false;
     float m_thirdPersonNeutral[3] = {};
     bool m_thirdPersonNeutralValid = false;

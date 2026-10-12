@@ -612,9 +612,12 @@ uint64_t GameDllBase() { return g_boundBase; }
 #include "jump_priority_regression.inl"
 #include "physical_switch_regression.inl"
 #include "physical_holster_regression.inl"
+#include "body_follower_regression.inl"
 
 int main() {
+    TestBodyFollower();
     TestHolsterGestures();
+    TestHolsterHoverHaptics();
     // Haptic envelopes use elapsed time, not render frame count or trigger polls.
     for (uint64_t step:{1,7,11,16,33}) {
         tr::GunHaptics h;int pulses[2]{};uint64_t last[2]{};
@@ -2202,6 +2205,22 @@ int main() {
         physicalPose(0, 0.2f, 0, -0.1f);
     };
     TestPhysicalSwitch(resetRoomscale,rva,physicalPose);
+    {
+        const auto settings=config;
+        resetRoomscale();config.firstPersonFullBodyIK=true;
+        physicalPose(0,.10f,0,0);collisionMode=0;
+        auto tick=[]() { LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
+            QueryPerformanceCounter(&g_roomscaleFollowTime);g_roomscaleFollowTime.QuadPart-=frequency.QuadPart/30; };
+        tick();const auto lean=DragBody(itemMemory);
+        Check(locomotion::Length(lean)==0 && collisionCalls==0,"full-body lean remains inside native collision root slack");
+        physicalPose(0,.4f,0,0);tick();const auto step=DragBody(itemMemory);
+        Check(locomotion::Length(step)>0 && locomotion::Length(step)<.035f && collisionCalls>0,
+              "full-body physical step is speed limited and passes through native collision sweeps");
+        const auto prior=pos;collisionMode=1;tick();const auto blocked=DragBody(itemMemory);
+        Check(locomotion::Length(blocked)==0 && pos.x_pos==prior.x_pos && pos.z_pos==prior.z_pos,
+              "wall rejection prevents lazy room-scale follow from moving the native root");
+        collisionMode=0;config=settings;resetRoomscale();
+    }
     for (int which : {0, 1}) {
         game = dll.game = which;
         resetRoomscale();

@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-11T23:31:58.8138844-04:00",
+    "base_commit":  "898efed",
+    "dll_sha256":  "F7DD31B7D84A005D71D0A151828F6D4F56167DBC9AF28A204C83CF2FEACF6FAC",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-body-upright-20261011-233158",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1697300,
+    "debug_regression_checks":  1697300,
+    "change":  "Explicit upright pelvis support; standing knee bend below two degrees in regressions; neck-arc-aware posture gate preserves upright legs when looking down; actual crouch and locomotion release support; exact tracked eye retained; knee-angle diagnostics",
+    "hardware_verified":  false
+}

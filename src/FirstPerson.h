@@ -11,6 +11,7 @@ void FirstPersonRecenter();
 void FirstPersonTrackingOriginChanged(float yawCorrection);
 void FirstPersonShutdown();
 bool FirstPersonActive();
+bool FirstPersonPhysicalCrouch(bool allowed);
 // Consume Right Grip only while a nearby physical wall lever is grabbed.
 bool FirstPersonSwitchGrip(bool down, bool allowed);
 // Bit 0/1 consume left/right Grip only during a physical holster transfer.

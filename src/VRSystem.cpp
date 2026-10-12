@@ -391,6 +391,7 @@ void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
 }
 
 void VRSystem::BeginFrame() {
+    ++m_poseSerial;
     m_controllerPoseValid[0] = m_controllerPoseValid[1] = false;
     if (!m_system) return;
     // The right System button is normally owned by the runtime. Observe its
@@ -555,6 +556,7 @@ void VRSystem::RecenterFirstPersonHead() {
         std::clamp(Cfg().firstPersonRoomscaleNeckMetres, 0.0f, 0.4f));
     m_firstPersonNeutralNeck[0] = pivot.x;
     m_firstPersonNeutralNeck[1] = pivot.z;
+    m_firstPersonNeutralEyeNeckY=.08f*m_rawHeadPose.m[1][1]-.12f*m_rawHeadPose.m[1][2];
     LogF("firstperson: headset neutral=(%.3f,%.3f,%.3f)m",
          m_firstPersonNeutral[0], m_firstPersonNeutral[1], m_firstPersonNeutral[2]);
 }
@@ -646,6 +648,18 @@ void VRSystem::FirstPersonViewOffset(float& right,float& forward) const {
 float VRSystem::FirstPersonVerticalOffset() const {
     if (!m_poseValid || !m_firstPersonNeutralValid) return 0;
     return (m_rawHeadPose.m[1][3]-m_firstPersonNeutral[1])*(Cfg().flipViewY ? -1.0f : 1.0f);
+}
+
+float VRSystem::FirstPersonHeightDrop() const {
+    return m_poseValid && m_firstPersonNeutralValid ? m_firstPersonNeutral[1]-m_rawHeadPose.m[1][3] : 0;
+}
+float VRSystem::FirstPersonPostureDrop() const {
+    if(!m_poseValid || !m_firstPersonNeutralValid) return 0;
+    // Looking down moves the HMD around the neck even when standing upright.
+    // Remove only that estimated downward arc from the standing-leg gate;
+    // rendering continues to use the unmodified, fully tracked eye position.
+    const float eyeNeckY=.08f*m_rawHeadPose.m[1][1]-.12f*m_rawHeadPose.m[1][2];
+    return FirstPersonHeightDrop()-std::max(0.f,m_firstPersonNeutralEyeNeckY-eyeNeckY);
 }
 
 void VRSystem::RecentreOffset() {
@@ -805,6 +819,10 @@ float VRSystem::HudNdcShiftX(Eye eye, float depthMetres) const {
 
 void VRSystem::GunShotHaptic(int hand) {
     if (m_system) m_gunHaptics.Shot(hand,GetTickCount64());
+}
+
+void VRSystem::HolsterHoverHaptic(int hand,bool active) {
+    m_gunHaptics.Hover(hand,active && m_system,GetTickCount64());
 }
 
 void VRSystem::LedgeGrabHaptic() {

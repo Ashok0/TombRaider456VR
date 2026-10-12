@@ -713,6 +713,13 @@ struct Config {
     bool  firstPersonMotionGuns = true;
     bool  firstPersonUnarmedIK = true;
     bool  firstPersonFullBodyIK = true; // Headset/controller inferred torso and legs.
+    float firstPersonBodyYawSlackDegrees = 45;
+    float firstPersonBodyYawSpeedDegrees = 120;
+    float firstPersonBodyLeanRadiusMetres = .15f;
+    float firstPersonBodyFollowSpeedMetres = .9f;
+    float firstPersonBodyHandYawWeight = .15f;
+    float firstPersonBodyScale = 0; // 0: calibrated standing fit; 1: original model size.
+    bool firstPersonPhysicalCrouch = false; // Optional native Duck from HMD height.
     float firstPersonMotionGunGripForwardMetres = 0.2032f; // eight inches back
     float firstPersonMotionGunRaiseMetres = -0.06985f; // 2.75 inches controller-local down
     float firstPersonMotionGunRightMetres = 0;

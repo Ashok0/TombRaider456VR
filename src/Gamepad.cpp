@@ -231,6 +231,7 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
     // must not interrupt a block push. In menus their normal bindings remain.
     const bool leftGrip = L.grip > 0.5f;
     if (leftGrip && !touchGripAction && !(holsterGrips&1)) b |= XB_LEFT_SHOULDER;
+    if(FirstPersonPhysicalCrouch(gameplay && !touchGripAction)) b|=XB_LEFT_SHOULDER;
 
     // Right grip is the physical VR "RB" and normally emits only XInput X,
     // which is Walk. TR6 binds Sneak to XInput RIGHT_SHOULDER. Holding Y with
