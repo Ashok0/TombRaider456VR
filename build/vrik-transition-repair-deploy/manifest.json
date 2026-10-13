@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-12T23:38:30.6263871-04:00",
+    "base_commit":  "a867c7a",
+    "dll_sha256":  "884F0FB8DEE8131BF733008F7E331912D5AAC185D3E9681AF545D2AF771A2A34",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-vrik-transition-repair-20261012-233830",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1845401,
+    "debug_regression_checks":  1845401,
+    "change":  "Continuous full-body IK through wall impact and hands-busy mount; same-tracking-sample mount root handoff; collision shift carried once by whole body and excluded from follower input; refined wall sweep; correct body-local calibration offset; standing support independent of synthetic gait; six negative regression probes confirmed failures before fixes",
+    "hardware_verified":  false
+}

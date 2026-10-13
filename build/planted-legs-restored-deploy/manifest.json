@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-12T08:48:54.7658849-04:00",
+    "base_commit":  "a867c7a",
+    "dll_sha256":  "8BA1C4556CB0BCA54387F5CAD06FBF5956EE06B31C8881FB8167DA4BACBBDCD4",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-planted-legs-restored-20261012-084854",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1748707,
+    "debug_regression_checks":  1748707,
+    "change":  "Restored stationary leg geometry and foot contacts independent of hand-facing detection; 10-20 cm posture support and 8 cm hip slack; crouch/lean preserve floor contacts; walking/mount release; torso mount recovery; true-HMD room movement; level/water calibration; final 15/33-joint render regressions",
+    "hardware_verified":  false
+}

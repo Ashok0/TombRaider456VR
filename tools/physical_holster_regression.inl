@@ -1,22 +1,22 @@
 namespace {
 void TestHolsterGestures() {
     using tr::motiongun::HolsterInput;
-    for(int hand:{0,1}) for(float distance:{.14f,.18f,.21f,.22f}) {
+    for(int hand:{0,1}) for(float distance:{.14f,.22f,.26f,.29f,.30f}) {
         HolsterInput h;
         Check(h.Hover(hand,hand,1,distance,0,1),"expanded draw zone advertises hover readiness without Grip");
-        Check(h.Poll(hand,true,true,hand,1,distance,0,1),"off-centre grip inside 22 cm can start drawing");
+        Check(h.Poll(hand,true,true,hand,1,distance,0,1),"off-centre grip inside 30 cm can start drawing");
         h.Poll(hand,true,true,hand,1,.24f,0,1);
         Check(!h.active,"wider capture zone cannot draw from minor grip jitter");
-        h.Poll(hand,true,true,hand,1,.34f,0,1);
-        h.Poll(hand,false,true,hand,1,.34f,4,1);
+        h.Poll(hand,true,true,hand,1,.44f,0,1);
+        h.Poll(hand,false,true,hand,1,.44f,4,1);
         Check(h.mask==(1u<<hand),"withdrawn gun stays equipped when Grip releases outside capture zone");
         Check(h.Hover(hand,hand,1,distance,4,1),"expanded stow zone has the same hover feedback as draw zone");
         h.Poll(hand,true,true,hand,1,distance,4,1);
         h.Poll(hand,false,true,hand,1,distance,4,1);
-        Check(h.mask==0,"off-centre release inside 22 cm returns only that hand's gun");
+        Check(h.mask==0,"off-centre release inside 30 cm returns only that hand's gun");
     }
     HolsterInput zone;
-    Check(!zone.Hover(1,1,1,.221f,0,1) && !zone.Hover(0,0,2,.1f,0,2) &&
+    Check(!zone.Hover(1,1,1,.301f,0,1) && !zone.Hover(0,0,2,.1f,0,2) &&
           !zone.Hover(1,2,4,.1f,4,1) && !zone.Hover(1,1,1,.1f,1,1),
           "hover rejects out-of-reach, wrong-hand, incompatible and busy weapon states");
     for(int weapon:{1,3}) for(int first:{0,1}) {
@@ -27,17 +27,17 @@ void TestHolsterGestures() {
         Check(h.Poll(first,true,true,first,weapon,.02f,0,weapon),"grip at matching hip latches the gun");
         h.Poll(first,true,true,first,weapon,.1f,0,weapon);
         Check(!h.active,"small hand movement inside holster cannot draw");
-        h.Poll(first,true,true,first,weapon,.32f,0,weapon);
+        h.Poll(first,true,true,first,weapon,.40f,0,weapon);
         Check(h.active && h.mask==(1u<<first) && h.request,"withdrawal equips only that hand");
         h.request=false;
         Check(!h.CanFire(first,true) && !h.CanFire(other,true),"grip transfer and holstered hand cannot fire");
-        h.Poll(first,false,true,first,weapon,.3f,4,weapon);
+        h.Poll(first,false,true,first,weapon,.40f,4,weapon);
         Check(h.Has(first) && !h.CanFire(first,true),"release away keeps gun held and requires trigger release");
         Check(h.CanFire(first,false) && h.CanFire(first,true),"released trigger re-arms drawn gun only");
         h.Poll(other,true,true,other,weapon,.02f,4,weapon);
-        h.Poll(other,true,true,other,weapon,.32f,4,weapon);
+        h.Poll(other,true,true,other,weapon,.40f,4,weapon);
         Check(h.mask==3 && !h.request,"second gun draws without toggling shared native equip");
-        h.Poll(other,false,true,other,weapon,.32f,4,weapon);
+        h.Poll(other,false,true,other,weapon,.40f,4,weapon);
         h.Poll(first,true,true,first,weapon,.4f,4,weapon);
         Check(h.Poll(first,true,true,first,weapon,.06f,4,weapon),"armed gun can enter holster with grip already held");
         h.Poll(first,false,true,first,weapon,.06f,4,weapon);
@@ -49,7 +49,7 @@ void TestHolsterGestures() {
     for(int failure=0;failure<3;++failure) {
         HolsterInput h;h.Poll(1,true,true,1,1,.04f,0,1);
         if(failure==0) h.Poll(1,false,true,1,1,.05f,0,1);
-        else h.Poll(1,true,false,1,1,.32f,0,1);
+        else h.Poll(1,true,false,1,1,.40f,0,1);
         Check(!h.active && !h.request,"release or tracking loss cancels incomplete draw");
         h.Poll(1,true,true,1,1,.4f,0,1);
         Check(!h.active,"reacquired distant controller never completes canceled grab");
@@ -58,12 +58,12 @@ void TestHolsterGestures() {
         HolsterInput h;
         Check(!h.Poll(0,true,true,0,weapon,.01f,0,weapon),"single weapons reject left-hand pickup");
         Check(h.Poll(1,true,true,2,weapon,.01f,0,weapon),"single weapon accepts right-hand pickup");
-        h.Poll(1,true,true,2,weapon,.32f,0,weapon);
+        h.Poll(1,true,true,2,weapon,.40f,0,weapon);
         Check(h.mask==2,"single weapon occupies right hand only");
     }
     HolsterInput both;
     for(int hand=0;hand<2;++hand) both.Poll(hand,true,true,hand,3,.02f,0,3);
-    for(int hand=0;hand<2;++hand) both.Poll(hand,true,true,hand,3,.3f,0,3);
+    for(int hand=0;hand<2;++hand) both.Poll(hand,true,true,hand,3,.40f,0,3);
     Check(both.mask==3 && both.request,"simultaneous grip withdrawal equips both independent guns");
     HolsterInput incompatible;
     Check(!incompatible.Poll(1,true,true,2,4,.02f,4,1),"back weapon cannot replace a gun still held in other hand");
@@ -171,12 +171,12 @@ template<class Rva> void TestPhysicalHolsters(Rva rva) {
         ResetPhysicalHolsters();g_gunEquip.Reset();g_gunTriggers.Reset();
         appMemory[0x9ec]=uint8_t(style);status=0;gun=1;
         g_holsters.Poll(1,true,true,1,1,.02f,0,1);
-        g_holsters.Poll(1,true,true,1,1,.32f,0,1);
+        g_holsters.Poll(1,true,true,1,1,.40f,0,1);
         uint8_t lt=0,rt=0;UpdateGunTriggers(lt,rt,true,100);
         Check(lt==255 && *reinterpret_cast<int16_t*>(laraMemory+6)==1,"physical draw requests selected native gun in hold and toggle styles");
         status=2;lt=rt=0;UpdateGunTriggers(lt,rt,true,110);
         Check(lt==(style?0:255) && !g_gunTriggers.WantsShot(),"native draw acknowledges grip request without firing");
-        status=4;g_holsters.Poll(1,false,true,1,1,.32f,4,1);
+        status=4;g_holsters.Poll(1,false,true,1,1,.40f,4,1);
         lt=rt=0;UpdateGunTriggers(lt,rt,true,120);
         lt=rt=255;UpdateGunTriggers(lt,rt,true,130);
         Check(!g_gunTriggers.pending[0] && g_gunTriggers.pending[1],"two triggers fire only the physically drawn right gun");
@@ -250,7 +250,7 @@ template<class Rva> void TestPhysicalHolsters(Rva rva) {
           "lost controller tracking stops only that hand's hover feedback");
     Check(UpdatePhysicalHolsterGrips(true,true,true,true,true,1001)==3,"both spatial grabs consume grips together without Action");
     const auto savedController=VR().m_rawControllerPose[1];
-    VR().m_rawControllerPose[1].m[1][3]+=.32f;
+    VR().m_rawControllerPose[1].m[1][3]+=.40f;
     Check(UpdatePhysicalHolsterGrips(true,true,true,true,true,1010)==3 && g_holsters.mask==2,
           "moving right controller out draws right gun while left stays grabbed in holster");
     UpdatePhysicalHolsterGrips(true,true,true,true,true,1200);

@@ -9,7 +9,7 @@ inline Vec YawVector(Vec v,float yaw) {
     return {v.x*std::cos(yaw)+v.z*std::sin(yaw),v.y,-v.x*std::sin(yaw)+v.z*std::cos(yaw)};
 }
 struct BodyFollowSettings {
-    float yawSlack=.785398163f, yawRelease=.523598776f, yawSpeed=2.0943951f;
+    float yawSlack=.785398163f;
     float leanRadius=.15f, leanRelease=.09f, followSpeed=.9f;
 };
 // Capture once in an ordinary standing pose. Size is not a per-frame IK
@@ -40,17 +40,21 @@ struct BodySizeCalibration {
 };
 // Evaluate hands in the BODY frame, never the current gaze frame. Looking
 // aside cannot turn two stationary forward controllers into a new body hint.
-inline bool HandsSupportFacing(Vec left,Vec right,Vec leftAim,Vec rightAim,float yaw) {
+inline bool HandsSupportFacing(Vec left,Vec right,Vec leftAim,Vec rightAim,float yaw,bool held=false) {
     const Vec forward{std::sin(yaw),0,std::cos(yaw)};
     Vec a{},b{};
     return Unit(Flat(leftAim),a) && Unit(Flat(rightAim),b) &&
-        Dot(Flat(left),forward)>.15f && Dot(Flat(right),forward)>.15f &&
-        Dot(a,forward)>.8f && Dot(b,forward)>.8f;
+        Dot(Flat(left),forward)>(held ? .10f : .15f) && Dot(Flat(right),forward)>(held ? .10f : .15f) &&
+        Dot(a,forward)>(held ? .65f : .8f) && Dot(b,forward)>(held ? .65f : .8f);
 }
 inline float BodyChestTwist(float headTwist,bool handsForward) {
     if(handsForward) return 0;
     const float excess=std::max(0.f,std::fabs(headTwist)-.523598776f); // Neck owns first 30 degrees.
     return std::copysign(std::min(excess*.35f,.34906585f),headTwist);
+}
+inline float StandingPostureWeight(float drop) {
+    const float t=std::clamp((drop-.10f)/.10f,0.f,1.f);
+    return 1-t*t*(3-2*t);
 }
 // World positions are metres. Update once per tracked pose, independent of
 // skin/hand/holster passes and stereo eyes. Artificial turns are applied whole.
@@ -62,7 +66,8 @@ struct BodyFollower {
     Vec root{},nativeRoot{};
     void Reset() { *this={}; }
     void Update(uint64_t frame,double now,float artificialYaw,float headYaw,float travelYaw,
-                Vec goal,Vec native,bool moving,const BodyFollowSettings& s,Vec turnPivot={},bool handsForward=false) {
+                Vec goal,Vec native,bool moving,const BodyFollowSettings& s,Vec turnPivot={},bool handsForward=false,
+                bool pivotFootprint=false) {
         if(!std::isfinite(now+artificialYaw+headYaw+travelYaw) ||
            !Finite({IdentityBasis(),goal}) || !Finite({IdentityBasis(),native})) { Reset();return; }
         if(!valid || now<time || now-time>.25 || Length(Sub(native,nativeRoot))>2) {
@@ -74,6 +79,7 @@ struct BodyFollower {
         if(turn!=0) {
             yaw=BodyAngle(yaw+turn);
             root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),turn));
+            if(pivotFootprint) goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),turn));
         }
         base=artificialYaw;
         if(serial==frame) return;
@@ -84,19 +90,27 @@ struct BodyFollower {
         if(moving) root=Add(root,Flat(Sub(native,nativeRoot)));
         nativeRoot=native;
         const float delta=BodyAngle(headYaw-yaw);
-        const bool supported=handsForward && !moving && std::fabs(delta)<1.3962634f;
-        if(supported) turning=false;
-        if(!supported && !turning && std::fabs(delta)>s.yawSlack) turning=true;
-        if(turning && std::fabs(delta)<=s.yawRelease+.001f) turning=false;
-        const float target=moving ? travelYaw : turning ? travelYaw-std::copysign(s.yawRelease,delta) : yaw;
-        const float change=std::clamp(BodyAngle(target-yaw)*(1-std::exp(-10*dt)),-s.yawSpeed*dt,s.yawSpeed*dt);
+        // Angular slack, without a timed chase: every degree beyond the
+        // boundary is carried in this pose. Stopping the head stops the body.
+        const bool supported=handsForward && !moving && !turning && std::fabs(delta)<1.3962634f;
+        const float change=moving ? BodyAngle(travelYaw-yaw) : supported ? 0.f :
+            delta-std::clamp(delta,-s.yawSlack,s.yawSlack);
+        turning=std::fabs(change)>.00001f;
         yaw=BodyAngle(yaw+change);
+        if(pivotFootprint && change!=0) {
+            root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),change));
+            goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),change));
+        }
         const Vec offset=Flat(Sub(goal,root));const float distance=Length(offset);
-        if(!stepping && distance>s.leanRadius) stepping=true;
-        if(stepping && distance<=s.leanRelease+.001f) stepping=false;
+        // Once an actual step starts, bring the visual body back under the
+        // player. Collision-root hysteresis can retain a larger lean margin;
+        // retaining it here as well leaves a permanent torso displacement.
+        const float settleRadius=std::min(s.leanRelease,.02f);
+        if(!stepping && distance>std::min(s.leanRadius,.04f)) stepping=true;
+        if(stepping && distance<=settleRadius+.001f) stepping=false;
         Vec move{};
         if(distance>0 && (moving || stepping)) {
-            const float excess=std::max(0.f,distance-(moving ? 0.f : s.leanRelease));
+            const float excess=std::max(0.f,distance-(moving ? 0.f : settleRadius));
             move=Scale(offset,std::min(excess,s.followSpeed*dt)/distance);root=Add(root,move);
         }
         const float stride=Length(move)+std::fabs(change)*.12f;
@@ -123,6 +137,134 @@ struct HeightCrouch {
         else if(!active && drop>=.35f) active=true;
         else if(active && drop<=.23f) active=false;
         return active;
+    }
+};
+// Filter only inferred body motion, never tracked head/controller targets.
+struct TorsoPoseFilter {
+    bool valid=false,mountPending=false,recovering=false,lastGrip=false;
+    bool planted=false,standingValid=false;
+    uint64_t serial=0;
+    double time=0;
+    float cadence=1.f/90.f;
+    Frame cached[4]{},eyeRelative[4]{},stance[7]{},standingHip{};
+    Vec nativeContacts[2]{};
+    bool contactsValid=false;
+    void Reset() { *this={}; }
+    void Mount() { mountPending=true; }
+    bool Update(uint64_t frame,double now,const Frame& reference,const Frame& eye,
+                bool idle,bool grip,Frame (&pose)[15],Vec forward,bool plant=false,float postureDrop=0,
+                const Vec* contacts=nullptr) {
+        constexpr int joint[4]={0,7,3,6};
+        Frame inverse{},inverseEye{};
+        if(!Inverse(reference,inverse) || !Inverse(eye,inverseEye)) return false;
+        Frame desired[4]{};
+        for(int i=0;i<4;++i) desired[i]=Multiply(inverse,pose[joint[i]]);
+        const bool fresh=!valid || now<time || (now-time>.25 && !mountPending);
+        // Keep contacts AND leg geometry: solving from fresh head-driven legs
+        // every frame reintroduces knee jitter even if the feet are filtered.
+        const bool hold=plant && idle && !grip && !recovering && !mountPending && !lastGrip;
+        if(fresh || !hold) { planted=standingValid=false;contactsValid=false; }
+        // STOP may arrive before the sprint/jump palette finishes blending.
+        // Only native animation contacts can invalidate the standing latch;
+        // tracked eye movement must never feed this comparison.
+        if(hold && contacts && contactsValid &&
+           (Length(Sub(contacts[0],nativeContacts[0]))>.01f ||
+            Length(Sub(contacts[1],nativeContacts[1]))>.01f)) planted=standingValid=false;
+        if(hold) {
+            if(!planted) {
+                for(int j=0;j<7;++j) stance[j]=Multiply(inverse,pose[j]);
+                if(contacts) { nativeContacts[0]=contacts[0];nativeContacts[1]=contacts[1];contactsValid=true; }
+                planted=true;
+            }
+            const float support=StandingPostureWeight(postureDrop);
+            if(!standingValid && support==1) { standingHip=desired[0];standingValid=true; }
+            if(standingValid) {
+                const Vec before=desired[0].origin;
+                const Vec lean=Flat(Sub(before,standingHip.origin));
+                const float distance=Length(lean);
+                // The follower and neck already provide roomscale slack.
+                // This last stage rejects only residual pose noise; another
+                // large lean radius here leaves the hips behind real steps.
+                const Vec excess=distance>.02f ? Scale(lean,(distance-.02f)/distance) : Vec{};
+                desired[0].origin.x=standingHip.origin.x+excess.x;
+                desired[0].origin.z=standingHip.origin.z+excess.z;
+                desired[0].origin.y+=(standingHip.origin.y-desired[0].origin.y)*support;
+                desired[0].basis=standingHip.basis;
+                desired[1].origin=Add(desired[1].origin,Sub(desired[0].origin,before));
+            }
+            desired[2]=stance[3];desired[3]=stance[6];
+        }
+        if(fresh) { valid=true;serial=frame;time=now;for(int i=0;i<4;++i) cached[i]=desired[i]; }
+        // Simulation can finish a mount between two draws of one tracking
+        // sample. Do not swallow that transition by updating lastGrip below
+        // without first transporting the cached pose into the new frame.
+        if(!fresh && (serial!=frame || grip!=lastGrip || (!grip && mountPending))) {
+            const double elapsed=now-time;
+            float dt=float(std::clamp(elapsed,0.,.05));time=now;serial=frame;
+            if(elapsed>0 && elapsed<=.05) cadence=dt;
+            if(!grip && (mountPending || lastGrip)) {
+                for(int i=0;i<4;++i) cached[i]=Multiply(inverse,Multiply(eye,eyeRelative[i]));
+                recovering=true;mountPending=false;
+                dt=std::min(dt,cadence);
+            }
+            bool settled=true;
+            for(int i=0;i<4;++i) {
+                if(grip || (!idle && !recovering)) { cached[i]=desired[i];continue; }
+                const Vec delta=Sub(desired[i].origin,cached[i].origin);
+                const float distance=Length(delta),dead=recovering ? 0.f : .003f;
+                if(distance>dead) cached[i].origin=Add(cached[i].origin,
+                    Scale(delta,std::min((distance-dead)*(1-std::exp(-12*dt)),1.2f*dt)/distance));
+                Frame invCached{};Inverse({cached[i].basis,{}},invCached);
+                const Basis deltaRotation=Multiply(desired[i].basis,invCached.basis);
+                const auto q=RotationOf(deltaRotation);
+                const float angle=2*std::atan2(Length(q.v),std::fabs(q.w));
+                if(angle>(recovering ? 0.f : .0174533f)) {
+                    const Basis change=LimitRotation(deltaRotation,std::min(angle*(1-std::exp(-12*dt)),4.f*dt));
+                    cached[i].basis=Multiply(change,cached[i].basis);
+                }
+                const float oldScale=Length(Transform(cached[i].basis,{1,0,0}));
+                const float newScale=Length(Transform(desired[i].basis,{1,0,0}));
+                if(oldScale>1.e-5f) for(auto& row:cached[i].basis.r) for(auto& v:row) v*=newScale/oldScale;
+                if(Length(Sub(desired[i].origin,cached[i].origin))>.003f || angle>.02f) settled=false;
+            }
+            if(recovering && settled) recovering=false;
+        }
+        lastGrip=grip;
+        if(grip) {
+            for(int i=0;i<4;++i) { cached[i]=desired[i];eyeRelative[i]=Multiply(inverseEye,pose[joint[i]]); }
+            return true;
+        }
+        Frame target[4]{},legReference[7]{};
+        for(int i=0;i<4;++i) target[i]=Multiply(reference,cached[i]);
+        if(planted) {
+            for(int j=0;j<7;++j) legReference[j]=Multiply(reference,stance[j]);
+            target[2]=legReference[3];target[3]=legReference[6];
+        }
+        if(!ReposeTorso(pose,target,forward,planted ? legReference : nullptr)) return false;
+        for(int i=0;i<4;++i) eyeRelative[i]=Multiply(inverseEye,pose[joint[i]]);
+        return true;
+    }
+};
+struct AutoBodyCalibration {
+    int level=-1,water=-1;
+    bool pending=false,waiting=false;
+    double since=0;
+    Vec sample{};
+    bool Observe(int nextLevel,int nextWater) {
+        const bool enteredWater=(nextWater==1 || nextWater==2 || nextWater==4) && water!=1 && water!=2 && water!=4;
+        const bool changed=nextLevel!=level || enteredWater;
+        level=nextLevel;water=nextWater;
+        if(changed) { pending=true;waiting=false; }
+        return changed;
+    }
+    bool Ready(bool standing,Vec head,double now) {
+        if(!pending) return false;
+        if(!standing || !std::isfinite(now) || !Finite({IdentityBasis(),head})) { waiting=false;return false; }
+        if(!waiting || now<since || Length(Sub(head,sample))>.025f) {
+            waiting=true;since=now;sample=head;return false;
+        }
+        if(now-since<.25) return false;
+        pending=waiting=false;return true;
     }
 };
 } // namespace tr::firstperson

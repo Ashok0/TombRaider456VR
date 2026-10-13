@@ -2,19 +2,56 @@ namespace {
 void TestBodyFollower() {
     using namespace tr::firstperson;
     BodyFollowSettings settings;
+    BodyVisibilityRecovery visibility;
+    const auto owner=&visibility;
+    Check(visibility.Update(owner,1,1,true,false,false)==ArmMeshBits,
+          "hang and mount show only arms");
+    Check(visibility.Update(owner,1,1,false,false,false)==ArmMeshBits &&
+          visibility.Update(owner,1,1.34,false,false,false)==ArmMeshBits,
+          "same-sample and first standing palettes cannot reveal the mounted torso");
+    Check(visibility.Update(owner,1,2,false,false,true)==ArmMeshBits &&
+          visibility.Update(owner,1,2.01,false,false,false)==UINT32_MAX,
+          "mount visibility waits for body recovery and then restores normal body");
+    Check(!(visibility.Update(owner,1,3,false,true,false)&(1u<<7)) &&
+          !(visibility.Update(owner,1,3.2,false,false,false)&(1u<<7)) &&
+          visibility.Update(owner,1,3.36,false,false,false)==UINT32_MAX,
+          "landing chest stays hidden through recovery while legs remain available");
+    visibility.Update(owner,1,4,true,false,false);
+    Check(visibility.Update(owner,2,4.01,false,false,false)==UINT32_MAX,
+          "new levels do not inherit previous ledge visibility");
+    for(int sign:{-1,1}) for(bool wall:{false,true}) for(int offset=480;offset<=550;++offset) {
+        const int32_t body[3]={0,0,0};int32_t eye[3]={0,-700,sign*offset};
+        ClampEyeToWall(body,eye,[=](int32_t,int32_t z,int32_t,int32_t) { return wall && std::abs(z)>=500; });
+        Check(eye[2]==sign*std::min(offset,wall ? 499 : 512),
+              "head movement across sweep reach saturates continuously in both directions, with or without a wall");
+    }
+    for(int target=130;target<240;++target) {
+        const int32_t body[3]={0,0,0};int32_t eye[3]={0,-700,target};
+        ClampEyeToWall(body,eye,[](int32_t,int32_t z,int32_t,int32_t) { return z>=100; });
+        Check(eye[2]==99,"subtle tracked motion cannot quantize wall contact into 16-unit camera jumps");
+    }
+    AutoBodyCalibration autoCal;
+    Check(autoCal.Observe(1,0) && autoCal.pending,"new level requests fresh body calibration");
+    Check(!autoCal.Ready(false,{},0) && !autoCal.Ready(true,{},1) && !autoCal.Ready(true,{},1.2) &&
+          autoCal.Ready(true,{},1.26),"calibration waits for settled standing");
+    Check(autoCal.Observe(1,1) && !autoCal.Observe(1,2),"water entry invalidates calibration only once");
+    Check(!autoCal.Ready(false,{},2) && !autoCal.Ready(true,{},3) &&
+          !autoCal.Ready(true,{.04f,0,0},3.2) && !autoCal.Ready(true,{.04f,0,0},3.3) &&
+          autoCal.Ready(true,{.04f,0,0},3.46),"water return waits for steady dry-ground tracking");
+    Check(autoCal.Observe(2,0),"reused player identity still recalibrates on level change");
     for(float hz:{30.f,72.f,90.f,144.f}) {
         BodyFollower body;double now=1;uint64_t serial=1;
         body.Update(serial,now,0,0,0,{},{},false,settings);
         for(int frame=0;frame<int(hz);++frame) {
-            now+=1/hz;body.Update(++serial,now,0,.7f,.7f,{.1f,0,0},{},false,settings);
+            now+=1/hz;body.Update(++serial,now,0,.7f,.7f,{.025f,0,0},{},false,settings);
             Check(std::fabs(body.yaw)<.00001f && Length(body.root)<.00001f,
-                  "head turns below 45 degrees and ten-centimetre leans leave pelvis state planted");
+                  "head turns below 45 degrees and subtle translation leave pelvis state planted");
         }
         for(int frame=0;frame<int(hz*2);++frame) {
             now+=1/hz;const auto old=body;
             body.Update(++serial,now,0,1.6f,1.6f,{.4f,0,0},{},false,settings);
-            Check(std::fabs(BodyAngle(body.yaw-old.yaw))<=settings.yawSpeed/hz+.00001f,
-                  "yaw catch-up is time-based and cannot snap on threshold crossing");
+            Check(std::fabs(BodyAngle(1.6f-body.yaw)-settings.yawSlack)<.00001f,
+                  "physical yaw outside slack is resolved in the same sample without delayed catch-up");
             Check(Length(Sub(body.root,old.root))<=settings.followSpeed/hz+.00001f,
                   "pelvis position catch-up has a bounded speed at every refresh rate");
             const auto once=body;
@@ -22,8 +59,8 @@ void TestBodyFollower() {
             Check(Length(Sub(body.root,once.root))<.000001f && body.yaw==once.yaw,
                   "a second eye or holster pass cannot advance the follower again");
         }
-        Check(std::fabs(BodyAngle(1.6f-body.yaw)-settings.yawRelease)<.003f &&
-              std::fabs(body.root.x-.31f)<.003f,"catch-up settles inside hysteresis margins");
+        Check(std::fabs(BodyAngle(1.6f-body.yaw)-settings.yawSlack)<.003f &&
+              std::fabs(body.root.x-.38f)<.003f,"visual catch-up settles under the head with two-centimetre residual slack");
         const float before=body.yaw;
         body.Update(serial,now+.001,.8f,2.4f,2.4f,{.4f,0,0},{},false,settings);
         Check(std::fabs(BodyAngle(body.yaw-before-.8f))<.00001f,"stick turn rotates body and headset frame together immediately");
@@ -38,6 +75,24 @@ void TestBodyFollower() {
     wrap.Update(1,1,0,3.1f,3.1f,{},{},false,settings);
     wrap.Update(2,1.01,0,-3.1f,-3.1f,{},{},false,settings);
     Check(wrap.yaw==3.1f,"head crossing pi retains the short-angle deadzone");
+    for(float direction:{-1.f,1.f}) {
+        BodyFollower turner;
+        turner.Update(1,1,0,0,0,{0,0,-.3f},{},false,settings);
+        for(int n=1;n<=180;++n) {
+            const float head=direction*n*.01745329252f;
+            const Vec goal=YawVector({0,0,-.3f},turner.yaw);
+            turner.Update(n+1,1+n/90.,0,head,head,goal,{},false,settings,{},false,true);
+            Check(std::fabs(BodyAngle(head-turner.yaw))<=settings.yawSlack+.00001f,
+                  "rapid roomscale turns remain inside angular slack every sample");
+            Check(Length(Sub(turner.root,YawVector({0,0,-.3f},turner.yaw)))<.00001f,
+                  "roomscale turn carries the footprint around the eye in the same sample");
+        }
+        const auto stopped=turner;
+        turner.Update(182,3.01,0,direction*3.14159265f,direction*3.14159265f,
+            turner.root,{},false,settings,{},false,true);
+        Check(std::fabs(BodyAngle(turner.yaw-stopped.yaw))<.00001f && Length(Sub(turner.root,stopped.root))<.00001f,
+              "body does not continue rotating or sliding after physical turn stops");
+    }
     BodyFollower consumed;
     consumed.Update(1,1,0,0,0,{.3f,0,0},{},false,settings);
     consumed.Update(2,1.02,0,0,0,{.3f,0,0},{.1f,0,0},false,settings);
@@ -78,6 +133,87 @@ void TestBodyFollower() {
         {100,-500,0},{100,-260,70},{100,0,0},{0,-650,0},
         {180,-700,0},{240,-460,30},{180,-250,70},{-180,-700,0},{-240,-460,30},{-180,-250,70},{0,-850,0}};
     for(int i=0;i<15;++i) native[i]={IdentityBasis(),p[i]};
+    for(float hz:{30.f,72.f,90.f,144.f}) {
+        Frame rest[15]{};
+        Check(SolveFollowingBody(native,p[14],p[14],0,IdentityBasis(),{0,0,1},1000,{},0,true,0,0,rest,1),
+              "standing-contact fixture begins with extended legs");
+        for(auto& joint:rest) joint.origin=Scale(joint.origin,.001f);
+        TorsoPoseFilter filter;
+        const Frame reference{IdentityBasis(),{}},eye{IdentityBasis(),{0,-.85f,0}};
+        Frame pose[15]{};for(int j=0;j<15;++j) pose[j]=rest[j];
+        Check(filter.Update(1,1,reference,eye,true,false,pose,{0,0,1},true),"standing contacts acquire");
+        Frame initial[15]{};for(int j=0;j<15;++j) initial[j]=pose[j];
+        uint64_t serial=1;double now=1;
+        for(int n=0;n<int(hz);++n) {
+            for(int j=0;j<15;++j) pose[j]=rest[j];
+            const float noise=std::sin(n*.47f)*.02f;
+            for(int j=0;j<7;++j) pose[j].origin.x+=noise;
+            pose[0].origin.y+=.02f+noise;pose[7].origin.y+=.02f+noise;
+            pose[14].origin.y+=noise;now+=1/hz;
+            Check(filter.Update(++serial,now,reference,eye,true,false,pose,{0,0,1},true,.065f+noise),
+                  "planted stance accepts native idle and head noise at every refresh rate");
+            for(int j=0;j<7;++j) Check(Length(Sub(pose[j].origin,initial[j].origin))<.0001f,
+                  "standing pelvis, thighs, knees and ankles stay fixed without tracking the head");
+        }
+        for(int n=0;n<int(hz);++n) {
+            for(int j=0;j<15;++j) pose[j]=rest[j];
+            pose[0].origin.y+=.20f;pose[7].origin.y+=.20f;
+            pose[14].origin.y+=.20f;now+=1/hz;
+            Check(filter.Update(++serial,now,reference,eye,true,false,pose,{0,0,1},true,.20f),
+                  "real physical crouch releases the standing hip hold");
+            for(int j:{3,6}) Check(Length(Sub(pose[j].origin,initial[j].origin))<.00001f,
+                  "physical crouch keeps feet on their original floor contacts");
+            for(int first:{1,4}) for(int j=0;j<2;++j)
+                Check(std::fabs(Length(Sub(pose[first+j+1].origin,pose[first+j].origin))-
+                                Length(Sub(rest[first+j+1].origin,rest[first+j].origin)))<.00001f,
+                      "planted crouch preserves thigh and shin lengths");
+        }
+        Check(KneeBendDegrees(pose,1)>30 && KneeBendDegrees(pose,4)>30,
+              "standing contact lock does not prevent deliberate crouching");
+        for(int n=0;n<int(hz);++n) {
+            for(int j=0;j<15;++j) pose[j]=rest[j];
+            pose[0].origin.x+=.15f;pose[7].origin.x+=.15f;now+=1/hz;
+            Check(filter.Update(++serial,now,reference,eye,true,false,pose,{0,0,1},true),
+                  "large lean moves the pelvis while feet remain planted");
+            for(int j:{3,6}) Check(Length(Sub(pose[j].origin,initial[j].origin))<.00001f,
+                  "lean reach limits lower hips instead of pulling floor contacts around");
+        }
+        Check(pose[0].origin.x>initial[0].origin.x+.04f,"deliberate lean exhausts stationary hip slack");
+        for(int j=0;j<15;++j) pose[j]=rest[j];
+        pose[3].origin.z+=.1f;now+=1/hz;
+        Check(filter.Update(++serial,now,reference,eye,false,false,pose,{0,0,1},false) && !filter.planted,
+              "locomotion, body catch-up and airborne poses release contacts immediately");
+        Check(pose[3].origin.z>.09f,"foot can swing again after leaving stationary state");
+        filter.Mount();Vec last=pose[7].origin;now+=1;
+        for(int n=0;n<int(hz);++n) {
+            for(int j=0;j<15;++j) pose[j]=rest[j];
+            pose[0].origin.z+=.24f;pose[7].origin.z+=.24f;now+=1/hz;
+            Check(filter.Update(++serial,now,reference,eye,true,false,pose,{0,0,1},true),
+                  "mount recovery survives animation gaps before replanting");
+            Check(Length(Sub(pose[7].origin,last))<=1.2f/hz+.0001f,
+                  "mount-to-standing torso cannot pop on first or subsequent frame");
+            last=pose[7].origin;
+        }
+        Check(std::fabs(pose[7].origin.z-.24f)<.004f,"mount recovery settles to new pose");
+    }
+    // STOP can be reported while both feet still belong to a jump/sprint
+    // palette. They must not become permanent airborne standing contacts.
+    for(float lift:{.08f,.18f,.3f}) {
+        TorsoPoseFilter filter;Frame pose[15]{};
+        const Frame reference{IdentityBasis(),{}},eye{IdentityBasis(),{0,-.85f,0}};
+        Vec contacts[2]={{-.1f,-lift,0},{.1f,-lift,0}};
+        for(int j=0;j<15;++j) { pose[j]=native[j];pose[j].origin=Scale(pose[j].origin,.001f);pose[j].origin.y-=lift; }
+        Check(filter.Update(1,1,reference,eye,true,false,pose,{0,0,1},true,0,contacts),"transient airborne standing fixture solves");
+        contacts[0].y=contacts[1].y=0;
+        for(int n=0;n<180;++n) {
+            for(int j=0;j<15;++j) { pose[j]=native[j];pose[j].origin=Scale(pose[j].origin,.001f); }
+            // The first correct palette can share the previous pose serial.
+            Check(filter.Update(n+1,1+n/90.,reference,eye,true,false,pose,{0,0,1},true,0,contacts),
+                  "standing contacts refresh when native sprint or directional-jump feet settle");
+        }
+        Check(std::fabs(pose[3].origin.y)<.0001f && std::fabs(pose[6].origin.y)<.0001f,
+              "settled native feet cannot remain latched in the air after sprint or jump");
+    }
     for(float lean:{-.12f,0.f,.12f}) for(float drop:{0.f,.03f,.15f,.3f}) for(float twist:{-.7f,0.f,.7f}) {
         Frame posed[15]{};
         const Basis head=RotationMatrix(AxisRotation({0,1,0},twist));

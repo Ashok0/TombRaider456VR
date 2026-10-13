@@ -1,0 +1,4 @@
+first_person_tests.cpp
+dynamic_bones_regression.cpp
+Generating Code...
+FAIL: armed attachments retain exact gun hands, with forearms hidden only while crouching

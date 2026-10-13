@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-12T10:50:16.2938865-04:00",
+    "base_commit":  "a867c7a",
+    "dll_sha256":  "6371F058AAEFC92317D5A8F95BF20E0C8810A9294D1DDCB14A7D4B41882698D3",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-body-follow-centering-20261012-105015",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  1770757,
+    "debug_regression_checks":  1770757,
+    "change":  "Held stance carried by visual follower root and yaw; eye-to-body offset follows body facing; visual follow starts at 4 cm and settles at 2 cm; residual hip noise slack 2 cm; forward-hand reacquisition cannot interrupt turn catch-up; real tracked steps in all directions and quarter/half turns, post-step stability, crouch and mount regression coverage",
+    "hardware_verified":  false
+}

@@ -1,0 +1,8 @@
+first_person_tests.cpp
+dynamic_bones_regression.cpp
+Generating Code...
+PASS: jiggle integration, 15 joints, mask 3fff
+PASS: jiggle integration, 15 joints, mask 3fff
+PASS: jiggle integration, 33 joints, mask fffdfffb
+PASS: jiggle integration, 33 joints, mask fffdfffb
+FAIL: visual roomscale following cannot switch standing legs into synthetic crouching

@@ -166,7 +166,8 @@ void __cdecl FakeHandDraw(uint8_t* item,int32_t useBits,int32_t) {
             return;
         }
         ++armedBodyDrawCalls;
-        Check(useBits==1 && (bits&0x1bffu)==0x1bffu && !(bits&0x6400u) && tr::g_bodySkinScope,
+        Check(useBits==1 && (tr::IsCrouchState(item) ? (bits&~0x2400u)==0 :
+              (bits&0x1bffu)==0x1bffu && !(bits&0x6400u)) && tr::g_bodySkinScope,
               "armed body keeps torso legs and both arm chains without duplicate hands/head");
         return;
     }
@@ -1234,13 +1235,14 @@ int main() {
                 RestoreHeadMesh();meshBits=0x7fff;
                 flags=0x101u|(modern ? 2u : 0u);const auto savedFlags=flags;
                 SetMeshVisibility(true,false,true);
+                meshBits=0; // Reproduce the old outer-renderer rejection explicitly.
                 const int hiddenHands=handDrawCalls,hiddenCalls=crouchOuterDrawCalls;
                 FakeLaraDrawPhase(itemMemory,17);
                 Check(meshBits==0 && handDrawCalls==hiddenHands && crouchOuterDrawCalls==hiddenCalls,
                       "zero crouch mask reproduces missing hands before the previous visibility hook can run");
                 SetMeshVisibility(true,false,true,false,false,false,MotionReady());
-                Check(meshBits==0x3fff && g_meshBaseBits==0x7fff,
-                      "armed crouch keeps the complete body and arms without losing the original mask");
+                Check(meshBits==0x2400 && g_meshBaseBits==0x7fff,
+                      "armed crouch retains hands only without losing the original body mask");
                 const auto before=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
                 const int hands=handDrawCalls,calls=crouchOuterDrawCalls;
                 FakeLaraDrawPhase(itemMemory,17);
@@ -1249,13 +1251,13 @@ int main() {
                 Check(flags==savedFlags && before==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)),
                       "outer visibility override restores control settings and leaves body/animation/masks unchanged");
                 SetMeshVisibility(true,false,true,false,false,false,true);
-                Check(meshBits==0x3fff && g_meshBaseBits==0x7fff,"repeated crouch render cannot corrupt saved visibility");
+                Check(meshBits==0x2400 && g_meshBaseBits==0x7fff,"repeated crouch render cannot corrupt saved visibility");
                 status=0;SetMeshVisibility(true,false,true,false,false,false,MotionReady());
-                Check(meshBits==0,"holstering returns crouched body and unarmed hands to hidden");
+                Check(meshBits==0x2400,"holstering preserves crouched hands-only visibility");
                 status=4;SetMeshVisibility(true,false,true,false,false,false,MotionReady());
-                Check(meshBits==0x3fff,"rearming while still crouched restores body and tracked hand visibility");
+                Check(meshBits==0x2400,"rearming while crouched cannot restore the body");
                 SetMeshVisibility(true,true,true,false,false,false,true);
-                Check(meshBits==0x3fff && !g_rollHidden && !g_crouchHidden,"tracked guns retain body and arms during rolls");
+                Check(meshBits==0x2400 && !g_rollHidden && g_crouchHidden,"tracked guns preserve crouch mask despite stale roll flags");
                 RestoreHeadMesh();Check(meshBits==0x7fff,"leaving crouch restores original full body mask");
             }
             g_crouchHidden=true;
@@ -2207,10 +2209,114 @@ int main() {
     TestPhysicalSwitch(resetRoomscale,rva,physicalPose);
     {
         const auto settings=config;
+        const auto savedMotion=g_motionDll;const bool savedHooks=g_motionHooksReady;
+        const bool savedTracking[2]={VR().m_controllerPoseValid[0],VR().m_controllerPoseValid[1]};
+        static uint8_t* motionApp=appMemory;
+        MotionDll motion{};motion.app=rva(&motionApp);g_motionDll=&motion;g_motionHooksReady=true;
+        VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+        auto& gunStatus=*reinterpret_cast<int16_t*>(laraMemory+2);
+        auto& weapon=*reinterpret_cast<int16_t*>(laraMemory+4);
+        const auto oldStatus=gunStatus,oldWeapon=weapon;
+        for(int which:{0,1}) for(bool armed:{false,true}) for(int obstruction:{0,14}) {
+            game=dll.game=which;resetRoomscale();collisionMode=obstruction;
+            config.firstPersonMovementStabilization=config.firstPersonFullBodyIK=true;
+            config.firstPersonMotionGuns=true;appMemory[0x9e4]=1;
+            config.firstPersonAnchorX=0;config.firstPersonAnchorZ=144;
+            gunStatus=armed ? 4 : 0;weapon=1;g_groundEye.Reset();
+            physicalPose(0);VR().RecenterFirstPersonHead();
+            UpdateSceneCamera(camera);
+            Check(!armed || MotionReady(),"camera regression actually runs with tracked dual guns drawn");
+            for(int direction:{1,-1}) {
+                float lastEye=0;bool haveLast=false;
+                for(int n=0;n<=450;++n) {
+                    const float forward=(direction==1 ? n : 450-n)*.001f;
+                    physicalPose(0,0,forward);UpdateSceneCamera(camera);
+                    const float eye=camera.z_pos-InvertRigid(VR().HeadView()).r[2][3];
+                    if(haveLast) Check(std::fabs(eye-lastEye)<2.1f,
+                        "armed and unarmed forward/backward HMD motion never snaps across clearance reach or wall contact");
+                    if(forward>.44f) Check(std::fabs(eye-(obstruction ? 99.f : 512.f))<1.1f,
+                        "armed camera fixture crosses maximum reach and retains the last safe eye position");
+                    lastEye=eye;haveLast=true;
+                }
+            }
+        }
+        const bool oldLongHooks=g_longGunHooksReady;g_longGunHooksReady=true;
+        for(int which:{0,1}) for(int equipped:{1,3,4,5,6}) {
+            game=dll.game=which;resetRoomscale();collisionMode=0;
+            config.firstPersonFullBodyIK=config.firstPersonMovementStabilization=config.firstPersonMotionGuns=true;
+            appMemory[0x9e4]=1;gunStatus=4;weapon=int16_t(equipped);
+            physicalPose(0);VR().RecenterFirstPersonHead();UpdateSceneCamera(camera);
+            const auto initial=camera;
+            for(int tick=0;tick<60;++tick) {
+                // Fast changes in position and direction, with real native-root
+                // consumption and intermediate render fractions, in open space.
+                const float x=.22f*std::sin(tick*.65f),z=.22f*std::cos(tick*.65f);
+                physicalPose(0,x,z);prev=pos;
+                LARGE_INTEGER freq{};QueryPerformanceFrequency(&freq);QueryPerformanceCounter(&g_roomscaleFollowTime);
+                g_roomscaleFollowTime.QuadPart-=freq.QuadPart/30;
+                Detour_LaraAboveWater(itemMemory,nullptr);
+                for(int fractionValue:{0,64,128,192,256}) {
+                    fraction=fractionValue;UpdateSceneCamera(camera);
+                    const auto eye=InvertRigid(VR().HeadView());
+                    Check(MotionReady(),"fast camera regression keeps each equipped gun path active");
+                    Check(std::fabs(camera.x_pos+eye.r[0][3]-initial.x_pos-x*1000)<1.1f &&
+                          std::fabs(camera.z_pos-eye.r[2][3]-initial.z_pos-z*1000)<1.1f,
+                          "rapid armed head movement and roomscale root interpolation add no camera jump");
+                }
+            }
+        }
+        for(int which:{0,1}) for(int equipped:{1,3,4,5,6}) {
+            game=dll.game=which;resetRoomscale();collisionMode=0;
+            config.firstPersonFullBodyIK=config.firstPersonMovementStabilization=config.firstPersonMotionGuns=true;
+            appMemory[0x9e4]=1;gunStatus=4;weapon=int16_t(equipped);
+            physicalPose(0);VR().RecenterFirstPersonHead();UpdateSceneCamera(camera);
+            const float initialHeading=g_headingBase;
+            for(int tick=0;tick<120;++tick) {
+                // Look rapidly across wraparound and the near-vertical heading
+                // guard. Native combat/look camera angles and body yaw must
+                // never add a second rotation to the raw stereo head pose.
+                Head(3.2f*std::sin(tick*.18f),1.5f*std::sin(tick*.13f));
+                VR().m_rawHeadPose.m[0][3]+=.18f*std::sin(tick*.32f);
+                VR().m_headFromTracking=InvertRigid(FromHmd(VR().m_rawHeadPose));
+                ++VR().m_poseSerial;
+                pos.y_rot=Angle(2.1f*std::sin(tick*.14f));prev=pos;
+                *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=tick%2 ? 2 : 3;
+                float lx=0,ly=0,rx=0;FirstPersonInput(lx,ly,rx,false);
+                Detour_LaraAboveWater(itemMemory,nullptr);
+                for(int f:{0,128,256}) {
+                    fraction=f;camera.x_rot=12000;camera.y_rot=-23000;camera.z_rot=4000;
+                    UpdateSceneCamera(camera);
+                    Check(MotionReady() && Near(g_headingBase,initialHeading) &&
+                          camera.y_rot==Angle(initialHeading) && !camera.x_rot && !camera.z_rot,
+                          "armed rapid yaw and pitch cannot rotate the scene base or inherit combat camera angles");
+                    const auto expected=ToEngineSpace(InvertRigid(FromHmd(VR().m_rawHeadPose)),1000,config.flipViewY);
+                    for(Eye e:{Eye::Left,Eye::Right}) {
+                        const auto view=VR().EyeView(e);
+                        for(int row=0;row<3;++row) for(int col=0;col<3;++col)
+                            Check(Near(view.r[row][col],expected.r[row][col]),
+                                  "both armed stereo eyes retain raw HMD rotation through rapid turns and nods");
+                    }
+                }
+            }
+        }
+        g_longGunHooksReady=oldLongHooks;
+        g_motionDll=savedMotion;g_motionHooksReady=savedHooks;
+        VR().m_controllerPoseValid[0]=savedTracking[0];VR().m_controllerPoseValid[1]=savedTracking[1];
+        gunStatus=oldStatus;weapon=oldWeapon;config=settings;collisionMode=0;resetRoomscale();
+    }
+    {
+        const auto settings=config;
         resetRoomscale();config.firstPersonFullBodyIK=true;
         physicalPose(0,.10f,0,0);collisionMode=0;
         auto tick=[]() { LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
             QueryPerformanceCounter(&g_roomscaleFollowTime);g_roomscaleFollowTime.QuadPart-=frequency.QuadPart/30; };
+        const auto stationaryRoot=pos;
+        for(float yaw:{.5f,.51f,.49f,1.2f,1.21f,1.19f}) {
+            physicalPose(yaw,0,0,0);tick();const auto movement=DragBody(itemMemory);
+            Check(locomotion::Length(movement)==0 && pos.x_pos==stationaryRoot.x_pos && pos.z_pos==stationaryRoot.z_pos,
+                  "yaw-only tracking cannot invent physical movement under full-body stabilization");
+        }
+        physicalPose(0,.10f,0,0);
         tick();const auto lean=DragBody(itemMemory);
         Check(locomotion::Length(lean)==0 && collisionCalls==0,"full-body lean remains inside native collision root slack");
         physicalPose(0,.4f,0,0);tick();const auto step=DragBody(itemMemory);
@@ -2639,11 +2745,11 @@ int main() {
         for (bool hideHead:{false,true}) for (int crouch:{71,80,81,84,85,86,105,106}) {
             RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
             state=int16_t(crouch); UpdateSceneCamera(camera);
-            Check(g_crouchHidden && bits==0 && !g_rollHidden,
+            Check(g_crouchHidden && bits==(baseBits&0x2400) && !g_rollHidden,
                   "crouch/crawl idle, movement and turns hide classic body independently of head option");
             const int oldDraws=draws, oldHairs=hairs;
             Detour_DrawCreatureHD(itemMemory,0,0); Detour_DrawHair(0);
-            Check(draws==oldDraws && hairs==oldHairs,"crouched HD body and hair do not draw");
+            Check(draws==oldDraws+1 && drawnBodyBits==0x2400 && hairs==oldHairs,"crouched HD draws hands only and no hair");
             state=2; UpdateSceneCamera(camera);
             Check(!g_crouchHidden && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
                   "standing restores the pre-crouch mesh mask");
@@ -2651,7 +2757,7 @@ int main() {
             spotCamera=1; UpdateSceneCamera(camera);
             Check(!g_crouchHidden && bits==baseBits,"scripted camera restores crouched body normally");
             spotCamera=0; UpdateSceneCamera(camera);
-            Check(g_crouchHidden && bits==0,"returning from cutscene restores crouch hiding");
+            Check(g_crouchHidden && bits==(baseBits&0x2400),"returning from cutscene restores crouch hands-only visibility");
             state=2; UpdateSceneCamera(camera);
         }
         for (bool hideHead:{false,true}) for (int swim:{13,17,18,35,33,34,47,48,49}) {
@@ -2711,6 +2817,9 @@ int main() {
             Check(g_ledgeArmsOnly && bits==(baseBits&kArmMeshBits),
                   "pull-up keeps torso hidden while interaction camera anchor is retracted");
             state=2; UpdateSceneCamera(camera);
+            Check(g_ledgeArmsOnly && bits==(baseBits&kArmMeshBits),
+                  "first standing draw after pull-up retains arms-only recovery mask");
+            g_bodyVisibility.until=0;g_mountBodyTransition.Reset();g_torsoPose.Reset();UpdateSceneCamera(camera);
             Check(!g_ledgeArmsOnly && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
                   "standing after pull-up restores body without losing the saved mesh mask");
             state=int16_t(hanging); UpdateSceneCamera(camera);
@@ -2787,7 +2896,7 @@ int main() {
                 const int before=draws;
                 Detour_DrawCreatureHD(itemMemory,0,0);
                 Check(draws==before+1 && drawnUseBits==1 && !(drawnBodyBits&kHeadMeshBit) &&
-                      (drawnBodyBits&0x3fff)==0x3fff,"kneeling head removal preserves torso, arms and legs");
+                      (drawnBodyBits&0x3fff)==0x3f7f,"landing draw hides chest and head while preserving arms and legs");
                 // The light sees the native head and braid during the kneel.
                 ShadowDll landingShadow{};static int landingPass=4;
                 landingShadow.renderPass=rva(&landingPass);const auto oldShadow=g_shadowDll;g_shadowDll=&landingShadow;
@@ -2810,7 +2919,7 @@ int main() {
             }
             RestoreHeadMesh();std::memcpy(geom,savedGeom,sizeof(savedGeom));
             config=landingSettings;game=landingGame;dll.game=landingDllGame;landingAnim=savedLandingAnim;vehicle=landingVehicle;
-            state=2;UpdateSceneCamera(camera);
+            g_bodyVisibility={};state=2;UpdateSceneCamera(camera);
         }
         g_hGetJoints.m_trampoline=reinterpret_cast<void*>(&FakeSkinJoints);
         state=2; g_active=g_scenePoseValid=true; g_headingItem=itemMemory;

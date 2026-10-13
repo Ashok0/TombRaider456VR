@@ -5,6 +5,26 @@
 namespace tr::firstperson {
 constexpr uint32_t HeadMeshBit = 1u << 14;
 constexpr uint32_t ArmMeshBits = 0x3f00u;
+constexpr uint32_t HandMeshBits = 0x2400u;
+
+// Hold the draw restriction through the first standing palettes after a
+// mount/landing. Rendering and simulation can change state within one pose.
+struct BodyVisibilityRecovery {
+    const void* owner=nullptr;
+    int level=-1;
+    uint32_t mask=UINT32_MAX;
+    double until=0,last=0;
+    uint32_t Update(const void* item,int currentLevel,double now,bool armsOnly,
+                    bool landing,bool recovering) {
+        if(owner!=item || level!=currentLevel || now<last) *this={};
+        owner=item;level=currentLevel;last=now;
+        if(armsOnly || landing) {
+            mask=armsOnly ? ArmMeshBits : ~(1u<<7); // Chest mesh.
+            until=now+.35;
+        } else if(now>=until && !recovering) mask=UINT32_MAX;
+        return mask;
+    }
+};
 
 inline bool UseHeadCamera(int hitPoints) { return hitPoints > 0; }
 

@@ -27,14 +27,17 @@ inline bool EyeBlocked(const int32_t samples[18], int32_t bodyY,
 // Keep the last clear point; do not move the eye through a blocked wall.
 template <typename Blocked>
 void ClampEyeToWall(const int32_t body[3], int32_t eye[3], Blocked blocked) {
-    const int64_t dx = int64_t(eye[0]) - body[0];
-    const int64_t dz = int64_t(eye[2]) - body[2];
-    const double distance = std::hypot(double(dx), double(dz));
+    int64_t dx = int64_t(eye[0]) - body[0];
+    int64_t dz = int64_t(eye[2]) - body[2];
+    double distance = std::hypot(double(dx), double(dz));
     if (distance < 1.0) return;
     if (distance > 512.0) {
-        eye[0] = body[0];
-        eye[2] = body[2];
-        return;
+        // Saturate along the same ray. Resetting to the root at this boundary
+        // teleports the view when a small tracked movement crosses it.
+        dx=int64_t(std::lround(double(dx)*512.0/distance));
+        dz=int64_t(std::lround(double(dz)*512.0/distance));
+        eye[0]=body[0]+int32_t(dx);eye[2]=body[2]+int32_t(dz);
+        distance=std::hypot(double(dx),double(dz));
     }
 
     const int steps = std::clamp(int(std::ceil(distance / 16.0)), 1, 32);
@@ -43,6 +46,16 @@ void ClampEyeToWall(const int32_t body[3], int32_t eye[3], Blocked blocked) {
         const int32_t x = body[0] + int32_t(dx * i / steps);
         const int32_t z = body[2] + int32_t(dz * i / steps);
         if (blocked(x, z, clearX, clearZ)) {
+            // Refine this final segment to integer precision. Returning the
+            // previous 16-unit sample makes a tiny HMD change move the camera
+            // by a whole sample when the sweep's step count changes.
+            int32_t hitX=x,hitZ=z;
+            for(int refine=0;refine<5;++refine) {
+                const int32_t midX=clearX+(hitX-clearX)/2,midZ=clearZ+(hitZ-clearZ)/2;
+                if(midX==clearX && midZ==clearZ) break;
+                if(blocked(midX,midZ,clearX,clearZ)) { hitX=midX;hitZ=midZ; }
+                else { clearX=midX;clearZ=midZ; }
+            }
             eye[0] = clearX;
             eye[2] = clearZ;
             return;

@@ -904,6 +904,36 @@ described in the historical October 8 section below. Enable it with
 `FirstPersonFullBodyIK=1`; tracked unarmed hands also require
 `FirstPersonUnarmedIK=1`. Stand normally and recenter to calibrate eye height.
 
+Stationary legs retain their foot contacts and reference geometry rather than
+being rebuilt from head movement every frame. The final standing filter absorbs
+2 cm of residual horizontal noise; larger leans and physical crouching move the hips while feet
+remain planted. Reach limits lower the hips instead of dragging the feet.
+Native walking, airborne poses and mount transitions release the hold. Visual
+roomscale catch-up carries the standing pose without lowering the hips.
+This does not depend on detecting forward-facing controllers. Head and hand
+targets remain exact. Regression tests check final 15- and 33-joint palettes
+under sustained down-gaze, imperfect neck compensation and head tremor.
+The held stance travels in the lazy body's position and facing, rather than
+remaining tied to the native simulation root. Real steps in all directions
+and physical quarter/half turns are tested through the same render hook.
+
+Wall and mount transitions retain full-body IK: wall impact no longer swaps to
+the native torso, and the native hands-busy mount status keeps authored grips.
+Wall camera retraction moves the body and hands in the same frame and is
+excluded from the inferred step target. The last wall sweep segment is refined
+to integer precision, avoiding 16-unit camera jumps. Mount recovery handles a
+root relocation even between draws sharing one headset sample. The calibrated
+eye offset uses body-local coordinates after recentering. Regression probes
+in `build/verify_vrik_transition_regressions.py` remove these fixes individually
+and require the corresponding render/camera tests to fail before restoring them.
+
+The inferred torso filters small tracking noise and retains its view-relative
+pose through ledge/crate handoffs before easing into standing. Full-body room
+movement uses actual HMD translation; yaw-only neck compensation cannot invent
+a physical step. The follower uses the stable eye and simulation root.
+New levels and water entry clear calibration and queue recapture after 250 ms
+of steady standing on dry ground; End remains the manual recenter override.
+
 Body size now calibrates on the first ordinary standing frame. The solver fits
 the model's near-straight standing stature to the available rendered eye-to-foot
 height, preserving the comfortable camera position. It scales the mesh and
@@ -928,31 +958,36 @@ standing knee bend; calibration now targets 99.995% reach and the standing
 constraint prevents the neck allowance from lowering the hips. Tests require
 less than two degrees of knee bend for symmetric standing contacts. Uneven
 contacts use the lower feasible pelvis height so neither leg stretches.
-Support is full within 3 cm of inferred upright posture and fades out by a
-10 cm physical drop; locomotion and inferred steps release it. Looking down
+Support is full within 10 cm of inferred upright posture and fades smoothly out
+by a 20 cm physical drop; locomotion and inferred steps release it. Looking down
 subtracts an estimated neck-to-eye arc from this **posture decision only**,
 so inspecting the legs need not trigger a crouch. The camera and tracked eye
 remain unchanged. Extreme manual sizing has a torso-clearance limit. With drift
-logging on, `body stance` entries report posture drop, support weight and the
+logging on, `body stance` entries report posture drop, planted-contact state and the
 two solved knee angles for headset diagnosis.
 
 At rest, the neck owns the first 30 degrees of head turn; the torso only shares
 excess twist. Head turns up to 45 degrees leave the hips fixed. Beyond that,
-facing catches up at up to 120 degrees/second and settles
-inside a 30-degree release margin. Stick turns rotate the body about the headset
+the body follows the excess angle in the same tracking sample, retaining the
+45-degree head-turn margin. There is no timed catch-up after the head stops.
+The footprint rotates around the eye with that change, so a quick roomscale turn
+does not leave the body position trailing behind. Stick turns rotate the body about the headset
 with the player. Locomotion follows HMD facing when `FirstPersonMoveWithHead=1`,
 or movement direction otherwise. Two raised controllers held and aimed forward
 in the **body's** frame hold the chest facing steady and suppress idle hip
-catch-up until an 80-degree head turn. Moving or lowering the hands releases
+rotation until an 80-degree head turn. Moving or lowering the hands releases
 that support. Movement still overrides it; the optional hand weight supplies a
 small facing bias during locomotion. Hands at the holsters do not steer the body.
 
 Horizontal displacement within 15 cm is treated as leaning. Beyond it,
 collision-checked room-scale movement catches up at up to 0.9 m/s until the
-remaining offset is about 9 cm. The rendered footprint follows with the same
-slack and speed limit. Small alternating IK steps accompany catch-up and
-turning; ordinary stick locomotion retains the native walking/running stride.
-These are inferred steps, without foot trackers or individual terrain probes.
+remaining offset is about 9 cm. The rendered footprint starts following after
+at most 4 cm and settles within 2 cm at the same speed limit, so collision slack
+does not leave the visible torso behind. Its eye-to-body offset rotates with
+body facing to keep physical turns centered. Standing and wall-impact poses
+retain upright support during this catch-up: synthetic step weight cannot
+repeatedly bend the knees. Ordinary stick locomotion retains native walking
+and running strides. There are no foot trackers or individual terrain probes.
 
 Small positional changes (4 cm horizontally, 1.5 cm vertically) are absorbed by
 the sparse neck rather than shifting the torso. Larger lean applies a bounded
@@ -978,7 +1013,7 @@ defaults off; physical crouching still bends the rendered body with it disabled.
 | Setting | Default |
 |---|---:|
 | `FirstPersonBodyYawSlackDegrees` | 45 |
-| `FirstPersonBodyYawSpeedDegrees` | 120 |
+| `FirstPersonBodyYawSpeedDegrees` | 120 (legacy; no longer limits physical yaw) |
 | `FirstPersonBodyLeanRadiusMetres` | 0.15 |
 | `FirstPersonBodyFollowSpeedMetres` | 0.9 |
 | `FirstPersonBodyHandYawWeight` | 0.15 (0 disables controller support and hint) |
@@ -993,6 +1028,33 @@ fixed torso during small head motion with forward hands, curved authored spines,
 leg lengths, standing size mismatch and knee extension, fixed size through
 crouching/walking, planted feet, native crouch input, shadows and jiggle. Headset fit remains a
 required practical check.
+
+First-person draw masks hide the chest throughout landing clips and for at
+least 350 ms of recovery. Ledge hangs and mounts show only arms and hands, with
+the same recovery hold and any additional time needed for the body pose to
+settle. These rules apply with full-body IK enabled and with guns drawn; hip
+and back holster meshes are also suppressed in arms-only views. Normal body
+visibility returns after recovery, and native shadows retain the full body.
+Native crouch and crawl states show only hands (and equipped hand-held weapons),
+including with full-body IK enabled; forearms, hair, torso, legs and holster
+attachments stay hidden. The standing pose latch now refreshes when native
+animation foot contacts settle after sprinting or sideways/backward jumps, so
+an airborne transition pose cannot remain frozen after returning to idle.
+This refresh uses native body-local contacts, not headset noise.
+The eye-clearance sweep saturates continuously at its 512-unit reach instead
+of snapping to Lara's root when tracked head displacement crosses that limit.
+
+The reported armed view that briefly rotates and snaps back is still under
+investigation. Rapid armed translation/yaw/pitch regressions pass, including
+combat/look cameras, angle wraparound and near-vertical head poses. They do not
+reproduce the headset symptom. With `FirstPersonDriftLog=1`, `fp-view` records
+peak tracked-head, native-camera and draw-view rotation changes plus frame
+intervals; `fp-eye` records unexpected positional changes and camera suspension.
+These diagnostics do not smooth or modify the camera.
+Validation for this update: 2,559,543 checks in both debug and optimized
+regression builds, 14 jiggle integration cases per build, and 13 deliberate
+fix-removal probes. The Release/x64 DLL builds successfully. Headset behavior
+has not been verified by these automated tests.
 
 ### Optional full-body centering (2026-10-08, historical)
 
@@ -6815,13 +6877,13 @@ build\hk_scope_gl_tests.exe
 
 First-person HD mode also supports physical weapon holsters on Lara's visible
 mesh. At either hip, squeeze that hand's **Grip**, then pull at least 8 cm out
-of the grab zone (about 27 cm from its centre). **Each hand controls its own
+of the grab zone (at least 35 cm from its centre). **Each hand controls its own
 pistol or Uzi**. To put a gun away, bring it to its matching hip while holding
 Grip and release Grip there. Releasing away from the holster keeps it equipped.
 The revolver/Desert Eagle uses the right hip; long weapons use the upper back
 mount with Right Grip. Put away held guns before changing weapon types.
 
-Grab zones allow 22 cm (about 9 inches) of distance from each holster grip,
+Grab zones allow 30 cm (about 12 inches) of distance from each holster grip,
 for both drawing and returning guns. The matching controller gently rumbles
 while inside a usable zone; moving away, losing tracking or opening a menu
 stops that feedback. A stronger burst confirms a completed draw or return.

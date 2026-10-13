@@ -115,6 +115,7 @@ void TestUnarmedIK() {
     using namespace tr;
     using namespace tr::motiongun;
     const auto settings=config; const auto savedDll=dll;
+    const auto savedVisibility=g_bodyVisibility;g_bodyVisibility={};
     config.firstPersonFullBodyIK=false; // Preserve coverage of the arm-only fallback.
     const auto savedCalibration=testCalibration;
     const auto savedItem=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
@@ -546,9 +547,9 @@ void TestUnarmedIK() {
                     meshBits=hand ? 0x600u : 0x3000u;
                     observedForearmPasses=observedGunPasses=0;
                     Detour_DrawCreatureHD(itemMemory,1,0);
-                    Check(observedForearmPasses==1 && observedGunPasses==1,
-                          "armed rendering emits an IK forearm and unchanged gun hand from each native attachment");
-                    Check(!std::memcmp(observedForearmPalette,armedPalette,count*12*sizeof(float)),
+                    Check(observedForearmPasses==(IsCrouchState(itemMemory) ? 0 : 1) && observedGunPasses==1,
+                          "armed attachments retain exact gun hands, with forearms hidden only while crouching");
+                    Check(IsCrouchState(itemMemory) || !std::memcmp(observedForearmPalette,armedPalette,count*12*sizeof(float)),
                           "visible forearm uses same articulated chain as the solved body");
                     Check(!std::memcmp(observedGunPalette,gunPalette,count*12*sizeof(float)),
                           "restoring forearm draw cannot change floating gun transform");
@@ -754,5 +755,6 @@ void TestUnarmedIK() {
     std::memcpy(itemMemory,savedItem.data(),sizeof(itemMemory));std::memcpy(laraMemory,savedLara.data(),sizeof(laraMemory));
     config=settings;dll=savedDll;testCalibration=savedCalibration;
     g_unarmedTwist[0]=savedLeftTwist;g_unarmedTwist[1]=savedRightTwist;
+    g_bodyVisibility=savedVisibility;
 }
 }

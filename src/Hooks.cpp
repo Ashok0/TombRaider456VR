@@ -49,6 +49,7 @@
 #include <cstring>
 #include <intrin.h>
 #include <cmath>
+#include <algorithm>
 
 namespace tr {
 namespace {
@@ -775,6 +776,47 @@ void __cdecl Detour_vid_setPass(int shader, float* params, int cull, int blend) 
 // ---------------------------------------------------------------------------
 // validate_draw -- per-eye matrix injection
 // ---------------------------------------------------------------------------
+// Sample one ordinary world draw per tracked pose. This is CPU-only: no GPU
+// readback/stall, no camera correction and no filtering of headset movement.
+void TraceFirstPersonView(const Affine& view,int shader,int eye) {
+    struct Trace {
+        bool valid=false;
+        uint64_t serial=0,time=0,report=0;
+        Affine view{},head{};
+        float native[3][3]{};
+        float headStep=0,viewStep=0,nativeStep=0;
+        uint64_t frameMs=0;
+    };
+    static Trace trace;
+    if(!Cfg().firstPersonDriftLog || !FirstPersonActive()) { trace={};return; }
+    if(eye || SkyInfinity() || FirstPersonDrawingTrackedHands() ||
+       (trace.valid && trace.serial==VR().PoseSerial())) return;
+    vr::HmdMatrix34_t raw{};float native[3][3]{},position[3]{};
+    if(!VR().HeadPose(raw) || !CameraViewFrame(native,position)) return;
+    Affine head{};std::memcpy(head.r,raw.m,sizeof(head.r));
+    const auto step=[](const auto& a,const auto& b) {
+        float dot=0;
+        for(int row=0;row<3;++row) for(int col=0;col<3;++col) dot+=a[row][col]*b[row][col];
+        return std::acos(std::clamp((dot-1)*.5f,-1.f,1.f))*57.2957795f;
+    };
+    const auto now=GetTickCount64();
+    if(trace.valid) {
+        trace.headStep=std::max(trace.headStep,step(head.r,trace.head.r));
+        trace.viewStep=std::max(trace.viewStep,step(view.r,trace.view.r));
+        trace.nativeStep=std::max(trace.nativeStep,step(native,trace.native));
+        trace.frameMs=std::max(trace.frameMs,now-trace.time);
+        if(now-trace.report>=250) {
+            LogF("fp-view: t=%llu pose=%llu shader=%d max-frame-ms=%llu max-rotation-deg hmd=%.2f native=%.2f draw=%.2f native-yaw=%.2f draw-forward=(%.3f,%.3f,%.3f) hmd-forward=(%.3f,%.3f,%.3f)",
+                 now,VR().PoseSerial(),shader,trace.frameMs,trace.headStep,trace.nativeStep,trace.viewStep,
+                 std::atan2(native[2][0],native[2][2])*57.2957795f,
+                 view.r[2][0],view.r[2][1],view.r[2][2],raw.m[0][2],raw.m[1][2],raw.m[2][2]);
+            trace.report=now;trace.headStep=trace.viewStep=trace.nativeStep=0;trace.frameMs=0;
+        }
+    } else trace.report=now;
+    trace.valid=true;trace.serial=VR().PoseSerial();trace.time=now;trace.view=view;trace.head=head;
+    std::memcpy(trace.native,native,sizeof(native));
+}
+
 void __cdecl Detour_validate_draw() {
     if (HKScopeCapturing()) {
         auto& state=VidState();
@@ -1221,6 +1263,7 @@ void __cdecl Detour_validate_draw() {
     // remaining per-eye difference is the frustum shear. If the two halves
     // still differ in that configuration, the difference was never parallax.
     const Affine gameView  = ReadPackedView(g_savedView);
+    TraceFirstPersonView(gameView,vs.shader,g_currentEye);
     Affine finalView = Cfg().perEyeView
                      ? Mul(eyeXform, gameView)
                      : gameView;

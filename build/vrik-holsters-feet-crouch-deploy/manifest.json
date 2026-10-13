@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-13T01:05:28.5228837-04:00",
+    "base_commit":  "a867c7a",
+    "dll_sha256":  "ABED000FC999721FF47C951B19ADF5757449097CE41B6D8E0F68637A6F4EACE5",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-vrik-holsters-feet-crouch-20261013-010528",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  2559543,
+    "debug_regression_checks":  2559543,
+    "change":  "Holster capture radius 30cm with hover haptics; refresh standing foot contacts as native sprint/jump animation settles; hands-only native crouch/crawl visibility, preserving prior mount/landing/hang masks and immediate physical yaw outside slack; armed camera rotation remains unresolved, with rapid translation/yaw/pitch tests and CPU-only camera/draw rotation diagnostics; 13 negative regression probes confirmed",
+    "hardware_verified":  false
+}

@@ -5,8 +5,8 @@ namespace tr::motiongun {
 // Native equipment remains shared; this mask owns physical hand occupancy.
 // Distances are supplied in metres from the rendered holster, not the HMD.
 struct HolsterInput {
-    static constexpr float ReachMetres=.22f;
-    static constexpr float WithdrawMetres=.27f;
+    static constexpr float ReachMetres=.30f;
+    static constexpr float WithdrawMetres=.35f;
     struct Hand {
         bool down=false, claimed=false, drawing=false, blockTrigger=false;
         int slot=-1, weapon=0;

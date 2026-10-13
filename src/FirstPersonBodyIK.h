@@ -259,4 +259,48 @@ inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,floa
     for(const auto& joint:posed) if(!Finite(joint)) return false;
     return true;
 }
+// Repose the torso against stable leg geometry. Positions are metres; the
+// tracked head stays exact and arms are subsequently solved to controllers.
+inline bool ReposeTorso(Frame (&pose)[15],const Frame (&target)[4],Vec forward,const Frame* planted=nullptr) {
+    Frame result[15];for(int j=0;j<15;++j) result[j]=pose[j];
+    const Frame* legs=planted ? planted : pose;
+    Frame inverseHip{},inverseChest{};
+    if(!Inverse(legs[0],inverseHip) || !Inverse(pose[7],inverseChest)) return false;
+    result[0]=target[0];result[7]=target[1];
+    if(planted) {
+        // Y-down: lower the pelvis at full extension rather than drag feet.
+        const Frame hip=Multiply(result[0],inverseHip);
+        float lower=0;
+        for(int leg=0;leg<2;++leg) {
+            const int first=1+leg*3;
+            const float a=Length(Sub(legs[first+1].origin,legs[first].origin));
+            const float b=Length(Sub(legs[first+2].origin,legs[first+1].origin));
+            const Vec socket=Transform(hip,legs[first].origin),foot=target[2+leg].origin;
+            const float horizontal=(socket.x-foot.x)*(socket.x-foot.x)+(socket.z-foot.z)*(socket.z-foot.z);
+            const float reach=a+b-.000001f;
+            if(horizontal<reach*reach)
+                lower=std::max(lower,foot.y-std::sqrt(reach*reach-horizontal)-socket.y);
+        }
+        result[0].origin.y+=lower;result[7].origin.y+=lower;
+    }
+    const Frame hip=Multiply(result[0],inverseHip),chest=Multiply(result[7],inverseChest);
+    for(int j=8;j<14;++j) result[j]=Multiply(chest,pose[j]);
+    for(int leg=0;leg<2;++leg) {
+        const int first=1+leg*3;
+        Frame chain[3]={Multiply(hip,legs[first]),Multiply(hip,legs[first+1]),Multiply(hip,legs[first+2])},changes[3]{};
+        Frame foot=target[2+leg];
+        const float a=Length(Sub(chain[1].origin,chain[0].origin)),b=Length(Sub(chain[2].origin,chain[1].origin));
+        Vec delta=Sub(foot.origin,chain[0].origin),direction{};
+        const float d=Length(delta);
+        if(a<.001f || b<.001f || !Unit(delta,direction)) return false;
+        const float feasible=std::clamp(d,std::fabs(a-b)+.000001f,a+b-.000001f);
+        if(std::fabs(feasible-d)>.000001f) foot.origin=Add(chain[0].origin,Scale(direction,feasible));
+        if(!SolveArm(chain,foot,forward,changes,nullptr,nullptr,false)) return false;
+        for(int j=0;j<3;++j) result[first+j]=Multiply(changes[j],chain[j]);
+        result[first+2]=foot;
+    }
+    for(const auto& joint:result) if(!Finite(joint)) return false;
+    for(int j=0;j<15;++j) pose[j]=result[j];
+    return true;
+}
 } // namespace tr::firstperson

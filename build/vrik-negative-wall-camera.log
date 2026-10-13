@@ -1,0 +1,4 @@
+first_person_tests.cpp
+dynamic_bones_regression.cpp
+Generating Code...
+FAIL: head movement across sweep reach saturates continuously in both directions, with or without a wall

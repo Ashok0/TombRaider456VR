@@ -9,6 +9,23 @@ void __cdecl FakeBodyJoint(uint8_t* item,tr::PHD_VECTOR* point,int joint,int) {
     point->x=int(p.x+offset.x);point->y=int(p.y+offset.y);point->z=int(p.z+offset.z);
 }
 int fullBodyDraws=0,fullBodyGunDraws=0;
+uint32_t restrictedBodyMask=UINT32_MAX;
+const int32_t* restrictedMapping=nullptr;
+int restrictedBodyDraws=0;
+void __cdecl ObserveRestrictedBodyDraw(uint8_t* item,int32_t masked,int32_t) {
+    using namespace tr;
+    const auto bits=*reinterpret_cast<uint32_t*>(item+off::item_mesh_bits);
+    Check(masked==1 && (bits&~restrictedBodyMask)==0,
+          "actual HD draw cannot restore hidden chest or lower body through IK or guns");
+    if(g_bodySkinScope) {
+        ++restrictedBodyDraws;
+        float palette[33*12]{};Detour_GetJoints(item,palette,0);
+        uint64_t visible=0;int count=0;
+        Check(FirstPersonBodyPalette(visible,count) && count==33 &&
+              visible==firstperson::SkinJointMask(bits,restrictedMapping,count),
+              "uploaded HD skin mask follows draw restriction while retaining complete solver skeleton");
+    }
+}
 void __cdecl ObserveFullBodyDraw(uint8_t* item,int32_t masked,int32_t) {
     using namespace tr;
     Check(masked==1,"full-body eye passes use an explicit visibility mask");
@@ -28,6 +45,10 @@ void TestFullBodyIK() {
     using namespace tr;using namespace tr::motiongun;
     const auto settings=config;const auto savedDll=dll;const auto calibration=testCalibration;
     const auto savedFollower=g_bodyFollower;const auto savedSerial=VR().m_poseSerial;
+    const auto savedTorso=g_torsoPose;const auto savedMount=g_mountBodyTransition;
+    const auto savedVisibility=g_bodyVisibility;g_bodyVisibility={};
+    const auto savedAuto=g_autoBodyCalibration;g_autoBodyCalibration.pending=false;
+    g_torsoPose.Reset();
     const auto savedBodySize=g_bodySize;const int savedSizeObject=g_bodySizeObject;
     const float savedNeckHeight=VR().m_firstPersonNeutralEyeNeckY;
     const auto savedHeightCrouch=g_heightCrouch;const bool savedPhysicalCamera=g_physicalCrouchCamera;
@@ -163,6 +184,7 @@ void TestFullBodyIK() {
         }
         skinFixture=fixture;skinFixtureCount=count;
         for(int which:{0,1}) for(int stance:{0,1,2,3,9,15,25,26,27,71,73,10,30,31,19,54}) for(int armed:{0,1}) {
+            g_torsoPose.Reset();++VR().m_poseSerial;
             dll.game=which;state=int16_t(stance);status=armed ? 4 : 0;g_bodyVisualOffset={55,-80};
             g_headingBase=.4f;testCalibration={.04f,-.06985f,.2032f,-30.f,8,-6};
             Check(FullBodyIKReady(),"full-body available in both games, grounded, airborne and native grip states");
@@ -229,6 +251,7 @@ void TestFullBodyIK() {
                 const auto beforeStance=g_stanceEye;
                 g_haveManualInput=false;g_bodyVisualOffset={};g_headingBase=0;g_bodyFollower.Reset();
                 config.firstPersonBodyScale=0;g_bodySize.Reset();g_stanceEye={};
+                g_torsoPose.Reset();g_mountBodyTransition.Reset();
                 g_scenePose.x_pos=int(bodyJointWorld[14].x+config.firstPersonAnchorX);
                 g_scenePose.y_pos=int(bodyJointWorld[14].y+config.firstPersonAnchorY+160);
                 g_scenePose.z_pos=int(bodyJointWorld[14].z+config.firstPersonAnchorZ);
@@ -280,6 +303,44 @@ void TestFullBodyIK() {
                         }
                     }
                 }
+                // A real neck need not follow our estimated pivot. Check final
+                // leg frames during sustained down-gaze with imperfect height
+                // compensation, translation and small orientation tremor.
+                for(int frame=0;frame<180;++frame) {
+                    const float wave=std::sin(frame*.37f);
+                    Head(.03f*wave,-.7f+.025f*wave);
+                    const auto& h=VR().m_rawHeadPose;
+                    VR().m_rawHeadPose.m[1][3]+=.08f*h.m[1][1]-.12f*h.m[1][2]-VR().m_firstPersonNeutralEyeNeckY;
+                    VR().m_rawHeadPose.m[1][3]-=.065f+.018f*wave;
+                    VR().m_rawHeadPose.m[0][3]+=.008f*wave;
+                    VR().m_rawHeadPose.m[2][3]+=.012f*wave;
+                    ++VR().m_poseSerial;g_torsoPose.time=TurnTime()-1./90.;
+                    const auto cameraBefore=g_scenePose;
+                    Detour_GetJoints(itemMemory,palette,0);
+                    Check(g_torsoPose.planted,"standing contact hold does not depend on hand-facing detection");
+                    for(int i=0;i<count;++i) {
+                        const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                        const auto baseJoint=Multiply(ReadRows(baseline+i*12),bind[i]);
+                        if(mapping[i]<=6) {
+                            Check(nearVec(actual.origin,baseJoint.origin),"head tremor cannot jerk uploaded thighs, knees or feet");
+                            for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                                Check(std::fabs(actual.basis.r[r][c]-baseJoint.basis.r[r][c])<.001f,
+                                      "stationary rendered legs keep their orientation under head tremor");
+                        }
+                        if(mapping[i]==14) {
+                            locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+                            view=locomotion::Rotate(view,g_headingBase)*LiveWorldUnitsPerMetre();
+                            const Vec eye{g_scenePose.x_pos+view.x,g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre(),g_scenePose.z_pos+view.z};
+                            Check(nearVec(Add(Transform(actual,{11,-32,144}),camera),eye),"planted legs preserve the exact rendered eye");
+                        }
+                        if(mapping[i]==10 || mapping[i]==13) {
+                            Frame target{};Basis controller{};BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller);
+                            const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,-testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),"leg planting preserves physical controller grips");
+                        }
+                    }
+                    Check(!std::memcmp(&cameraBefore,&g_scenePose,sizeof(g_scenePose)),"leg planting cannot write the camera pose");
+                }
                 for(float pitch:{-.35f,-.7f,-1.1f}) {
                     Head(0,pitch);
                     const auto& h=VR().m_rawHeadPose;
@@ -295,8 +356,143 @@ void TestFullBodyIK() {
                     Check(nearVec(Add(Transform(looking[14],{11,-32,144}),camera),eye),
                           "neck-arc posture compensation does not modify the rendered eye target");
                 }
+                // Real tracked room movement remains native idle. Do not set
+                // a locomotion flag just to make the standing lock release.
+                {
+                    const auto oldGround=g_groundEye;
+                    const auto beforeFollow=g_bodyFollower;const auto beforeFilter=g_torsoPose;
+                    g_groundEye.valid=true;
+                    g_groundEye.local={float(g_scenePose.x_pos)-root.x,float(g_scenePose.y_pos)-root.y,float(g_scenePose.z_pos)-root.z};
+                    g_groundEye.bodyLocal={g_groundEye.local.x,g_groundEye.local.z};
+                    for(Vec travel:{Vec{.35f,0,0},Vec{-.35f,0,0},Vec{0,0,.35f},Vec{0,0,-.35f},Vec{.10f,0,0}}) {
+                        Head(0);g_bodyFollower.Reset();g_torsoPose.Reset();
+                        ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                        Frame start[15]{};
+                        for(int i=0;i<count;++i) start[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                        for(int frame=1;frame<=180;++frame) {
+                            const float progress=std::min(1.f,frame/90.f);
+                            Head(0);VR().m_rawHeadPose.m[0][3]+=travel.x*progress;
+                            VR().m_rawHeadPose.m[2][3]-=travel.z*progress;
+                            for(int hand=0;hand<2;++hand) {
+                                auto& m=VR().m_rawControllerPose[hand];m=VR().m_rawHeadPose;
+                                m.m[0][3]+=(hand ? .25f : -.25f);m.m[1][3]-=.3f;m.m[2][3]-=.4f;
+                            }
+                            ++VR().m_poseSerial;g_bodyFollower.time=g_torsoPose.time=TurnTime()-1./90.;
+                            Detour_GetJoints(itemMemory,palette,0);
+                            Frame walkingRoom[15]{};
+                            for(int i=0;i<count;++i) walkingRoom[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                            Check(firstperson::KneeBendDegrees(walkingRoom,1)<8 && firstperson::KneeBendDegrees(walkingRoom,4)<8,
+                                  "visual roomscale following cannot switch standing legs into synthetic crouching");
+                        }
+                        for(int i=0;i<count;++i) if(mapping[i]==0 || mapping[i]==7) {
+                            const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                            const Vec wanted=Add(start[mapping[i]].origin,Scale(travel,LiveWorldUnitsPerMetre()));
+                            const float error=firstperson::Length(firstperson::Flat(Sub(actual.origin,wanted)))/LiveWorldUnitsPerMetre();
+                            if(error>.065f) std::printf("room follow error %.3f joint %d travel %.2f %.2f\n",error,mapping[i],travel.x,travel.z);
+                            Check(error<.065f,"tracked steps in every direction keep pelvis and chest centered within neck/noise slack");
+                        }
+                        Frame settled[15]{};
+                        for(int i=0;i<count;++i) settled[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                        for(int frame=0;frame<30;++frame) {
+                            Head(0);VR().m_rawHeadPose.m[0][3]+=travel.x+(frame%2 ? .002f : -.002f);
+                            VR().m_rawHeadPose.m[2][3]-=travel.z;
+                            ++VR().m_poseSerial;g_bodyFollower.time=g_torsoPose.time=TurnTime()-1./90.;
+                            Detour_GetJoints(itemMemory,palette,0);
+                            for(int i=0;i<count;++i) if(mapping[i]<=6) {
+                                const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                                Check(firstperson::Length(Sub(actual.origin,settled[mapping[i]].origin))<.001f*LiveWorldUnitsPerMetre(),
+                                      "after a real step, subtle head noise leaves the new standing leg pose steady");
+                            }
+                        }
+                    }
+                    for(float turn:{1.570796327f,-1.570796327f,3.14159265f}) {
+                        Head(0);g_bodyFollower.Reset();g_torsoPose.Reset();
+                        ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                        Frame start[15]{};
+                        for(int i=0;i<count;++i) start[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                        const Vec eyePalette=Sub({float(g_scenePose.x_pos),float(g_scenePose.y_pos),float(g_scenePose.z_pos)},camera);
+                        for(int frame=1;frame<=270;++frame) {
+                            const float angle=turn*std::min(1.f,frame/90.f);
+                            Head(angle);
+                            for(int hand=0;hand<2;++hand) {
+                                auto& m=VR().m_rawControllerPose[hand];m=VR().m_rawHeadPose;
+                                const Vec offset=firstperson::YawVector({hand ? .25f : -.25f,0,.4f},angle);
+                                m.m[0][3]+=offset.x;m.m[1][3]-=.3f;m.m[2][3]-=offset.z;
+                            }
+                            const float nativeYaw=g_bodyFollower.yaw;
+                            current.y_rot=previous.y_rot=Angle(nativeYaw);
+                            bodyJointRotation=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},nativeYaw));
+                            const Vec pivot=Sub(root,camera);
+                            const Frame rotate{bodyJointRotation,Sub(pivot,Transform(bodyJointRotation,pivot))};
+                            for(int i=0;i<count;++i) WriteRows(Multiply(rotate,ReadRows(unturned+i*12)),fixture+i*12);
+                            for(int i=0;i<15;++i) bodyJointWorld[i]=Add(root,Transform(bodyJointRotation,native[i].origin));
+                            ++VR().m_poseSerial;g_bodyFollower.time=g_torsoPose.time=TurnTime()-1./90.;
+                            Detour_GetJoints(itemMemory,palette,0);
+                            Check(std::fabs(Wrap(g_bodyFollower.yaw-angle))<=BodyFollowSettings().yawSlack+.001f,
+                                  "rendered body resolves physical turn beyond head slack in this tracking sample");
+                        }
+                        Check(std::fabs(Wrap(g_bodyFollower.yaw-turn))<=BodyFollowSettings().yawSlack+.001f,"real body rotation stays within neck yaw slack");
+                        for(int i=0;i<count;++i) if(mapping[i]==0 || mapping[i]==7) {
+                            const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                            const Vec wanted=Add(eyePalette,firstperson::YawVector(Sub(start[mapping[i]].origin,eyePalette),g_bodyFollower.yaw));
+                            const float error=firstperson::Length(firstperson::Flat(Sub(actual.origin,wanted)))/LiveWorldUnitsPerMetre();
+                            if(error>.065f) std::printf("turn centering error %.3f joint %d turn %.2f\n",error,mapping[i],turn);
+                            Check(error<.065f,"physical quarter and half turns retain torso centering around tracked eye");
+                        }
+                        current.y_rot=previous.y_rot=0;bodyJointRotation=identity;
+                        std::memcpy(fixture,unturned,sizeof(fixture));
+                        for(int i=0;i<15;++i) bodyJointWorld[i]=Add(root,native[i].origin);
+                    }
+                    Head(0);g_groundEye=oldGround;g_bodyFollower=beforeFollow;g_torsoPose=beforeFilter;
+                }
+                {
+                    const auto beforeGround=g_groundEye;const auto beforeWall=g_bodyWallOffset;
+                    const auto beforeCamera=g_scenePose;const auto beforeBase=g_headingBase;
+                    const auto beforeFollower=g_bodyFollower;const auto beforeTorso=g_torsoPose;
+                    const bool beforeInput=g_haveManualInput;const auto beforeLocal=g_manualLocal;
+                    g_groundEye.valid=true;
+                    g_groundEye.bodyLocal={float(g_scenePose.x_pos)-root.x,float(g_scenePose.z_pos)-root.z};
+                    for(float base:{0.f,-1.13f,.75f}) {
+                        g_headingBase=base;Head(-base);
+                        const auto local=locomotion::Rotate(g_groundEye.bodyLocal,-base);
+                        g_groundEye.local={local.x,float(g_scenePose.y_pos)-root.y,local.z};
+                        g_bodyFollower.Reset();g_torsoPose.Reset();g_bodyWallOffset={};
+                        g_haveManualInput=false;state=2;
+                        ++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+                        const Vec standingRoot=g_bodyFollower.root;
+                        Check(firstperson::Length(firstperson::Flat(Sub(standingRoot,Scale(root,1/LiveWorldUnitsPerMetre()))))<.0001f,
+                              "calibrated body offset uses body coordinates after tracking yaw recenter");
+                        // The same calibrated eye expressed in another tracking
+                        // yaw must not create a translation goal or a fake step.
+                        for(int frame=0;frame<24;++frame) {
+                            ++VR().m_poseSerial;g_bodyFollower.time=g_torsoPose.time=TurnTime()-1./90.;
+                            Detour_GetJoints(itemMemory,palette,0);
+                            Check(firstperson::Length(Sub(g_bodyFollower.root,standingRoot))<.0001f && !g_bodyFollower.stepping,
+                                  "recentered tracking yaw cannot create a body-follow step");
+                        }
+                        g_haveManualInput=true;g_manualLocal={0,1};
+                        for(int wallState:{2,12,2,12,2}) for(float retract:{-100.f,-101.f,-99.f,0.f}) {
+                            state=int16_t(wallState);g_bodyWallOffset={0,retract};
+                            g_scenePose=beforeCamera;g_scenePose.z_pos+=int(retract);
+                            ++VR().m_poseSerial;g_bodyFollower.time=g_torsoPose.time=TurnTime()-1./90.;
+                            Check(FullBodyIKReady(),"wall impact retains full-body rendering while input is held");
+                            Detour_GetJoints(itemMemory,palette,0);
+                            for(int i=0;i<count;++i) if(mapping[i]==0 || mapping[i]==7 || mapping[i]==10 || mapping[i]==13) {
+                                const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                                const auto start=Multiply(ReadRows(baseline+i*12),bind[i]);
+                                Check(nearVec(Sub(actual.origin,{0,0,retract}),start.origin),
+                                      "wall contact/release carries torso and hands with the eye without a catch-up pop");
+                            }
+                            Check(firstperson::Length(Sub(g_bodyFollower.root,standingRoot))<.0001f,
+                                  "camera wall retraction never feeds back into roomscale body motion");
+                        }
+                    }
+                    g_groundEye=beforeGround;g_bodyWallOffset=beforeWall;g_scenePose=beforeCamera;g_headingBase=beforeBase;
+                    g_bodyFollower=beforeFollower;g_torsoPose=beforeTorso;g_haveManualInput=beforeInput;g_manualLocal=beforeLocal;
+                }
                 Head(0);VR().m_rawHeadPose.m[1][3]-=.2f;state=1;
                 ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                Check(!g_torsoPose.planted,"walking releases planted contacts in the actual render hook");
                 Check(g_bodySize.factor==calibratedSize,"walking and physical crouch cannot rescale the rendered body");
                 state=2;
                 ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
@@ -309,6 +505,7 @@ void TestFullBodyIK() {
                 g_bodyFollower.Reset();
             }
             for(int which:{0,1}) for(int armed:{0,1}) for(int step=0;step<48;++step) {
+                g_torsoPose.Reset(); // Independent geometry samples, not a temporal sequence.
                 ++VR().m_poseSerial;
                 dll.game=which;state=2;status=armed ? 4 : 0;
                 const float phase=step*6.2831853f/47;
@@ -371,16 +568,92 @@ void TestFullBodyIK() {
             std::memcpy(VR().m_firstPersonNeutral,neutral,sizeof(neutral));std::memcpy(VR().m_firstPersonNeutralNeck,neck,sizeof(neck));
             std::memcpy(VR().m_rawControllerPose,oldHands,sizeof(oldHands));status=0;
         }
+        // Native STOP arrives before the last sprint/directional-jump palette.
+        // Exercise the actual uploaded skin, including the same tracking sample.
+        for(int transition:{73,25,26,27}) {
+            float originalFixture[33*12]{};std::memcpy(originalFixture,fixture,sizeof(fixture));
+            Vec originalWorld[15];std::copy(std::begin(bodyJointWorld),std::end(bodyJointWorld),originalWorld);
+            g_torsoPose.Reset();g_bodyFollower.Reset();state=2;status=0;++VR().m_poseSerial;
+            Detour_GetJoints(itemMemory,baseline,0);
+            const auto bend=firstperson::RotationMatrix(firstperson::AxisRotation({1,0,0},.8f));
+            for(int i=0;i<count;++i) if(mapping[i]>=1 && mapping[i]<=6) {
+                const int hip=mapping[i]<=3 ? 1 : 4;
+                const Vec pivot=Sub(bodyJointWorld[hip],camera);
+                const Frame move{bend,Sub(pivot,Transform(bend,pivot))};
+                WriteRows(Multiply(move,ReadRows(fixture+i*12)),fixture+i*12);
+            }
+            state=int16_t(transition);++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+            state=2;++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+            std::memcpy(fixture,originalFixture,sizeof(fixture));
+            for(int frame=0;frame<180;++frame) {
+                if(frame) ++VR().m_poseSerial;
+                g_torsoPose.time=TurnTime()-1./90.;Detour_GetJoints(itemMemory,palette,0);
+            }
+            for(int i=0;i<count;++i) if(mapping[i]==3 || mapping[i]==6) {
+                const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                const auto standing=Multiply(ReadRows(baseline+i*12),bind[i]);
+                Check(std::fabs(actual.origin.y-standing.origin.y)<1.f,
+                      "uploaded feet return to standing floor after sprint and left/right/back jump recovery");
+            }
+            std::copy(std::begin(originalWorld),std::end(originalWorld),bodyJointWorld);
+        }
+        // Mount completion changes the incoming chest pose abruptly. Check
+        // the final uploaded palette, where body IK used to undo the handoff.
+        {
+            g_torsoPose.Reset();g_bodyFollower.Reset();
+            state=19;status=1;++VR().m_poseSerial;
+            Check(FullBodyIKReady(),"native hands-busy mount keeps the full-body solver active");
+            Detour_GetJoints(itemMemory,baseline,0);g_torsoPose.Mount();
+            Frame previousPose[15]{};
+            for(int i=0;i<count;++i) previousPose[mapping[i]]=Multiply(ReadRows(baseline+i*12),bind[i]);
+            float originalFixture[33*12]{};std::memcpy(originalFixture,fixture,sizeof(fixture));
+            const Vec originalChest=bodyJointWorld[7];
+            const auto oldScene=g_scenePose;
+            auto& current=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+            auto& previous=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos_prev);
+            const auto oldCurrent=current,oldPrevious=previous;
+            const Vec relocation{120,-512,200};
+            current.x_pos+=120;previous.x_pos+=120;g_scenePose.x_pos+=120;
+            current.y_pos-=512;previous.y_pos-=512;g_scenePose.y_pos-=512;
+            current.z_pos+=200;previous.z_pos+=200;g_scenePose.z_pos+=200;
+            for(int j=0;j<15;++j) { bodyJointWorld[j]=Add(bodyJointWorld[j],relocation);previousPose[j].origin=Add(previousPose[j].origin,relocation); }
+            for(int i=0;i<count;++i) {
+                auto frame=ReadRows(fixture+i*12);frame.origin=Add(frame.origin,relocation);WriteRows(frame,fixture+i*12);
+            }
+            for(int i=0;i<count;++i) if(mapping[i]==7) {
+                auto frame=ReadRows(fixture+i*12);frame.origin.z+=180;WriteRows(frame,fixture+i*12);
+            }
+            bodyJointWorld[7].z+=180;state=2;status=0;
+            for(int frame=0;frame<24;++frame) {
+                if(frame) ++VR().m_poseSerial; // First standing draw shares the mount's HMD sample.
+                g_torsoPose.time=TurnTime()-1./90.;
+                Detour_GetJoints(itemMemory,palette,0);
+                for(int i=0;i<count;++i) if(mapping[i]==0 || mapping[i]==7) {
+                    const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                    Check(firstperson::Length(Sub(actual.origin,previousPose[mapping[i]].origin))<=
+                          LiveWorldUnitsPerMetre()*1.2f*std::min(g_torsoPose.cadence,.05f)+.02f,
+                          "uploaded mount-to-standing pelvis and chest cannot pop");
+                    previousPose[mapping[i]]=actual;
+                }
+            }
+            for(int j=0;j<15;++j) bodyJointWorld[j]=Sub(bodyJointWorld[j],relocation);
+            std::memcpy(fixture,originalFixture,sizeof(fixture));bodyJointWorld[7]=originalChest;
+            current=oldCurrent;previous=oldPrevious;g_scenePose=oldScene;
+            g_torsoPose.Reset();
+        }
         // Exercise the real HMD Y-up -> game Y-down path, not only a synthetic
         // solver delta. A physical crouch must lower the pelvis, keeping feet.
         const auto sceneBefore=g_scenePose;const float headY=VR().m_rawHeadPose.m[1][3];
         const bool flipBefore=config.flipViewY;config.flipViewY=true;
-        g_bodyFollower.Reset();++VR().m_poseSerial;
+        g_bodyFollower.Reset();g_torsoPose.Reset();++VR().m_poseSerial;
         g_scenePose.y_pos=int(bodyJointWorld[14].y);
         VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1];
         Detour_GetJoints(itemMemory,baseline,0);
         VR().m_rawHeadPose.m[1][3]-=.20f;
-        Detour_GetJoints(itemMemory,palette,0);
+        for(int frame=0;frame<30;++frame) {
+            ++VR().m_poseSerial;g_torsoPose.time=TurnTime()-1./90.;
+            Detour_GetJoints(itemMemory,palette,0);
+        }
         for(int i=0;i<count;++i) {
             const auto before=Multiply(ReadRows(baseline+i*12),bind[i]);
             const auto after=Multiply(ReadRows(palette+i*12),bind[i]);
@@ -424,8 +697,51 @@ void TestFullBodyIK() {
         state=int16_t(stance);status=4;fullBodyDraws=fullBodyGunDraws=0;
         bits=0x3fff;Detour_DrawCreatureHD(itemMemory,0,0);
         bits=0x3600;Detour_DrawCreatureHD(itemMemory,1,0);
-        Check(fullBodyDraws==1 && fullBodyGunDraws==2 && bits==0x3600 && g_renderArm==-1,
-              "tracked guns never disable body and arms, regardless of full-body/unarmed IK options or stance");
+        Check(fullBodyDraws==(IsCrouchState(itemMemory) ? 0 : 1) && fullBodyGunDraws==2 && bits==0x3600 && g_renderArm==-1,
+              "crouched tracked guns show hands only; other ordinary stances retain the body");
+    }
+    // Exercise real draw and palette hooks with both IK settings and weapon
+    // paths; native simulation may change state without a new tracking sample.
+    float visibilityFixture[33*12]{},visibilityBinds[33*12]{};int32_t visibilityMapping[33]{};
+    for(int i=0;i<33;++i) {
+        visibilityMapping[i]=(i*7)%15;
+        WriteRows({identity,positions[visibilityMapping[i]]},visibilityFixture+i*12);
+        Frame rawBind{identity,{}};
+        for(int r=0;r<3;++r) { rawBind.basis.r[r][1]=identity.r[r][2];rawBind.basis.r[r][2]=-identity.r[r][1]; }
+        WriteRows(rawBind,visibilityBinds+i*12);
+    }
+    auto* visibilityGeom=objectInfo+off::object_geom;
+    *reinterpret_cast<int32_t*>(visibilityGeom+28)=33;
+    *reinterpret_cast<int32_t**>(visibilityGeom+48)=visibilityMapping;
+    *reinterpret_cast<float**>(visibilityGeom+72)=visibilityBinds;
+    skinFixture=visibilityFixture;skinFixtureCount=33;restrictedMapping=visibilityMapping;
+    g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&ObserveRestrictedBodyDraw);
+    auto& visibilityAnim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+    for(bool full:{false,true}) for(bool armed:{false,true}) for(int stance:{10,30,31,75,82,83,139,19,54,2,71,80,81,84,85,86,105,106}) {
+        g_bodyVisibility={};g_mountBodyTransition.Reset();g_torsoPose.Reset();
+        config.firstPersonFullBodyIK=full;config.firstPersonUnarmedIK=true;
+        state=int16_t(stance);status=armed ? 4 : (stance==2 ? 0 : 1);gun=1;
+        visibilityAnim=stance==2 ? 24 : 103;
+        const bool crouched=IsCrouchState(itemMemory);
+        if(crouched && !armed) status=0;
+        restrictedBodyMask=crouched ? firstperson::HandMeshBits : stance==2 ? ~(1u<<7) : firstperson::ArmMeshBits;
+        restrictedBodyDraws=0;bits=UINT32_MAX;
+        Detour_DrawCreatureHD(itemMemory,0,0);
+        Check(restrictedBodyDraws==(crouched && armed ? 0 : 1) && bits==UINT32_MAX,
+              "transition body draw keeps restriction and restores native item mask");
+        if(armed) { bits=0x3600;Detour_DrawCreatureHD(itemMemory,1,0); }
+        if(armed && stance!=2) {
+            const int before=restrictedBodyDraws;bits=0x92;Detour_DrawCreatureHD(itemMemory,1,0);
+            Check(restrictedBodyDraws==before,"arms-only ledge view suppresses floating hip and back holster meshes");
+        }
+        state=2;visibilityAnim=103;status=armed ? 4 : 0;bits=UINT32_MAX;
+        if(crouched) restrictedBodyMask=UINT32_MAX;
+        Detour_DrawCreatureHD(itemMemory,0,0);
+        Check(g_bodyVisibility.mask==restrictedBodyMask,
+              "first standing draw stays hidden with unchanged VR pose serial");
+        g_bodyVisibility.until=0;g_torsoPose.Reset();g_mountBodyTransition.Reset();restrictedBodyMask=UINT32_MAX;
+        Detour_DrawCreatureHD(itemMemory,0,0);
+        Check(g_bodyVisibility.mask==UINT32_MAX,"settled standing restores normal visibility after recovery");
     }
     skinFixture=nullptr;skinFixtureCount=0;g_bodySkinScope=g_bodySkinReady=false;
     g_hGetJoints.m_trampoline=getJoints;g_hDrawCreatureHD.m_trampoline=draw;g_shadowDll=shadowDll;
@@ -434,6 +750,9 @@ void TestFullBodyIK() {
     std::memcpy(itemMemory,savedItem.data(),sizeof(itemMemory));std::memcpy(laraMemory,savedLara.data(),sizeof(laraMemory));
     config=settings;dll=savedDll;testCalibration=calibration;g_unarmedTwist[0]=savedLeft;g_unarmedTwist[1]=savedRight;
     g_bodyFollower=savedFollower;VR().m_poseSerial=savedSerial;
+    g_torsoPose=savedTorso;g_mountBodyTransition=savedMount;
+    g_bodyVisibility=savedVisibility;
+    g_autoBodyCalibration=savedAuto;
     g_bodySize=savedBodySize;g_bodySizeObject=savedSizeObject;
     VR().m_firstPersonNeutralEyeNeckY=savedNeckHeight;
     g_heightCrouch=savedHeightCrouch;g_physicalCrouchCamera=savedPhysicalCamera;
