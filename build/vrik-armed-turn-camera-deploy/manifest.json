@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-13T11:36:05.5608862-04:00",
+    "base_commit":  "25d4137",
+    "dll_sha256":  "5FC9C9F88B3BB2BDD597AE507157A4EE4E5D54211694D8BF4D97DFF9F31CBDE3",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-vrik-armed-turn-camera-20261013-113605",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  2523197,
+    "debug_regression_checks":  2523197,
+    "change":  "Correct armed head-movement camera jitter: state 7 animation 13 is a native looping left turn, not a landing. Keep stable eye and normal body visibility through idle/turn/fast-turn transitions. Logged 220-240-unit jumps reproduced by negative regression; both games and pistols/Uzis/long guns covered with IK on/off. All 55 installed animation tables verified; actual landing and mount/hang handling retained.",
+    "hardware_verified":  false
+}

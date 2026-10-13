@@ -2299,6 +2299,53 @@ int main() {
                 }
             }
         }
+        // Recorded armed jitter: the root and view yaw stayed fixed while the
+        // native gun-facing controller cycled STOP -> TURN_L -> FASTTURN.
+        // Animation 13 is a looping turn, not a landing. Feed those real state
+        // transitions through the production camera with displaced head joints.
+        const auto savedJointQuery=dll.getJointAbsPositionLerp;
+        const auto savedGaitSway=gaitSway;
+        auto& turnAnimation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        const auto savedTurnAnimation=turnAnimation;
+        for(int which:{0,1}) for(int equipped:{1,3,4,5,6}) for(bool full:{false,true}) {
+            game=dll.game=which;resetRoomscale();collisionMode=0;
+            config.firstPersonMovementStabilization=config.firstPersonMotionGuns=true;
+            config.firstPersonFullBodyIK=full;config.firstPersonRoomscaleMove=false;
+            config.firstPersonAnchorX=0;config.firstPersonAnchorZ=140;
+            appMemory[0x9e4]=3;gunStatus=4;weapon=int16_t(equipped);
+            dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+            gaitSway={};turnAnimation=103;
+            pos={35317,-1792,35211,0,Angle(-103.9f*kPi/180),0,0};prev=pos;fraction=256;
+            physicalPose(-96.35f*kPi/180);VR().RecenterFirstPersonHead();
+            g_haveHeading=false;g_groundEye.Reset();g_bodyVisibility={};UpdateSceneCamera(camera);
+            const auto initial=camera;const auto heading=g_headingBase;
+            for(int repeat=0;repeat<12;++repeat) for(const auto turn:
+                {std::pair<int,int>{2,103},{7,13},{20,69},{2,103},{6,12},{20,44},{2,103}}) {
+                state=int16_t(turn.first);turnAnimation=int16_t(turn.second);
+                Head((-96.35f+40*std::sin(repeat*.7f))*kPi/180,.25f*std::sin(repeat*.9f));
+                ++VR().m_poseSerial;
+                // Native aiming/turn animation moves the head relative to the
+                // item, while the physical head remains at the same position.
+                gaitSway={int32_t(80*std::sin(repeat+.3f)),20,-50};
+                for(int f:{0,64,128,192,256}) {
+                    fraction=f;UpdateSceneCamera(camera);
+                    const auto local=InvertRigid(VR().HeadView());
+                    const auto raw=VR().m_rawHeadPose;
+                    const auto tracked=locomotion::Rotate({raw.m[0][3]-VR().m_firstPersonNeutral[0],
+                        VR().m_firstPersonNeutral[2]-raw.m[2][3]},heading)*LiveWorldUnitsPerMetre();
+                    const auto shown=locomotion::Rotate({local.r[0][3],-local.r[2][3]},heading);
+                    Check(MotionReady() && std::fabs(camera.x_pos+shown.x-initial.x_pos-tracked.x)<1.1f &&
+                          std::fabs(camera.z_pos+shown.z-initial.z_pos-tracked.z)<1.1f && camera.y_pos==initial.y_pos,
+                          "armed idle-left-fast-right turn sequence cannot switch away from the stable tracked eye");
+                    Check(camera.y_rot==initial.y_rot && !camera.x_rot && !camera.z_rot,
+                          "armed native turn clips cannot add room rotation");
+                    Check(!UseLandingCamera(itemMemory) && !HideLandingHead(itemMemory) &&
+                          FirstPersonBodyMask(itemMemory)==UINT32_MAX,
+                          "native turns cannot trigger landing camera or chest recovery hiding");
+                }
+            }
+        }
+        dll.getJointAbsPositionLerp=savedJointQuery;gaitSway=savedGaitSway;turnAnimation=savedTurnAnimation;
         g_longGunHooksReady=oldLongHooks;
         g_motionDll=savedMotion;g_motionHooksReady=savedHooks;
         VR().m_controllerPoseValid[0]=savedTracking[0];VR().m_controllerPoseValid[1]=savedTracking[1];
@@ -2875,9 +2922,9 @@ int main() {
             int32_t bodyMapping[33];for(int i=0;i<33;++i) bodyMapping[i]=i%15;
             *reinterpret_cast<void**>(geom+off::geom_mesh)=heads+off::geom_stride;
             for(int which:{0,1}) for(bool hide:{false,true}) for(int joints:{1,15,33})
-            for(int clip:{13,24,31,82,92,99}) {
+            for(int clip:{24,31,82,92,99}) {
                 game=dll.game=which;vehicle=which==0 ? -1 : 0;config.firstPersonHideHead=hide;
-                RestoreHeadMesh();bits=0x7fff;state=clip==92 ? 1 : clip==13 ? 7 : 2;landingAnim=int16_t(clip);
+                RestoreHeadMesh();bits=0x7fff;state=clip==92 ? 1 : 2;landingAnim=int16_t(clip);
                 *reinterpret_cast<int32_t*>(geom+28)=joints;
                 *reinterpret_cast<int32_t**>(geom+48)=headMapping;
                 UpdateSceneCamera(camera);
@@ -2911,7 +2958,7 @@ int main() {
                 Check(!HideLandingHead(itemMemory) && g_headHidden==hide && bool(bits&kHeadMeshBit)==!hide,
                       "standing recovery releases only the landing-specific head override");
                 // Third-person landing remains completely native.
-                g_active=false;state=clip==92 ? 1 : clip==13 ? 7 : 2;landingAnim=int16_t(clip);
+                g_active=false;state=clip==92 ? 1 : 2;landingAnim=int16_t(clip);
                 const int thirdBefore=draws,thirdHair=hairs;
                 Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
                 Check(!HideLandingHead(itemMemory) && draws==thirdBefore+1 && hairs==thirdHair+1 && drawnUseBits==0,
@@ -4619,10 +4666,10 @@ int main() {
         Check(locomotion::Length(transition.Correction(residual,-1600,3))==0,
               "camera/session reset discards stale mount correction");
     }
-    // Landing clips can use STOP or RUN as well as LAND. Exercise the full
+    // Landing clips use STOP or RUN. Exercise the full
     // animated anchor, body fit, floor clearance and standing reference together.
     for (int which:{0,1}) for (bool stable:{false,true}) for (bool calibrated:{false,true})
-    for (int clip:{13,24,31,82,92,99})
+    for (int clip:{24,31,82,92,99})
     for (float heading:{0.f,.7f,-1.9f}) for (float duck:{0.f,-.2f}) {
         game=dll.game=which;resetRoomscale();ResetMovementStabilization();
         config.firstPersonMovementStabilization=stable;config.firstPersonHeadTranslation=true;
@@ -4635,7 +4682,7 @@ int main() {
         if (!calibrated) g_groundEye.Reset();
         const auto saved=g_groundEye;
         physicalPose(0,0,0,duck);const float neutral=VR().m_firstPersonNeutral[1];
-        state=clip==92 ? 1 : clip==13 ? 7 : 2;animation=int16_t(clip);
+        state=clip==92 ? 1 : 2;animation=int16_t(clip);
         Check(UseLandingCamera(itemMemory),"TR4/5 landing recognized by state and animation");
         for (int height:{-700,-600,-400,-200,-80,50,-80,-200,-400,-600,-700}) {
             gaitSway={30,height+700,-20};

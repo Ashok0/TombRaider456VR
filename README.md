@@ -1044,17 +1044,28 @@ This refresh uses native body-local contacts, not headset noise.
 The eye-clearance sweep saturates continuously at its 512-unit reach instead
 of snapping to Lara's root when tracked head displacement crosses that limit.
 
-The reported armed view that briefly rotates and snaps back is still under
-investigation. Rapid armed translation/yaw/pitch regressions pass, including
-combat/look cameras, angle wraparound and near-vertical head poses. They do not
-reproduce the headset symptom. With `FirstPersonDriftLog=1`, `fp-view` records
+The armed head-movement jitter log exposed an incorrect landing classification:
+state 7 / animation 13 is the native looping left turn. Armed modern controls
+enter it when the head and VRIK body face different directions. Treating it as
+a landing switched from the stable eye to the animated neck and back, producing
+repeated 220-240-unit camera jumps with a stationary gameplay root. Turning now
+keeps the stable eye and does not trigger landing visibility or recovery masks.
+The actual landing clips and ledge/mount handling retain their existing rules.
+The regression replays idle/left/right/fast-turn sequences with pistols, Uzis and
+long guns in both games, with IK on/off and intermediate render fractions. It
+fails with the old classification restored. All 55 installed PDP animation
+tables verify the turning loops, their idle entries and fast-turn exits, plus
+the real jump/fall landing transitions. The earlier test incorrectly assumed
+that animation 13's state alone established it as a landing; that check is fixed.
+
+With `FirstPersonDriftLog=1`, `fp-view` records
 peak tracked-head, native-camera and draw-view rotation changes plus frame
 intervals; `fp-eye` records unexpected positional changes and camera suspension.
 These diagnostics do not smooth or modify the camera.
-Validation for this update: 2,559,543 checks in both debug and optimized
-regression builds, 14 jiggle integration cases per build, and 13 deliberate
-fix-removal probes. The Release/x64 DLL builds successfully. Headset behavior
-has not been verified by these automated tests.
+Validation for the turn-camera correction: 2,523,197 checks in both debug and
+optimized regression builds and 14 jiggle integration cases per build. The new
+fix-removal probe reproduces the camera jump. The Release/x64 DLL builds
+successfully. Headset confirmation remains a separate practical check.
 
 ### Optional full-body centering (2026-10-08, historical)
 

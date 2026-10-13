@@ -7,6 +7,10 @@ import sys
 
 root = Path(__file__).resolve().parent.parent
 cases = [
+    ('armed-turn-camera', 'src/LocomotionMath.h',
+     'return IsHardLanding(state,animation) ||',
+     'return IsHardLanding(state,animation) || (state==7 && animation==13) ||',
+     'armed idle-left-fast-right turn sequence cannot switch away from the stable tracked eye'),
     ('standing-contact-refresh', 'src/BodyFollower.h',
      'if(hold && contacts && contactsValid &&',
      'if(false && hold && contacts && contactsValid &&',

@@ -54,7 +54,10 @@ inline bool IsLandingAnimation(int game,int state,int animation) {
     // ordinary STOP/RUN animation keeps its stable eye. Clip 99 is a death
     // in most TR5 levels but a landing in JOBY4; its state disambiguates it.
     if (game!=0 && game!=1) return false;
-    return IsHardLanding(state,animation) || (state==7 && animation==13) ||
+    // State 7 / clip 13 is the looping left turn. Armed modern controls enter
+    // it when HMD facing differs from VRIK's body yaw; treating it as a landing
+    // swaps the stable eye for the animated neck and back on every head turn.
+    return IsHardLanding(state,animation) ||
         (state==2 && (animation==31 || animation==82 || animation==99)) ||
         (state==1 && animation==92);
 }
