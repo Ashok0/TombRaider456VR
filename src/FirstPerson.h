@@ -5,6 +5,8 @@
 
 namespace tr {
 void FirstPersonUpdate();
+// Force Modern Controls while FP is active; restore the entry mode on exit.
+void FirstPersonControlModeUpdate();
 void FirstPersonToggle();
 void FirstPersonRecenter();
 // Runtime System recenter changed the tracking basis; preserve world heading.

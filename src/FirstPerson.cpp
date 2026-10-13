@@ -142,6 +142,24 @@ bool g_runtimeInitialized = false;
 bool g_active = false;
 bool g_haveHeading = false;
 float g_headingBase = 0.0f;
+bool g_controlModeOwned=false;
+uint32_t g_savedControlMode=0;
+
+void UpdateControlMode(bool active) {
+    if(!Base()) return;
+    constexpr uint32_t modernControls=2u;
+    auto& flags=*reinterpret_cast<uint32_t*>(Base()+L().app+drva::app_off::cfgFlags);
+    if(active) {
+        if(!g_controlModeOwned) {
+            g_savedControlMode=flags&modernControls;
+            g_controlModeOwned=true;
+        }
+        flags|=modernControls;
+    } else if(g_controlModeOwned) {
+        flags=(flags&~modernControls)|g_savedControlMode;
+        g_controlModeOwned=false;
+    }
+}
 float g_lastHeadWorld = 0.0f;
 stabilization::RenderTurn g_renderTurn;
 struct TurnTrace { double start=0; unsigned polls=0,views=0,moved=0; float maxStep=0; };
@@ -3406,6 +3424,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         ++g_skipped;
         g_cameraMotionTrace = {};
     }
+    FirstPersonControlModeUpdate();
     if (!g_active) { g_stanceEye.Reset();ResetBodyFollower();g_bodyVisibility={}; }
     if (wasActive && !g_active) VR().RecenterThirdPersonHead();
     const auto* item = g_boundDll && g_boundBase
@@ -3692,6 +3711,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
 }
 
 void Remove() {
+    UpdateControlMode(false);
     ResetPhysicalHolsters();
     RemovePhysicalSwitches();
     g_hCrouchDraw.Remove();
@@ -3862,7 +3882,16 @@ bool FirstPersonHKScopeAiming() {
     return false;
 }
 
+void FirstPersonControlModeUpdate() {
+    // Only frame/input boundaries. The crouch draw temporarily clears this
+    // bit to bypass native proximity hiding; getters must not reassert it.
+    UpdateControlMode(g_active && g_runtimeEnabled && g_boundDll && g_boundBase &&
+        CurrentGame()==g_boundDll->game && (CurrentGame()==0 || CurrentGame()==1) &&
+        Cfg().enabled && Cfg().firstPerson && VR().active());
+}
+
 void FirstPersonUpdate() {
+    FirstPersonControlModeUpdate();
     if (!MotionReady() || CurrentMotionWeapon()!=5) g_hkScopeBindItem=nullptr;
     if (g_gunTriggers.active && !MotionTriggerMode()) {
         g_gunTriggers.Reset();
@@ -3933,6 +3962,7 @@ void FirstPersonTrackingOriginChanged(float yawCorrection) {
 }
 
 void FirstPersonToggle() {
+    UpdateControlMode(false);
     ResetPhysicalHolsters();
     ResetPhysicalSwitch();
     g_unarmedArmVisibility={};
@@ -3963,6 +3993,7 @@ void FirstPersonToggle() {
 }
 
 void FirstPersonShutdown() {
+    UpdateControlMode(false);
     g_calibrationActive=false;
     if (g_calibrationMessageHook) UnhookWindowsHookEx(g_calibrationMessageHook);
     g_calibrationMessageHook=nullptr;

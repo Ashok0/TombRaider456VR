@@ -1,0 +1,178 @@
+diff --git a/README.md b/README.md
+index 4d0d31e..a4a1dc1 100644
+--- a/README.md
++++ b/README.md
+@@ -1425,6 +1425,14 @@ menu takes effect when normal gameplay resumes. Startup is still third person:
+ the INI setting enables the feature, not an automatic first-person startup.
+ TR6, or `FirstPerson=0`, retains the legacy Y + LT hold chord for graphics.
+ 
++Active TR4/5 first person now forces Modern Controls, ported from TR1/3.
++The control mode selected on entry is restored when first person exits or is
++suspended (including inventory, cutscenes and swimming), when the feature is
++disabled, and on shutdown or a game switch. Only the controls bit is owned;
++graphics and other flags keep their current values. No INI change is required.
++The render-only crouch visibility workaround can still temporarily clear that
++bit, without a camera/body state query re-enabling it during the draw.
++
+ In first person, LS up moves forward, LS left/right sidesteps, and LS down
+ backpedals instead of turning Lara to run toward the camera. The dominant stick
+ axis selects the directional gait. RS turns your view; physical head rotation
+diff --git a/src/FirstPerson.cpp b/src/FirstPerson.cpp
+index a03265a..534befc 100644
+--- a/src/FirstPerson.cpp
++++ b/src/FirstPerson.cpp
+@@ -142,6 +142,24 @@ bool g_runtimeInitialized = false;
+ bool g_active = false;
+ bool g_haveHeading = false;
+ float g_headingBase = 0.0f;
++bool g_controlModeOwned=false;
++uint32_t g_savedControlMode=0;
++
++void UpdateControlMode(bool active) {
++    if(!Base()) return;
++    constexpr uint32_t modernControls=2u;
++    auto& flags=*reinterpret_cast<uint32_t*>(Base()+L().app+drva::app_off::cfgFlags);
++    if(active) {
++        if(!g_controlModeOwned) {
++            g_savedControlMode=flags&modernControls;
++            g_controlModeOwned=true;
++        }
++        flags|=modernControls;
++    } else if(g_controlModeOwned) {
++        flags=(flags&~modernControls)|g_savedControlMode;
++        g_controlModeOwned=false;
++    }
++}
+ float g_lastHeadWorld = 0.0f;
+ stabilization::RenderTurn g_renderTurn;
+ struct TurnTrace { double start=0; unsigned polls=0,views=0,moved=0; float maxStep=0; };
+@@ -3406,6 +3424,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
+         ++g_skipped;
+         g_cameraMotionTrace = {};
+     }
++    FirstPersonControlModeUpdate();
+     if (!g_active) { g_stanceEye.Reset();ResetBodyFollower();g_bodyVisibility={}; }
+     if (wasActive && !g_active) VR().RecenterThirdPersonHead();
+     const auto* item = g_boundDll && g_boundBase
+@@ -3692,6 +3711,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
+ }
+ 
+ void Remove() {
++    UpdateControlMode(false);
+     ResetPhysicalHolsters();
+     RemovePhysicalSwitches();
+     g_hCrouchDraw.Remove();
+@@ -3862,7 +3882,16 @@ bool FirstPersonHKScopeAiming() {
+     return false;
+ }
+ 
++void FirstPersonControlModeUpdate() {
++    // Only frame/input boundaries. The crouch draw temporarily clears this
++    // bit to bypass native proximity hiding; getters must not reassert it.
++    UpdateControlMode(g_active && g_runtimeEnabled && g_boundDll && g_boundBase &&
++        CurrentGame()==g_boundDll->game && (CurrentGame()==0 || CurrentGame()==1) &&
++        Cfg().enabled && Cfg().firstPerson && VR().active());
++}
++
+ void FirstPersonUpdate() {
++    FirstPersonControlModeUpdate();
+     if (!MotionReady() || CurrentMotionWeapon()!=5) g_hkScopeBindItem=nullptr;
+     if (g_gunTriggers.active && !MotionTriggerMode()) {
+         g_gunTriggers.Reset();
+@@ -3933,6 +3962,7 @@ void FirstPersonTrackingOriginChanged(float yawCorrection) {
+ }
+ 
+ void FirstPersonToggle() {
++    UpdateControlMode(false);
+     ResetPhysicalHolsters();
+     ResetPhysicalSwitch();
+     g_unarmedArmVisibility={};
+@@ -3963,6 +3993,7 @@ void FirstPersonToggle() {
+ }
+ 
+ void FirstPersonShutdown() {
++    UpdateControlMode(false);
+     g_calibrationActive=false;
+     if (g_calibrationMessageHook) UnhookWindowsHookEx(g_calibrationMessageHook);
+     g_calibrationMessageHook=nullptr;
+diff --git a/src/FirstPerson.h b/src/FirstPerson.h
+index 60677ac..ba3a7da 100644
+--- a/src/FirstPerson.h
++++ b/src/FirstPerson.h
+@@ -5,6 +5,8 @@
+ 
+ namespace tr {
+ void FirstPersonUpdate();
++// Force Modern Controls while FP is active; restore the entry mode on exit.
++void FirstPersonControlModeUpdate();
+ void FirstPersonToggle();
+ void FirstPersonRecenter();
+ // Runtime System recenter changed the tracking basis; preserve world heading.
+diff --git a/src/Gamepad.cpp b/src/Gamepad.cpp
+index 416c889..1e5abd5 100644
+--- a/src/Gamepad.cpp
++++ b/src/Gamepad.cpp
+@@ -313,6 +313,7 @@ void ApplyMergedChords(XGamepad& pad, bool gameplay,
+ }
+ 
+ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
++    FirstPersonControlModeUpdate();
+     if (!state) return ERROR_BAD_ARGUMENTS;
+ 
+     // Only pad 0 is ours. Let the engine see the other three as absent, or as
+@@ -446,6 +447,7 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
+ } // namespace
+ 
+ void GamepadUpdate() {
++    FirstPersonControlModeUpdate();
+     if (!Cfg().gamepadEnabled) return;
+ 
+     if (!g_slot) {
+diff --git a/tools/first_person_tests.cpp b/tools/first_person_tests.cpp
+index a0f3099..b54d862 100644
+--- a/tools/first_person_tests.cpp
++++ b/tools/first_person_tests.cpp
+@@ -4753,6 +4753,43 @@ int main() {
+             "third person, camera takeovers, death, water and unrelated turns remain native");
+     }
+     TestGroundJumpPriority();
++    // Ported TR1/3 control ownership: exercise real camera/input/lifecycle
++    // boundaries for both entry modes, preserving all non-control flag bits.
++    const auto controlsDll=g_boundDll;const auto controlsBase=g_boundBase;
++    auto& controlFlags=*reinterpret_cast<uint32_t*>(appMemory+drva::app_off::cfgFlags);
++    for(int which:{0,1}) for(bool modern:{false,true}) for(int leave=0;leave<9;++leave) {
++        UpdateControlMode(false);g_boundDll=controlsDll;g_boundBase=controlsBase;
++        game=dll.game=which;resetRoomscale();
++        config.enabled=config.firstPerson=true;config.firstPersonFullBodyIK=false;
++        config.gamepadEnabled=false;g_runtimeInitialized=true;
++        const uint32_t entry=0xa5u|(modern ? 2u : 0u);
++        controlFlags=entry;g_active=false;
++        FirstPersonControlModeUpdate();
++        Check(controlFlags==entry && !g_controlModeOwned,"third person keeps the selected control mode");
++        UpdateSceneCamera(camera);
++        Check(g_active && g_controlModeOwned && controlFlags==(entry|2u),
++              "entering TR4/5 first person forces Modern Controls from either entry mode");
++        controlFlags^=0x80u; // Graphics/unrelated flags can change during FP.
++        controlFlags&=~2u;FirstPersonActive();
++        Check(!(controlFlags&2u),"render state getters preserve the crouch draw's temporary classic bit");
++        Check(Detour_XInputGetState(0,nullptr)==ERROR_BAD_ARGUMENTS && (controlFlags&2u),
++              "input boundary reasserts Modern Controls even without an active gamepad");
++        controlFlags&=~2u;GamepadUpdate();
++        Check(controlFlags&2u,"frame boundary reasserts first-person Modern Controls");
++        if(leave==0) FirstPersonToggle();
++        if(leave==1) { cutseq=1;UpdateSceneCamera(camera); }
++        if(leave==2) { water=1;UpdateSceneCamera(camera); }
++        if(leave==3) { *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=1;UpdateSceneCamera(camera); }
++        if(leave==4) { config.firstPerson=false;FirstPersonControlModeUpdate(); }
++        if(leave==5) { g_runtimeEnabled=false;FirstPersonControlModeUpdate(); }
++        if(leave==6) { game=2;FirstPersonControlModeUpdate(); }
++        if(leave==7) FirstPersonShutdown();
++        if(leave==8) Remove();
++        Check(!g_controlModeOwned && controlFlags==(entry^0x80u),
++              "view exit, suspension, disable, game switch and shutdown restore only the saved controls bit");
++        controlFlags^=2u;FirstPersonControlModeUpdate();
++        Check(controlFlags==((entry^0x80u)^2u),"after restoration user control changes are no longer owned by FP");
++    }
+     VR().m_system = nullptr;
+     std::printf("OK: %d first-person regression checks passed.\n", checks);
+     return 0;

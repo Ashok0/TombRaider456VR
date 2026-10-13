@@ -1425,6 +1425,14 @@ menu takes effect when normal gameplay resumes. Startup is still third person:
 the INI setting enables the feature, not an automatic first-person startup.
 TR6, or `FirstPerson=0`, retains the legacy Y + LT hold chord for graphics.
 
+Active TR4/5 first person now forces Modern Controls, ported from TR1/3.
+The control mode selected on entry is restored when first person exits or is
+suspended (including inventory, cutscenes and swimming), when the feature is
+disabled, and on shutdown or a game switch. Only the controls bit is owned;
+graphics and other flags keep their current values. No INI change is required.
+The render-only crouch visibility workaround can still temporarily clear that
+bit, without a camera/body state query re-enabling it during the draw.
+
 In first person, LS up moves forward, LS left/right sidesteps, and LS down
 backpedals instead of turning Lara to run toward the camera. The dominant stick
 axis selects the directional gait. RS turns your view; physical head rotation

@@ -4753,6 +4753,43 @@ int main() {
             "third person, camera takeovers, death, water and unrelated turns remain native");
     }
     TestGroundJumpPriority();
+    // Ported TR1/3 control ownership: exercise real camera/input/lifecycle
+    // boundaries for both entry modes, preserving all non-control flag bits.
+    const auto controlsDll=g_boundDll;const auto controlsBase=g_boundBase;
+    auto& controlFlags=*reinterpret_cast<uint32_t*>(appMemory+drva::app_off::cfgFlags);
+    for(int which:{0,1}) for(bool modern:{false,true}) for(int leave=0;leave<9;++leave) {
+        UpdateControlMode(false);g_boundDll=controlsDll;g_boundBase=controlsBase;
+        game=dll.game=which;resetRoomscale();
+        config.enabled=config.firstPerson=true;config.firstPersonFullBodyIK=false;
+        config.gamepadEnabled=false;g_runtimeInitialized=true;
+        const uint32_t entry=0xa5u|(modern ? 2u : 0u);
+        controlFlags=entry;g_active=false;
+        FirstPersonControlModeUpdate();
+        Check(controlFlags==entry && !g_controlModeOwned,"third person keeps the selected control mode");
+        UpdateSceneCamera(camera);
+        Check(g_active && g_controlModeOwned && controlFlags==(entry|2u),
+              "entering TR4/5 first person forces Modern Controls from either entry mode");
+        controlFlags^=0x80u; // Graphics/unrelated flags can change during FP.
+        controlFlags&=~2u;FirstPersonActive();
+        Check(!(controlFlags&2u),"render state getters preserve the crouch draw's temporary classic bit");
+        Check(Detour_XInputGetState(0,nullptr)==ERROR_BAD_ARGUMENTS && (controlFlags&2u),
+              "input boundary reasserts Modern Controls even without an active gamepad");
+        controlFlags&=~2u;GamepadUpdate();
+        Check(controlFlags&2u,"frame boundary reasserts first-person Modern Controls");
+        if(leave==0) FirstPersonToggle();
+        if(leave==1) { cutseq=1;UpdateSceneCamera(camera); }
+        if(leave==2) { water=1;UpdateSceneCamera(camera); }
+        if(leave==3) { *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=1;UpdateSceneCamera(camera); }
+        if(leave==4) { config.firstPerson=false;FirstPersonControlModeUpdate(); }
+        if(leave==5) { g_runtimeEnabled=false;FirstPersonControlModeUpdate(); }
+        if(leave==6) { game=2;FirstPersonControlModeUpdate(); }
+        if(leave==7) FirstPersonShutdown();
+        if(leave==8) Remove();
+        Check(!g_controlModeOwned && controlFlags==(entry^0x80u),
+              "view exit, suspension, disable, game switch and shutdown restore only the saved controls bit");
+        controlFlags^=2u;FirstPersonControlModeUpdate();
+        Check(controlFlags==((entry^0x80u)^2u),"after restoration user control changes are no longer owned by FP");
+    }
     VR().m_system = nullptr;
     std::printf("OK: %d first-person regression checks passed.\n", checks);
     return 0;

@@ -313,6 +313,7 @@ void ApplyMergedChords(XGamepad& pad, bool gameplay,
 }
 
 uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
+    FirstPersonControlModeUpdate();
     if (!state) return ERROR_BAD_ARGUMENTS;
 
     // Only pad 0 is ours. Let the engine see the other three as absent, or as
@@ -446,6 +447,7 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
 } // namespace
 
 void GamepadUpdate() {
+    FirstPersonControlModeUpdate();
     if (!Cfg().gamepadEnabled) return;
 
     if (!g_slot) {
