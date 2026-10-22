@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-20T01:26:21.8639478-04:00",
+    "base_commit":  "22cb815",
+    "dll_sha256":  "EAAF181D27F3D6ED495F1DE7184B8D316348E00F1D5FBCDD327767CEB4C6CD3C",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-pistol-idle-turn-20261020-012621",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  3956546,
+    "debug_regression_checks":  3956546,
+    "change":  "Prevent native ModernControlsGunRotation from injecting turn animations during stationary armed VRIK shoulder glances. Scoped camTurn uses current body yaw during idle native simulation, restores camera-relative input afterwards. Does not change arm IK, torso filters, camera pose, or INI. Both games confirmed by disassembly; negative regression fails without scope. Hardware visual confirmation pending.",
+    "hardware_verified":  false
+}

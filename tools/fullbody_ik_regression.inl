@@ -9,6 +9,35 @@ void __cdecl FakeBodyJoint(uint8_t* item,tr::PHD_VECTOR* point,int joint,int) {
     point->x=int(p.x+offset.x);point->y=int(p.y+offset.y);point->z=int(p.z+offset.z);
 }
 int fullBodyDraws=0,fullBodyGunDraws=0;
+float pistolBodyPalette[33*12]{},pistolForearmPalette[33*12]{};
+void __cdecl ObservePistolArmDraw(uint8_t* item,int32_t,int32_t pass) {
+    using namespace tr;
+    float palette[33*12]{};
+    const int count=Detour_GetJoints(item,palette,pass);
+    if(g_renderArm>=0 && PistolBodyPoseMatches(item,pass)) {
+        const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+
+            *reinterpret_cast<int16_t*>(item+off::item_object)*off::object_stride;
+        const auto* geom=obj+off::object_geom;
+        const int bones=*reinterpret_cast<const int32_t*>(geom+28);
+        const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+        const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+        motiongun::Frame wrist{};
+        Check(ReadIKJoint(obj,palette,count,bones,mapping,poses,g_renderArm ? 10 : 13,wrist),"pistol draw exposes its wrist");
+        Check(firstperson::Length(motiongun::Sub(wrist.origin,g_pistolArmPose.joint[g_renderArm ? 2 : 5].origin))<.04f,
+              "both pistol hands stay on solved forearms despite independent native wrist interpolation");
+    }
+    if(g_pistolBodyScope) std::memcpy(pistolBodyPalette,palette,count*12*sizeof(float));
+    if(g_pistolForearmScope) {
+        std::memcpy(pistolForearmPalette,palette,count*12*sizeof(float));
+        uint64_t mask=0;int captured=0;
+        const auto* physics=FirstPersonBodyPalette(mask,captured);
+        Check(physics && captured==count,"pistol attachment retains its native physics palette");
+        float nativePalette[33*12]{};std::memcpy(nativePalette,skinFixture,count*12*sizeof(float));
+        if(BodyVisualOffsetApplies(item)) stabilization::OffsetBodyPalette(nativePalette,count,BodyRenderOffset());
+        Check(!std::memcmp(physics,nativePalette,count*12*sizeof(float)),
+              "sharing pistol render arms cannot feed controller motion into native physics");
+    }
+}
 uint32_t restrictedBodyMask=UINT32_MAX;
 const int32_t* restrictedMapping=nullptr;
 int restrictedBodyDraws=0;
@@ -44,6 +73,7 @@ void __cdecl ObserveFullBodyDraw(uint8_t* item,int32_t masked,int32_t) {
 void TestFullBodyIK() {
     using namespace tr;using namespace tr::motiongun;
     const auto settings=config;const auto savedDll=dll;const auto calibration=testCalibration;
+    const auto savedPistolRoll=g_pistolRoll;g_pistolRoll={};
     const auto savedFollower=g_bodyFollower;const auto savedSerial=VR().m_poseSerial;
     const auto savedTorso=g_torsoPose;const auto savedMount=g_mountBodyTransition;
     const auto savedVisibility=g_bodyVisibility;g_bodyVisibility={};
@@ -95,6 +125,68 @@ void TestFullBodyIK() {
         {180,-700,0},{240,-460,30},{180,-250,70},{-180,-700,0},{-240,-460,30},{-180,-250,70},{0,-850,0}};
     for(int i=0;i<15;++i) native[i]={identity,positions[i]};
     auto nearVec=[](Vec a,Vec b) { return firstperson::Length(Sub(a,b))<.04f; };
+    // A fixed controller near the shoulder used to magnify a .057-degree
+    // torso change into roughly 20 degrees of material roll. Test both sides,
+    // reversal of the head glance, repeated draws, and exact wrist tracking.
+    for(int hand=0;hand<2;++hand) {
+        const float side=hand ? 1.f : -1.f;
+        const Frame armBind[3]={{identity,{side*180,-700,0}},
+            {identity,{side*240,-460,30}},{identity,{side*180,-250,70}}};
+        const Frame torsoBind{identity,{0,-650,-60}};
+        const Frame target{Multiply(firstperson::RotationMatrix(firstperson::AxisRotation({0,0,1},side*3)),motiongun::GunBasis(identity)),
+            {side*180,-700,50}};
+        firstperson::ArmRollContinuity history{};
+        Frame previous[3]{};bool havePrevious=false;
+        for(int sample=0;sample<=1400;++sample) {
+            const int step=sample<=700 ? sample-350 : 1050-sample;
+            Frame torso{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},step*.001f)),torsoBind.origin};
+            Frame chain[3]{},changes[3]{};auto seed=history;
+            Check(firstperson::PistolArmReference(torso,torsoBind,armBind,1,chain),"glance fixture builds pistol model reference");
+            Check(firstperson::SolveTrackedArm(chain,target,{side*.6f,1,-.25f},armBind,changes,true,&history),"pistol glance roll solve succeeds");
+            for(int j=0;j<3;++j) {
+                const auto actual=Multiply(changes[j],chain[j]);
+                if(havePrevious && j<2) {
+                    const auto q=firstperson::RotationProduct(firstperson::RotationOf(actual.basis),
+                        firstperson::RotationInverse(firstperson::RotationOf(previous[j].basis)));
+                    const float angle=2*std::atan2(firstperson::Length(q.v),std::fabs(q.w));
+                    Check(angle<.07f,"small shoulder glance cannot cause a pistol arm roll spike");
+                }
+                if(j==2) {
+                    Check(nearVec(actual.origin,target.origin),"glance protection leaves pistol wrist position exact");
+                    for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                        Check(std::fabs(actual.basis.r[r][c]-target.basis.r[r][c])<.001f,"glance protection leaves pistol aim and wrist roll exact");
+                }
+                previous[j]=actual;
+            }
+            Frame repeat[3]{};
+            Check(firstperson::SolveTrackedArm(chain,target,{side*.6f,1,-.25f},armBind,repeat,true,&seed),"same-pose pistol redraw succeeds");
+            Check(!std::memcmp(repeat,changes,sizeof(repeat)),"same-pose redraw cannot advance pistol roll history");
+            havePrevious=true;
+        }
+    }
+    // Model-proportion pistol arms must still obey the rigid-reach contract
+    // through full wrist rolls, mirrored arms and calibrated body scales.
+    for(int hand=0;hand<2;++hand) for(float size:{.8f,1.f,1.2f}) for(int roll=-8;roll<=8;++roll) {
+        const int first=hand ? 8 : 11;
+        const Frame armBind[3]={native[first],native[first+1],native[first+2]};
+        Frame chain[3]{},changes[3]{};
+        Check(firstperson::PistolArmReference(native[7],native[7],armBind,size,chain),"model-proportion pistol reference is valid");
+        const Frame target{firstperson::RotationMatrix(firstperson::AxisRotation({0,0,1},roll*.4f)),
+                           Add(chain[0].origin,{hand ? 100.f : -100.f,0,900.f})};
+        Check(firstperson::SolveTrackedArm(chain,target,{hand ? .6f : -.6f,1,-.25f},armBind,changes),
+              "pistol reaches beyond anatomical range with full controller roll");
+        Frame output[3]{};for(int j=0;j<3;++j) output[j]=Multiply(changes[j],chain[j]);
+        Check(nearVec(output[2].origin,target.origin),"pistol wrist follows controller immediately");
+        for(int j=0;j<2;++j) {
+            Check(std::fabs(firstperson::Length(Sub(output[j+1].origin,output[j].origin))-
+                size*firstperson::Length(Sub(armBind[j+1].origin,armBind[j].origin)))<.04f,
+                "pistol reaches by shoulder travel without changing model bone lengths");
+            for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
+                float dot=0;for(int k=0;k<3;++k) dot+=output[j].basis.r[k][r]*output[j].basis.r[k][c];
+                Check(std::fabs(dot-(r==c ? size*size : 0.f))<.003f,"pistol arm meshes keep calibrated scale without shear");
+            }
+        }
+    }
     // Crouch/lean/yaw across a wide range, unequal legs, straight legs and
     // split strides: feet cannot drift and segment lengths cannot change.
     for(int stride=0;stride<4;++stride) for(int x=-6;x<=6;++x) for(int y=-4;y<=12;++y) {
@@ -183,6 +275,57 @@ void TestFullBodyIK() {
             WriteRows(Multiply(frame,ib),fixture+i*12);
         }
         skinFixture=fixture;skinFixtureCount=count;
+        {
+            const bool cameraValid=worldCameraValid;
+            float oldCamera[3];std::memcpy(oldCamera,worldCameraPos,sizeof(oldCamera));
+            const auto oldHeadJoint=bodyJointWorld[14],oldLeftJoint=bodyJointWorld[13],oldRightJoint=bodyJointWorld[10];
+            const auto oldScope=g_pistolBodyScope;
+            worldCameraValid=true;worldCameraPos[0]=camera.x;worldCameraPos[1]=camera.y;worldCameraPos[2]=camera.z;
+            // Real HD interpolation is floating point; the gameplay joint
+            // query is integer and need not agree frame-for-frame. A mismatch
+            // is NOT camera movement, even when every tracked pose is fixed.
+            for(int which:{0,1}) for(bool armed:{false,true}) {
+                dll.game=which;state=2;status=armed ? 4 : 0;gun=1;
+                g_pistolBodyScope=armed;g_bodyVisualOffset={};
+                worldCameraPos[0]=camera.x;worldCameraPos[1]=camera.y;worldCameraPos[2]=camera.z;
+                g_torsoPose.Reset();g_bodyFollower.Reset();g_pistolRoll={};
+                ++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+                for(int n=1;n<=120;++n) {
+                    float animated[33*12]{};std::memcpy(animated,fixture,sizeof(animated));
+                    const float noise=.45f*std::sin(n*1.7f);
+                    const Vec cameraShift=n>60 ? Vec{(n-60)*2.4f,(n-60)*.3f,-(n-60)*1.7f} : Vec{};
+                    worldCameraPos[0]=camera.x+cameraShift.x;
+                    worldCameraPos[1]=camera.y+cameraShift.y;
+                    worldCameraPos[2]=camera.z+cameraShift.z;
+                    for(int i=0;i<count;++i) {
+                        auto frame=Multiply(ReadRows(fixture+i*12),bind[i]);
+                        frame.origin=Sub(frame.origin,cameraShift);
+                        if(mapping[i]==14) frame.origin=Add(frame.origin,{noise,noise*.6f,-noise*.8f});
+                        Frame inverse{};Inverse(bind[i],inverse);
+                        WriteRows(Multiply(frame,inverse),animated+i*12);
+                    }
+                    bodyJointWorld[14]=Add(oldHeadJoint,{float(n%3-1),0,0});
+                    bodyJointWorld[13]=Add(oldLeftJoint,{0,float(n%3-1),0});
+                    bodyJointWorld[10]=Add(oldRightJoint,{0,0,float(n%3-1)});
+                    skinFixture=animated;++VR().m_poseSerial;g_torsoPose.time=TurnTime()-1./60.;
+                    Detour_GetJoints(itemMemory,palette,0);
+                    for(int i=0;i<count;++i) {
+                        const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                        const auto initial=Multiply(ReadRows(baseline+i*12),bind[i]);
+                        Check(firstperson::Length(Sub(Add(actual.origin,cameraShift),initial.origin))<.025f,
+                              "stationary full-body world positions ignore joint query noise and follow real camera rebasing exactly");
+                        for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                            Check(std::fabs(actual.basis.r[r][c]-initial.basis.r[r][c])<.001f,
+                                  "stationary body and limb orientation stays stable through joint query mismatch");
+                    }
+                }
+                bodyJointWorld[14]=oldHeadJoint;bodyJointWorld[13]=oldLeftJoint;bodyJointWorld[10]=oldRightJoint;
+                skinFixture=fixture;
+            }
+            g_pistolBodyScope=oldScope;worldCameraValid=cameraValid;
+            std::memcpy(worldCameraPos,oldCamera,sizeof(oldCamera));
+            g_torsoPose.Reset();g_bodyFollower.Reset();
+        }
         for(int which:{0,1}) for(int stance:{0,1,2,3,9,15,25,26,27,71,73,10,30,31,19,54}) for(int armed:{0,1}) {
             g_torsoPose.Reset();++VR().m_poseSerial;
             dll.game=which;state=int16_t(stance);status=armed ? 4 : 0;g_bodyVisualOffset={55,-80};
@@ -206,6 +349,14 @@ void TestFullBodyIK() {
             Check(render && !std::memcmp(render,palette,count*12*sizeof(float)),"skinning uploads the full-body pose without physics overwriting it");
             for(int i=0;i<count;++i) {
                 const int joint=mapping[i];const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                if(joint>=8 && joint<=13 && (!FullBodyGripState(itemMemory) || armed)) {
+                    for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
+                        float dot=0;
+                        for(int k=0;k<3;++k) dot+=actual.basis.r[k][r]*actual.basis.r[k][c];
+                        Check(std::fabs(dot-(r==c ? 1.f : 0.f))<.003f,
+                              "full-body tracked arms retain rigid meshes with calibrated native-size body");
+                    }
+                }
                 if((joint==3 || joint==6) && FullBodyGripState(itemMemory) && !armed) Check(nearVec(actual.origin,Sub(bodyJointWorld[joint],camera)),"constrained grip keeps native animated feet");
                 if(joint==10 || joint==13) {
                     Frame target{};Basis controller{};const int hand=joint==10 ? 1 : 0;
@@ -223,6 +374,164 @@ void TestFullBodyIK() {
                         Check(std::fabs(actual.basis.r[r][c]-target.basis.r[r][c])<.002f,"armed body wrist matches exact gun orientation without unarmed wrist limits");
                 }
             }
+        }
+        // Real draw order: body, then independently animated pistol meshes.
+        // The attachment may omit torso/shoulders and has different bindings
+        // for helper bones. Its forearms must use the body's SAME solved pose.
+        {
+            const auto savedDraw=g_hDrawCreatureHD.m_trampoline;
+            const auto oldSettings=config;const int oldGame=dll.game;
+            const bool oldBodyScope=g_bodySkinScope;
+            const auto oldBits=bits;
+            g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&ObservePistolArmDraw);
+            // Hold tracking and torso still; vary BOTH native arm palettes,
+            // including shoulder locations, lengths, roll and nonorthogonal
+            // matrix blends. The previous wrist-only fix misses these inputs.
+            for(int which:{0,1}) for(bool full:{false,true}) for(bool omitHands:{false,true}) {
+                if(count==15 && omitHands) continue;
+                g_pistolRoll={};
+                dll.game=which;state=2;status=4;gun=1;
+                config.firstPersonFullBodyIK=full;config.firstPersonBodyScale=1.15f;
+                Frame referenceArms[6]{};
+                const auto originalWrist=bodyJointWorld[10];
+                const auto originalLeftWrist=bodyJointWorld[13];
+                int32_t bodyMapping[33]{};
+                for(int i=0;i<count;++i) bodyMapping[i]=omitHands && (mapping[i]==10 || mapping[i]==13) ? -1 : mapping[i];
+                *reinterpret_cast<int32_t**>(geom+48)=bodyMapping;
+                for(int sample=0;sample<8;++sample) {
+                    bodyJointWorld[10]=Add(originalWrist,{sample*2.f,-sample*1.f,sample*3.f});
+                    bodyJointWorld[13]=Add(originalLeftWrist,{-sample*3.f,sample*2.f,sample*1.f});
+                    float animated[33*12]{};std::memcpy(animated,fixture,sizeof(animated));
+                    for(int i=0;i<count;++i) if(mapping[i]>=8 && mapping[i]<=13) {
+                        auto frame=Multiply(ReadRows(fixture+i*12),bind[i]);
+                        const float phase=sample*.19f*(mapping[i]<11 ? 1.f : -1.f);
+                        const auto rotation=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},phase));
+                        for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                            frame.basis.r[r][c]=.5f*(frame.basis.r[r][c]+rotation.r[r][c]);
+                        frame.origin=Add(frame.origin,{sample*(mapping[i]-7.f),sample*2.f,-sample*3.f});
+                        Frame inverse{};Inverse(bind[i],inverse);
+                        WriteRows(Multiply(frame,inverse),animated+i*12);
+                    }
+                    skinFixture=animated;
+                    g_torsoPose.Reset();g_bodyFollower.Reset();++VR().m_poseSerial;
+                    bits=0x3fff;Detour_DrawCreatureHD(itemMemory,0,0);
+                    Check(g_pistolArmPose.valid,"animated bilateral pistol fixture captures body arms");
+                    Frame firstEye[6]{};std::memcpy(firstEye,g_pistolArmPose.joint,sizeof(firstEye));
+                    Detour_DrawCreatureHD(itemMemory,0,0);
+                    Check(!std::memcmp(firstEye,g_pistolArmPose.joint,sizeof(firstEye)),
+                          "second body draw in one tracking sample cannot advance either pistol roll");
+                    if(sample==0) std::memcpy(referenceArms,g_pistolArmPose.joint,sizeof(referenceArms));
+                    for(int j=0;j<6;++j) {
+                        Check(nearVec(referenceArms[j].origin,g_pistolArmPose.joint[j].origin),
+                              "native pistol animation cannot move either tracked shoulder elbow or wrist");
+                        for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                            Check(std::fabs(referenceArms[j].basis.r[r][c]-g_pistolArmPose.joint[j].basis.r[r][c])<.003f,
+                                  "native pistol matrix interpolation cannot wobble or deform either arm mesh");
+                    }
+                    *reinterpret_cast<int32_t**>(geom+48)=mapping;
+                    bits=0x3600;Detour_DrawCreatureHD(itemMemory,1,0);
+                    *reinterpret_cast<int32_t**>(geom+48)=bodyMapping;
+                }
+                bodyJointWorld[10]=originalWrist;
+                bodyJointWorld[13]=originalLeftWrist;
+                skinFixture=fixture;*reinterpret_cast<int32_t**>(geom+48)=mapping;
+            }
+            for(int which:{0,1}) for(int renderPass:{0,2}) for(bool full:{false,true}) for(bool partial:{false,true}) for(bool omitBodyHands:{false,true}) {
+                if(count==15 && (partial || omitBodyHands)) continue;
+                dll.game=which;state=2;status=4;gun=1;
+                config.firstPersonFullBodyIK=full;config.firstPersonBodyScale=1.15f;
+                g_torsoPose.Reset();g_bodyFollower.Reset();++VR().m_poseSerial;
+                skinFixture=fixture;
+                int32_t bodyMapping[33]{};
+                for(int i=0;i<count;++i) bodyMapping[i]=omitBodyHands && (mapping[i]==10 || mapping[i]==13) ? -1 : mapping[i];
+                *reinterpret_cast<int32_t**>(geom+48)=bodyMapping;
+                *reinterpret_cast<float**>(geom+72)=poses;
+                bits=0x3fff;Detour_DrawCreatureHD(itemMemory,0,renderPass);
+                Check(g_pistolArmPose.valid,"main pistol body captures its complete arm solve");
+                Frame expected[6]{};
+                for(int i=0;i<count;++i) if(bodyMapping[i]>=8 && bodyMapping[i]<=13)
+                    expected[mapping[i]-8]=Multiply(ReadRows(pistolBodyPalette+i*12),bind[i]);
+                if(omitBodyHands) for(int joint:{10,13}) {
+                    expected[joint-8]=g_pistolArmPose.joint[joint-8];
+                    Frame target{};Basis controller{};
+                    Check(BuildControllerWrist(joint==10 ? 1 : 0,target,controller) &&
+                          nearVec(Add(expected[joint-8].origin,camera),target.origin),
+                          "body with omitted hands still publishes the exact solved controller wrist");
+                }
+                for(int sample=0;sample<12;++sample) {
+                    float attachment[33*12]{},attachmentPoses[33*12]{};
+                    int32_t attachmentMapping[33]{};Frame attachmentBind[33]{};
+                    for(int i=0;i<count;++i) {
+                        const int joint=mapping[i];attachmentMapping[i]=joint;
+                        if(partial && joint!=9 && joint!=10 && joint!=12 && joint!=13) attachmentMapping[i]=-1;
+                        Frame inverseBind{};Inverse(bind[i],inverseBind);
+                        if(count==33) {
+                            inverseBind.basis=Multiply(firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},i*.03f)),inverseBind.basis);
+                            inverseBind.origin=Add(inverseBind.origin,{float(i*7),float(-i*3),float(i*2)});
+                        }
+                        Inverse(inverseBind,attachmentBind[i]);
+                        auto raw=inverseBind;
+                        for(int r=0;r<3;++r) { raw.basis.r[r][1]=inverseBind.basis.r[r][2];raw.basis.r[r][2]=-inverseBind.basis.r[r][1]; }
+                        WriteRows(raw,attachmentPoses+i*12);
+                        Frame animated{identity,Sub(bodyJointWorld[joint],camera)};
+                        if(joint>=8 && joint<=13) {
+                            const float phase=(joint<11 ? 1.f : -1.f)*sample*.11f;
+                            animated.basis=firstperson::RotationMatrix(firstperson::AxisRotation({1,0,0},phase));
+                            if(joint==9 || joint==12) animated.origin=Add(animated.origin,{sample*1.5f,0,-sample*.7f});
+                            if(joint==10 || joint==13) animated.origin=Add(animated.origin,{sample*2.f,-sample*1.f,sample*3.f});
+                        }
+                        WriteRows(Multiply(animated,inverseBind),attachment+i*12);
+                    }
+                    skinFixture=attachment;
+                    *reinterpret_cast<int32_t**>(geom+48)=attachmentMapping;
+                    *reinterpret_cast<float**>(geom+72)=attachmentPoses;
+                    bits=0x3600;
+                    const auto itemBefore=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
+                    const auto laraBefore=std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory));
+                    const auto torsoBefore=std::string(reinterpret_cast<char*>(&g_torsoPose),sizeof(g_torsoPose));
+                    GunPose gunsBefore[2]{};
+                    for(int hand=0;hand<2;++hand) Check(BuildGunPose(hand,gunsBefore[hand]),"pistol fixture has a tracked gun pose");
+                    Detour_DrawCreatureHD(itemMemory,1,renderPass);
+                    for(int i=0;i<count;++i) if(attachmentMapping[i]>=8 && attachmentMapping[i]<=13) {
+                        const auto actual=Multiply(ReadRows(pistolForearmPalette+i*12),attachmentBind[i]);
+                        const auto& wanted=expected[attachmentMapping[i]-8];
+                        Check(nearVec(actual.origin,wanted.origin),"animated pistol attachment cannot move an IK elbow or wrist away from the body");
+                        for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                            Check(std::fabs(actual.basis.r[r][c]-wanted.basis.r[r][c])<.003f,
+                                  "pistol forearm uses body roll and calibrated scale despite native weapon animation");
+                    }
+                    Check(itemBefore==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)) &&
+                          laraBefore==std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory)),
+                          "pistol arm rendering never changes native aim recoil or firing state");
+                    Check(torsoBefore==std::string(reinterpret_cast<char*>(&g_torsoPose),sizeof(g_torsoPose)),
+                          "pistol attachment cannot run another body solve or advance torso filtering");
+                    for(int hand=0;hand<2;++hand) {
+                        GunPose after{};
+                        Check(BuildGunPose(hand,after) && !std::memcmp(&gunsBefore[hand],&after,sizeof(after)),
+                              "shared pistol arms retain exact tracked gun pose muzzle and aim");
+                    }
+                }
+                const int oldFraction=fraction;
+                for(int reason=0;reason<4;++reason) {
+                    fraction=oldFraction;gun=1;
+                    if(reason==0) ++fraction;
+                    if(reason==1) gun=3;
+                    float unchanged[33*12]{};std::memcpy(unchanged,fixture,count*12*sizeof(float));
+                    Check(!PistolBodyArmPose(reason==2 ? laraMemory : itemMemory,unchanged,count,reason==3 ? renderPass^1 : renderPass,false) &&
+                          !std::memcmp(unchanged,fixture,count*12*sizeof(float)),
+                          "pistol pose rejects different interpolation weapon creature and render pass atomically");
+                }
+                fraction=oldFraction;gun=1;
+                ++VR().m_poseSerial;
+                float untouched[33*12]{};std::memcpy(untouched,fixture,count*12*sizeof(float));
+                Check(!PistolBodyArmPose(itemMemory,untouched,count,renderPass,false) &&
+                      !std::memcmp(untouched,fixture,count*12*sizeof(float)),"next tracking sample cannot reuse stale pistol arms");
+            }
+            *reinterpret_cast<int32_t**>(geom+48)=mapping;*reinterpret_cast<float**>(geom+72)=poses;
+            skinFixture=fixture;config=oldSettings;dll.game=oldGame;
+            g_hDrawCreatureHD.m_trampoline=savedDraw;g_pistolArmPose={};
+            g_bodySkinScope=oldBodyScope;
+            bits=oldBits;
         }
         state=2;status=0;
         // Reproduce the reported drift: the actual rendered anchor must
@@ -750,6 +1059,7 @@ void TestFullBodyIK() {
     std::memcpy(itemMemory,savedItem.data(),sizeof(itemMemory));std::memcpy(laraMemory,savedLara.data(),sizeof(laraMemory));
     config=settings;dll=savedDll;testCalibration=calibration;g_unarmedTwist[0]=savedLeft;g_unarmedTwist[1]=savedRight;
     g_bodyFollower=savedFollower;VR().m_poseSerial=savedSerial;
+    g_pistolRoll=savedPistolRoll;
     g_torsoPose=savedTorso;g_mountBodyTransition=savedMount;
     g_bodyVisibility=savedVisibility;
     g_autoBodyCalibration=savedAuto;

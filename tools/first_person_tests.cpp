@@ -2208,6 +2208,115 @@ int main() {
     };
     TestPhysicalSwitch(resetRoomscale,rva,physicalPose);
     {
+        const auto settings=config;const auto savedMotion=g_motionDll;
+        const bool savedHooks=g_motionHooksReady,savedScene=g_scenePoseValid;
+        const bool tracking[2]={VR().m_controllerPoseValid[0],VR().m_controllerPoseValid[1]};
+        const auto above=g_hLaraAboveWater.m_trampoline;
+        const auto oldStatus=*reinterpret_cast<int16_t*>(laraMemory+2);
+        const auto oldGun=*reinterpret_cast<int16_t*>(laraMemory+4);
+        static uint8_t* armedApp=appMemory;
+        MotionDll motion{};motion.app=rva(&armedApp);g_motionDll=&motion;g_motionHooksReady=true;
+        // Native ModernControlsGunRotation (TR4 E0420 / TR5 E38B0)
+        // reads camTurn even with zero axes, then ORs Left/Right into input.
+        // Model its large-angle idle branch, and consume it as lara_as_stop
+        // does immediately afterwards. The old pass-through simulation stub
+        // could not catch this armed-only animation transition.
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(+[](uint8_t* item,void* collision) {
+            FakeAboveWater(item,collision);
+            const float delta=Wrap(Radians(analogMemory[2])-Radians(seenYaw));
+            if(NewControls() && *reinterpret_cast<int16_t*>(laraMemory+2)==4 &&
+               analogMemory[0]==0 && analogMemory[1]==0 && std::fabs(delta)>.55f)
+                actionInput|=delta>0 ? locomotion::Right : locomotion::Left;
+            auto& goal=*reinterpret_cast<int16_t*>(item+off::item_goal_state);
+            goal=actionInput&locomotion::Right ? 6 : actionInput&locomotion::Left ? 7 : 2;
+        });
+        for(int which:{0,1}) for(int stance:{2,6,7,20}) for(float gaze:{-1.2f,1.2f}) {
+            game=dll.game=which;resetRoomscale();
+            config.firstPersonFullBodyIK=config.firstPersonMotionGuns=true;
+            config.firstPersonRoomscaleMove=false;appMemory[0x9e4]=3;
+            g_scenePoseValid=true;
+            VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+            *reinterpret_cast<int16_t*>(laraMemory+2)=4;*reinterpret_cast<int16_t*>(laraMemory+4)=1;
+            state=int16_t(stance);*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state)=2;
+            pos.y_rot=Angle(.2f);Head(gaze);
+            g_haveManualInput=true;g_manualLocal=g_manualWorld={};
+            analogMemory[0]=analogMemory[1]=0;
+            analogMemory[2]=Angle(-2);analogMemory[3]=Angle(2);
+            actionInput=0x40; // Native action/grab must survive the scope.
+            Check(MotionReady(),"idle armed glance regression has valid tracked pistols");
+            const auto before=pos;const auto controller0=VR().m_rawControllerPose[0];
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(seenAnalog[2]==before.y_rot && seenAnalog[0]==0 && seenAnalog[1]==0,
+                  "stationary armed simulation uses body heading despite left or right shoulder glance");
+            Check(actionInput==0x40 && *reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state)==2,
+                  "armed shoulder glances cannot inject native turn or fastturn animation requests");
+            Check(analogMemory[2]==Angle(gaze) && analogMemory[3]==Angle(gaze),
+                  "idle gun heading restores camera-relative input after native simulation");
+            Check(!std::memcmp(&pos,&before,sizeof(pos)) &&
+                  !std::memcmp(&controller0,&VR().m_rawControllerPose[0],sizeof(controller0)),
+                  "idle gun suppression preserves body yaw root and controller aim");
+        }
+        // Only the stationary tracked VRIK case owns this override.
+        // Exercise the complete simulation call and inspect what native code
+        // sees; all exclusions must retain the ordinary camera heading.
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeAboveWater);
+        for(int exclusion=0;exclusion<17;++exclusion) {
+            game=dll.game=1;resetRoomscale();
+            config.firstPersonFullBodyIK=config.firstPersonMotionGuns=true;
+            config.firstPersonRoomscaleMove=false;appMemory[0x9e4]=3;g_scenePoseValid=true;
+            VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+            *reinterpret_cast<int16_t*>(laraMemory+2)=4;*reinterpret_cast<int16_t*>(laraMemory+4)=1;
+            state=2;*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state)=2;
+            pos.y_rot=Angle(.2f);Head(1.2f);
+            g_haveManualInput=false;g_manualLocal=g_manualWorld={};
+            analogMemory[0]=analogMemory[1]=0;analogMemory[2]=Angle(1.2f);analogMemory[3]=Angle(-.7f);
+            actionInput=0;
+            if(exclusion==0) *reinterpret_cast<int16_t*>(laraMemory+2)=0;
+            if(exclusion==1) config.firstPersonFullBodyIK=false;
+            if(exclusion==2) g_active=false;
+            if(exclusion==3) g_shifted=true;
+            if(exclusion==4) actionInput=locomotion::Left;
+            if(exclusion==5) actionInput=locomotion::Right;
+            if(exclusion==6) actionInput=0x10;
+            if(exclusion==7) actionInput=0x100;
+            if(exclusion==8) analogMemory[0]=5000;
+            if(exclusion==9) analogMemory[1]=5000;
+            if(exclusion==10) state=3; // jump
+            if(exclusion==11) state=10; // hanging
+            if(exclusion==12) state=71; // crouch
+            if(exclusion==13) *reinterpret_cast<uint32_t*>(laraMemory+off::lara_movement_flags)|=0x20;
+            if(exclusion==14) VR().m_controllerPoseValid[1]=false;
+            if(exclusion==15) {
+                g_haveManualInput=true;g_manualLocal=g_manualWorld={0,1};
+                analogMemory[1]=10000;actionInput=locomotion::Forward;
+            }
+            if(exclusion==16) appMemory[0x9e4]&=~2u; // Native tank mode is not owned here.
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(seenAnalog[2]==Angle(1.2f),"idle gun fix leaves unarmed movement turns jumps and interactions unchanged");
+            *reinterpret_cast<uint32_t*>(laraMemory+off::lara_movement_flags)&=~0x20u;
+        }
+        // Artificial turning has already updated the authoritative body yaw:
+        // idle simulation must use that NEW facing rather than freeze the old
+        // orientation or rotate the tracked camera itself.
+        game=dll.game=1;resetRoomscale();config.firstPersonFullBodyIK=config.firstPersonMotionGuns=true;
+        config.firstPersonRoomscaleMove=false;appMemory[0x9e4]=3;g_scenePoseValid=true;
+        VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+        *reinterpret_cast<int16_t*>(laraMemory+2)=4;*reinterpret_cast<int16_t*>(laraMemory+4)=1;
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state)=2;
+        g_haveManualInput=false;analogMemory[0]=analogMemory[1]=0;actionInput=0;
+        for(float facing:{-.8f,.2f,1.4f}) {
+            pos.y_rot=Angle(facing);analogMemory[2]=Angle(2.5f);
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(seenAnalog[2]==Angle(facing) && pos.y_rot==Angle(facing) && analogMemory[2]==Angle(2.5f),
+                  "idle armed scope follows deliberate body turns immediately and restores camera heading");
+        }
+        g_hLaraAboveWater.m_trampoline=above;g_motionDll=savedMotion;
+        g_motionHooksReady=savedHooks;g_scenePoseValid=savedScene;
+        VR().m_controllerPoseValid[0]=tracking[0];VR().m_controllerPoseValid[1]=tracking[1];
+        *reinterpret_cast<int16_t*>(laraMemory+2)=oldStatus;*reinterpret_cast<int16_t*>(laraMemory+4)=oldGun;
+        config=settings;
+    }
+    {
         const auto settings=config;
         const auto savedMotion=g_motionDll;const bool savedHooks=g_motionHooksReady;
         const bool savedTracking[2]={VR().m_controllerPoseValid[0],VR().m_controllerPoseValid[1]};

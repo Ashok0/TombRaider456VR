@@ -218,8 +218,12 @@ struct TorsoPoseFilter {
                 const Basis deltaRotation=Multiply(desired[i].basis,invCached.basis);
                 const auto q=RotationOf(deltaRotation);
                 const float angle=2*std::atan2(Length(q.v),std::fabs(q.w));
-                if(angle>(recovering ? 0.f : .0174533f)) {
-                    const Basis change=LimitRotation(deltaRotation,std::min(angle*(1-std::exp(-12*dt)),4.f*dt));
+                const float angularDead=recovering ? 0.f : .0174533f;
+                if(angle>angularDead) {
+                    // Follow only the excess, as the positional deadzone does.
+                    // Applying the WHOLE angle at the boundary produces a
+                    // repeated ~0.2-degree pulse from tiny idle animation.
+                    const Basis change=LimitRotation(deltaRotation,std::min((angle-angularDead)*(1-std::exp(-12*dt)),4.f*dt));
                     cached[i].basis=Multiply(change,cached[i].basis);
                 }
                 const float oldScale=Length(Transform(cached[i].basis,{1,0,0}));

@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-15T05:02:38.1078297-04:00",
+    "base_commit":  "22cb815",
+    "dll_sha256":  "DE9AB89529C164DF703A6486536255C4BADF1B610C07429317EC68BC2BB8488F",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-pistol-glance-roll-20261015-050237",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  3956437,
+    "debug_regression_checks":  3956437,
+    "change":  "Pistol-only material roll continuity around ill-conditioned wrist swing. Transports controller rotation and bone direction; bounds reconciliation by input motion and prevents repeated draw updates. Exact tracked wrist and existing unarmed solver retained. Mirrored shoulder-glance regression fails without protection and passes with it. Runtime logs report minimum twist confidence and recovery. Debug and optimized VR suites passed. Headset cause still requires confirmation.",
+    "hardware_verified":  false
+}

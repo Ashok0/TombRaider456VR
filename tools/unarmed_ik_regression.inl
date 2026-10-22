@@ -168,10 +168,114 @@ void TestUnarmedIK() {
             Check(std::fabs(std::sqrt(Dot(lower,lower))-200)<.04f,"reachable forearm retains native length");
         }
     }
+    // Reach beyond Lara's proportions translates the tracked chain instead of
+    // stretching its meshes. Exercise both reach boundaries, full folding,
+    // mirrored arms, calibrated scales and rotated/translated palette frames.
+    for(float scale:{.5f,1.f,2.f}) for(float side:{-1.f,1.f}) for(float yaw:{-2.f,0.f,1.3f}) {
+        const Frame body{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},yaw)),{170,-90,240}};
+        Frame chain[3]{};
+        for(int i=0;i<3;++i) chain[i]=Multiply(body,{identity,Scale(arm[i].origin,scale)});
+        const Vec direction=Transform(body.basis,{side,0,0});
+        const Vec pole=Transform(body.basis,{0,0,-1});
+        Frame previous[3]{};bool havePrevious=false;
+        for(int distance=0;distance<=1000;++distance) {
+            const Frame target{body.basis,Add(chain[0].origin,Scale(direction,float(distance)*scale))};
+            Frame changes[3]{},repeat[3]{};
+            Check(firstperson::SolveTrackedArm(chain,target,pole,chain,changes),"rigid tracked reach solves near and far controllers");
+            Check(firstperson::SolveTrackedArm(chain,target,pole,chain,repeat) && !std::memcmp(changes,repeat,sizeof(changes)),
+                  "tracked reach is independent of render history and stereo eye");
+            Frame solved[3]{};
+            for(int i=0;i<3;++i) {
+                solved[i]=Multiply(changes[i],chain[i]);
+                for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
+                    float dot=0;
+                    for(int k=0;k<3;++k) dot+=changes[i].basis.r[k][r]*changes[i].basis.r[k][c];
+                    Check(std::fabs(dot-(r==c ? 1.f : 0.f))<.002f,"tracked reach never scales or shears an arm mesh");
+                }
+                if(i<2) Check(nearVec(Transform(changes[i],chain[i+1].origin),Multiply(changes[i+1],chain[i+1]).origin),
+                              "rigid arm meshes remain connected at elbow and wrist");
+            }
+            nearFrame(solved[2],target);
+            Check(std::fabs(firstperson::Length(Sub(solved[1].origin,solved[0].origin))-300*scale)<.04f &&
+                  std::fabs(firstperson::Length(Sub(solved[2].origin,solved[1].origin))-200*scale)<.04f,
+                  "upper arm and forearm retain native lengths even beyond reach");
+            if(distance>100 && distance<500) Check(nearVec(solved[0].origin,chain[0].origin),"reachable tracked arms keep shoulder anchored");
+            if(distance>500) Check(std::fabs(Dot(Sub(solved[0].origin,chain[0].origin),direction)-(distance-499.8f)*scale)<.04f,
+                                  "overreach moves shoulder only by the excess reach");
+            if(havePrevious && distance>1) {
+                Check(firstperson::Length(Sub(solved[0].origin,previous[0].origin))<1.01f*scale,
+                      "shoulder translation is continuous across reach limits");
+                Check(firstperson::Length(Sub(solved[1].origin,previous[1].origin))<36.f*scale,
+                      "elbow does not flip when crossing reach limits");
+            }
+            std::memcpy(previous,solved,sizeof(previous));havePrevious=true;
+        }
+    }
     // Model an already-bent arm with the forearm forward and neutral gun
     // wrist axes. This lets the test independently measure actual mesh twist.
     const Basis neutral=motiongun::GunBasis(identity);
     const Frame restArm[3]={{neutral,{0,0,0}},{neutral,{0,300,0}},{neutral,{0,300,200}}};
+    // A normal wrist uses the posed mesh axes and bind ROTATIONS. Rest bone
+    // translations can differ between HD body/attachment bindings; they must
+    // not introduce a second swing projection into controller forearm roll.
+    // The previous broad singularity fix failed this on asymmetric arms.
+    for(float side:{-1.f,1.f}) for(float yaw:{-2.f,0.f,1.3f})
+    for(float swing:{-.8f,0.f,.8f}) for(float roll:{-1.5f,0.f,1.5f}) {
+        const Frame body{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},yaw)),{170,-90,240}};
+        Frame native[3]{};
+        for(int i=0;i<3;++i) native[i]=Multiply(body,restArm[i]);
+        native[1].basis=Multiply(firstperson::RotationMatrix(firstperson::AxisRotation(
+            Transform(body.basis,{0,1,0}),side*swing)),native[1].basis);
+        const Frame target{Multiply(body.basis,Multiply(firstperson::RotationMatrix(
+            firstperson::AxisRotation({0,0,1},side*roll)),neutral)),native[2].origin};
+        Frame expected[3]{};
+        Check(firstperson::SolveTrackedArm(native,target,Transform(body.basis,{0,1,0}),restArm,expected),
+              "ordinary mirrored arm reference solves");
+        const auto reference=Multiply(expected[1],native[1]);
+        for(int step=0;step<=80;++step) {
+            Frame attachmentBind[3]={restArm[0],restArm[1],restArm[2]};
+            const float angle=step*.02f;
+            attachmentBind[2].origin=Add(attachmentBind[1].origin,{0,200*std::sin(angle),200*std::cos(angle)});
+            Frame actual[3]{};
+            Check(firstperson::SolveTrackedArm(native,target,Transform(body.basis,{0,1,0}),attachmentBind,actual),
+                  "controller arm solves with different rest-bone translations");
+            const auto forearm=Multiply(actual[1],native[1]);
+            for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                Check(std::fabs(forearm.basis.r[r][c]-reference.basis.r[r][c])<.003f,
+                      "ordinary forearm roll cannot wobble from a second rest-axis projection");
+            Check(nearVec(Transform(actual[1],native[2].origin),target.origin),
+                  "normal-pose stability retains exact wrist connection");
+        }
+    }
+    // Hold tracking and shoulder fixed while native idle/recoil changes its
+    // elbow plane. At a reversed wrist the old twist singularity fell back to
+    // that animated plane, making one arm wobble with no controller movement.
+    for(float side:{-1.f,1.f}) for(float yaw:{-2.f,0.f,1.3f})
+    for(float scale:{.5f,1.f,2.f}) for(float wristSwing:{0.f,1.f,3.12159265f,3.14159265f,3.16159265f}) {
+        const Frame body{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},yaw)),{170,-90,240}};
+        Frame rest[3]{};
+        for(int i=0;i<3;++i) rest[i]={neutral,Add(Scale(restArm[i].origin,scale),{side*100,0,0})};
+        Vec spin{};firstperson::Unit(Sub(rest[2].origin,rest[0].origin),spin);
+        const Frame target=Multiply(body,{Multiply(firstperson::RotationMatrix(
+            firstperson::AxisRotation({0,1,0},side*wristSwing)),rest[2].basis),rest[2].origin});
+        Frame reference[3]{};
+        for(int step=0;step<360;step+=4) {
+            const auto turn=firstperson::RotationMatrix(firstperson::AxisRotation(spin,step*.01745329252f));
+            const Frame aroundShoulder{turn,Sub(rest[0].origin,Transform(turn,rest[0].origin))};
+            Frame animated[3]{},changes[3]{};
+            for(int i=0;i<3;++i) animated[i]=Multiply(body,Multiply(aroundShoulder,rest[i]));
+            Check(firstperson::SolveTrackedArm(animated,target,Transform(body.basis,{0,1,0}),rest,changes),
+                  "stationary controller solves through native animation and reversed wrist");
+            for(int i=0;i<3;++i) {
+                const auto actual=Multiply(changes[i],animated[i]);
+                if(step==0) reference[i]=actual;
+                Check(nearVec(actual.origin,reference[i].origin),"native elbow animation cannot move tracked arm joints");
+                for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                    Check(std::fabs(actual.basis.r[r][c]-reference[i].basis.r[r][c])<.003f,
+                          "fixed controller cannot inherit animated arm roll at the wrist singularity");
+            }
+        }
+    }
     // Natural roll: the controller and forearm must keep turning together,
     // including past the old 90-degree clamp and 135..180 return-to-neutral.
     // Independent animation rotations cannot change that rest-pose relation.
@@ -205,7 +309,7 @@ void TestUnarmedIK() {
     }
     // Rest axes differ between forearm and hand meshes. Check continuous roll
     // through those real relationships, mirrored arms and body headings.
-    for(float side:{-1.f,1.f}) for(float yaw:{-2.f,0.f,1.3f}) {
+    for(float side:{-1.f,1.f}) for(float yaw:{-2.f,0.f,1.3f}) for(float nativeUpperRoll:{-1.7f,0.f,2.1f}) {
         const Frame bodyTurn{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},yaw)),{}};
         Frame rest[3]={restArm[0],restArm[1],restArm[2]};
         rest[0].origin.x=rest[1].origin.x=rest[2].origin.x=side*100;
@@ -213,15 +317,32 @@ void TestUnarmedIK() {
         rest[2].basis=Multiply(firstperson::RotationMatrix(firstperson::AxisRotation({0,0,1},-side*.4f)),neutral);
         Frame animated[3]{};
         for(int i=0;i<3;++i) animated[i]=Multiply(bodyTurn,rest[i]);
+        // Native upper-arm animation must not wind the joint up against the
+        // controller-driven forearm, including opposite rolls on each hand.
+        animated[0].basis=Multiply(firstperson::RotationMatrix(firstperson::AxisRotation(
+            Transform(bodyTurn.basis,{0,1,0}),nativeUpperRoll)),animated[0].basis);
+        Frame inverseUpperBind{},inverseLowerBind{};
+        Check(Inverse(rest[0],inverseUpperBind) && Inverse(rest[1],inverseLowerBind),"elbow material reference binds invert");
+        const Vec upperSeam=Transform(inverseUpperBind.basis,{1,0,0});
+        const Vec lowerSeam=Transform(inverseLowerBind.basis,{1,0,0});
         const auto axis=Transform(bodyTurn.basis,{0,0,1});
         Frame previous[3]{};bool havePrevious=false;
         for(int degree=-720;degree<=720;degree+=2) {
-            const auto roll=firstperson::RotationMatrix(firstperson::AxisRotation(axis,degree*3.14159265358979323846f/180));
+            const auto roll=firstperson::RotationMatrix(firstperson::AxisRotation(axis,side*degree*3.14159265358979323846f/180));
             const Frame target{Multiply(roll,animated[2].basis),animated[2].origin};
             Frame changes[3]{};
             Check(firstperson::SolveTrackedArm(animated,target,Transform(bodyTurn.basis,{0,1,0}),rest,changes),
                   "mirrored tracked arms solve with independent rest joint axes");
             const auto forearm=Multiply(changes[1],animated[1]);
+            const auto upper=Multiply(changes[0],animated[0]);
+            const auto bend=firstperson::Align(Sub(forearm.origin,upper.origin),Sub(target.origin,forearm.origin));
+            const Vec upperEdge=Transform(bend,Transform(upper.basis,upperSeam));
+            const Vec lowerEdge=Transform(forearm.basis,lowerSeam);
+            Check(Dot(upperEdge,lowerEdge)>.999f,
+                  "inward and outward thumb roll keep both elbow mesh edges aligned through the bend");
+            Check(nearVec(upper.origin,animated[0].origin) && nearVec(forearm.origin,animated[1].origin) &&
+                  nearVec(Transform(changes[0],animated[1].origin),forearm.origin),
+                  "elbow twist correction cannot move shoulder or elbow or stretch upper arm");
             const auto expected=Multiply(roll,animated[1].basis);
             for(int row=0;row<3;++row) for(int col=0;col<3;++col)
                 Check(std::fabs(forearm.basis.r[row][col]-expected.r[row][col])<.003f,
@@ -230,6 +351,9 @@ void TestUnarmedIK() {
                 const auto before=Multiply(previous[1],animated[1]);
                 Check(Dot(Transform(before.basis,{1,0,0}),Transform(forearm.basis,{1,0,0}))>.999f,
                       "forearm has no reversal or snap at 90, 135 or 180 degrees");
+                const auto beforeUpper=Multiply(previous[0],animated[0]);
+                Check(Dot(Transform(beforeUpper.basis,upperSeam),Transform(upper.basis,upperSeam))>.999f,
+                      "upper arm rolls continuously through inward outward and full turns");
             }
             std::memcpy(previous,changes,sizeof(previous));havePrevious=true;
         }
@@ -532,9 +656,16 @@ void TestUnarmedIK() {
                     const int joint=mapping[i];
                     if(joint<8 || joint>13) Check(!std::memcmp(armedPalette+i*12,nativePalette+i*12,12*sizeof(float)),
                                                 "armed arm-only IK preserves animated torso legs and head");
-                    if(joint==8 || joint==11) Check(nearVec(Multiply(ReadRows(armedPalette+i*12),bind[i]).origin,
-                                                              Multiply(ReadRows(nativePalette+i*12),bind[i]).origin),
-                                                   "IK shoulder stays anchored to animated body");
+                    if(joint>=8 && joint<=13) {
+                        Frame inverse{};Check(Inverse(ReadRows(nativePalette+i*12),inverse),"native arm palette is invertible");
+                        const auto change=Multiply(ReadRows(armedPalette+i*12),inverse);
+                        for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
+                            float dot=0;
+                            for(int k=0;k<3;++k) dot+=change.basis.r[k][r]*change.basis.r[k][c];
+                            Check(std::fabs(dot-(r==c ? 1.f : 0.f))<.003f,
+                                  "production armed reach preserves mesh dimensions at every controller distance");
+                        }
+                    }
                 }
                 for(int hand=0;hand<2;++hand) {
                     g_renderArm=hand;float gunPalette[33*12]{};Detour_GetJoints(itemMemory,gunPalette,0);g_renderArm=-1;

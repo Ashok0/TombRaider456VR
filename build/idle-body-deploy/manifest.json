@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-20T10:11:31.3230055-04:00",
+    "base_commit":  "22cb815",
+    "dll_sha256":  "846484B5089312A9F2B7A4385AD8DB8DA21261AE10357A90F402A8214DE6CA3A",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-idle-body-20261020-101131",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  4160947,
+    "debug_regression_checks":  4160947,
+    "change":  "Stationary full-body jitter: read the actual render camera origin instead of inferring it from integer gameplay head versus floating HD joints; build the eye anchor directly in the HD frame; all full-body tracked wrists share that origin. Angular torso filter follows only deadzone excess to prevent threshold pulses. Both targeted negative controls fail without their correction. Prior camera, roomscale, mount, landing, leg and weapon regressions retained. Hardware visual confirmation pending.",
+    "hardware_verified":  false
+}

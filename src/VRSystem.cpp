@@ -902,6 +902,30 @@ void VRSystem::Submit(GLuint tex, uint32_t, uint32_t) {
 
     m_compositor->Submit(vr::Eye_Left,  &t, &left);
     m_compositor->Submit(vr::Eye_Right, &t, &right);
+    // Read compositor history at a low cadence; never wait for the GPU or
+    // modify timing/reprojection settings. Compare with arm-glance timestamps.
+    if(Cfg().firstPersonDriftLog && FirstPersonActive()) {
+        static uint64_t nextTrace=0;
+        const auto now=GetTickCount64();
+        if(now>=nextTrace) {
+            nextTrace=now+500;
+            vr::Compositor_FrameTiming timings[32]{};
+            timings[0].m_nSize=sizeof(timings[0]);
+            const auto count=std::min(m_compositor->GetFrameTimings(timings,32),uint32_t(32));
+            unsigned dropped=0,misPresented=0,motion=0;uint32_t flags=0;
+            float gpu=0,interval=0,submit=0,render=0;
+            for(uint32_t i=0;i<count;++i) {
+                const auto& f=timings[i];dropped+=f.m_nNumDroppedFrames;misPresented+=f.m_nNumMisPresented;
+                motion+=(f.m_nReprojectionFlags&vr::VRCompositor_ReprojectionMotion)!=0;flags|=f.m_nReprojectionFlags;
+                gpu=std::max(gpu,f.m_flPreSubmitGpuMs);interval=std::max(interval,f.m_flClientFrameIntervalMs);
+                submit=std::max(submit,f.m_flSubmitFrameMs);
+                render=std::max(render,f.m_flNewFrameReadyMs-f.m_flNewPosesReadyMs);
+            }
+            if(count) LogF("vr-glance: t=%llu pose=%llu history=%u frames=%u..%u max-ms gpu=%.2f app=%.2f interval=%.2f submit=%.2f dropped=%u mispresented=%u motion-smoothed=%u flags=%x",
+                now,m_poseSerial,count,timings[0].m_nFrameIndex,timings[count-1].m_nFrameIndex,
+                gpu,render,interval,submit,dropped,misPresented,motion,flags);
+        }
+    }
 }
 
 } // namespace tr

@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-19T22:37:42.8164434-04:00",
+    "base_commit":  "22cb815",
+    "dll_sha256":  "8CDC4D5985727D4E181DAB0EBE63175D22980F10C3E104D46165B708E9B0B91E",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-glance-diagnostics-20261019-223742",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  3956437,
+    "debug_regression_checks":  3956437,
+    "change":  "Diagnostic build only: compare rendered arm/torso steps with raw HMD/controller steps for armed and unarmed main body draws, separately per render pass. Log last 32 OpenVR frame timings twice per second for GPU/app/submit time and dropped/mispresented/motion-smoothed frames. Latest real log ruled out twist singularity (confidence minima \u003e=0.87) and showed armed frame-time spikes. Solver and VR settings unchanged. Wobble unresolved pending targeted headset capture.",
+    "hardware_verified":  false
+}

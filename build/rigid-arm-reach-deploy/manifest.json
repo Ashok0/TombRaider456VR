@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-13T16:47:37.7373856-04:00",
+    "base_commit":  "22cb815",
+    "dll_sha256":  "0600C80CF3BE178316EE3684321C80A0A66AB8DD795E4030BE94C9C695057536",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-rigid-arm-reach-20261013-164737",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  3415961,
+    "debug_regression_checks":  3415961,
+    "change":  "Preserve tracked upper-arm and forearm mesh lengths; translate visual shoulder by excess reach while retaining exact controller wrists and gun poses. Native grips and legs retain existing solver behavior. Regression coverage checks reach boundaries, connected rigid meshes, stereo determinism, calibrated scales, both TR4/5 palette layouts and full-body and arm-only rendering; prior camera, mounting and visibility regressions retained.",
+    "hardware_verified":  false
+}

@@ -7441,3 +7441,215 @@ Regression coverage reproduces the old duplicate, checks taps at several poll
 rates before/after native animation can fire, and verifies independent sustained
 fire plus production pistol/Uzi/revolver caller routing. Headset retesting is
 still needed for controller feel.
+
+#### Rigid controller arm reach (2026-10-13)
+
+Tracked arms now keep their upper-arm and forearm lengths when a controller
+reaches beyond Lara's proportions. The visual shoulder moves by the excess
+reach so the hand remains on the controller, with a small elbow bend instead
+of stretched meshes. Reachable poses keep the shoulder anchored. This applies
+to armed and unarmed controller arms, with full-body IK enabled or disabled.
+Extreme reach can expose the shoulder seam because Lara has rigid joint meshes.
+
+Native climbing grips, legs, torso following, camera behavior and weapon aiming
+retain their existing paths. Regression coverage checks rigid mesh transforms,
+connected joints, continuous reach transitions, controller wrist alignment,
+mirrored/scaled arms and both TR4/5 production palette layouts. Headset visual
+confirmation remains pending.
+
+#### Controller roll at the elbow (2026-10-13)
+
+Controller roll now carries through the elbow into the upper arm using the
+authored joint axes and elbow bend. Previously only the forearm followed that
+roll, which could wind the elbow seam against the upper arm during inward hand
+rotation. The correction rotates each mesh around its limb axis, preserving
+joint positions, rigid reach and exact hand/gun tracking. Forearm-only weapon
+attachments retain the same forearm pose as the complete body.
+
+Regression coverage checks elbow material alignment for mirrored inward and
+outward rolls, full turns, body headings and independent upper-arm animation.
+The old forearm-only behavior fails the new elbow regression. Headset visual
+confirmation remains pending.
+
+#### Stationary-controller arm wobble (2026-10-13)
+
+Undefined forearm twist now uses a fixed rest-joint reference. At a reversed wrist
+orientation the previous solver could inherit native idle/recoil rotation even
+with the controller held fixed; that rotation also propagated into the upper
+arm. This fallback applies only when twist is undefined. Ordinary poses retain
+the original calculation from the posed mesh axes: applying the rest reference
+globally introduced an extra swing/twist projection and an opposite-arm wobble.
+Controller tracking remains immediate, with rigid reach and the elbow seam
+correction retained.
+
+A regression holds tracking fixed while rotating the native elbow plane through
+a full turn, covering both arms, body headings, scales and ordinary/reversed
+wrists. It fails with the animated reference and passes with the fixed reference.
+An additional regression checks both arms with different body/attachment rest
+translations and posed mesh axes; the previous global rest-reference patch fails
+that check, while the fallback restricted to undefined twist passes both checks.
+Visual confirmation in the headset remains pending.
+
+#### Pistol forearm pose shared with the body (2026-10-14)
+
+The pistol forearm draw now reuses the main body's solved arm joints for the
+same tracking sample, interpolation fraction and render pass. Previously the
+weapon attachment solved its arms again from its independently animated mesh;
+partial weapon palettes could also fall back from full-body IK to arm-only IK.
+Those poses could disagree at the elbow despite steady controller tracking.
+
+Solved joint frames are rebound into each attachment's own mesh bindings,
+including duplicate helpers and omitted body wrists. The pose is discarded at
+the next body draw or scene-camera update. Gun/hand transforms, firing, native
+physics and shadows keep their existing paths. Other weapons and unarmed arms
+retain their existing solves. Drift logging reports whether pistol forearms use
+`body-IK` or `attachment-fallback` for headset diagnosis.
+
+The regression animates pistol attachment joints with fixed controllers and
+checks that both forearms match the body, including partial palettes and scaled
+full-body IK in TR4/5. It fails with the independent attachment solve. Existing
+reach, elbow roll, camera, ledge and visibility regressions remain included.
+Headset confirmation is pending.
+
+#### Right pistol wrist coordinate reference (2026-10-14)
+
+The right pistol's controller target now uses the body's head-derived camera
+reference instead of subtracting the animated gameplay wrist from the HD wrist.
+Those two animation/interpolation paths can disagree even with steady tracking.
+The right gun/hand draw also uses the same current solved wrist as its forearm,
+with the existing item, game, render-pass, interpolation and tracking guards.
+Arm-only main body draws use the same reference when the head joint is present;
+partial attachment fallback retains its existing behavior. The left arm, arm
+roll solver, other weapons, camera and gameplay firing paths are unchanged.
+
+Regressions hold controllers and body palettes fixed while varying only the
+right gameplay wrist query, then vary the right attachment wrist separately.
+Both checks fail with their respective original transforms. Tests cover TR4/5,
+native/HD palettes and full-body IK on/off, and verify the left arm stays fixed.
+These are synthetic interpolation reproductions; headset confirmation remains
+necessary for the reported wobble.
+
+#### Both pistol arms independent of weapon animation (2026-10-14)
+
+The wrist-reference change above did not resolve headset wobble. Pistol arm
+IK still inherited shoulder/elbow positions, segment lengths and mesh axes
+from the animated native skeleton. Native matrix interpolation can also add
+scale and shear; correcting wrist position alone leaves these inputs active.
+
+Both pistol arm chains now start from the model bind pose, placed at the solved
+torso with the calibrated body scale. Controller targets and the existing rigid
+reach and elbow-roll solver determine the final arms. Both pistol hand draws
+use those same solved wrists and the shared body camera reference. Other
+weapons, unarmed arms, native grips, camera and gameplay firing are unchanged.
+Arm-only body solves use the bind reference when the torso is available;
+partial attachment fallback still uses its previous path. The periodic pistol
+log reports `reference=model-bind` or `reference=animated` to distinguish them.
+
+The bilateral regression varies native shoulder positions, elbow/wrist positions
+and interpolated matrix rotations with fixed torso/controllers, across TR4/5,
+native/HD palettes, omitted wrists and full-body IK on/off. It fails with native
+arm references and passes with the model references. Separate checks verify
+fixed model bone lengths, undistorted calibrated mesh scale, full wrist roll
+and exact controller reach. Headset confirmation remains pending.
+
+#### Pistol roll continuity during shoulder glances (2026-10-15)
+
+The model-bind build remained active in the reported run, with valid controller
+tracking. A separate mathematical reproduction found that a fixed controller
+near a shoulder could amplify a 0.057-degree torso change into about 20 degrees
+of arm roll. The wrist swing/twist decomposition becomes ill-conditioned near
+an antiparallel swing; handling only an exactly undefined twist misses this.
+
+Pistol body solves now transport the previous forearm material orientation
+through actual controller rotation and bone-direction changes in that region.
+They return toward the normal twist solution as it becomes well-conditioned,
+with reconciliation bounded by input motion so exiting the region cannot
+release a stored twist abruptly or creep while inputs are still. Wrist position,
+wrist orientation and joint lengths remain exact. Unarmed and other weapon
+solves do not enable this history. Recenter, item changes, tracking loss and
+holstering reset it; repeated draws use the same prior tracking-sample state.
+
+The mirrored glance/reversal regression fails without continuity and passes
+with it, along with exact wrist and repeated-render checks. In the reproduced
+sweep the maximum step falls from 19.76 to 2.78 degrees. Periodic pistol logs
+include the minimum twist confidence per hand (`roll-min`) and recovery state;
+confidence below 0.35 identifies the region where protection can engage.
+This reproduction has not yet been confirmed as the cause of the headset
+report; the added runtime measurements support that check.
+
+#### Shoulder-glance diagnostics (2026-10-19)
+
+The subsequent headset run remained outside the protected twist region:
+logged per-hand confidence minima were 0.87 or higher, with no roll recovery.
+The twist correction therefore did not address the reported wobble. Armed
+sections also showed repeated 78–110 ms frame intervals; these alone do not
+establish whether reprojection or the arm pose causes the visible problem.
+
+With `FirstPersonDriftLog` enabled, `arm-glance` records half-second maxima
+of actual rendered upper-arm/forearm motion, torso motion and raw controller/
+HMD changes, for both armed and unarmed main body draws. Positions are relative
+to the wrist, or the elbow if the body mesh omits its wrist; the pivot and
+render pass are identified. Same-pose redraw displacement is tracked separately.
+`vr-glance` reads the last 32 SteamVR timing records twice per second, reporting
+GPU/app/submit time, dropped or mispresented frames and motion-smoothing flags.
+Timing windows may overlap and are not cumulative counts. These diagnostics
+change neither the solver nor SteamVR settings. The next useful capture is a
+stationary-controller shoulder glance with pistols drawn, repeated unarmed.
+
+#### Idle armed shoulder-glance turn requests (2026-10-20)
+
+The next capture recorded 45.6 mm shoulder and 59.0 mm torso frame steps while
+controller steps stayed below 1.4 mm in the same half-second window. Native
+animation changed from STOP (2) into TURN_R/TURN_L (6/7) and FASTTURN (20)
+with zero movement input. The unarmed shoulder-glance comparison remained in
+STOP. Compositor timing was similar in both sections, with no dropped or
+motion-smoothed frames in the sampled windows; same-pose arm redraws matched.
+
+Binary inspection identifies the source: `ModernControlsGunRotation` (TR4
+RVA `0xE0420`, TR5 `0xE38B0`) reads `analogInput.camTurn` even when both stick
+axes are zero and adds Left/Right input. `lara_as_stop` consumes those bits.
+VRIK's intended head/body slack therefore became a native turn animation
+request; turn states also bypass the standing torso filter.
+
+`IdleTrackedGunHeadingScope` supplies current Lara body yaw only during
+stationary, tracked, armed VRIK ground simulation, then restores camTurn.
+It leaves movement axes, action/fire input, controller aiming, body yaw and
+the rendered camera intact. Explicit movement/turn input, jumps, landing,
+interactions, unarmed play and non-VRIK paths retain their existing behavior.
+The arm solver and pose filters are unchanged.
+
+Regression coverage exercises both games, both glance directions, idle and
+turn states, input restoration, deliberate body turns and scope exclusions.
+The new simulation-boundary regression fails when this scope is removed.
+Existing camera, mount/landing visibility, planted legs, arm reach/roll and
+weapon attachment tests remain in the full suite. Headset confirmation of
+the resulting visual improvement is still required.
+
+#### Stationary full-body jitter (2026-10-20)
+
+The follow-up capture stays in STOP through armed shoulder glances, confirming
+that unwanted native turn requests have stopped. With reported HMD/controller
+steps at zero, the rendered torso still shows roughly 0.2-degree steps and
+small shoulder/elbow movement.
+
+Full-body IK now reads the actual render-camera origin using `CameraViewFrame`.
+Previously it inferred that origin by subtracting a floating-point HD head
+joint from `GetJointAbsPositionLerp`'s integer gameplay head query. Rounding
+and animation interpolation differences could therefore move the entire body
+and its hand targets despite fixed tracking. Configured eye offsets now use
+the recovered HD joint directly, and all full-body tracked hands share the
+same camera frame. Native physics and shadow palettes remain unchanged.
+
+The torso angular filter now follows only rotation exceeding its deadzone,
+matching its existing positional filter. Previously, crossing the one-degree
+boundary applied a fraction of the entire angle, causing repeated small
+rotation pulses. Recovery still uses a zero deadzone.
+
+Regression fixtures keep tracking fixed while independently varying HD head
+interpolation and integer head/wrist queries, for both games and both palette
+layouts, armed and unarmed. They check absolute body and limb placement,
+including real camera rebasing, rather than only wrist-relative positions.
+A separate refresh-rate sweep tests rotation at the deadzone boundary.
+Removing either correction fails its respective regression. Existing
+roomscale movement, crouch, mount, landing, weapon and arm tests remain in the
+suite. The headset result still requires confirmation.

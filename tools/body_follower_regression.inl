@@ -133,6 +133,28 @@ void TestBodyFollower() {
         {100,-500,0},{100,-260,70},{100,0,0},{0,-650,0},
         {180,-700,0},{240,-460,30},{180,-250,70},{-180,-700,0},{-240,-460,30},{-180,-250,70},{0,-850,0}};
     for(int i=0;i<15;++i) native[i]={IdentityBasis(),p[i]};
+    // A deadzone must be continuous at its boundary. Idle animation hovering
+    // near one degree used to apply the entire angle in a single filter step.
+    for(float hz:{30.f,60.f,90.f,144.f}) {
+        TorsoPoseFilter filter;
+        Frame pose[15]{};
+        const Frame reference{IdentityBasis(),{}},eye{IdentityBasis(),{0,-.85f,0}};
+        for(int j=0;j<15;++j) { pose[j]=native[j];pose[j].origin=Scale(pose[j].origin,.001f); }
+        Check(filter.Update(1,1,reference,eye,true,false,pose,{0,0,1},true),
+              "idle angular boundary fixture acquires standing pose");
+        Basis previous=pose[7].basis;
+        for(int n=1;n<=int(hz*2);++n) {
+            for(int j=0;j<15;++j) { pose[j]=native[j];pose[j].origin=Scale(pose[j].origin,.001f); }
+            const float angle=(1.f+.01f*std::sin(n*.7f))*.0174532925f;
+            pose[7].basis=RotationMatrix(AxisRotation({0,1,0},angle));
+            Check(filter.Update(n+1,1+n/double(hz),reference,eye,true,false,pose,{0,0,1},true),
+                  "native idle rotation straddling deadzone solves");
+            const auto q=RotationProduct(RotationOf(pose[7].basis),RotationInverse(RotationOf(previous)));
+            Check(2*std::atan2(Length(q.v),std::fabs(q.w))<.0002f,
+                  "tiny motion over angular deadzone cannot produce whole-angle torso pulse");
+            previous=pose[7].basis;
+        }
+    }
     for(float hz:{30.f,72.f,90.f,144.f}) {
         Frame rest[15]{};
         Check(SolveFollowingBody(native,p[14],p[14],0,IdentityBasis(),{0,0,1},1000,{},0,true,0,0,rest,1),

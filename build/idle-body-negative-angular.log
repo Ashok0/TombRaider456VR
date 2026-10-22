@@ -1,0 +1,4 @@
+first_person_tests.cpp
+dynamic_bones_regression.cpp
+Generating Code...
+FAIL: tiny motion over angular deadzone cannot produce whole-angle torso pulse
