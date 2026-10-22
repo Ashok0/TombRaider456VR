@@ -1,0 +1,16 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-22T00:17:51.3552843-04:00",
+    "base_commit":  "e8f3321",
+    "dll_sha256":  "9CC759DE3117B61FFE7CB3D006A39E36D072219D0CBB551F2652729CE05F50DF",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-auto-jump-20261022-001750",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "previous_dll_installed":  true,
+    "rollback_source":  "previous installed DLL",
+    "regression_checks":  4166289,
+    "debug_regression_checks":  4166289,
+    "change":  "VR Modern Controls held forward Jump waits for a floor drop, accounting for seven native run-up frames and signed per-tick motion. Short release stays manual; long release and context changes cancel; takeoff consumes hold only when accepted. No VRIK solver changes. Native animation data verified across 55 TR4/5 tables. Headset validation pending.",
+    "hardware_verified":  false
+}

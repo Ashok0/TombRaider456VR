@@ -474,6 +474,27 @@ tests; in-headset confirmation remains pending.
 
 ### Jump priority over walking animations (2026-10-09)
 
+October 21 update: in VR with Modern Controls, **hold A while moving forward**
+to queue a running jump at a ledge, in either first or third person. First person
+already forces Modern Controls; third-person Tank Controls retain native timing.
+The assist waits for a drop
+greater than the native 384-unit step limit, using `GetFloor`/`GetHeight` along
+the run-up. It accounts for the native seven-frame, 47-unit-per-frame jump
+startup so takeoff occurs within the last supported running tick when approaching
+straight ahead. It does not guarantee pixel-perfect timing after steering or
+collision changes during the committed run-up.
+
+Release A within 250 ms for a manual forward jump; releasing a longer hold
+cancels it. Stopping, changing to sideways/backward movement, entering water or
+changing level also cancels the queued jump. Release and press again to rearm
+after landing. Standing jumps, Walk-modified jumps, directional jumps and sprint
+dives retain their existing behavior. An ongoing hold survives beyond the
+short-tap buffer. Native animation, collision, takeoff and gravity are retained.
+Regression coverage includes both games/views, cardinal and diagonal approaches,
+long holds, taps, cancellation, floor steps/walls and no repeated jump on landing;
+the installed 55 Lara animation tables verify the run-up and takeoff commands.
+Headset playtesting remains necessary.
+
 TR4/5 now uses the TR1-3 jump-priority behavior in **both first and third person**.
 Pressing A during ordinary forward walking, gait starts/stops, sidestepping or
 backpedaling enters the native standing-jump dispatcher on the next simulation

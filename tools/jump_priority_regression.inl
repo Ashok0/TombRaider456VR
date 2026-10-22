@@ -5,6 +5,16 @@ uint8_t* jumpAnimationTable=jumpAnimations;
 int jumpTicks=0,jumpClipSeen=-1;
 uint64_t jumpBitsSeen=0;
 bool jumpClearance=true;
+float edgeYaw=0;
+int edgeDistance=0,edgeDrop=1024,edgeQueries=0,edgeLaunch=-1;
+bool edgeMissing=false;
+void* __cdecl EdgeFloor(int32_t,int32_t,int32_t,int16_t* room) {
+    ++edgeQueries; *room=9; return edgeMissing ? nullptr : &floorToken;
+}
+int32_t __cdecl EdgeHeight(void*,int32_t x,int32_t,int32_t z) {
+    const float travel=x*std::sin(edgeYaw)+z*std::cos(edgeYaw);
+    return travel>=edgeDistance ? edgeDrop : 0;
+}
 void __cdecl NativeGroundJumpConsumer(uint8_t* item,void*) {
     using namespace tr;
     ++jumpTicks;jumpBitsSeen=actionInput;
@@ -20,6 +30,26 @@ void __cdecl NativeGroundJumpConsumer(uint8_t* item,void*) {
         goal=15;++frame;
         if ((clip==11 && frame>=184 && frame<=185) || clip==103) { state=15;clip=73; }
     } else if(state==1 && clip==0) { state=goal=3;clip=16; }
+}
+void __cdecl NativeEdgeJumpConsumer(uint8_t* item,void* collision) {
+    using namespace tr;
+    auto& state=*reinterpret_cast<int16_t*>(item+off::item_anim_state);
+    auto& frame=*reinterpret_cast<int16_t*>(item+26);
+    auto& p=*reinterpret_cast<PHD_3DPOS*>(item+off::item_pos);
+    const bool running=state==1;
+    NativeGroundJumpConsumer(item,collision);
+    if (running && state==3) frame=360;
+    else if(state==3) ++frame;
+    if(state==3 && frame==367) {
+        edgeLaunch=int(std::lround(p.x_pos*std::sin(edgeYaw)+p.z_pos*std::cos(edgeYaw)));
+        *reinterpret_cast<uint32_t*>(item+0x1820)|=8;
+    }
+    // Native clips 0,16,18 all move 47 units per grounded tick.
+    if(edgeLaunch<0) {
+        const float yaw=Radians(p.y_rot);
+        p.x_pos+=(int(std::sin(yaw)*16384.f)*47)>>14;
+        p.z_pos+=(int(std::cos(yaw)*16384.f)*47)>>14;
+    }
 }
 void TestGroundJumpPriority() {
     using namespace tr;
@@ -130,6 +160,74 @@ void TestGroundJumpPriority() {
     reset(0,true,0,1);jumpClearance=false;actionInput=0x10;
     Detour_LaraAboveWater(itemMemory,nullptr);
     Check(state==2 && !(flags&8) && jumpTicks==1,"native clearance rejection cannot be bypassed by jump priority");
+    const auto oldFloor=dll.getFloor,oldHeight=dll.getHeight;
+    const auto edgeReset=[&](int which,bool first) {
+        reset(which,first,1,0);goal=1;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=2;
+        dll.getFloor=rva(&EdgeFloor);dll.getHeight=rva(&EdgeHeight);
+        for(int c:{16,18}) {
+            auto* a=jumpAnimations+c*48;
+            *reinterpret_cast<int16_t*>(a+10)=3;
+            *reinterpret_cast<int32_t*>(a+12)=47<<16;
+            *reinterpret_cast<int16_t*>(a+28)=360;*reinterpret_cast<int16_t*>(a+30)=366;
+        }
+        edgeDistance=4096;edgeDrop=1024;edgeQueries=0;edgeLaunch=-1;edgeMissing=false;edgeYaw=0;
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&NativeEdgeJumpConsumer);
+    };
+    for(int which:{0,1}) for(bool first:{false,true}) for(float yaw:{0.f,.65f,-.65f,1.5707963f,-1.5707963f,2.4f,-2.4f,3.1415926f})
+    for(int edge:{1024,2048,4096}) {
+        edgeReset(which,first);edgeDistance=edge;edgeYaw=yaw;
+        g_headingBase=yaw;body.y_rot=Angle(yaw);
+        float x=0,y=1,r=0;
+        for(int tick=0;tick<110 && edgeLaunch<0;++tick) {
+            x=0;y=1;r=0; // Each poll starts with raw controller axes.
+            FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10|(uint64_t(1)<<40);
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check((actionInput&((uint64_t(1)<<40)|0x10))==((uint64_t(1)<<40)|0x10),"edge wait restores physical Jump and preserves high input bits");
+            if(tick==0) {Check(state==1 && g_groundJump.edgeWaiting,"held forward Jump waits instead of taking off far from edge");g_groundJump.until=TurnTime()-1;}
+        }
+        Check(edgeLaunch>=0 && edgeDistance-edgeLaunch>0 && edgeDistance-edgeLaunch<=49,
+              "native seven-frame run-up launches in the last supported run tick in TR4/5, both views and cardinal/diagonal headings");
+        Check(g_groundJump.edgeBlocked && !g_groundJump.edgeWaiting,"takeoff consumes automatic hold even beyond tap timeout");
+        state=goal=1;clip=0;flags=0;body.x_pos=body.z_pos=0;
+        x=0;y=1;r=0;
+        FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(!(jumpBitsSeen&0x10) && state==1,"held button cannot rearm after landing");
+    }
+    for(int which:{0,1}) for(int terrain:{0,256,384,-512,-32512,1024}) {
+        edgeReset(which,true);edgeDistance=200;edgeDrop=terrain;edgeMissing=terrain==1024;
+        float x=0,y=1,r=0;FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(bool(jumpBitsSeen&0x10)==(terrain==-32512),"flat ground, normal steps, walls and missing query do not masquerade as a ledge; NO_HEIGHT is a drop");
+    }
+    for(int mode=0;mode<6;++mode) {
+        edgeReset(0,true);float x=0,y=1,r=0;FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        if(mode==0) FirstPersonInput(x,y,r,false,false); // quick release
+        if(mode==1) {g_groundJump.until=TurnTime()-1;FirstPersonInput(x,y,r,false,false);}
+        if(mode==2) {y=0;FirstPersonInput(x,y,r,false,true);} // stop
+        if(mode==3) {x=1;y=0;FirstPersonInput(x,y,r,false,true);} // side
+        if(mode==4) g_groundJump.Bind(itemMemory,999);
+        if(mode==5) {water=1;g_groundJump.Observe(true,false,TurnTime());water=0;}
+        actionInput=locomotion::Forward|((mode<2)?0:0x10);
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(bool(jumpBitsSeen&0x10)==(mode==0),"short release jumps manually; long release, stop, direction change, level and water cancel automatic hold");
+        if(mode==3) Check((jumpBitsSeen&locomotion::Directions)==locomotion::StepRight,"cancelling an automatic hold restores normal sidestep movement");
+    }
+    edgeReset(0,true);float ex=0,ey=1,er=0;FirstPersonInput(ex,ey,er,false,true);
+    state=goal=2;clip=103;actionInput=locomotion::Forward|0x10;
+    Detour_LaraAboveWater(itemMemory,nullptr);
+    Check(state==2 && !(jumpBitsSeen&0x10),"holding forward plus Jump before running cannot invoke standing jump priority");
+    edgeReset(0,true);edgeDistance=350;jumpClearance=false;
+    ex=er=0;ey=1;FirstPersonInput(ex,ey,er,false,true);actionInput=locomotion::Forward|0x10;
+    Detour_LaraAboveWater(itemMemory,nullptr);
+    Check(state==1 && g_groundJump.edgeWaiting && !g_groundJump.edgeBlocked,"native rejection cannot consume automatic Jump before takeoff");
+    edgeReset(0,false);*reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=0;
+    ex=er=0;ey=1;FirstPersonInput(ex,ey,er,false,true);actionInput=locomotion::Forward|0x10;
+    Detour_LaraAboveWater(itemMemory,nullptr);
+    Check(state==3 && !g_groundJump.edgeWaiting,"third-person classic controls retain native stride-based jump timing");
+    dll.getFloor=oldFloor;dll.getHeight=oldHeight;
     GroundJumpIntent intent;
     intent.Observe(true,true,1);intent.Observe(false,true,1.01);
     Check(intent.Wants(1.02) && !intent.Wants(1.26),"tap survives input polling but expires after 250 ms");

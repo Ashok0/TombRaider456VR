@@ -9,7 +9,7 @@ from pathlib import Path
 def verify(path):
     data = path.read_bytes()
     tables, cursor = {}, 0
-    for name, size in (("anims", 40), ("changes", 6), ("ranges", 8)):
+    for name, size in (("anims", 40), ("changes", 6), ("ranges", 8), ("commands", 2)):
         count, = struct.unpack_from("<I", data, cursor)
         cursor += 4
         end = cursor + count * size
@@ -37,11 +37,22 @@ def verify(path):
                 low, high, dest, frame = struct.unpack_from("<4h", tables["ranges"], index * 8)
                 dest_state, base, end, *_ = animation(dest)
                 assert dest_state == target and base <= frame <= end, (path, clip, "jump destination")
+                if clip == 0:
+                    assert dest in (16, 18) and frame == base, (path, "running jump enters full run-up")
                 covered.update(range(low, high + 1))
         required = {first + 1} if clip == 11 else set(range(first + 1, last + 2))
         assert required <= covered, (path, clip, "jump dispatch window")
         if clip == 11:
             assert last + 1 not in covered, (path, "final standing frame needs restart")
+    for clip in (0, 16, 18):
+        speed, acceleration = struct.unpack_from("<2i", tables["anims"], clip * 40 + 8)
+        assert (speed, acceleration) == (47 << 16, 0), (path, clip, "constant run-up speed")
+        if clip:
+            _, first, last, _, _, _, _, count, start = animation(clip)
+            assert last - first + 1 == 7 and count == 5, (path, clip, "seven grounded run-up frames")
+            commands = struct.unpack_from("<15h", tables["commands"], start * 2)
+            assert commands[:3] == (2, -100, 75), (path, clip, "native end-of-animation takeoff")
+            assert all(commands[i] in (5, 6) for i in (3, 6, 9, 12)), (path, clip, "remaining commands are sound/effects")
     return True
 
 
@@ -53,4 +64,4 @@ if __name__ == "__main__":
         assert paths, (game, "missing PDP files")
         count = sum(verify(path) for path in paths)
         assert count, (game, "no Lara tables")
-        print(f"TR{game}: {count} tables verified: idle entry compression, final-frame hazard, complete idle/run jump windows")
+        print(f"TR{game}: {count} tables verified: idle/run dispatch, seven-frame 47-unit run-up, native takeoff command")
