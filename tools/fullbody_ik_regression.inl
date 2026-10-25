@@ -1,4 +1,5 @@
 // Real render-hook fixtures plus independent physical constraints for full-body IK.
+#include "flare_regression.inl"
 namespace {
 tr::motiongun::Vec bodyJointWorld[15]{};
 tr::motiongun::Basis bodyJointRotation{{{1,0,0},{0,1,0},{0,0,1}}};
@@ -275,6 +276,7 @@ void TestFullBodyIK() {
             WriteRows(Multiply(frame,ib),fixture+i*12);
         }
         skinFixture=fixture;skinFixtureCount=count;
+        TestFlareTracking(count,bind,camera);
         {
             const bool cameraValid=worldCameraValid;
             float oldCamera[3];std::memcpy(oldCamera,worldCameraPos,sizeof(oldCamera));

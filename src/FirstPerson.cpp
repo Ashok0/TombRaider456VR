@@ -385,6 +385,33 @@ bool g_longGunHooksReady=false, g_opticShot=false;
 int g_triggerWeapon=0;
 hook::InlineHook g_hRifleHandler, g_hFireShotgun, g_hFireSpecial, g_hFireCrossbow;
 hook::InlineHook g_hGunJoint, g_hInitialiseProjectile;
+struct FlareDll { uint32_t timestamp, inHand, previousJoint, triggerDynamic; };
+constexpr FlareDll kFlareDlls[]={
+    {0x696B4999,0x5F7F0,0xA3920,0xAD150},{0x696B499C,0x5C9D0,0x9CB20,0xD0890},
+    {0x68C12FDA,0x5F500,0xA44C0,0xADD00},{0x68C12FE9,0x5D700,0x9CE90,0xD0B30}
+};
+hook::InlineHook g_hFlareInHand,g_hFlarePreviousJoint,g_hFlareDynamic;
+bool g_flareHooksReady=false;
+// Native DYNAMIC: interleaved current/previous XYZ followed by light settings.
+// Keep the original light, including burn/flicker, and move only its position.
+struct FlareLightSlot { uint8_t* address=nullptr; uint8_t snapshot[40]{}; };
+struct FlareLights {
+    FlareLightSlot slots[2]{}; // TR4 may also emit a Z-mirrored copy.
+    int count=0,level=-1;
+    const uint8_t* item=nullptr;
+    double time=0;
+    float mirrorZSum=0;
+} g_flareLights;
+bool g_captureFlareLights=false;
+bool g_loggedFlareLight=false;
+struct FlareHandFrames { motiongun::Frame current{},previous{}; };
+const FlareHandFrames* g_flareHandFrames=nullptr;
+struct FlareHandHistory {
+    const uint8_t* item=nullptr;
+    int level=-1,age=-1;
+    double time=0;
+    FlareHandFrames frames{};
+} g_flareHandHistory;
 bool g_motionHooksReady = false;
 bool g_scenePoseValid = false;
 PHD_3DPOS g_scenePose{};
@@ -827,8 +854,8 @@ bool CanModifyGroundMotion(const uint8_t* item) {
 void TurnBodyToHead(uint8_t* item, float dt) {
     if (!Cfg().firstPersonBodyFollowsHead || !CanTurnBody(item)) return;
     auto& pos = *reinterpret_cast<PHD_3DPOS*>(item + off::item_pos);
-    if(Cfg().firstPersonFullBodyIK && Cfg().firstPersonMotionGuns) {
-        if(g_bodyFollower.valid) pos.y_rot=Angle(g_bodyFollower.yaw);
+    if(Cfg().firstPersonFullBodyIK && Cfg().firstPersonMotionGuns && g_bodyFollower.valid) {
+        pos.y_rot=Angle(g_bodyFollower.yaw);
         return;
     }
     const float delta = Wrap(g_headingBase + VR().HeadYawRadians() - Radians(pos.y_rot));
@@ -1193,18 +1220,30 @@ bool FullBodyState(const uint8_t* item) {
     default: return false;
     }
 }
+bool FlareIKReady() {
+    // A held flare is weapon 7 with hands free (status 0). Draw/throw/pickup
+    // animations keep their native hands. Do not classify flares as guns.
+    if(!g_flareHooksReady || ControllerTrackingBlockedReason() || CurrentMotionWeapon()!=7 ||
+       *Ptr<int16_t>(g_boundDll->lara+2)!=0 ||
+       (!Cfg().firstPersonUnarmedIK && !Cfg().firstPersonFullBodyIK)) return false;
+    const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(!FullBodyState(item) || FullBodyGripState(item)) return false;
+    motiongun::Frame wrist{};GunBasis controller{};
+    return BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller);
+}
 bool FullBodyIKReady() {
     if(!Cfg().firstPersonFullBodyIK || ControllerTrackingBlockedReason()) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool nativeGrip=status==1 && FullBodyGripState(item); // Hands-busy during pull-ups.
     if(!FullBodyState(item) || (status!=0 && !nativeGrip && !MotionReady()) ||
-       (status==0 && (!Cfg().firstPersonUnarmedIK || CurrentMotionWeapon()<0 || CurrentMotionWeapon()>6))) return false;
+       (status==0 && !FlareIKReady() && (!Cfg().firstPersonUnarmedIK || CurrentMotionWeapon()<0 || CurrentMotionWeapon()>6))) return false;
     motiongun::Frame wrist{};GunBasis controller{};vr::HmdMatrix34_t head{};
     return VR().HeadPose(head) && BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller);
 }
 
 bool UnarmedIKReady() {
+    if(FlareIKReady()) return true;
     if (!Cfg().firstPersonUnarmedIK || ControllerTrackingBlockedReason()) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
     // Full-body free jumps retain controller hands; ledges retain authored grips.
@@ -2074,7 +2113,16 @@ uint8_t* SelectGunTarget(const GunPose& gun, motiongun::Vec& ray) {
         if (Dot(delta,delta)>20480.f*20480.f) continue;
         const int object=*reinterpret_cast<int16_t*>(item+off::item_object);
         if (object<0) continue;
-        const int meshes=*reinterpret_cast<int16_t*>(Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride);
+        const auto* definition=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+        // Active items include dropped flares, projectiles and effects with
+        // positive hit_points. Their item.data is NOT a CREATURE_INFO pointer
+        // (the reported flare held 0x40f); HitTarget dereferences it as one.
+        // Native enemy targeting uses baddie slots. Our wider ray scan must
+        // require a loaded intelligent object before querying combat spheres.
+        // World props still receive the ordinary native LOS/breakable path.
+        // OBJECT_INFO +80: loaded bit 0, intelligent bit 1 in both TR4/5 PDBs.
+        if ((*reinterpret_cast<const uint32_t*>(definition+80)&3u)!=3u) continue;
+        const int meshes=*reinterpret_cast<const int16_t*>(definition);
         Sphere spheres[256]{};
         if (meshes<=0 || meshes>256) continue;
         const int count=reinterpret_cast<Fn_Spheres>(g_boundBase+d.getSpheres)(item,spheres,1);
@@ -2260,7 +2308,101 @@ void __cdecl Detour_FireCrossbow(PHD_3DPOS* pose) {
     });
 }
 
+uint8_t* __cdecl Detour_FlareDynamic(int32_t x,int32_t y,int32_t z,int32_t falloff,
+                                    int32_t red,int32_t green,int32_t blue) {
+    auto* light=g_hFlareDynamic.Original<uint8_t* (__cdecl*)(int32_t,int32_t,int32_t,int32_t,int32_t,int32_t,int32_t)>()(
+        x,y,z,falloff,red,green,blue);
+    // A pooled slot can be reused by any effect. Invalidate that ownership even
+    // outside the held-flare call; never move a thrown flare or a gun flash.
+    for(auto& slot:g_flareLights.slots) if(slot.address==light) slot.address=nullptr;
+    if(g_captureFlareLights && light && g_flareLights.count<2)
+        g_flareLights.slots[g_flareLights.count++].address=light;
+    return light;
+}
+
+void UpdateFlareLightPosition() {
+    if(!g_flareLights.count) return;
+    const double elapsed=TurnTime()-g_flareLights.time;
+    if(g_flareLights.item!=g_headingItem || g_flareLights.level!=AppState(drva::app_off::level) ||
+       elapsed<0 || elapsed>.15 || !FlareIKReady()) {g_flareLights={};return;}
+    motiongun::Frame wrist{};GunBasis controller{};
+    if(!BuildControllerWrist(0,wrist,controller)) return;
+    const auto tip=Transform(wrist,{11,-64,41});
+    for(int i=0;i<g_flareLights.count;++i) {
+        auto& slot=g_flareLights.slots[i];
+        if(!slot.address) continue;
+        // Check before writing: native reset/reuse or a transition invalidates
+        // the slot. DLL unload clears this cache before removing the hooks.
+        if(std::memcmp(slot.address,slot.snapshot,40) || !slot.address[0x18]) {
+            slot.address=nullptr;continue;
+        }
+        const int32_t position[]={int32_t(std::lround(tip.x)),int32_t(std::lround(tip.y)),
+            int32_t(std::lround(i ? g_flareLights.mirrorZSum-tip.z : tip.z))};
+        if(!i && !g_loggedFlareLight) {
+            const auto* old=reinterpret_cast<const int32_t*>(slot.snapshot);
+            LogF("firstperson flare light: native=(%d,%d,%d) tracked tip=(%d,%d,%d); render-time room/object light attached",
+                 old[0],old[2],old[4],position[0],position[1],position[2]);
+            g_loggedFlareLight=true;
+        }
+        for(int axis=0;axis<3;++axis) {
+            // Both endpoints use this render's tracked pose. Interpolating the
+            // 30 Hz animation here would lag behind the controller-driven mesh.
+            std::memcpy(slot.address+axis*8,&position[axis],4);
+            std::memcpy(slot.address+axis*8+4,&position[axis],4);
+        }
+        std::memcpy(slot.snapshot,slot.address,40);
+    }
+}
+
+bool FlareJointPoint(uint8_t* item,PHD_VECTOR* point,int32_t joint,bool previous) {
+    if(!g_flareHandFrames || item!=g_headingItem || !point || joint!=13) return false;
+    const auto& wrist=previous ? g_flareHandFrames->previous : g_flareHandFrames->current;
+    const auto p=Transform(wrist,{float(point->x),float(point->y),float(point->z)});
+    *point={int32_t(std::lround(p.x)),int32_t(std::lround(p.y)),int32_t(std::lround(p.z))};
+    return true;
+}
+
+void __cdecl Detour_FlarePreviousJoint(uint8_t* item,PHD_VECTOR* point,int32_t joint) {
+    if(FlareJointPoint(item,point,joint,true)) return;
+    g_hFlarePreviousJoint.Original<void (__cdecl*)(uint8_t*,PHD_VECTOR*,int32_t)>()(item,point,joint);
+}
+
+void __cdecl Detour_FlareInHand(int32_t age) {
+    const auto* saved=g_flareHandFrames;
+    g_flareLights={};
+    FlareHandFrames frames{};GunBasis controller{};
+    if(FlareIKReady() && BuildControllerWrist(0,frames.current,controller)) {
+        auto& h=g_flareHandHistory;
+        const int level=AppState(drva::app_off::level);
+        const double now=TurnTime();
+        const bool continuous=h.item==g_headingItem && h.level==level &&
+            now>=h.time && now-h.time<.15 && (age==h.age || age==h.age+1);
+        frames.previous=continuous ? (age==h.age ? h.frames.previous : h.frames.current) : frames.current;
+        h={g_headingItem,level,age,now,frames};
+        g_flareHandFrames=&frames;
+    } else { g_flareHandHistory={};g_flareHandFrames=nullptr; }
+    // Native code keeps age, ignition, burn-out, sparks/light and TR4 mirror
+    // reflection. Replace its current AND previous left-wrist queries only
+    // inside this call; otherwise light interpolation pulls back to Lara.
+    const bool savedCapture=g_captureFlareLights;
+    g_captureFlareLights=true;
+    g_hFlareInHand.Original<void (__cdecl*)(int32_t)>()(age);
+    g_captureFlareLights=savedCapture;
+    // Capture even when the simulation-time camera gate is unavailable: the
+    // hand/light eligibility is checked again with the actual render camera.
+    g_flareLights.item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    g_flareLights.level=AppState(drva::app_off::level);
+    g_flareLights.time=TurnTime();
+    for(auto& slot:g_flareLights.slots) if(slot.address) std::memcpy(slot.snapshot,slot.address,40);
+    if(g_flareLights.count==2 && g_flareLights.slots[0].address && g_flareLights.slots[1].address)
+        g_flareLights.mirrorZSum=float(*reinterpret_cast<const int32_t*>(g_flareLights.slots[0].snapshot+16))+
+            float(*reinterpret_cast<const int32_t*>(g_flareLights.slots[1].snapshot+16));
+    else if(g_flareLights.count==2) g_flareLights={}; // Pool exhausted/reused: no valid mirror plane.
+    g_flareHandFrames=saved;
+}
+
 void __cdecl Detour_GunJoint(uint8_t* item, PHD_VECTOR* point, int32_t joint) {
+    if(FlareJointPoint(item,point,joint,false)) return;
     if (g_longShot && item==g_headingItem && point && joint==10) {
         const auto& gun=g_longShot->gun;
         const auto p=Add(gun.trackedHand,Transform(gun.desired,
@@ -3815,6 +3957,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
                       g_active && IsCrouchState(item),
                       g_active && FirstPersonBodyMask(item)==firstperson::ArmMeshBits,
                       g_active && item && LaraWaterStatus()==1,hideUnarmedArms,MotionReady() || unarmedIK); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
+    UpdateFlareLightPosition(); // Before room/item light collection for this render.
 }
 
 void __cdecl Detour_GenerateW2V(PHD_3DPOS* pose) {
@@ -4054,6 +4197,19 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             Log("firstperson: Touch additional weapon hooks unavailable; dual guns preserved");
         }
     }
+    if(g_longGunHooksReady) for(const auto& entry:kFlareDlls) if(entry.timestamp==d.timestamp) {
+        const uint8_t inHand[]={0x40,0x53,0x48,0x83,0xec,0x40};
+        const uint8_t previous[]={0x48,0x89,0x5c,0x24,0x08};
+        g_flareHooksReady=g_hFlarePreviousJoint.Install(reinterpret_cast<void*>(base+entry.previousJoint),
+            reinterpret_cast<void*>(&Detour_FlarePreviousJoint),5,previous,5,"FlarePreviousWrist") &&
+            g_hFlareInHand.Install(reinterpret_cast<void*>(base+entry.inHand),
+            reinterpret_cast<void*>(&Detour_FlareInHand),6,inHand,6,"FlareTrackedHand") &&
+            g_hFlareDynamic.Install(reinterpret_cast<void*>(base+entry.triggerDynamic),
+            reinterpret_cast<void*>(&Detour_FlareDynamic),5,previous,5,"FlareDynamicLight");
+        if(!g_flareHooksReady) {g_hFlareInHand.Remove();g_hFlarePreviousJoint.Remove();g_hFlareDynamic.Remove();}
+        Log(g_flareHooksReady ? "firstperson: left-controller flare hand and render-time tip light ready" :
+            "firstperson: flare tracking unavailable; native flare retained");
+    }
     if(g_motionHooksReady) for(const auto& entry:kCrouchDrawDlls) if(entry.timestamp==d.timestamp) {
         const uint8_t prologue[]={0x48,0x8B,0xC4,0x48,0x89,0x58,0x08};
         if(!g_hCrouchDraw.Install(reinterpret_cast<void*>(base+entry.draw),
@@ -4073,6 +4229,9 @@ bool Install(const GameDllLayout& d, uint64_t base) {
 }
 
 void Remove() {
+    g_flareHooksReady=false;g_flareHandFrames=nullptr;g_flareHandHistory={};
+    g_flareLights={};g_captureFlareLights=g_loggedFlareLight=false;
+    g_hFlareInHand.Remove();g_hFlarePreviousJoint.Remove();g_hFlareDynamic.Remove();
     UpdateControlMode(false);
     ResetPhysicalHolsters();
     RemovePhysicalSwitches();
@@ -4184,9 +4343,11 @@ bool UpdateGunTriggers(uint8_t& left, uint8_t& right, bool enabled, uint64_t now
 } // namespace
 
 bool FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed, bool y) {
-    DWORD process=0;
-    GetWindowThreadProcessId(GetForegroundWindow(),&process);
-    const bool enabled=!chordConsumed && process==GetCurrentProcessId() && WeaponControlMode();
+    // XInput is already polling the VR controllers. Desktop focus must not
+    // change their meaning: returning raw LT/RT here makes LT native Equip
+    // and RT native paired fire while the hands remain controller-tracked.
+    // Gate() still excludes menus, scripted cameras and unsupported FP states.
+    const bool enabled=!chordConsumed && WeaponControlMode();
     return UpdateGunTriggers(left,right,enabled,GetTickCount64(),y);
 }
 
@@ -4394,9 +4555,8 @@ bool FirstPersonSwitchGrip(bool down, bool allowed) {
 }
 
 unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightValid,bool allowed) {
-    DWORD process=0;GetWindowThreadProcessId(GetForegroundWindow(),&process);
     return UpdatePhysicalHolsterGrips(left,right,leftValid,rightValid,
-        allowed && process==GetCurrentProcessId(),GetTickCount64());
+        allowed,GetTickCount64());
 }
 
 bool FirstPersonActive() {

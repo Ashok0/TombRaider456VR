@@ -242,6 +242,15 @@ template<class Rva> void TestPhysicalHolsters(Rva rva) {
         g_holsterAnchor[hand]={motiongun::HandInWorld({float(g_scenePose.x_pos),float(g_scenePose.y_pos),float(g_scenePose.z_pos)},
             r,d,f,g_headingBase,LiveWorldUnitsPerMetre()),true};
     }
+    g_holsterSeen=GetTickCount64();
+    FirstPersonHolsterGrips(false,false,true,true,true);
+    Check(FirstPersonHolsterGrips(true,true,true,true,true)==3,
+          "public VR holster grips claim both matching holsters without desktop focus");
+    FirstPersonHolsterGrips(false,false,true,true,true);
+    Check(!g_holsters.active,"releasing public grips before withdrawal cannot equip guns");
+    Check(!FirstPersonHolsterGrips(true,true,true,true,false),"public holster wrapper still respects gameplay/chord permission");
+    FirstPersonHolsterGrips(false,false,true,true,false);
+    g_holsterSeen=1000;
     Check(UpdatePhysicalHolsterGrips(false,false,true,true,true,1000)==0 &&
           VR().m_gunHaptics.hoverUntil[0] && VR().m_gunHaptics.hoverUntil[1] && !g_holsters.active,
           "hovering with both empty hands queues feedback without consuming Grip or equipping guns");

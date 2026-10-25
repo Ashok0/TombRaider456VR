@@ -472,6 +472,58 @@ The installed DLL hash matches the build; the installed INI is byte-for-byte
 unchanged, with both IK options disabled. Native calls are stubbed in the hook
 tests; in-headset confirmation remains pending.
 
+### First-person controller flares (2026-10-22)
+
+Controller input correction: first-person trigger and physical-holster mapping
+no longer depends on the desktop foreground window. Previously, losing desktop
+focus bypassed trigger translation while controller aiming stayed active:
+LT became native equip/holster and RT fired both pistols. LT/RT now retain their
+matching hands and grip holsters remain available whenever their normal VR
+gameplay gates allow them. Public input-entry regressions cover returning from
+a flare to pistols/Uzis, both native equip styles, held fire and matching-hand
+native shots without a foreground game window.
+
+The engine also skips its entire controller poll when its desktop window is
+inactive. TR4/5 VR now temporarily permits that poll after native window-message
+processing, restoring the actual activation state as soon as polling returns.
+This keeps face buttons, grips, sticks and button releases working across desktop
+focus changes in either camera mode and menus. Window activation messages and
+keyboard/mouse handling remain native. Disabled VR/gamepad mode and TR6 retain
+native polling behavior. Hook prologues, relocation and the native focus gate
+are checked by `tools/verify_gamepad_focus.py`; input regressions exercise
+focus changes during message handling and press/hold/release for each button.
+
+Crash correction: VR gun targeting now requires a loaded intelligent object
+before passing an active item to native creature hit-testing. Dropped flares
+have positive hit points but store packed flare data where creatures store an
+AI pointer; targeting one as an enemy caused a crash in native `HitTarget`.
+World-object shots retain their normal LOS handling. The regression reproduces
+the reported flare's metadata and checks that it cannot intercept an enemy
+target or enter creature sphere queries.
+
+Held flares now use the left controller for hand position and orientation in
+TR4/5 HD first person, with either arm IK or full-body IK enabled. The native
+flare mesh and its light share the tracked wrist. The actual dynamic light
+allocated by the native held-flare update is refreshed at render time, before
+room/object lighting is collected. Both light interpolation endpoints use the
+current tracked tip, removing the native 256-unit upward bias and simulation
+lag behind the rendered hand. TR4 mirror reflections remain mirrored. Native
+brightness, flicker, ignition, lifetime, equip/throw
+animations and dropped flares remain native; flares do not enter gun trigger or
+holster handling.
+
+Full-body mode also falls back to ordinary body turning when its body follower
+has no valid pose, fixing the frozen facing while holding unsupported items or
+waiting for an IK solve. Held flares keep the full-body follower active.
+Lost tracking, third person, classic graphics and native interactions retain
+their original flare behavior. No INI change is needed. Regression coverage
+checks both games, 15/33-joint meshes, actual flare attachment draws, moving and
+rotating the left controller between simulation ticks, final dynamic-light
+positions, mirrored lights, pool reuse by dropped flares/gun flashes, burnout,
+turning and native fallbacks. The hook boundaries, native wrist/light calls and
+returned dynamic-light layout are verified against all four
+supported DLLs by `tools/verify_flare_tracking.py`. Headset validation is pending.
+
 ### Jump priority over walking animations (2026-10-09)
 
 October 21 update: in VR with Modern Controls, **hold A while moving forward**

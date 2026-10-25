@@ -210,9 +210,11 @@ bool shotVisible=true;
 alignas(16) uint8_t targetItems[3][9416]{};
 uint8_t* targetItemsPtr=targetItems[0];
 int16_t activeTarget=0;
-uint8_t targetObjects[3792]{};
+uint8_t targetObjects[2*3792]{};
+int targetSphereCalls=0;
 struct TestSphere { int32_t x,y,z,r; };
 int __cdecl FakeTargetSpheres(uint8_t* item,TestSphere* out,int flags) {
+    ++targetSphereCalls;
     Check(flags==1,"controller selection requests world-space hit spheres");
     const auto& pos=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
     out[0]={pos.x_pos,pos.y_pos,pos.z_pos,80}; return 1;
@@ -614,8 +616,10 @@ uint64_t GameDllBase() { return g_boundBase; }
 #include "physical_switch_regression.inl"
 #include "physical_holster_regression.inl"
 #include "body_follower_regression.inl"
+#include "gamepad_focus_regression.inl"
 
 int main() {
+    TestGamepadFocus();
     TestBodyFollower();
     TestHolsterGestures();
     TestHolsterHoverHaptics();
@@ -908,6 +912,7 @@ int main() {
         const auto savedObjects=dll.objects,savedFloor=dll.getFloor;
         dll.objects=rva(targetObjects); dll.getFloor=rva(reinterpret_cast<void*>(&FakeCandidateFloor));
         *reinterpret_cast<int16_t*>(targetObjects)=1;
+        *reinterpret_cast<uint32_t*>(targetObjects+80)=3; // Loaded intelligent enemy.
         for (int i=0;i<3;++i) {
             *reinterpret_cast<int16_t*>(targetItems[i]+off::item_next_active)=i==2 ? -1 : int16_t(i+1);
             *reinterpret_cast<int16_t*>(targetItems[i]+off::item_hit_points)=100;
@@ -915,6 +920,26 @@ int main() {
         }
         GunPose gun{}; gun.direction={0,0,1}; motiongun::Vec ray=gun.direction;
         Check(SelectGunTarget(gun,ray)==targetItems[0],"barrel picks nearest direct living target without native lock");
+        // Reproduce the crash dump: a dropped flare has positive HP and
+        // packed numeric item.data, but is not an intelligent combat object.
+        *reinterpret_cast<int16_t*>(targetObjects+off::object_stride)=1;
+        *reinterpret_cast<int16_t*>(targetItems[0]+off::item_object)=1;
+        *reinterpret_cast<int16_t*>(targetItems[0]+off::item_hit_points)=256;
+        *reinterpret_cast<uint64_t*>(targetItems[0]+0x58)=0x40f;
+        for(uint32_t objectFlags:{0x29u,1u,0x400u,2u}) {
+            *reinterpret_cast<uint32_t*>(targetObjects+off::object_stride+80)=objectFlags;
+            targetSphereCalls=0;ray=gun.direction;
+            Check(SelectGunTarget(gun,ray)==targetItems[2] && targetSphereCalls==2,
+                  "dropped flare/effect/unloaded object cannot steal a combat hit or invoke creature sphere queries");
+            *reinterpret_cast<int16_t*>(targetItems[0]+off::item_next_active)=-1;
+            targetSphereCalls=0;ray=gun.direction;
+            Check(!SelectGunTarget(gun,ray) && targetSphereCalls==0 && ray.x==0 && ray.z==1,
+                  "shooting only a dropped flare leaves a null combat target and the ordinary world shot intact");
+            *reinterpret_cast<int16_t*>(targetItems[0]+off::item_next_active)=1;
+        }
+        *reinterpret_cast<int16_t*>(targetItems[0]+off::item_object)=0;
+        *reinterpret_cast<int16_t*>(targetItems[0]+off::item_hit_points)=100;
+        *reinterpret_cast<uint64_t*>(targetItems[0]+0x58)=0;
         gun.muzzle.x=1000; ray=gun.direction;
         Check(SelectGunTarget(gun,ray)==targetItems[1],"other controller independently picks another enemy");
         gun.muzzle.x=0; *reinterpret_cast<int16_t*>(targetItems[0]+off::item_hit_points)=0;
@@ -1645,6 +1670,31 @@ int main() {
         lt=0; rt=0; UpdateGunTriggers(lt,rt,true,70);
         Check(rt==0 && !g_gunTriggers.WantsShot(),
               "production LT release cancels the held repeat instead of firing");
+        // Exercise the public XInput entry, not just UpdateGunTriggers. The
+        // headless fixture has no foreground game window, like VR play with
+        // the desktop focused elsewhere. Mapping must stay identical.
+        for(int which:{0,1}) for(int weapon:{1,3}) for(uint8_t style:{uint8_t(0),uint8_t(1)}) {
+            dll.game=which;appMemory[0x9e4]=3;appMemory[0x9ed]=style;
+            gun=7;status=0;lt=rt=0;FirstPersonGunTriggers(lt,rt,false,false);
+            gun=int16_t(weapon);status=4;
+            for(int hand:{0,1}) {
+                lt=rt=0;FirstPersonGunTriggers(lt,rt,false,false);
+                for(int repeat=0;repeat<3;++repeat) {
+                    lt=hand==0 ? 255 : 0;rt=hand==1 ? 255 : 0;
+                    FirstPersonGunTriggers(lt,rt,false,false);
+                    Check(g_gunTriggers.active && g_gunTriggers.pending[hand] && !g_gunTriggers.pending[1-hand],
+                          "public VR input after flare retains independent triggers without desktop focus");
+                    Check(lt==(style==0 ? 255 : 0) && rt==255,
+                          "public armed LT cannot become native toggle holster");
+                    const int shotsBefore=nativeShotCalls;
+                    Check(FireWeaponForHand(1-hand,weapon,nullptr,nullptr,aim)==0 && nativeShotCalls==shotsBefore,
+                          "native paired pistol callback cannot fire the unpressed hand");
+                    Check(FireWeaponForHand(hand,weapon,nullptr,nullptr,aim)==-1 && nativeShotCalls==shotsBefore+1 && nativeShotHand==hand,
+                          "public trigger fires exactly its matching native gun including held repeats");
+                }
+            }
+        }
+        gun=1;status=4;g_gunTriggers.Reset();g_gunEquip.Reset();
         auto& lastGun=*reinterpret_cast<int16_t*>(laraMemory+8);
         const auto savedLastGun=lastGun;
         for (int which:{0,1}) for (int scheme:{0,1})

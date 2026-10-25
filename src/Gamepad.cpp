@@ -5,6 +5,7 @@
 #include "VRSystem.h"
 #include "Log.h"
 #include "FirstPerson.h"
+#include "InlineHook.h"
 
 #include <windows.h>
 #include <cmath>
@@ -59,6 +60,88 @@ bool               g_loggedOnce = false;
 int                g_lastWater  = -2;
 int                g_lastZoom   = -1;   // 0/1, -1 = not yet logged
 bool               g_viewToggleHeld = false;
+
+struct PadFocusBuild { uint32_t timestamp,update,messages,active,cookie; };
+constexpr PadFocusBuild kPadFocusBuilds[]={
+    {0x696B49A7,0x5C10,0x5A70,0x698668,0x167080},
+    {0x68639C21,0x5C30,0x5A90,0x69A808,0x169080},
+    {0x68C12FEB,0x5C30,0x5A90,0x69A808,0x169080}
+};
+hook::InlineHook g_hPadUpdate,g_hPadMessages;
+int32_t* g_padWindowActive=nullptr;
+bool g_padFocusAttempted=false;
+
+bool VRPadPollingAllowed() {
+    const int game=CurrentGame();
+    return Cfg().enabled && Cfg().gamepadEnabled && VR().active() && (game==0 || game==1);
+}
+
+// Native inputUpdate pumps messages, then skips ALL pads when isActive==0.
+// Override that flag only after the pump and only until the pad update returns.
+// Window activation, keyboard/mouse messages and all other callers see the real
+// state. Do not steal desktop focus or suppress WM_ACTIVATEAPP/inputReset.
+struct PadFocusScope {
+    int32_t saved=0;
+    bool overridden=false;
+    void Restore() {
+        if(overridden) *g_padWindowActive=saved;
+        overridden=false;
+    }
+    void AfterMessages() {
+        if(g_padWindowActive && VRPadPollingAllowed()) {
+            saved=*g_padWindowActive;
+            *g_padWindowActive=1;
+            overridden=true;
+        }
+    }
+    ~PadFocusScope() { Restore(); }
+};
+PadFocusScope* g_padFocusScope=nullptr;
+
+void __cdecl Detour_PadMessages() {
+    if(g_padFocusScope) g_padFocusScope->Restore();
+    g_hPadMessages.Original<void (__cdecl*)()>()();
+    if(g_padFocusScope) g_padFocusScope->AfterMessages();
+}
+
+void __cdecl Detour_PadUpdate() {
+    PadFocusScope scope;
+    auto* previous=g_padFocusScope;
+    g_padFocusScope=&scope;
+    g_hPadUpdate.Original<void (__cdecl*)()>()();
+    g_padFocusScope=previous;
+}
+
+void InstallPadFocusHooks() {
+    if(g_padFocusAttempted || !Base()) return;
+    g_padFocusAttempted=true;
+    for(const auto& b:kPadFocusBuilds) if(b.timestamp==L().timestamp) {
+        const auto base=Base();
+        // Verify the native message call and following focus comparison too;
+        // a matching function prologue alone cannot establish their meaning.
+        uint8_t gate[]={0xe8,0,0,0,0,0x83,0x3d,0,0,0,0,0};
+        const int32_t messageDisp=int32_t(b.messages-(b.update+0x18));
+        const int32_t activeDisp=int32_t(b.active-(b.update+0x1f));
+        std::memcpy(gate+1,&messageDisp,4);std::memcpy(gate+7,&activeDisp,4);
+        if(std::memcmp(reinterpret_cast<void*>(base+b.update+0x13),gate,sizeof(gate))) break;
+        const auto install=[&](hook::InlineHook& h,uint32_t rva,void* detour,const char* name) {
+            uint8_t prologue[]={0x48,0x83,0xec,0x78,0x48,0x8b,0x05,0,0,0,0};
+            const int32_t cookieDisp=int32_t(b.cookie-(rva+11));
+            std::memcpy(prologue+7,&cookieDisp,4);
+            const int rip=7;
+            return h.Install(reinterpret_cast<void*>(base+rva),detour,11,prologue,11,name,&rip,1);
+        };
+        if(install(g_hPadMessages,b.messages,reinterpret_cast<void*>(&Detour_PadMessages),"VRPadMessages") &&
+           install(g_hPadUpdate,b.update,reinterpret_cast<void*>(&Detour_PadUpdate),"VRPadUpdate")) {
+            g_padWindowActive=reinterpret_cast<int32_t*>(base+b.active);
+            Log("pad: TR4/5 VR controller polling survives desktop focus loss; native window messages retained");
+            return;
+        }
+        g_hPadUpdate.Remove();g_hPadMessages.Remove();
+        break;
+    }
+    Log("pad: VR background controller polling unavailable; native focus behavior retained");
+}
 
 int16_t Axis(float v) {
     if (v >  1.0f) v =  1.0f;
@@ -449,6 +532,7 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
 void GamepadUpdate() {
     FirstPersonControlModeUpdate();
     if (!Cfg().gamepadEnabled) return;
+    InstallPadFocusHooks();
 
     if (!g_slot) {
         g_slot = reinterpret_cast<Fn_XInputGetState*>(XInputGetStateSlot());
@@ -483,11 +567,13 @@ void GamepadUpdate() {
                  : "",
              Cfg().gamepadMenuUsesBack ? "BACK" : "START",
              Cfg().dpadShift ? " dpad=R3+Lstick" : "");
-        Log("pad: FP motion guns: tap LT=left pistol/Uzi on release, tap RT=right/single shot; hold LT 0.5s=draw/holster once");
+        Log("pad: FP motion guns: LT=left pistol/Uzi, RT=right/single gun; press fires, hold repeats; LT draws from unarmed, Y holsters; physical holsters use matching grip; desktop focus does not change bindings");
     }
 }
 
 void GamepadShutdown() {
+    g_hPadUpdate.Remove();g_hPadMessages.Remove();
+    g_padWindowActive=nullptr;g_padFocusScope=nullptr;g_padFocusAttempted=false;
     if (g_slot && *g_slot == &Detour_XInputGetState) {
         *g_slot = g_original;
         Log("pad: _XInputGetState restored");

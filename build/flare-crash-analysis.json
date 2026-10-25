@@ -1,0 +1,23 @@
+{
+  "dump": "tomb456.exe.61296.dmp",
+  "event_time": "2026-10-22T00:38:11-04:00",
+  "module": "tomb5.dll",
+  "timestamp": "68C12FE9",
+  "exception": "C0000005",
+  "fault_rva": "5C8AF",
+  "fault_instruction": "or word ptr [rax+0xc],0x10",
+  "rax": "0x40f",
+  "target_object": 354,
+  "target_object_hex": "0x162",
+  "target_hit_points": 256,
+  "target_data": "0x40f",
+  "object_flags": "0x29",
+  "target_position": [
+    41428,
+    512,
+    34533
+  ],
+  "finding": "VR active-item target scan selected dropped flare. Native HitTarget treated packed flare data as CREATURE_INFO pointer.",
+  "fix": "Require OBJECT_INFO.loaded and intelligent (offset 80, bits 0 and 1) before combat sphere queries. Native world LOS path remains available.",
+  "metadata_verified": "TR4 and TR5 PDB OBJECT_INFO bitfield layouts; retail TR5 crash memory."
+}

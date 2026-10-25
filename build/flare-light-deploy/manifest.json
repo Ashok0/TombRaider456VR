@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-22T00:54:10.8492838-04:00",
+    "base_commit":  "d4e2833",
+    "dll_sha256":  "9CDCAA8254E9EA8DE78357D79722425CFE5A5F65BEB9A6F47CD15CFCDC3A306D",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-flare-light-20261022-005410",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  4167681,
+    "debug_regression_checks":  4167681,
+    "change":  "Native held-flare dynamic light follows the rendered controller flare tip each frame, including both interpolation endpoints and TR4 mirror. Removes native vertical light bias. Retains native brightness, flicker, burnout, thrown flares and prior shooting-crash fix. Slot ownership invalidated on reuse/reset/transition. Debug/Release and four DLL binary checks passed; headset validation pending.",
+    "hardware_verified":  false
+}

@@ -1,0 +1,14 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-22T00:35:05.9007851-04:00",
+    "base_commit":  "d4e2833",
+    "dll_sha256":  "D551A915CAC0BB88EB1F464BA197BB4ADB3362CB84D156BE0045A6D26949E81D",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-flare-20261022-003505",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_change":  "none",
+    "regression_checks":  4167395,
+    "debug_regression_checks":  4167395,
+    "change":  "First-person flare turning and left-controller hand IK in TR4/5. Native held-flare update receives tracked current/previous left wrist positions for light interpolation and mirrors. Full-body facing falls back when the follower is unavailable. Native ignition, burn-out, draw/throw, firearms and holsters retained. New draw/IK/light regression cases and four-DLL hook verification passed; headset validation pending.",
+    "hardware_verified":  false
+}
