@@ -4,6 +4,7 @@
 #include "GL.h"
 #include "GameDll.h"
 #include "FirstPerson.h"
+#include "Gamepad.h"
 #include "LocomotionMath.h"
 
 #include <cstdio>
@@ -529,6 +530,7 @@ void VRSystem::HandleRuntimeEvent(const vr::VREvent_t& event) {
 void VRSystem::ApplyRuntimeRecenter() {
     if(!m_runtimeRecenterPending || !m_poseValid) return;
     m_runtimeRecenterPending=false;
+    WorldInventoryRecenter();
     m_headingYawValid=m_headingYawVertical=false;
     const float yaw=HeadYawRadians();
     if(FirstPersonActive()) {
@@ -663,6 +665,7 @@ float VRSystem::FirstPersonPostureDrop() const {
 }
 
 void VRSystem::RecentreOffset() {
+    WorldInventoryRecenter();
     m_recentreRequested = true;
     if (FirstPersonActive()) FirstPersonRecenter();
     else if (CurrentGame()==0 || CurrentGame()==1) RecenterThirdPersonHead();
@@ -767,6 +770,18 @@ Affine VRSystem::EyeView(Eye eye) const {
 
     // Then into the engine's Y-down, TR-unit view space.
     return ToEngineSpace(ovr, scale, c.flipViewY);
+}
+
+Affine VRSystem::AnchoredEyeView(Eye eye,const vr::HmdMatrix34_t& anchor) const {
+    Affine relative=Mul(InvertRigid(FromHmd(m_rawHeadPose)),FromHmd(anchor));
+    if(!Cfg().monoTracking) {
+        int idx=static_cast<int>(eye);
+        if(Cfg().swapEyes) idx=1-idx;
+        Affine offset=m_eyeFromHead[idx];
+        for(int i=0;i<3;++i) offset.r[i][3]*=LiveIpdScale();
+        relative=Mul(offset,relative);
+    }
+    return ToEngineSpace(relative,LiveWorldUnitsPerMetre(),Cfg().flipViewY);
 }
 
 void VRSystem::EyeProjection(Eye eye, float zNear, float zFar, mat4& out) const {

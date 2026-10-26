@@ -1,4 +1,6 @@
 #include "FirstPerson.h"
+#include "Gamepad.h"
+#include "InventoryScene.h"
 #include "HKScopeMath.h"
 #include "Config.h"
 #include "Engine.h"
@@ -3882,6 +3884,15 @@ void __cdecl Detour_DrawHair(int32_t argument) {
 }
 
 void UpdateSceneCamera(PHD_3DPOS& pose) {
+    // The inventory's scene is redrawn, not simulated. Preserve the last FP
+    // camera/root while native inventory owns input. Running Anchor here
+    // would consume room-scale movement; suspending FP would jump to chase
+    // view. EyeView still supplies live headset rotation/translation.
+    if(InventorySceneReady() && WorldInventoryActive() && g_active && g_scenePoseValid) {
+        pose=g_scenePose;
+        g_pistolArmPose.valid=false;
+        return;
+    }
     g_pistolArmPose.valid=false;
     if(!MotionReady() || CurrentMotionWeapon()!=1) g_pistolRoll={};
     if(Cfg().firstPersonFullBodyIK && g_boundDll && g_boundBase &&

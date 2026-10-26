@@ -279,6 +279,7 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.menuChordSeconds    = GetFloat(L"MenuChordSeconds",    g_cfg.menuChordSeconds,   ini);
     g_cfg.menuChordPressSeconds = GetFloat(L"MenuChordPressSeconds", g_cfg.menuChordPressSeconds, ini);
     g_cfg.dpadShift           = GetBool (L"DpadShift",           g_cfg.dpadShift,          ini);
+    g_cfg.worldInventory      = GetBool (L"WorldInventory",      g_cfg.worldInventory,     ini);
     g_cfg.dpadShiftDeadzone   = GetFloat(L"DpadShiftDeadzone",   g_cfg.dpadShiftDeadzone,  ini);
     g_cfg.gamepadLogButtons   = GetBool (L"GamepadLogButtons",  g_cfg.gamepadLogButtons,  ini);
     g_cfg.decoupledPitch      = GetBool (L"DecoupledPitch",     g_cfg.decoupledPitch,     ini);

@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 59274 bytes, 1181 lines.
+// Source: TombRaiderVR.ini, 60029 bytes, 1194 lines.
 #pragma once
 
 namespace tr {
@@ -616,6 +616,12 @@ HideOpticsTint=1
 ; move a menu selection twice.
 DpadShift=1
 
+; TR4/5 stereo VR: X opens the paused native inventory in front of the
+; headset, anchored there until closed. With weapons active X retains native
+; ammo switching. Release X, then LS navigates, A selects/uses, B backs out.
+; Native 3D items over the live head-tracked level; gameplay remains paused.
+WorldInventory=1
+
 ; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
 ;
 ; Touch has no Start or Back of its own, so both have to come from somewhere.
@@ -643,15 +649,15 @@ DpadShiftDeadzone=0.5
 
 ; Which XInput button the left hand's LOWER face button sends.
 ;   1 = BACK  -- the System menu. Default.
-;   0 = START -- the pause/inventory menu.
+)INI"
+           R"INI(;   0 = START -- the pause/inventory menu.
 ; inputUpdate() decodes BACK to internal key 0x62 and START to 0x63; which one a
 ; given screen treats as System lives in the game DLLs, so this stays switchable.
 GamepadMenuUsesBack=1
 
 ; --- reverse engineering ----------------------------------------------------
 
-)INI"
-           R"INI(; Log the DLL-side return address of each distinct call into vid_setPass and
+; Log the DLL-side return address of each distinct call into vid_setPass and
 ; ogl_drawVB, as "module+RVA".
 ;
 ; The game DLLs ship without PDBs, so this is how we find their render code
@@ -803,7 +809,8 @@ TR4EffectStrength=1.0
 ; keep their authored framing. TR6 uses a different engine and is unsupported.
 FirstPerson=1
 
-; Animated head joint and eye offset in that joint's local coordinates.
+)INI"
+           R"INI(; Animated head joint and eye offset in that joint's local coordinates.
 ; Negative Y is up; positive Z moves the eye forward.
 FirstPersonJoint=14
 FirstPersonAnchorX=0
@@ -812,8 +819,7 @@ FirstPersonAnchorZ=144
 
 ; Hanging, ledge pull-up, climbing and push/pull hold Lara against geometry.
 ; Retract only the forward eye offset in those states; never extend a custom
-)INI"
-           R"INI(; normal anchor farther into a wall.
+; normal anchor farther into a wall.
 FirstPersonInteractionAnchorZ=16
 
 ; Tracked rotation is always active. This controls physical leaning/ducking.
@@ -859,18 +865,13 @@ FirstPersonBodyTurnDegreesPerFrame=4
 FirstPersonHeadAim=1
 ; Controller tracking enabled to match the known-good Steam profile.
 FirstPersonMotionGuns=1
-; Body yaw/position use slack and smoothed catch-up; head and hands stay tracked.
-FirstPersonFullBodyIK=1
-FirstPersonBodyYawSlackDegrees=45
-FirstPersonBodyYawSpeedDegrees=120
-FirstPersonBodyLeanRadiusMetres=0.15
-FirstPersonBodyFollowSpeedMetres=0.9
-FirstPersonBodyHandYawWeight=0.15
-; 0 calibrates body size to standing eye/floor height. 1 keeps native size.
-; Positive values override calibration (0.5 to 1.5). Recenter standing upright.
-FirstPersonBodyScale=0
-; Optional native Duck: enter at 35 cm below calibration, release at 23 cm.
-FirstPersonPhysicalCrouch=0
+; Unarmed HD arms bend to controller wrists using the same gun calibration.
+; Requires motion guns/tracking above. Set 0 for the prior look-down-only arms.
+FirstPersonUnarmedIK=1
+; Full-body inference from headset/controllers in TR4/5 HD first person.
+; Torso/hips follow head movement; leg IK retains native animated foot targets.
+; No waist/foot trackers required. Set 0 to restore the earlier arm-only mode.
+FirstPersonFullBodyIK=0
 ; Mesh grip calibration: positive pulls the gun back along its barrel axis.
 ; This local grip point stays on the controller as the gun rotates.
 ; Known-good fit: 0.2032 = 8 inches back; raise -0.06985 = 2.75 inches down.
@@ -968,7 +969,8 @@ DynamicBonesAnchorZ=45
 ; is a ratio near 0.12.
 ;
 ; Frequency is what makes it visible, not strength. The previous 1900/22 was
-; a 6.9 Hz flutter that died in 0.11 s -- over before the eye registers it,
+)INI"
+           R"INI(; a 6.9 Hz flutter that died in 0.11 s -- over before the eye registers it,
 ; and landing during Lara's own landing crouch, which hid the rest. Logs
 ; showed every jump detected and displaced ~14 units; it just could not be
 ; seen. At 4 Hz / 0.12 a running jump rings for about 0.8 s. Resting sag is
@@ -979,8 +981,7 @@ DynamicBonesAnchorZ=45
 ; running speed is 160 units against an 18-unit clamp -- why both sessions
 ; reported disp_peak pinned at exactly 18.00 and never settling. The solver
 ; is now driven by the parent joint's acceleration instead, so constant
-)INI"
-           R"INI(; velocity produces no displacement at all, and these constants replace the
+; velocity produces no displacement at all, and these constants replace the
 ; old ones rather than merely retuning them.
 DynamicBonesStiffness=630
 DynamicBonesDamping=9.5
@@ -1130,7 +1131,8 @@ DynamicBonesRegionDebug=0
 ; when DynamicBonesShader=0, or when the shader path cannot start on this
 ; build; the log says which. Joint 7 is TORSO, so everything weighted to it
 ; moves and the whole upper body wobbles rather than just the chest: coarse,
-; but it also makes the solver visible by eye -- anchor position, direction
+)INI"
+           R"INI(; but it also makes the solver visible by eye -- anchor position, direction
 ; of motion and magnitude can all be judged from it.
 DynamicBonesApply=1
 
@@ -1144,8 +1146,7 @@ DynamicBonesDebugScale=1
 ; How far apart two joint origins must be, in world units, to count as
 ; separate joints when scoring which draw carries the body. Bones on a body
 ; are tens of units apart; padding slots differ by a fraction of one.
-)INI"
-           R"INI(DynamicBonesSeparation=12
+DynamicBonesSeparation=12
 
 ; Displacement clamp, world units. TR6 bounds its bones with authored
 ; deflector volumes; a radius is the stand-in for assets that carry none.

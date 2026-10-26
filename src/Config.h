@@ -435,6 +435,10 @@ struct Config {
 
     bool  dpadShift        = true;
 
+    // Touch X opens a paused, tracking-space anchored native inventory in
+    // TR4/5. Native X ammo switching is preserved. Requires stereo VR.
+    bool  worldInventory   = true;
+
     // How far the left stick must travel before a shifted press registers.
     float dpadShiftDeadzone = 0.5f;
 

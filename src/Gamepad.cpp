@@ -6,6 +6,7 @@
 #include "Log.h"
 #include "FirstPerson.h"
 #include "InlineHook.h"
+#include "WorldInventory.h"
 
 #include <windows.h>
 #include <cmath>
@@ -60,6 +61,123 @@ bool               g_loggedOnce = false;
 int                g_lastWater  = -2;
 int                g_lastZoom   = -1;   // 0/1, -1 = not yet logged
 bool               g_viewToggleHeld = false;
+inventory::Session g_worldInventory;
+vr::HmdMatrix34_t g_inventoryAnchor{};
+
+namespace ammoinput {
+// Native DoHotkeys handles ammo flags, cycling order, cooldown and feedback.
+// Verified against all four DLLs by tools/verify_inventory_ammo.py.
+struct Build { uint32_t timestamp,hotkeys,app,level;uint8_t savedRegister; };
+constexpr Build builds[]={
+    {0x696B4999,0x16950,0x663F08,0,0x56},
+    {0x696B499C,0x15320,0x66D1A0,0x65EC40,0x55},
+    {0x68C12FDA,0x16550,0x664E48,0,0x56},
+    {0x68C12FE9,0x15400,0x66D0E0,0x65EB80,0x55}
+};
+hook::InlineHook hotkeysHook;
+const GameDllLayout* dll=nullptr;
+const Build* build=nullptr;
+uint64_t base=0,failedBase=0,queuedAt=0;
+int queuedGun=0;
+uint8_t* queuedItem=nullptr;
+bool held=false,consumeHold=false;
+
+bool Bound() { return dll && base && dll==GameDllBound() && base==GameDllBase(); }
+bool Gameplay() {
+    return Bound() && Cfg().enabled && Cfg().gamepadEnabled && VR().active() &&
+        CurrentGame()==dll->game && !InInventory() && !InTitle() && !InFMV() &&
+        !AppState(drva::app_off::photoMode);
+}
+int Gun() { return *reinterpret_cast<int16_t*>(base+dll->lara+4); }
+int Status() { return *reinterpret_cast<int16_t*>(base+dll->lara+2); }
+uint8_t* Item() { return *reinterpret_cast<uint8_t**>(base+dll->laraItem); }
+int AmmoKey(int gun) {
+    if(dll->game==0) return gun==4 ? 1 : gun==5 ? 4 : gun==6 ? 5 : -1;
+    const int level=*reinterpret_cast<uint8_t*>(base+build->level);
+    // TR5 reuses the pistol/shotgun hotkeys for HK/grappling gun in VCI.
+    return gun==4 && level<11 ? 1 : gun==5 && level>=11 ? 0 : -1;
+}
+void __cdecl Hotkeys() {
+    const int gun=queuedGun;queuedGun=0; // one native attempt per physical press
+    const int key=gun && Gameplay() && GetTickCount64()-queuedAt<500 &&
+        Gun()==gun && Status()==4 && Item()==queuedItem ? AmmoKey(gun) : -1;
+    auto original=hotkeysHook.Original<void (__cdecl*)()>();
+    if(key<0) { original();return; }
+    auto* app=*reinterpret_cast<uint8_t**>(base+build->app);
+    if(!app) { original();return; }
+    // Scope the keyboard weapon keys and pad hotkey modifier to this one
+    // native call. Other input and ammo counts are never written by the mod.
+    uint8_t saved[6];std::memcpy(saved,app+0x89c,6);
+    const uint8_t modifier=app[0x8f2];
+    std::memset(app+0x89c,0,6);app[0x89c+key]=1;app[0x8f2]=0;
+    original();
+    std::memcpy(app+0x89c,saved,6);app[0x8f2]=modifier;
+    LogF("ammo: X routed to native weapon hotkey (game=%d weapon=%d)",dll->game,gun);
+}
+void Reset() {
+    hotkeysHook.Remove();dll=nullptr;build=nullptr;base=0;
+    held=consumeHold=false;queuedGun=0;queuedItem=nullptr;
+}
+void Update() {
+    const auto* current=GameDllBound();const auto address=GameDllBase();
+    if(dll && (dll!=current || base!=address || !Cfg().enabled || !Cfg().gamepadEnabled)) Reset();
+    if(dll || !current || !address || address==failedBase || !Cfg().enabled || !Cfg().gamepadEnabled) return;
+    for(const auto& row:builds) if(row.timestamp==current->timestamp) {
+        const uint8_t bytes[]={0x40,row.savedRegister,0x48,0x83,0xec,0x30};
+        if(!hotkeysHook.Install(reinterpret_cast<void*>(address+row.hotkeys),
+                reinterpret_cast<void*>(&Hotkeys),6,bytes,6,"InventoryAmmoHotkeys")) {
+            failedBase=address;Log("ammo: native hotkey hook verification failed");return;
+        }
+        dll=current;base=address;build=&row;
+        Log("ammo: armed X routing to native ammo hotkeys ready");return;
+    }
+}
+void Apply(XGamepad& pad) {
+    const bool down=(pad.wButtons&XB_BACK)!=0;
+    if(!Gameplay()) { held=down;consumeHold=false;queuedGun=0;return; }
+    const bool armed=Gun()>=1 && Gun()<=6 && Status()>=2 && Status()<=4;
+    if(down && !held) {
+        consumeHold=armed;
+        if(armed && Status()==4 && hotkeysHook.installed() && AmmoKey(Gun())>=0) {
+            queuedGun=Gun();queuedItem=Item();queuedAt=GetTickCount64();
+        }
+    }
+    if(!down) consumeHold=false;
+    // Keep swallowing the SAME press if holstering completes while X is held.
+    if(down && (consumeHold || armed)) {
+        consumeHold=true;
+        pad.wButtons &= uint16_t(~XB_BACK);
+        g_worldInventory.pending=false;
+    }
+    held=down;
+}
+} // namespace ammoinput
+
+bool WorldInventoryAllowed() {
+    const int game=CurrentGame();
+    return Cfg().enabled && Cfg().gamepadEnabled && Cfg().worldInventory &&
+        !Cfg().monoTracking && VR().active() && VR().poseValid() &&
+        (game==0 || game==1) && !InTitle() && !InFMV() &&
+        !AppState(drva::app_off::photoMode);
+}
+
+bool ApplyWorldInventory(XGamepad& pad,bool& shifted) {
+    inventory::Input in{pad.wButtons,pad.sThumbLX/32767.f,pad.sThumbLY/32767.f,
+        pad.bLeftTrigger,pad.bRightTrigger,shifted};
+    bool owned=false;
+    if(g_worldInventory.Update(in,WorldInventoryAllowed(),InInventory(),CurrentGame(),
+        GetTickCount64(),Cfg().dpadShiftDeadzone,owned)) {
+        VR().HeadPose(g_inventoryAnchor);
+        Log("inventory: unarmed X observed; spatial anchor prepared if inventory opens");
+    }
+    if(owned) {
+        pad.wButtons=in.buttons;
+        pad.sThumbLX=pad.sThumbLY=pad.sThumbRX=pad.sThumbRY=0;
+        pad.bLeftTrigger=pad.bRightTrigger=0;
+        shifted=true;
+    }
+    return owned;
+}
 
 struct PadFocusBuild { uint32_t timestamp,update,messages,active,cookie; };
 constexpr PadFocusBuild kPadFocusBuilds[]={
@@ -407,6 +525,7 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
     }
 
     if (!Cfg().gamepadEnabled || !VR().active()) {
+        g_worldInventory.Reset();
         return g_original ? g_original(userIndex, state)
                           : ERROR_DEVICE_NOT_CONNECTED;
     }
@@ -438,12 +557,22 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
         }
     }
 
-    ApplyMergedChords(mine.Gamepad, gameplay, touchGripAction, shifted);
+    ammoinput::Apply(mine.Gamepad);
+    const bool inventoryOwned=ApplyWorldInventory(mine.Gamepad,shifted);
+    if(!inventoryOwned) ApplyMergedChords(mine.Gamepad, gameplay, touchGripAction, shifted);
+    else {
+        // Reset trigger/chord history too; a held gun trigger before opening
+        // must not survive the menu as a queued shot or a missed fresh press.
+        FirstPersonGunTriggers(mine.Gamepad.bLeftTrigger,mine.Gamepad.bRightTrigger,true,false);
+        g_viewToggleHeld=false;
+        g_menuChordSince=g_menuPressUntil=0;
+        g_menuChordFired=false;
+    }
 
     float fpLeftX = mine.Gamepad.sThumbLX / 32767.0f;
     float fpLeftY = mine.Gamepad.sThumbLY / 32767.0f;
     float fpRightX = mine.Gamepad.sThumbRX / 32767.0f;
-    const bool jumpPressed = (mine.Gamepad.wButtons & XB_A) != 0;
+    const bool jumpPressed = !inventoryOwned && (mine.Gamepad.wButtons & XB_A) != 0;
     FirstPersonInput(fpLeftX, fpLeftY, fpRightX, shifted, jumpPressed);
     mine.Gamepad.sThumbLX = Axis(fpLeftX);
     mine.Gamepad.sThumbLY = Axis(fpLeftY);
@@ -529,8 +658,22 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
 
 } // namespace
 
+bool WorldInventoryActive() {
+    g_worldInventory.Sync(WorldInventoryAllowed(),InInventory(),CurrentGame(),GetTickCount64());
+    return g_worldInventory.open;
+}
+
+Affine WorldInventoryEyeView(Eye eye) {
+    return VR().AnchoredEyeView(eye,g_inventoryAnchor);
+}
+
+void WorldInventoryRecenter() {
+    if(g_worldInventory.pending || g_worldInventory.open) VR().HeadPose(g_inventoryAnchor);
+}
+
 void GamepadUpdate() {
     FirstPersonControlModeUpdate();
+    ammoinput::Update();
     if (!Cfg().gamepadEnabled) return;
     InstallPadFocusHooks();
 
@@ -572,6 +715,8 @@ void GamepadUpdate() {
 }
 
 void GamepadShutdown() {
+    ammoinput::Reset();
+    g_worldInventory.Reset();
     g_hPadUpdate.Remove();g_hPadMessages.Remove();
     g_padWindowActive=nullptr;g_padFocusScope=nullptr;g_padFocusAttempted=false;
     if (g_slot && *g_slot == &Detour_XInputGetState) {

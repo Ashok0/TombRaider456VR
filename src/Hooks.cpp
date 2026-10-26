@@ -35,6 +35,7 @@
 #include "StereoRenderer.h"
 #include "VideoPanel.h"
 #include "Gamepad.h"
+#include "InventoryScene.h"
 #include "Callsite.h"
 #include "GameDll.h"
 #include "PortalCull.h"
@@ -1052,7 +1053,8 @@ void __cdecl Detour_validate_draw() {
             const Eye oe = (g_currentEye == 0) ? Eye::Left : Eye::Right;
             std::memcpy(&g_savedOrtho3D, op, sizeof(mat4));
 
-            if (Cfg().ortho3DLockToHead) {
+            const bool spatialInventory=WorldInventoryActive() && !InventorySceneDrawing();
+            if (Cfg().ortho3DLockToHead && !spatialInventory) {
                 // Ortho output has w == 1 and no perspective divide, so moving
                 // m[12] is a pure convergence shift: it changes where the layer
                 // fuses and nothing else. Every relative x, y and z survives it
@@ -1101,7 +1103,8 @@ void __cdecl Detour_validate_draw() {
                 L.m[14] = -Zc;
                 L.m[15] = 1.0f;
 
-                const mat4 E = AffineToMat4(VR().EyeView(oe));
+                const mat4 E = AffineToMat4(spatialInventory
+                    ? WorldInventoryEyeView(oe) : VR().EyeView(oe));
                 *op = Mul4(Ppersp, Mul4(E, Mul4(L, g_savedOrtho3D)));
             }
 
@@ -1126,7 +1129,8 @@ void __cdecl Detour_validate_draw() {
             const Eye hudEye = (g_currentEye == 0) ? Eye::Left : Eye::Right;
             std::memcpy(&g_savedHud, hudProj, sizeof(mat4));
 
-            if (Cfg().hudLockToHead) {
+            const bool spatialInventory=WorldInventoryActive() && !InventorySceneDrawing();
+            if (Cfg().hudLockToHead && !spatialInventory) {
                 // Screen-locked: a flat per-eye NDC shift. Ortho output has
                 // w == 1, so ndc.x moves with m[12] directly.
                 hudProj->m[12] += VR().HudNdcShiftX(hudEye, Cfg().hudDepthMetres);
@@ -1168,7 +1172,8 @@ void __cdecl Detour_validate_draw() {
                 L.m[14] = -Z;
                 L.m[15] = 1.0f;
 
-                const mat4 E = AffineToMat4(VR().EyeView(hudEye));
+                const mat4 E = AffineToMat4(spatialInventory
+                    ? WorldInventoryEyeView(hudEye) : VR().EyeView(hudEye));
                 *hudProj = Mul4(Ppersp, Mul4(E, Mul4(L, g_savedHud)));
             }
 
@@ -1216,7 +1221,8 @@ void __cdecl Detour_validate_draw() {
     // dome a finite stereo depth, and dropping it here reaches every mode below
     // (view matrix, model-matrix redistribution, or projection) uniformly. The
     // rotation stays, so head-look still turns the sky.
-    Affine eyeXform = VR().EyeView(eye);
+    Affine eyeXform = WorldInventoryActive() && !InventorySceneDrawing()
+        ? WorldInventoryEyeView(eye) : VR().EyeView(eye);
     if (skyInfinity) {
         eyeXform.r[0][3] = eyeXform.r[1][3] = eyeXform.r[2][3] = 0.0f;
         ++g_skyDraws;
@@ -2410,6 +2416,7 @@ void __cdecl Detour_ogl_present() {
     // The game DLLs load after we do, and the player can switch between TR4 and
     // TR5 without restarting, so both of these run every frame.
     GameDllUpdate();
+    InventorySceneUpdate();
     FirstPersonUpdate();
 
     // TR6's render boundary and visibility builder live in tomb6.dll rather
@@ -2738,6 +2745,7 @@ bool InstallHooks() {
 }
 
 void RemoveHooks() {
+    InventorySceneShutdown();
     TR4EffectsShutdown();
     HKScopeShutdown();
     GamepadShutdown();

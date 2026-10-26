@@ -138,6 +138,7 @@
     <ClCompile Include="src\BoneSkin.cpp" />
     <ClCompile Include="src\TR4Effects.cpp" />
     <ClCompile Include="src\Gamepad.cpp" />
+    <ClCompile Include="src\InventoryScene.cpp" />
     <ClCompile Include="src\VideoPanel.cpp" />
     <ClCompile Include="src\VRSystem.cpp" />
     <ClCompile Include="src\FirstPerson.cpp" />
@@ -165,6 +166,8 @@
     <ClInclude Include="src\TR4EffectsMath.h" />
     <ClInclude Include="src\TR4EffectsGL.h" />
     <ClInclude Include="src\Gamepad.h" />
+    <ClInclude Include="src\InventoryScene.h" />
+    <ClInclude Include="src\WorldInventory.h" />
     <ClInclude Include="src\VideoPanel.h" />
     <ClInclude Include="src\VRSystem.h" />
     <ClInclude Include="src\FirstPerson.h" />

@@ -57,6 +57,7 @@ int cutseqNumber=0, cutseqTransition=0, spotCamera=0;
 uint8_t vonCroyScene=0;
 bool nativeMoves = true, jointFollowsBody = false;
 bool worldCameraValid = false, opticsZoomed=false;
+bool inventorySceneReady = false;
 float worldCameraRot[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
 float worldCameraPos[3] = {};
 uint8_t* laraItem = itemMemory;
@@ -584,6 +585,7 @@ bool InlineHook::Install(void*, void*, size_t, const uint8_t*, size_t,
                          const char*, const int*, size_t) { return false; }
 }
 namespace tr {
+bool InventorySceneReady() { return inventorySceneReady; }
 const Config& Cfg() { return config; }
 const motiongun::Calibration& LiveMotionGunCalibration() {
     return testCalibration;
@@ -617,8 +619,11 @@ uint64_t GameDllBase() { return g_boundBase; }
 #include "physical_holster_regression.inl"
 #include "body_follower_regression.inl"
 #include "gamepad_focus_regression.inl"
+#include "world_inventory_regression.inl"
 
 int main() {
+    TestArmedInventoryButton();
+    TestWorldInventory();
     TestGamepadFocus();
     TestBodyFollower();
     TestHolsterGestures();

@@ -37,6 +37,9 @@ public:
     // Eye transform in ENGINE view space, ready to be composed onto the game's
     // view matrix:   finalView = EyeView(eye) * gameView
     Affine EyeView(Eye eye) const;
+    // View of a pose captured in raw tracking space. Independent of gameplay
+    // camera/FP neutrals, which can change when the inventory pauses the game.
+    Affine AnchoredEyeView(Eye eye,const vr::HmdMatrix34_t& anchor) const;
 
     // The same transform WITHOUT the per-eye offset: head centre rather than
     // either pupil. This is what the room culling wants -- one frustum that

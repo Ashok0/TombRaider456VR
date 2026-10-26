@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-25T08:23:15.1136653-04:00",
+    "dll_sha256":  "9A1D5135EC6CC7817492C9B48BD26AB7BA9F9E714C82C9C3853BF06C46928FDF",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-inventory-20261025-082314",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4168374,
+    "hardware_verified":  false,
+    "general_selftest":  "One pre-existing failure: full-body IK expected enabled but shipped template sets FirstPersonFullBodyIK=0.",
+    "change":  "TR4/5 Touch X/BACK opens native paused inventory anchored to opening headset pose; native ammo switching is preserved with weapons active. R3+LS down no longer opens spatial inventory. LS navigates, A selects/uses, B backs/closes. Live stereo level rendering replaces native captured background; paused first-person camera preserved. 66 real OpenGL scene checks and all four binary hook verifications passed. Entry/exit input drains begin only after native inventory opens; pending ammo input remains untouched. Photo Mode unchanged. Existing INI preserved."
+}

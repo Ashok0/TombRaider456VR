@@ -66,11 +66,57 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Recenter Camera + Calibrate First-Person Height | Right System (hold for the runtime recenter) |
 | Adjust Camera Pitch | RT + RB + RS |
 | Menu | X |
+| Spatial Inventory (TR4/5) | X with weapons holstered; release, then LS navigates, A selects/uses, B backs out |
 | Change Ammo  | X + Weapon equipped |
 | Sneak (TR6 only) | RB + Y |
 
 
 ## Development Notes
+
+### Spatial inventory shortcut (2026-10-25)
+
+In TR4/5 stereo VR, X with weapons holstered opens the native paused inventory
+at the headset's current position and orientation. Release X, then
+use LS left/right to cycle items, LS up/down for native categories/options, A to
+select/use, and B to back out or close. Native item actions, ammo selection and
+submenus remain in charge. With weapons active, X is consumed before the menu
+path and routed once per press to the equipped weapon's native ammo hotkey.
+This uses the game's ammo order, cooldown and feedback. Weapons with no ammo
+variants do nothing on X. Drawing/holstering also blocks the menu, and holding
+an armed X press through holstering cannot open inventory. Movement and firing
+remain available. The previous BACK passthrough was incorrect: BACK opens
+inventory even while armed in these builds. R3 + LS down
+returns to ordinary D-pad navigation and no longer opens spatial inventory.
+
+The 3D item carousel and menu text stay anchored as the headset turns or leans.
+Recenter places them in front again. The level is rendered freshly in stereo
+behind the ring on every inventory frame, with live head tracking and the
+first-person camera position preserved. This replaces the native black/captured
+pause background. Gameplay simulation remains paused while inventory is open.
+The scene is flushed before the ring, then only depth is cleared in both eyes,
+so inventory meshes remain readable without erasing the world behind them.
+
+`WorldInventory=1` enables this presentation by default, including existing INIs
+that omit the key. Set it to `0` for the native inventory background.
+Photo Mode, title screens, FMVs and TR6 retain their existing behavior.
+The opening press is consumed after inventory opens until release; held menu
+controls are also consumed on exit so they cannot become gameplay actions.
+
+Validation: Release DLL build and 4,169,082 controller/first-person/anchor
+regression checks passed. The scene harness passed 66 checks using real OpenGL
+colour/depth buffers, repeated frames, native fallback and hook lifecycle.
+`tools/verify_inventory_scene.py` verifies the hook bytes, relocation and native
+initialize-before-background ordering in all four supported TR4/5 binaries.
+`tools/verify_inventory_ammo.py` executes each binary's actual `DoHotkeys`
+routine against isolated fixtures and verifies ammo cycles, wrap, cooldown,
+feedback and readiness guards in both control modes. Controller regressions
+check armed X suppression, one call per press, native input restoration,
+stale requests and unarmed inventory entry.
+The general self-test has one pre-existing failure:
+it expects full-body IK enabled while the shipped template sets it to `0`.
+Headset validation of the live background, placement and native item use is still
+required. If the background hook cannot be verified, it logs a failure and keeps
+the native background.
 
 ### Session changes and current deployment (2026-10-04 to 2026-10-11)
 

@@ -25,6 +25,13 @@
 
 namespace tr {
 
+struct Affine;
+enum class Eye;
+// Native inventory opened with Touch X/BACK uses the spatial anchor.
+bool WorldInventoryActive();
+Affine WorldInventoryEyeView(Eye eye);
+void WorldInventoryRecenter();
+
 // Install the pointer override. Idempotent and cheap; call once per frame so it
 // survives the game re-resolving XInput, and so it self-heals if we install
 // before WinMain has run.
