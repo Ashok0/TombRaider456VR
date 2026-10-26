@@ -73,6 +73,26 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
+### Animated first-person pistol draw and holster (2026-10-26)
+
+Pistol drawing/holstering (native weapon statuses 2/3) temporarily gives the
+visible hands to Lara's authored animation, including physical-holster requests.
+Controller aim and physical hand/holster mesh overrides stand down for those
+statuses. Native animation retains the exact frame at which each pistol moves
+between hand and holster. Head tracking and fitted body positioning stay active.
+
+With full-body IK, a 160 ms joint-local blend connects tracked arms to animated
+arms and back again. The blend preserves arm reach, follows the fitted chest,
+and shares the resulting wrists with pistol/hand attachments. It advances once
+per tracking pose so stereo redraws cannot speed it up. Other weapons retain
+their existing behavior; native animation speed, equip logic and physics are
+unchanged.
+
+Release build and 4,247,540 regression checks passed, including controller-motion
+isolation during draw/holster, native mesh timing, arm continuity and reach at
+60/90/120 Hz, repeated draws, and restoration of exact target poses. Headset
+confirmation remains pending.
+
 ### First-person body continuity during transitions (2026-10-26)
 
 Weapon draw/holster statuses keep full-body positioning active instead of

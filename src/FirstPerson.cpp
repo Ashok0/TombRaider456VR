@@ -18,6 +18,7 @@
 #include "BodyFollower.h"
 #include "MotionGunInput.h"
 #include "PhysicalHolster.h"
+#include "PistolAnimationBlend.h"
 #include "LedgePullGesture.h"
 #include "SwitchPosePath.h"
 #include "LedgeGrabFeedback.h"
@@ -260,6 +261,7 @@ firstperson::BodyFollower g_bodyFollower;
 firstperson::BodySizeCalibration g_bodySize;
 firstperson::TorsoPoseFilter g_torsoPose;
 bool g_bodyLanding=false;
+firstperson::PistolAnimationBlend g_pistolAnimation;
 firstperson::BodyVisibilityRecovery g_bodyVisibility;
 firstperson::AutoBodyCalibration g_autoBodyCalibration;
 int g_bodySizeObject=-1;
@@ -281,6 +283,7 @@ void ResetBodyFollower() {
     g_bodySize.Reset();g_bodySizeObject=-1;
     g_torsoPose.Reset();
     g_bodyLanding=false;
+    g_pistolAnimation.Reset();
     g_heightCrouch={};g_physicalCrouchCamera=false;
 }
 
@@ -958,7 +961,7 @@ const char* MotionBlockedReason() {
     const int16_t status = *reinterpret_cast<const int16_t*>(lara + 2);
     const int16_t gun = *reinterpret_cast<const int16_t*>(lara + 4);
     const bool physicalTransition=g_holsters.active && gun==g_holsters.weapon &&
-        (status==2 || status==3);
+        gun!=1 && (status==2 || status==3);
     if (status != 4 && !physicalTransition) return "guns-not-ready";
     if (!MotionWeaponSupported(gun)) return "weapon-not-supported";
     vr::HmdMatrix34_t pose{};
@@ -1482,7 +1485,9 @@ void TraceArmGlance(uint8_t* item,const float* joints,int count,int pass) {
 }
 
 bool PistolBodyPoseMatches(const uint8_t* item,int pass) {
-    return MotionReady() && CurrentMotionWeapon()==1 && g_pistolArmPose.valid &&
+    if(!g_boundDll || !g_boundBase) return false;
+    const int status=*Ptr<int16_t>(g_boundDll->lara+2);
+    return (MotionReady() || status==2 || status==3 || g_pistolAnimation.blending) && CurrentMotionWeapon()==1 && g_pistolArmPose.valid &&
         g_pistolArmPose.item==item && g_pistolArmPose.game==g_boundDll->game &&
         g_pistolArmPose.pass==pass && g_pistolArmPose.serial==VR().PoseSerial() &&
         g_pistolArmPose.fraction==*Ptr<int32_t>(g_boundDll->frameFrac);
@@ -1490,7 +1495,9 @@ bool PistolBodyPoseMatches(const uint8_t* item,int pass) {
 
 bool PistolBodyArmPose(uint8_t* item,float* joints,int count,int pass,bool capture) {
     using namespace motiongun;
-    if(!MotionReady() || CurrentMotionWeapon()!=1 || count<15 || count>33) return false;
+    if(!g_boundDll || !g_boundBase) return false;
+    const int status=*Ptr<int16_t>(g_boundDll->lara+2);
+    if((!MotionReady() && status!=2 && status!=3 && !g_pistolAnimation.blending) || CurrentMotionWeapon()!=1 || count<15 || count>33) return false;
     const int fraction=*Ptr<int32_t>(g_boundDll->frameFrac);
     if(capture) {
         // Solvers publish the complete chains, including joints omitted from
@@ -1557,7 +1564,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         // body fitting and mount-recovery filtering can otherwise pull them
         // toward a headset-relative pose or ease them out over several frames.
         // Fall through to arm-only IK, which leaves hips/legs/chest untouched.
-        g_bodyFollower.Reset();g_torsoPose.Reset();g_bodyLanding=false;
+        g_bodyFollower.Reset();g_torsoPose.Reset();g_bodyLanding=false;g_pistolAnimation.Reset();
         return false;
     }
     const bool landing=UseLandingCamera(item);
@@ -1757,6 +1764,11 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         }
         for(int i=0;i<3;++i) posed[first+i]=Multiply(changes[i],chain[i]);
     }
+    if(CurrentMotionWeapon()==1 && !grip) {
+        // Main body owns the blend; attachments consume its published arm pose.
+        if(g_bodySkinScope && (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49)
+            g_pistolAnimation.Apply(item,weaponStatus,VR().PoseSerial(),TurnTime(),posed);
+    } else g_pistolAnimation.Reset();
     // Validate every correction before touching a palette. Helpers sharing a
     // native joint receive the same transform, including nonidentity bindings.
     for(int joint=0;joint<15;++joint) {
@@ -2644,6 +2656,8 @@ void __cdecl Detour_AimWeapon(void* weapon, uint8_t* arm) {
     if (item != g_headingItem) return;
     uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
     if (arm != lara + off::lara_left_arm && arm != lara + off::lara_right_arm) return;
+    const int status=*reinterpret_cast<const int16_t*>(lara+2);
+    if(CurrentMotionWeapon()==1 && (status==2 || status==3)) return;
     // TR5 RICH3 grapple animation state 2 is a terminal raised loop with no
     // holster transition. AnimateShotgun enters it when arm.lock is forced,
     // even with no fire input. Preserve the engine's lock for this weapon;
@@ -3948,7 +3962,15 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         bits = VisibleMeshBits(useMeshBits ? savedBits : UINT32_MAX,
             hideHead,false,false,armsOnly,false,g_unarmedArmsHidden && !fullBody) & bodyMask;
         g_bodySkinScope=true; g_bodySkinReady=false;
+        const bool previousPistolBody=g_pistolBodyScope,previousPistolForearm=g_pistolForearmScope;
+        const int weaponStatus=*Ptr<int16_t>(g_boundDll->lara+2);
+        if(fullBody && CurrentMotionWeapon()==1 && (weaponStatus==2 || weaponStatus==3 ||
+           g_pistolAnimation.mode!=0 || g_pistolAnimation.blending)) {
+            g_pistolBodyScope=!useMeshBits;
+            g_pistolForearmScope=useMeshBits && bits && !(bits&~0x3f00u);
+        }
         g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item, 1, renderPass);
+        g_pistolBodyScope=previousPistolBody;g_pistolForearmScope=previousPistolForearm;
         g_bodySkinScope=g_bodySkinReady=false;
         bits = savedBits;
     } else {

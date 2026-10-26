@@ -1766,6 +1766,7 @@ int main() {
         config.firstPersonMotionGuns=true;
         lastGun=savedLastGun;
         TestPhysicalHolsters(rva);
+        TestPistolAnimationBlend();
         {
             VRSystem::HandState hands[2]{};
             hands[0].btnUpper=true; hands[1].grip=1;

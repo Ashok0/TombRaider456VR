@@ -133,11 +133,12 @@ template<class Rva> void TestPhysicalHolsters(Rva rva) {
     g_holsters.active=true;g_holsters.weapon=1;g_holsters.mask=2;
     for(int nativeStatus:{2,3,4}) {
         status=int16_t(nativeStatus);
-        Check(MotionReady(),"physical weapon transitions retain tracked hand rendering");
+        Check(MotionReady()==(nativeStatus==4),"pistol draw and holster temporarily suspend tracked hand rendering");
         {
             HolsterRenderScope scope(itemMemory,appMemory);
-            Check(appMemory[0x508]==1 && appMemory[0x509]==5 && appMemory[0x50a]==1 &&
-                appMemory[0x50b]==0 && appMemory[0x50c]==5,"right-only draw renders left rest hand and full left holster");
+            Check(appMemory[0x508]==(nativeStatus==4 ? 1 : 5) && appMemory[0x509]==5 &&
+                appMemory[0x50a]==(nativeStatus==4 ? 1 : 0) && appMemory[0x50b]==0 && appMemory[0x50c]==5,
+                "pistol animation owns hand/holster mesh timing before independent grip selectors resume");
         }
         Check(appMemory[0x508]==5 && !appMemory[0x50a],"render scope restores native pair selectors");
     }
@@ -279,5 +280,51 @@ template<class Rva> void TestPhysicalHolsters(Rva rva) {
     *reinterpret_cast<int16_t*>(itemMemory+18)=oldState;g_bodySkinScope=savedScope;config=savedConfig;
     std::memcpy(appMemory+0x508,savedSelectors,5);appMemory[0x9ec]=0;
     *reinterpret_cast<uint8_t**>(appMemory+0x4f8)=savedOutfit;
+}
+void TestPistolAnimationBlend() {
+    using namespace tr::firstperson;
+    const auto make=[](Frame (&pose)[15],float angle,float travel) {
+        for(auto& joint:pose) joint={IdentityBasis(),{travel,0,0}};
+        for(int first:{8,11}) {
+            pose[first]={RotationMatrix(AxisRotation({1,0,0},angle)),{travel+(first==8 ? 180.f : -180.f),0,0}};
+            pose[first+1]={pose[first].basis,Transform(pose[first],{0,200,0})};
+            pose[first+2]={pose[first].basis,Transform(pose[first+1],{0,180,0})};
+        }
+    };
+    for(int hz:{60,90,120}) for(int animation:{2,3}) {
+        PistolAnimationBlend blend;
+        Frame pose[15]{};make(pose,0,0);blend.Apply(&blend,0,1,1,pose);
+        float oldWristZ=pose[10].origin.z;
+        double now=1.01;uint64_t serial=2;
+        for(int phase=0;phase<2;++phase) {
+            const int status=phase ? (animation==2 ? 4 : 0) : animation;
+            const float targetAngle=phase ? -.6f : 1.4f;
+            const double start=now;
+            for(int tick=0;tick<=hz/4;++tick,++serial) {
+                now=start+tick/double(hz);
+                make(pose,targetAngle,float(tick*20));
+                const auto desiredWrist=pose[10];
+                blend.Apply(&blend,status,serial,now,pose);
+                Check(std::fabs(pose[10].origin.z-oldWristZ)<2.1f*380*1.5f/(hz*.16f)+1,
+                      "pistol animation handoff has no one-frame wrist snap at 60/90/120 Hz");
+                if(tick==0) Check(std::fabs(pose[10].origin.z-oldWristZ)<.01f,
+                                  "draw/holster and return to controllers start at last rendered hand pose");
+                for(int first:{8,11}) for(int j=0;j<2;++j)
+                    Check(std::fabs(Length(Sub(pose[first+j+1].origin,pose[first+j].origin))-(j ? 180 : 200))<.02f,
+                          "smooth pistol handoff preserves connected arm bone lengths");
+                const auto rendered=pose[10];oldWristZ=rendered.origin.z;
+                make(pose,targetAngle,float(tick*20));
+                blend.Apply(&blend,status,serial,now,pose);
+                Check(Length(Sub(rendered.origin,pose[10].origin))<.01f,
+                      "repeated stereo/attachment draws cannot advance the handoff");
+                if(tick/double(hz)>=.16) Check(!blend.blending && Length(Sub(pose[10].origin,desiredWrist.origin))<.01f,
+                    "handoff finishes in 160 ms and restores exact native or tracked target");
+            }
+            now+=.01;
+        }
+        make(pose,1,1000);blend.Apply(nullptr,2,++serial,now+.01,pose);
+        Check(!blend.blending,"changed character cannot inherit old pistol handoff");
+        blend.Reset();Check(!blend.valid,"session reset clears pistol handoff");
+    }
 }
 } // namespace

@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-26T11:13:41.4405921-04:00",
+    "dll_sha256":  "537F37F6CF1BB015000D5A27E134468E975B4F873C21AC383559A8ECEDE9192C",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-pistol-animation-20261026-111341",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4247540,
+    "hardware_verified":  false,
+    "general_selftest":  "One pre-existing failure: full-body IK expected enabled but shipped template sets FirstPersonFullBodyIK=0.",
+    "change":  "First-person pistol draw/holster uses native animated hands and mesh timing, including physical holster requests. Full-body arm pose blends over 160 ms into animation and back to controllers; native bone reach and attachment wrist sharing retained. Head tracking and fitted body remain active. Other weapons, native animation speed, equip logic, physics and INI preserved."
+}

@@ -78,6 +78,7 @@ void TestFullBodyIK() {
     const auto savedFollower=g_bodyFollower;const auto savedSerial=VR().m_poseSerial;
     const auto savedTorso=g_torsoPose;const auto savedMount=g_mountBodyTransition;
     const bool savedLanding=g_bodyLanding;g_bodyLanding=false;
+    const auto savedPistolAnimation=g_pistolAnimation;g_pistolAnimation.Reset();
     const auto savedVisibility=g_bodyVisibility;g_bodyVisibility={};
     const auto savedAuto=g_autoBodyCalibration;g_autoBodyCalibration.pending=false;
     g_torsoPose.Reset();
@@ -339,6 +340,7 @@ void TestFullBodyIK() {
             ++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
             for(int next:{2,2,4,3,3,0}) {
                 status=int16_t(next);++VR().m_poseSerial;
+                g_pistolAnimation.Reset(); // This fixture checks the settled native transition pose.
                 Check(FullBodyIKReady(),"body solver stays available through draw and holster");
                 Detour_GetJoints(itemMemory,palette,0);
                 Frame nativeChest{},renderedChest{};
@@ -393,6 +395,30 @@ void TestFullBodyIK() {
                       "landing completion immediately fits torso and legs to standing eye without a forward flash");
             Check(!g_bodyLanding,"landing frame is discarded after returning to standing");
             anim=oldAnim;
+        }
+        g_pistolAnimation.Reset();
+        // Controller movement cannot override native pistol hands during draw
+        // or holster, including equipment requested from physical holsters.
+        {
+            const auto savedHolsters=g_holsters;const auto cfg=config;
+            vr::HmdMatrix34_t oldControllers[2];std::memcpy(oldControllers,VR().m_rawControllerPose,sizeof(oldControllers));
+            const auto oldAnim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=103;
+            state=2;gun=1;config.firstPersonBodyHandYawWeight=0;
+            for(int next:{2,3}) for(bool physical:{false,true}) {
+                status=int16_t(next);g_holsters.active=physical;g_holsters.weapon=1;
+                g_bodyFollower.Reset();g_torsoPose.Reset();g_pistolAnimation.Reset();
+                ++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+                Check(!MotionReady() && FullBodyIKReady(),"pistol animation disables tracked hands while retaining fitted body");
+                for(int hand=0;hand<2;++hand) VR().m_rawControllerPose[hand].m[0][3]+=.3f;
+                ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                for(int i=0;i<count;++i) if(mapping[i]>=8 && mapping[i]<=13)
+                    Check(nearVec(ReadRows(palette+i*12).origin,ReadRows(baseline+i*12).origin),
+                          "moving controllers during draw/holster cannot move animated hands");
+                std::memcpy(VR().m_rawControllerPose,oldControllers,sizeof(oldControllers));
+            }
+            g_holsters=savedHolsters;config=cfg;g_pistolAnimation.Reset();
+            *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=oldAnim;
         }
         for(int which:{0,1}) for(int stance:{0,1,2,3,9,15,25,26,27,71,73,10,30,31,19,54}) for(int armed:{0,1}) {
             g_torsoPose.Reset();++VR().m_poseSerial;
@@ -1161,6 +1187,7 @@ void TestFullBodyIK() {
     g_pistolRoll=savedPistolRoll;
     g_torsoPose=savedTorso;g_mountBodyTransition=savedMount;
     g_bodyLanding=savedLanding;
+    g_pistolAnimation=savedPistolAnimation;
     g_bodyVisibility=savedVisibility;
     g_autoBodyCalibration=savedAuto;
     g_bodySize=savedBodySize;g_bodySizeObject=savedSizeObject;
