@@ -5,6 +5,26 @@ uint8_t* jumpAnimationTable=jumpAnimations;
 int jumpTicks=0,jumpClipSeen=-1;
 uint64_t jumpBitsSeen=0;
 bool jumpClearance=true;
+int16_t compressionAxes[2]{};
+void __cdecl NativeCompressionConsumer(uint8_t* item,void*) {
+    using namespace tr;
+    ++jumpTicks;jumpBitsSeen=actionInput;
+    compressionAxes[0]=analogMemory[0];compressionAxes[1]=analogMemory[1];
+    auto& body=*reinterpret_cast<PHD_3DPOS*>(item+off::item_pos);
+    const int status=*reinterpret_cast<int16_t*>(laraMemory+2),weapon=*reinterpret_cast<int16_t*>(laraMemory+4);
+    const bool armed=weapon!=8 && (status==4 || (status==2 && weapon!=7));
+    // Verified against real lara_as_compress/ModernControlsRotation by
+    // verify_directional_jump.py: only unarmed analog rotates before dispatch.
+    if(NewControls() && !armed && (analogMemory[0] || analogMemory[1]))
+        body.y_rot=Angle(Radians(body.y_rot)+.5f);
+    if(!jumpClearance) return;
+    const auto direction=actionInput&locomotion::Directions;
+    const int target=direction==locomotion::Left ? 27 : direction==locomotion::Right ? 26 :
+        direction==locomotion::Back ? 25 : 3;
+    *reinterpret_cast<int16_t*>(item+off::item_goal_state)=int16_t(target);
+    *reinterpret_cast<int16_t*>(laraMemory+off::lara_move_angle)=
+        Angle(Radians(body.y_rot)+(target==27 ? -kPi/2 : target==26 ? kPi/2 : target==25 ? kPi : 0));
+}
 float edgeYaw=0;
 int edgeDistance=0,edgeDrop=1024,edgeQueries=0,edgeLaunch=-1;
 bool edgeMissing=false;
@@ -121,6 +141,56 @@ void TestGroundJumpPriority() {
         Check(g_groundJump.pending,"a goal request alone cannot consume the buffered jump");
         Detour_LaraAboveWater(itemMemory,nullptr);
         Check(state==15 && !g_groundJump.pending && jumpTicks==1,"last standing frame cannot swallow a released A tap");
+    }
+    for(int which:{0,1}) for(int status:{0,1,2,3,4}) for(int weapon:{1,7,8})
+    for(float heading:{0.f,.7f,-2.9f}) for(bool clear:{false,true})
+    for(locomotion::Vec direction:{locomotion::Vec{-1,.2f},locomotion::Vec{1,-.2f},locomotion::Vec{.2f,-1}}) {
+        reset(which,true,15,73);goal=15;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=2;
+        *reinterpret_cast<int16_t*>(laraMemory+2)=int16_t(status);
+        *reinterpret_cast<int16_t*>(laraMemory+4)=int16_t(weapon);
+        Head(heading);body.y_rot=Angle(heading);jumpClearance=clear;
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&NativeCompressionConsumer);
+        float x=direction.x,y=direction.z,r=0;FirstPersonInput(x,y,r,false,true);
+        analogMemory[0]=12000;analogMemory[1]=24000;
+        const uint64_t keep=(uint64_t(1)<<40)|0x10|0x40;
+        actionInput=keep;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        const auto expected=locomotion::MovementAction(direction,true)&locomotion::Directions;
+        const bool armed=weapon!=8 && (status==4 || (status==2 && weapon!=7));
+        Check(body.y_rot==Angle(heading) && (jumpBitsSeen&locomotion::Directions)==expected && (jumpBitsSeen&keep)==keep,
+              "armed and unarmed FP directional takeoff keep head facing and requested jump direction");
+        Check(armed ? (compressionAxes[0] || compressionAxes[1]) : (!compressionAxes[0] && !compressionAxes[1]),
+              "only the native unarmed rotation branch has its analog axes suppressed");
+        Check(std::hypot(float(analogMemory[0]),float(analogMemory[1]))>26000 && jumpTicks==1 &&
+              body.x_pos==0 && body.y_pos==0 && body.z_pos==0 && speed==47 && !(flags&8),
+              "compression restores analog steering and preserves native speed and one simulation tick");
+        Check(goal==(clear ? (expected==locomotion::Left ? 27 : expected==locomotion::Right ? 26 : 25) : 15),
+              "native floor clearance still accepts or rejects directional jump");
+        if(clear) Check(std::fabs(Wrap(Radians(*reinterpret_cast<int16_t*>(laraMemory+off::lara_move_angle))-
+                                      locomotion::MovementYaw(direction,heading)))<.001f,
+                        "unarmed takeoff move angle matches the requested cardinal direction");
+    }
+    for(int which:{0,1}) for(int reason=0;reason<13;++reason) {
+        reset(which,true,15,73);
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=2;
+        g_haveManualInput=true;g_manualLocal={-1,0};analogMemory[0]=1234;analogMemory[1]=5678;
+        if(reason==0) g_active=false;
+        if(reason==1) g_headingItem=nullptr;
+        if(reason==2) g_haveHeading=false;
+        if(reason==3) g_haveManualInput=false;
+        if(reason==4) g_shifted=true;
+        if(reason==5) water=1;
+        if(reason==6) *reinterpret_cast<int16_t*>(itemMemory+off::item_hit_points)=0;
+        if(reason==7) state=25;
+        if(reason==8) state=3;
+        if(reason==9) g_manualLocal={0,1};
+        if(reason==10) config.gamepadEnabled=false;
+        if(reason==11) *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=0;
+        if(reason==12) *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=1;
+        DirectionalJumpAxesScope scope(itemMemory);
+        Check(analogMemory[0]==1234 && analogMemory[1]==5678,
+              "directional takeoff scope excludes third person, airborne steering, forward jumps and ineligible contexts");
     }
     for(int which:{0,1}) for(int reason=0;reason<27;++reason) {
         reset(which,true,0,1);

@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-26T00:12:42.4555957-04:00",
+    "dll_sha256":  "35C463F97F41DBC713DD164DF58AEE191358DE3DE8E9C7299A2F7E9E98825BA9",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-backjump-camera-20261026-001242",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4242448,
+    "hardware_verified":  false,
+    "general_selftest":  "One pre-existing failure: full-body IK expected enabled but shipped template sets FirstPersonFullBodyIK=0.",
+    "change":  "TR4/5 first-person backjump camera follows interpolated native root with calibrated standing offset, removing the animated neck second arc. Live tracking, collision clearance, physics, existing jump visibility and landing behavior retained. Uncalibrated or stabilization-disabled views use native eye. Existing INI preserved."
+}

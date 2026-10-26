@@ -77,6 +77,7 @@ void TestFullBodyIK() {
     const auto savedPistolRoll=g_pistolRoll;g_pistolRoll={};
     const auto savedFollower=g_bodyFollower;const auto savedSerial=VR().m_poseSerial;
     const auto savedTorso=g_torsoPose;const auto savedMount=g_mountBodyTransition;
+    const bool savedLanding=g_bodyLanding;g_bodyLanding=false;
     const auto savedVisibility=g_bodyVisibility;g_bodyVisibility={};
     const auto savedAuto=g_autoBodyCalibration;g_autoBodyCalibration.pending=false;
     g_torsoPose.Reset();
@@ -328,6 +329,71 @@ void TestFullBodyIK() {
             std::memcpy(worldCameraPos,oldCamera,sizeof(oldCamera));
             g_torsoPose.Reset();g_bodyFollower.Reset();
         }
+        // Weapon status must not switch the torso back to native placement.
+        // Native draw/holster arms remain attached to that same fitted chest.
+        for(int which:{0,1}) {
+            dll.game=game=which;state=2;gun=1;status=0;
+            auto& anim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            const auto oldAnim=anim;anim=103;
+            g_bodyFollower.Reset();g_torsoPose.Reset();g_bodyLanding=false;
+            ++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+            for(int next:{2,2,4,3,3,0}) {
+                status=int16_t(next);++VR().m_poseSerial;
+                Check(FullBodyIKReady(),"body solver stays available through draw and holster");
+                Detour_GetJoints(itemMemory,palette,0);
+                Frame nativeChest{},renderedChest{};
+                for(int i=0;i<count;++i) if(mapping[i]==7) {
+                    Inverse(Multiply(ReadRows(fixture+i*12),bind[i]),nativeChest);
+                    Inverse(Multiply(ReadRows(palette+i*12),bind[i]),renderedChest);
+                    break;
+                }
+                for(int i=0;i<count;++i) {
+                    if(mapping[i]<8) Check(nearVec(ReadRows(palette+i*12).origin,ReadRows(baseline+i*12).origin),
+                        "draw and holster cannot move the rendered torso or legs forward");
+                    if((next==2 || next==3) && mapping[i]>=8 && mapping[i]<=13) {
+                        const auto actual=Multiply(renderedChest,Multiply(ReadRows(palette+i*12),bind[i]));
+                        const auto expected=Multiply(nativeChest,Multiply(ReadRows(fixture+i*12),bind[i]));
+                        Check(nearVec(actual.origin,expected.origin),
+                              "native weapon animation keeps its arm placement relative to fitted chest");
+                    }
+                }
+                if(next==2 || next==3) Check(!MotionReady(),"rendering transition body does not enable weapon firing or tracked gun takeover");
+            }
+            const auto savedInventory=g_worldInventory;
+            const bool ready=inventorySceneReady,drawing=inventorySceneDrawing;
+            const auto cfg=config;config.worldInventory=true;config.monoTracking=false;config.gamepadEnabled=true;
+            auto& menu=*reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive);
+            const int oldMenu=menu;menu=1;inventorySceneReady=true;
+            g_worldInventory={};g_worldInventory.open=true;g_worldInventory.game=game;
+            for(bool drawWorld:{false,true,false,true}) {
+                inventorySceneDrawing=drawWorld;
+                Check(!Gate() && !MotionTriggerMode(),"inventory keeps gameplay and weapon input suspended during world rendering");
+                Check(FullBodyIKReady()==drawWorld,"only the inventory world draw retains the first-person body solver");
+                if(drawWorld) {
+                    ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                    for(int i=0;i<count;++i) if(mapping[i]<8)
+                        Check(nearVec(ReadRows(palette+i*12).origin,ReadRows(baseline+i*12).origin),
+                              "entering inventory ring cannot reveal the unfitted body position");
+                }
+            }
+            menu=oldMenu;g_worldInventory=savedInventory;
+            inventorySceneReady=ready;inventorySceneDrawing=drawing;config=cfg;
+            // Landing camera/root changes must not carry a kneeling torso into
+            // the first standing palette, even within the same tracking sample.
+            const auto oldScene=g_scenePose;
+            float landingFixture[33*12];std::memcpy(landingFixture,fixture,sizeof(fixture));
+            for(int i=0;i<count;++i) landingFixture[i*12+11]+=240;
+            skinFixture=landingFixture;anim=82;g_scenePose.z_pos+=240;
+            ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+            Check(g_bodyLanding,"landing pose records its separate camera frame");
+            skinFixture=fixture;anim=103;g_scenePose=oldScene;
+            Detour_GetJoints(itemMemory,palette,0);
+            for(int i=0;i<count;++i) if(mapping[i]<8)
+                Check(nearVec(ReadRows(palette+i*12).origin,ReadRows(baseline+i*12).origin),
+                      "landing completion immediately fits torso and legs to standing eye without a forward flash");
+            Check(!g_bodyLanding,"landing frame is discarded after returning to standing");
+            anim=oldAnim;
+        }
         for(int which:{0,1}) for(int stance:{0,1,2,3,9,15,25,26,27,71,73,10,30,31,19,54}) for(int armed:{0,1}) {
             g_torsoPose.Reset();++VR().m_poseSerial;
             dll.game=which;state=int16_t(stance);status=armed ? 4 : 0;g_bodyVisualOffset={55,-80};
@@ -339,7 +405,12 @@ void TestFullBodyIK() {
             config.firstPersonFullBodyIK=config.firstPersonUnarmedIK=true;
             // Call explicitly as well: fallback arms must not conceal a failed body solve.
             std::memcpy(palette,baseline,count*12*sizeof(float));
-            Check(ApplyFullBodyIK(itemMemory,palette,count),"production body solver recovers all native and HD helper joints");
+            const bool airborne=IsNativeAirborneBodyState(itemMemory);
+            Check(ApplyFullBodyIK(itemMemory,palette,count)==!airborne,
+                  "grounded body uses full IK; airborne body falls through to arm-only IK");
+            if(airborne) Check(!std::memcmp(palette,baseline,count*12*sizeof(float)) &&
+                !g_bodyFollower.valid && !g_torsoPose.valid,
+                "airborne bypass leaves animation untouched and clears standing/mount pose history");
             const auto itemSnapshot=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
             const auto laraSnapshot=std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory));
             Detour_GetJoints(itemMemory,palette,0);
@@ -351,6 +422,9 @@ void TestFullBodyIK() {
             Check(render && !std::memcmp(render,palette,count*12*sizeof(float)),"skinning uploads the full-body pose without physics overwriting it");
             for(int i=0;i<count;++i) {
                 const int joint=mapping[i];const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                if(airborne && (joint<8 || joint==14))
+                    Check(!std::memcmp(palette+i*12,baseline+i*12,12*sizeof(float)),
+                          "uploaded airborne hips legs torso and head exactly match native animation");
                 if(joint>=8 && joint<=13 && (!FullBodyGripState(itemMemory) || armed)) {
                     for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
                         float dot=0;
@@ -376,6 +450,29 @@ void TestFullBodyIK() {
                         Check(std::fabs(actual.basis.r[r][c]-target.basis.r[r][c])<.002f,"armed body wrist matches exact gun orientation without unarmed wrist limits");
                 }
             }
+        }
+        // Rapid airborne animation must reach skinning in the same frame,
+        // including mapped HD helper bones and a lingering mount recovery.
+        for(int which:{0,1}) for(int jump:{3,15,26,27}) for(bool armed:{false,true}) {
+            dll.game=which;state=int16_t(jump);status=armed ? 4 : 0;
+            for(int frame=0;frame<8;++frame) {
+                float animated[33*12]{},expected[33*12]{};
+                std::memcpy(animated,fixture,sizeof(animated));
+                for(int i=0;i<count;++i) if(mapping[i]<8) {
+                    animated[i*12+7]+=(frame%2 ? -150.f : 90.f)*(mapping[i]+1);
+                    animated[i*12+11]+=frame*31.f;
+                }
+                std::memcpy(expected,animated,sizeof(expected));
+                if(BodyVisualOffsetApplies(itemMemory))
+                    stabilization::OffsetBodyPalette(expected,count,BodyRenderOffset());
+                skinFixture=animated;g_torsoPose.recovering=true;++VR().m_poseSerial;
+                Detour_GetJoints(itemMemory,palette,0);
+                for(int i=0;i<count;++i) if(mapping[i]<8)
+                    Check(!std::memcmp(palette+i*12,expected+i*12,12*sizeof(float)),
+                          "rapid jump leg animation reaches uploaded palette immediately without IK easing or floating feet");
+                Check(!g_torsoPose.recovering,"airborne rendering discards lingering mount-recovery smoothing");
+            }
+            skinFixture=fixture;
         }
         // Real draw order: body, then independently animated pistol meshes.
         // The attachment may omit torso/shoulders and has different bindings
@@ -981,7 +1078,7 @@ void TestFullBodyIK() {
             if(reason==3) appMemory[0x9e4]=0;
             if(reason==4) state=23;
             if(reason==5) state=12;
-            if(reason==6) status=2;
+            if(reason==6) status=1; // Busy hands outside native ledge grips.
             if(reason==7) water=1;
             if(reason==8) gun=7;
             if(reason==9) state=40; // Scripted/use interaction not in the allowed set.
@@ -1063,6 +1160,7 @@ void TestFullBodyIK() {
     g_bodyFollower=savedFollower;VR().m_poseSerial=savedSerial;
     g_pistolRoll=savedPistolRoll;
     g_torsoPose=savedTorso;g_mountBodyTransition=savedMount;
+    g_bodyLanding=savedLanding;
     g_bodyVisibility=savedVisibility;
     g_autoBodyCalibration=savedAuto;
     g_bodySize=savedBodySize;g_bodySizeObject=savedSizeObject;

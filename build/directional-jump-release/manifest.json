@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-25T23:45:09.2255949-04:00",
+    "dll_sha256":  "C636279C1642FDA705D21B5C610BB7BC6697308FE6664C8CDD0F54F7EAE6725F",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-directional-jump-20261025-234508",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4171434,
+    "hardware_verified":  false,
+    "general_selftest":  "One pre-existing failure: full-body IK expected enabled but shipped template sets FirstPersonFullBodyIK=0.",
+    "change":  "TR4/5 first-person left/right/back jump states 25/26/27 hide body and hair while retaining hands/weapons. Body mask restores when the jump ends or first person is disabled. Forward/vertical jumps, third person, shadows and physics retain existing behavior. Previous inventory/ammo fixes retained. Existing INI preserved."
+}

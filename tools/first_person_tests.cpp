@@ -58,6 +58,7 @@ uint8_t vonCroyScene=0;
 bool nativeMoves = true, jointFollowsBody = false;
 bool worldCameraValid = false, opticsZoomed=false;
 bool inventorySceneReady = false;
+bool inventorySceneDrawing = false;
 float worldCameraRot[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
 float worldCameraPos[3] = {};
 uint8_t* laraItem = itemMemory;
@@ -586,6 +587,7 @@ bool InlineHook::Install(void*, void*, size_t, const uint8_t*, size_t,
 }
 namespace tr {
 bool InventorySceneReady() { return inventorySceneReady; }
+bool InventorySceneDrawing() { return inventorySceneDrawing; }
 const Config& Cfg() { return config; }
 const motiongun::Calibration& LiveMotionGunCalibration() {
     return testCalibration;
@@ -1260,7 +1262,8 @@ int main() {
             const int oldGame=game;const auto oldState=state;
             const auto oldFlags=*reinterpret_cast<uint32_t*>(appMemory+drva::app_off::cfgFlags);
             auto& flags=*reinterpret_cast<uint32_t*>(appMemory+drva::app_off::cfgFlags);
-            for(int which:{0,1}) for(int crouch:{71,80,81,84,85,86,105,106}) for(bool modern:{false,true}) {
+            // Crouching and directional jumps share a hands-only draw mask.
+            for(int which:{0,1}) for(int crouch:{25,71,80,81,84,85,86,105,106}) for(bool modern:{false,true}) {
                 game=dll.game=which;state=int16_t(crouch);
                 RestoreHeadMesh();meshBits=0x7fff;
                 flags=0x101u|(modern ? 2u : 0u);const auto savedFlags=flags;
@@ -2952,6 +2955,53 @@ int main() {
             Check(bits == baseBits && !g_rollHidden && !g_headHidden,
                   "inventory during a roll restores full original mask");
             std::memset(appMemory, 0, sizeof(appMemory));
+        }
+        for(bool hideHead:{false,true}) for(int jump:{25}) {
+            RestoreHeadMesh();bits=baseBits;config.firstPersonHideHead=hideHead;
+            state=int16_t(jump);UpdateSceneCamera(camera);
+            Check(g_active && !IsCrouchState(itemMemory) && IsHandsOnlyBodyState(itemMemory) &&
+                  bits==(baseBits&firstperson::HandMeshBits),
+                  "directional jumps hide classic body without changing jump/crouch camera classification");
+            const int before=draws,beforeHair=hairs;
+            Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+            Check(draws==before+1 && drawnUseBits==1 && drawnBodyBits==firstperson::HandMeshBits && hairs==beforeHair,
+                  "left/right/back first-person jumps draw only HD hands and no hair");
+            Check(bits==(baseBits&firstperson::HandMeshBits),"jump draw restores persistent visibility mask");
+            ShadowDll jumpShadow{};static int jumpPass=4;jumpShadow.renderPass=rva(&jumpPass);
+            const auto oldShadow=g_shadowDll;g_shadowDll=&jumpShadow;
+            Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+            Check(drawnUseBits==0 && hairs==beforeHair+1,"directional jump shadow keeps native body and hair");
+            g_shadowDll=oldShadow;
+            g_runtimeEnabled=false;UpdateSceneCamera(camera);
+            const int thirdDraws=draws,thirdHair=hairs;
+            Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+            Check(!g_active && bits==baseBits && draws==thirdDraws+1 && drawnUseBits==0 && hairs==thirdHair+1,
+                  "switching to third person mid-jump restores complete native body immediately");
+            g_runtimeEnabled=true;UpdateSceneCamera(camera);
+            for(int next:{2,3,15}) {
+                state=int16_t(next);UpdateSceneCamera(camera);
+                Check(!g_crouchHidden && FirstPersonBodyMask(itemMemory)==UINT32_MAX &&
+                      bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
+                      "standing forward jump and vertical jump retain normal first-person body visibility");
+            }
+            state=2;UpdateSceneCamera(camera);
+        }
+        for(bool hideHead:{false,true}) for(int jump:{3,15,26,27}) {
+            RestoreHeadMesh();bits=baseBits;config.firstPersonHideHead=hideHead;
+            state=int16_t(jump);UpdateSceneCamera(camera);
+            Check(g_active && !IsHandsOnlyBodyState(itemMemory) &&
+                  FirstPersonBodyMask(itemMemory)==UINT32_MAX &&
+                  bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits),
+                  "forward vertical and sideways jumps retain body under the normal head visibility setting");
+            const int before=draws,beforeHair=hairs;
+            Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
+            Check(draws==before+1 && (drawnUseBits==0 || (drawnBodyBits&0x7f)==0x7f) && hairs==beforeHair+1,
+                  "visible jumps retain hips legs and hair even when first-person head hiding is enabled");
+            state=25;UpdateSceneCamera(camera);
+            const int backHair=hairs;Detour_DrawHair(0);
+            Check(bits==(baseBits&firstperson::HandMeshBits) && hairs==backHair,
+                  "transition into backpedal jump immediately hides body and hair");
+            state=2;UpdateSceneCamera(camera);
         }
         for (bool hideHead:{false,true}) for (int crouch:{71,80,81,84,85,86,105,106}) {
             RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
@@ -4829,6 +4879,67 @@ int main() {
         transition.Begin();transition.Reset();
         Check(locomotion::Length(transition.Correction(residual,-1600,3))==0,
               "camera/session reset discards stale mount correction");
+    }
+    // Backjump's neck animation rises during descent. The first-person eye
+    // must follow the single native root arc, without delaying its apex.
+    {
+        const auto savedConfig=config;
+        const auto oldJoint=dll.getJointAbsPositionLerp;
+        for(int which:{0,1}) for(bool stable:{false,true}) for(bool calibrated:{false,true})
+        for(float heading:{0.f,.7f,-1.9f}) {
+            game=dll.game=which;resetRoomscale();ResetMovementStabilization();
+            config.firstPersonMovementStabilization=stable;
+            config.firstPersonBodyFollowsHead=config.firstPersonRoomscaleMove=false;
+            collisionMode=0;gaitSway={};physicalPose(0);FirstPersonRecenter();
+            dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+            auto& animation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            animation=0;fraction=256;Anchor(camera);
+            if(!calibrated) g_groundEye.Reset();
+            const auto reference=g_groundEye;
+            state=25;animation=75;g_headingBase=heading;
+            physicalPose(0,.02f,-.03f,.04f);
+            const auto tracking=VR().m_rawHeadPose;
+            const float neutral=VR().m_firstPersonNeutral[1];
+            for(int tick=0;tick<=12;++tick) {
+                prev=pos;pos.x_pos+=7;pos.z_pos-=100;
+                pos.y_pos=16*(tick-6)*(tick-6)-576;
+                gaitSway={tick%2 ? 120 : -120,tick%2 ? 160 : -160,tick%2 ? -90 : 90};
+                for(int f:{0,64,128,192,256}) {
+                    fraction=f;
+                    const auto nativePosition=pos,nativePrevious=prev;
+                    const auto nativeInput=actionInput;
+                    Check(Anchor(camera),"backjump camera stays active throughout ascent and descent");
+                    if(stable && calibrated) {
+                        const float t=f/256.f;
+                        const auto flat=locomotion::Rotate({reference.local.x,reference.local.z},g_headingBase);
+                        Check(std::fabs(camera.y_pos-(prev.y_pos+(pos.y_pos-prev.y_pos)*t+reference.local.y))<=.51f &&
+                              std::fabs(camera.x_pos-(prev.x_pos+(pos.x_pos-prev.x_pos)*t+flat.x))<=.51f &&
+                              std::fabs(camera.z_pos-(prev.z_pos+(pos.z_pos-prev.z_pos)*t+flat.z))<=.51f,
+                              "backjump eye follows interpolated physics arc despite reversing neck animation");
+                    } else {
+                        PHD_VECTOR animated{config.firstPersonAnchorX,config.firstPersonAnchorY,config.firstPersonAnchorZ};
+                        FakeGaitJoint(itemMemory,&animated,14,f);
+                        Check(camera.x_pos==animated.x && camera.y_pos==animated.y && camera.z_pos==animated.z,
+                              "backjump opt-out and uncalibrated midair entry preserve native eye");
+                    }
+                    Check(!std::memcmp(&nativePosition,&pos,sizeof(pos)) &&
+                          !std::memcmp(&nativePrevious,&prev,sizeof(prev)) && nativeInput==actionInput &&
+                          !std::memcmp(&tracking,&VR().m_rawHeadPose,sizeof(tracking)) &&
+                          neutral==VR().m_firstPersonNeutral[1],
+                          "backjump correction preserves physics, jump input and live headset tracking");
+                    Check(reference.valid==g_groundEye.valid &&
+                          !std::memcmp(&reference.local,&g_groundEye.local,sizeof(reference.local)),
+                          "backjump never captures animated neck into standing calibration");
+                }
+            }
+            state=2;animation=0;gaitSway={};fraction=256;Anchor(camera);
+            Check(camera.y_pos==pos.y_pos-700,"backjump completion restores standing eye height");
+            state=25;animation=75;g_runtimeEnabled=false;
+            const PHD_3DPOS native{400,500,600,20,30,40,0};camera=native;UpdateSceneCamera(camera);
+            Check(!g_active && !std::memcmp(&camera,&native,sizeof(native)),
+                  "third-person backjump camera is unchanged");
+        }
+        config=savedConfig;dll.getJointAbsPositionLerp=oldJoint;gaitSway={};
     }
     // Landing clips use STOP or RUN. Exercise the full
     // animated anchor, body fit, floor clearance and standing reference together.

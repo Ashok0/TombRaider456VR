@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-26T04:42:41.0245967-04:00",
+    "dll_sha256":  "3EFF0A919CC0181DA87478F847532540C96938BC6BD2B0A02949A60EBE2B2BD1",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-body-transition-20261026-044240",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4245640,
+    "hardware_verified":  false,
+    "general_selftest":  "One pre-existing failure: full-body IK expected enabled but shipped template sets FirstPersonFullBodyIK=0.",
+    "change":  "TR4/5 FP full-body positioning stays active during weapon draw/holster with native transition arms attached to fitted chest. Inventory world rendering retains the fitted body while normal input remains gated. Landing completion discards stale kneeling torso/footprint history when returning to standing camera. Native/HD render regressions passed. Existing jump fixes and INI preserved."
+}

@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-25T23:51:54.4260941-04:00",
+    "dll_sha256":  "83BD299D64CDCD3470E4434A58AC3E35C1D825F13783C112F8BDAA042EAC96E4",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-native-jump-pose-20261025-235154",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4176178,
+    "hardware_verified":  false,
+    "general_selftest":  "One pre-existing failure: full-body IK expected enabled but shipped template sets FirstPersonFullBodyIK=0.",
+    "change":  "TR4/5 first-person airborne body uses native hips/legs/torso with arm-only IK and cleared standing/mount pose history. Forward/vertical/side jumps show body and hair while preserving the head-mesh setting. Backward/backpedal jump retains hands-only visibility and hidden hair. Grounded full-body IK, third person, shadows, physics, inventory and ammo routing retained. Existing INI preserved."
+}

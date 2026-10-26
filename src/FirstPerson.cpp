@@ -259,6 +259,7 @@ firstperson::ArmRollContinuity PistolRollSeed(int hand,const uint8_t* item) {
 firstperson::BodyFollower g_bodyFollower;
 firstperson::BodySizeCalibration g_bodySize;
 firstperson::TorsoPoseFilter g_torsoPose;
+bool g_bodyLanding=false;
 firstperson::BodyVisibilityRecovery g_bodyVisibility;
 firstperson::AutoBodyCalibration g_autoBodyCalibration;
 int g_bodySizeObject=-1;
@@ -279,6 +280,7 @@ void ResetBodyFollower() {
     g_bodyFollower.Reset();g_roomscaleFollower={};g_roomscaleFollowTime={};
     g_bodySize.Reset();g_bodySizeObject=-1;
     g_torsoPose.Reset();
+    g_bodyLanding=false;
     g_heightCrouch={};g_physicalCrouchCamera=false;
 }
 
@@ -563,12 +565,12 @@ bool ScriptedCameraActive() {
     return d.vonCroyCutscene && *Ptr<uint8_t>(d.vonCroyCutscene);
 }
 
-bool Gate() {
+bool Gate(bool inventoryBackground=false) {
     if (!g_boundDll || !g_boundBase || !Cfg().enabled ||
         !Cfg().firstPerson || !g_runtimeEnabled)
         return false;
     if (!VR().active() || !VR().poseValid()) return false;
-    if (InInventory() || InFMV() || InTitle()) return false;
+    if ((InInventory() && !inventoryBackground) || InFMV() || InTitle()) return false;
     if (ScriptedCameraActive()) return false;
     const GameDllLayout& dll = *g_boundDll;
     const auto* item=*Ptr<uint8_t*>(dll.laraItem);
@@ -738,6 +740,29 @@ bool IsCrouchState(const uint8_t* item) {
     }
 }
 
+bool IsHandsOnlyBodyState(const uint8_t* item) {
+    if(!item) return false;
+    // TR4/5 lara_control_routines[25]: backjump. Side jumps stay visible.
+    // Use the current animation state, not stick input or the requested goal,
+    // so the body returns as soon as the directional jump ends. Camera and
+    // locomotion still distinguish these jumps from actual crouching.
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    return IsCrouchState(item) || state==25;
+}
+
+bool IsNativeAirborneBodyState(const uint8_t* item) {
+    if(!item) return false;
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    return state==3 || state==9 || state==15 || (state>=25 && state<=29);
+}
+
+bool ShowJumpHair(const uint8_t* item) {
+    if(!g_active || !item || !g_boundDll || !g_boundBase ||
+       item!=*Ptr<uint8_t*>(g_boundDll->laraItem)) return false;
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    return state==3 || state==15 || state==26 || state==27;
+}
+
 bool CanUseCrouchCamera(const uint8_t* item) {
     return IsCrouchState(item) && LaraWaterStatus()==0 &&
         *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0 &&
@@ -838,7 +863,7 @@ uint32_t FirstPersonBodyMask(const uint8_t* item) {
     const auto mask=g_bodyVisibility.Update(item,AppState(drva::app_off::level),TurnTime(),
         locomotion::IsLedgeHangState(state) || locomotion::IsLedgeMountState(state),
         UseLandingCamera(item),g_mountBodyTransition.active || g_torsoPose.recovering);
-    return IsCrouchState(item) ? firstperson::HandMeshBits : mask;
+    return IsHandsOnlyBodyState(item) ? firstperson::HandMeshBits : mask;
 }
 
 bool CanModifyGroundMotion(const uint8_t* item) {
@@ -912,7 +937,9 @@ const char* ControllerTrackingBlockedReason() {
     if (!g_scenePoseValid) return "no-scene-camera";
     if (!g_active) return "first-person-inactive";
     if (!g_haveHeading) return "no-heading";
-    if (!Gate()) return "first-person-gate";
+    // Only the inventory's world draw may keep rendering the fitted body.
+    // Gameplay/input callers still encounter the normal inventory gate.
+    if (!Gate(InventorySceneDrawing() && InventorySceneReady() && WorldInventoryActive())) return "first-person-gate";
     if (!Cfg().positionalTracking) return "positional-tracking-disabled";
     if (!Cfg().firstPersonHeadTranslation) return "head-translation-disabled";
     // Classic graphics use a separate Lara renderer. Keep the old head-aim
@@ -1238,7 +1265,8 @@ bool FullBodyIKReady() {
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool nativeGrip=status==1 && FullBodyGripState(item); // Hands-busy during pull-ups.
-    if(!FullBodyState(item) || (status!=0 && !nativeGrip && !MotionReady()) ||
+    const bool weaponTransition=(status==2 || status==3) && MotionWeaponSupported(CurrentMotionWeapon());
+    if(!FullBodyState(item) || (status!=0 && !nativeGrip && !weaponTransition && !MotionReady()) ||
        (status==0 && !FlareIKReady() && (!Cfg().firstPersonUnarmedIK || CurrentMotionWeapon()<0 || CurrentMotionWeapon()>6))) return false;
     motiongun::Frame wrist{};GunBasis controller{};vr::HmdMatrix34_t head{};
     return VR().HeadPose(head) && BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller);
@@ -1524,6 +1552,22 @@ motiongun::Vec BodyPaletteCameraOrigin(uint8_t* item,const motiongun::Frame& hea
 bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
     if(!FullBodyIKReady() || count<15 || count>33) return false;
+    if(IsNativeAirborneBodyState(item)) {
+        // Airborne feet must follow this frame's native animation. Standing
+        // body fitting and mount-recovery filtering can otherwise pull them
+        // toward a headset-relative pose or ease them out over several frames.
+        // Fall through to arm-only IK, which leaves hips/legs/chest untouched.
+        g_bodyFollower.Reset();g_torsoPose.Reset();g_bodyLanding=false;
+        return false;
+    }
+    const bool landing=UseLandingCamera(item);
+    if(g_bodyLanding && !landing) {
+        // The camera has returned from the animated landing neck to the
+        // standing eye. A cached kneeling torso belongs to the old frame;
+        // easing it in the new frame briefly places the body ahead of the eye.
+        g_bodyFollower.Reset();g_torsoPose.Reset();
+    }
+    g_bodyLanding=landing;
     const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
     if(object<0) return false;
     const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
@@ -1685,7 +1729,9 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
             quiet ? 0.f : g_bodyFollower.stepWeight,
             firstperson::KneeBendDegrees(posed,1),firstperson::KneeBendDegrees(posed,4));
     }
-    for(int hand=0;hand<2;++hand) {
+    const int weaponStatus=*Ptr<int16_t>(g_boundDll->lara+2);
+    const bool nativeWeaponArms=(weaponStatus==2 || weaponStatus==3) && !MotionReady();
+    for(int hand=0;!nativeWeaponArms && hand<2;++hand) {
         const int first=hand ? 8 : 11;
         Frame chain[3]={posed[first],posed[first+1],posed[first+2]},changes[3]{},target=native[first+2];
         if(!grip) {
@@ -3094,6 +3140,31 @@ struct IdleTrackedGunHeadingScope {
     ~IdleTrackedGunHeadingScope() { if(heading) *heading=saved; }
 };
 
+// Unarmed lara_as_compress calls ModernControlsRotation before selecting the
+// directional jump. Our FP input already supplies body-relative Left/Right/Back;
+// rotating toward that same stick applies its direction twice. Guns-out uses
+// a separate dispatcher which does not rotate, hence the armed/unarmed split.
+struct DirectionalJumpAxesScope {
+    int16_t* axes=nullptr;
+    int16_t saved[2]{};
+    explicit DirectionalJumpAxesScope(uint8_t* item) {
+        if(!item || item!=g_headingItem || !g_active || !g_haveHeading || !Gate() ||
+           !Cfg().gamepadEnabled || !NewControls() || !g_haveManualInput || g_shifted ||
+           LaraWaterStatus()!=0 || *reinterpret_cast<const int16_t*>(item+off::item_hit_points)<=0 ||
+           *reinterpret_cast<const int16_t*>(item+off::item_anim_state)!=15) return;
+        const auto direction=locomotion::MovementAction(g_manualLocal,true)&locomotion::Directions;
+        if(direction!=locomotion::Left && direction!=locomotion::Right && direction!=locomotion::Back) return;
+        const int status=*Ptr<int16_t>(g_boundDll->lara+2),weapon=CurrentMotionWeapon();
+        // Preserve the native guns-out branch, including its flare/torch exceptions.
+        if(weapon!=8 && (status==4 || (status==2 && weapon!=7))) return;
+        axes=Ptr<int16_t>(g_boundDll->analogInput);
+        saved[0]=axes[0];saved[1]=axes[1];axes[0]=axes[1]=0;
+        // Keep digital direction/Jump and native floor checks. Restore analog
+        // input after this one simulation call so airborne steering stays native.
+    }
+    ~DirectionalJumpAxesScope() { if(axes) { axes[0]=saved[0];axes[1]=saved[1]; } }
+};
+
 void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     using namespace locomotion;
     GroundJumpInputScope jumpInput(item,TurnTime());
@@ -3239,6 +3310,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     {
         IdleTrackedGunHeadingScope idleGunHeading(item);
         CrouchWeaponScope crouchWeapons(item);
+        DirectionalJumpAxesScope jumpAxes(item);
         g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
     }
     if (grabFeedback && g_ledgeGrab.Finish(Gate() && LaraWaterStatus()==0,
@@ -3607,6 +3679,17 @@ bool Anchor(PHD_3DPOS& pose) {
         const auto flat=locomotion::Rotate({local.x,local.z},g_headingBase);
         pose.x_pos=int32_t(std::lround(body[0]+flat.x));
         pose.z_pos=int32_t(std::lround(body[2]+flat.z));
+    } else if (Cfg().firstPersonMovementStabilization && state==25 &&
+               LaraWaterStatus()==0 && g_groundEye.valid) {
+        // Backjump's animated neck rises again just after the physics apex,
+        // producing an apparent second jump in first person. Follow the
+        // interpolated collision root with the existing standing eye offset.
+        // No temporal filter: native ascent/descent and HMD tracking stay live.
+        // Entering FP midair without calibration retains the native eye.
+        const auto flat=locomotion::Rotate({g_groundEye.local.x,g_groundEye.local.z},g_headingBase);
+        pose.x_pos=int32_t(std::lround(body[0]+flat.x));
+        pose.y_pos=int32_t(std::lround(body[1]+g_groundEye.local.y));
+        pose.z_pos=int32_t(std::lround(body[2]+flat.z));
     } else if (Cfg().firstPersonMovementStabilization && CanUseCrouchCamera(item)) {
         // Native crouch/crawl turns swing the animated head around Lara. Keep
         // the eye in the artificial-yaw frame, inside the 400-unit crouch hull.
@@ -3628,7 +3711,7 @@ bool Anchor(PHD_3DPOS& pose) {
         pose.y_pos=int32_t(std::lround(eye.y));
         pose.z_pos=int32_t(std::lround(eye.z));
     } else if (!Cfg().firstPersonMovementStabilization) g_groundEye.Reset();
-    // Landings and non-ground states use the full native animated eye, while
+    // Landings and other non-ground states use the full native animated eye, while
     // retaining the standing reference. Never pin the camera above/beside a
     // bending neck or save a kneeling pose as normal standing height.
     // On vault/pull-up completion the cached skeleton can still be
@@ -3876,7 +3959,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
 
 void __cdecl Detour_DrawHair(int32_t argument) {
     const auto* item=g_boundDll && g_boundBase ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
-    if (!DrawingNativeShadow() && g_active && (HideLandingHead(item) || g_headHidden || g_rollHidden || g_crouchHidden || g_underwaterHidden || FirstPersonBodyMask(item)==firstperson::ArmMeshBits || IsCrouchState(item) || MotionReady())) {
+    if (!DrawingNativeShadow() && g_active && !ShowJumpHair(item) && (HideLandingHead(item) || g_headHidden || g_rollHidden || g_crouchHidden || g_underwaterHidden || FirstPersonBodyMask(item)==firstperson::ArmMeshBits || IsHandsOnlyBodyState(item) || MotionReady())) {
         ++g_hairSkips;
         return;
     }
@@ -3965,7 +4048,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
     const bool hideUnarmedArms=g_unarmedArmVisibility.Hide(unarmedMovement && !unarmedIK,VR().HeadPitchRadians());
     SetMeshVisibility(g_active && (Cfg().firstPersonHideHead || HideLandingHead(item)),
                       g_active && IsRollState(item),
-                      g_active && IsCrouchState(item),
+                      g_active && IsHandsOnlyBodyState(item),
                       g_active && FirstPersonBodyMask(item)==firstperson::ArmMeshBits,
                       g_active && item && LaraWaterStatus()==1,hideUnarmedArms,MotionReady() || unarmedIK); // UNDERWATER, not SURFACE/WADE/FLYCHEAT
     UpdateFlareLightPosition(); // Before room/item light collection for this render.

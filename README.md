@@ -73,6 +73,85 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Development Notes
 
+### First-person body continuity during transitions (2026-10-26)
+
+Weapon draw/holster statuses keep full-body positioning active instead of
+briefly reverting to the native mesh placement. Ordinary draw/holster arms
+retain their authored animation relative to the fitted chest; tracked physical
+holsters keep their existing controller behavior.
+
+The inventory ring's world-background draw also retains the fitted first-person
+body. This rendering exception does not open the gameplay/input gate or apply
+to ordinary menus. Landing completion discards the cached kneeling torso and
+footprint when the camera returns to the standing eye, preventing that old pose
+from briefly appearing in front of the player in the new camera frame.
+
+Release build and 4,245,640 regression checks passed. Render fixtures cover
+both games and native/HD palettes, weapon-status transitions, native arm
+attachment, inventory render/input isolation, and landing-to-standing within
+one tracking sample. Existing airborne poses, visibility and native shadows
+retain their checks. Headset confirmation remains pending.
+
+### Unarmed first-person directional jump takeoff (2026-10-26)
+
+Unarmed left/right/back jumps now retain the first-person facing direction at
+takeoff, matching the armed behavior. Native `lara_as_compress` calls
+`ModernControlsRotation` on the unarmed path before interpreting Left/Right/Back;
+the VR controls had already set those directions relative to headset facing.
+This applied the stick direction twice and launched Lara at an unwanted angle.
+
+During unarmed directional compression only, a scoped override zeros the two
+analog movement axes while keeping digital direction, Jump and Action intact.
+Native clearance checks and jump dispatch still run, and the axes are restored
+after the simulation call. Armed dispatch, forward jumps, airborne steering,
+third person and the existing jump camera/body visibility behavior are retained.
+
+The release build and 4,244,904 regression checks passed.
+`tools/verify_directional_jump.py` also executed 216 native TR4/5 compression
+cases on isolated memory: it reproduced the unarmed rotation and verified
+corrected directions, armed parity and blocked takeoff. Headset confirmation
+remains pending.
+
+### First-person backjump camera arc (2026-10-26)
+
+With movement stabilization enabled, backward jumps (state 25) use the saved
+standing eye offset above Lara's interpolated collision root. The recorded
+backjump has one root-height apex, but its animated neck rises again during
+descent; following that neck made the first-person view feel like a second jump.
+The camera now follows the native rise and fall directly, without smoothing or
+changing jump input, physics, or animation speed. Headset tracking and eye
+collision clearance remain active. The existing backward-jump body/hair hiding
+and other jump visibility rules are preserved.
+
+Entering first person midair without a standing reference falls back to the
+native eye. Disabling movement stabilization also retains the native eye.
+Landing animations and third-person cameras keep their existing behavior.
+Regression coverage includes ascent/descent with reversing neck animation,
+render interpolation, both games, rotated headings, calibration fallback,
+tracking preservation, landing restoration and third-person exclusion.
+Release build and 4,242,448 regression checks passed. Headset confirmation
+remains pending.
+
+### First-person airborne body animation (2026-10-25)
+
+Forward, vertical and sideways jumps show Lara's body and hair, with the usual
+head-mesh setting preserved. Only the backward/backpedal jump (state 25) keeps
+the hands-only body mask and hidden hair; it restores normal visibility when
+that state ends. Third-person rendering and native shadows retain the complete
+body and hair.
+
+Airborne rendering bypasses full-body IK and clears standing/mount pose history.
+Hips, legs and torso use the current native animation rather than headset-fitted
+or eased poses; arm-only IK retains tracked hands and weapons. Grounded full-body
+IK resumes on landing. This changes the rendered pose, not animation timing,
+jump physics or collision. The user's full-body IK setting remains enabled.
+
+Validation includes exact native airborne hip/leg/chest palettes for both native
+and HD skeletons, rapid animation changes across consecutive frames, tracked
+hands, jump visibility, restoration and third-person/shadow rendering.
+Release build and 4,176,178 regression checks passed. Headset confirmation
+remains pending.
+
 ### Spatial inventory shortcut (2026-10-25)
 
 In TR4/5 stereo VR, X with weapons holstered opens the native paused inventory
