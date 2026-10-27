@@ -191,6 +191,8 @@ private:
     float m_thirdPersonNeutral[3] = {};
     bool m_thirdPersonNeutralValid = false;
     bool m_thirdPersonRecenterPending = false;
+    int m_thirdPersonGame = -1, m_thirdPersonLevel = -1;
+    uint64_t m_thirdPersonRooms = 0;
     Affine TrackedHeadView() const;
     Affine m_eyeFromHead[2]   = { Affine::Identity(), Affine::Identity() };
     float  m_rawProj[2][4]    = {};                  // l, r, t, b per eye

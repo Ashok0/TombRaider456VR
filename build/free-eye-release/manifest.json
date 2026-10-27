@@ -1,0 +1,11 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-26T23:56:05.6445940-04:00",
+    "dll_sha256":  "550EDC834317BB805E6C81D44DDA2560188238CB9D507FB1964033A0A2D4FE12",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-free-eye-20261026-235605",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_log":  "build\\free-eye-tests.log",
+    "hardware_verified":  false,
+    "change":  "Disable first-person camera wall pushback by default, preserving native Lara collision and stance/landing vertical clearance. FirstPersonWallCollision=1 restores legacy camera collision."
+}

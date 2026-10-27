@@ -64,6 +64,8 @@ bool inventorySceneDrawing = false;
 float worldCameraRot[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
 float worldCameraPos[3] = {};
 uint8_t* laraItem = itemMemory;
+uint8_t* loadedRooms = itemMemory;
+int16_t loadedRoomCount = 2;
 uint8_t* motionApp = appMemory;
 int fraction = 128, game = 0, water = 0, checks = 0;
 bool jointCalled = false;
@@ -683,6 +685,7 @@ uint64_t GameDllBase() { return g_boundBase; }
 #include "world_inventory_regression.inl"
 
 int main() {
+    Check(!tr::Config{}.firstPersonWallCollision, "camera wall pushback is disabled by default");
     TestArmedInventoryButton();
     TestWorldInventory();
     TestGamepadFocus();
@@ -863,6 +866,8 @@ int main() {
     };
     dll.lara = rva(laraMemory);
     dll.laraItem = rva(&laraItem);
+    dll.room = rva(&loadedRooms);
+    dll.numberRooms = rva(&loadedRoomCount);
     dll.camera = rva(cameraMemory);
     dll.frameFrac = rva(&fraction);
     dll.analogInput = rva(analogMemory);
@@ -2307,6 +2312,8 @@ int main() {
         RestoreHeadMesh();
         config.firstPersonRoomscaleMove = config.positionalTracking = true;
         config.firstPersonHeadTranslation = config.firstPersonHideHead = true;
+        // Retain coverage of the optional legacy camera clearance below.
+        config.firstPersonWallCollision = true;
         config.firstPersonRoomscaleDeadzoneMetres = 0.02f;
         config.firstPersonRoomscaleNeckMetres = 0.15f;
         g_active = g_runtimeEnabled = g_haveHeading = true;
@@ -2796,6 +2803,31 @@ int main() {
         UpdateSceneCamera(camera);
         Check(eyeX() >= 80 && eyeX() < 100 && cameraCollisionCalls > 1,
               "wall stops rendered eye with stereo clearance during ground movement");
+        config.firstPersonWallCollision = false;
+        const auto rootBeforeFreeEye=pos;
+        const auto prevBeforeFreeEye=prev;
+        float neutralBeforeFreeEye[3];
+        std::copy(VR().m_firstPersonNeutral,VR().m_firstPersonNeutral+3,neutralBeforeFreeEye);
+        UpdateSceneCamera(camera);
+        Check(std::fabs(eyeX()-200)<1.1f && g_bodyWallOffset.x==0 && g_bodyWallOffset.z==0,
+              "free first-person scene eye crosses the wall without retracting the rendered body");
+        for (int freeState : {2,3,9,12,15,25,26,27,28,29,71,80}) {
+            state=int16_t(freeState);
+            for (float lean : {0.2f,0.8f}) {
+                physicalPose(0,lean,0,-0.1f);
+                PHD_3DPOS freeEye{800,-600,800,0,0,0,0};
+                ClampRenderedHeadToCollision(itemMemory,freeEye);
+                Check(freeEye.x_pos==800 && freeEye.z_pos==800,
+                      "disabled camera wall collision preserves physical lean through walls and beyond old sweep limit");
+            }
+        }
+        Check(!std::memcmp(&pos,&rootBeforeFreeEye,sizeof(pos)) &&
+              !std::memcmp(&prev,&prevBeforeFreeEye,sizeof(prev)),
+              "free eye leaves native collision roots untouched");
+        Check(!std::memcmp(neutralBeforeFreeEye,VR().m_firstPersonNeutral,sizeof(neutralBeforeFreeEye)),
+              "looking through walls does not recenter tracking");
+        physicalPose(0,0.2f,0,-0.1f);
+        config.firstPersonWallCollision = true;
         collisionMode = 12; state = 2;
         UpdateSceneCamera(camera);
         Check(camera.z_pos == 144, "grounded camera permits looking beyond a ledge");
@@ -3665,12 +3697,20 @@ int main() {
     // Cold startup must equal a centred FP handoff without requiring a toggle.
     // Do not capture a headset on the desk during loading/title presentation.
     for (int which:{0,1}) for (bool worldLocked:{false,true}) {
-        game=which; g_active=false; config.headOffsetWorld=worldLocked; worldCameraValid=false;
+        game=dll.game=which; g_active=false; config.headOffsetWorld=worldLocked; worldCameraValid=false;
         VR().m_thirdPersonNeutralValid=VR().m_thirdPersonRecenterPending=false;
         VR().m_offsetValid=VR().m_recentreRequested=false; Head(0);
         thirdPersonSample(); centredEyes();
         Check(!VR().m_thirdPersonNeutralValid,"cold startup does not anchor before a valid gameplay camera");
         worldCameraValid=true;
+        loadedRooms=nullptr;
+        thirdPersonSample(); centredEyes();
+        Check(!VR().m_thirdPersonNeutralValid,
+              "stale camera matrix with title flag cleared cannot capture neutral before rooms load");
+        loadedRooms=itemMemory; loadedRoomCount=0;
+        thirdPersonSample(); centredEyes();
+        Check(!VR().m_thirdPersonNeutralValid,"room allocation without loaded rooms cannot capture neutral");
+        loadedRoomCount=2;
         *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InTitle)=1;
         thirdPersonSample(); centredEyes();
         Check(!VR().m_thirdPersonNeutralValid,"title camera cannot capture an early desk-height neutral");
@@ -3702,6 +3742,46 @@ int main() {
         worldCameraPos[0]+=10000;
         thirdPersonSample(); centredEyes();
         Check(VR().m_thirdPersonNeutralValid,"camera teleport cannot restore absolute room-space offset");
+        // Leaving a level must discard its neutral even if the old camera
+        // matrix remains valid. Cover a direct load, title, FMV and rebinding.
+        for(int transition=0;transition<6;++transition) {
+            VR().m_rawHeadPose.m[0][3]+=0.4f;
+            thirdPersonSample();
+            if(transition==0) loadedRooms=nullptr;
+            if(transition==1) *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InTitle)=1;
+            if(transition==2) *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InFMV)=1;
+            if(transition<3) {
+                thirdPersonSample(); centredEyes();
+                Check(!VR().m_thirdPersonNeutralValid,"leaving gameplay discards the previous camera neutral");
+            }
+            loadedRooms=itemMemory;
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InTitle)=0;
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InFMV)=0;
+            if(transition==3) ++*reinterpret_cast<int32_t*>(appMemory+drva::app_off::level);
+            if(transition==4) loadedRooms=cameraMemory;
+            if(transition==5) game=dll.game=1-game;
+            VR().m_rawHeadPose.m[0][3]+=1.0f; // Player moved during loading.
+            thirdPersonSample(); centredEyes();
+            Check(Near(VR().m_thirdPersonNeutral[0],VR().m_rawHeadPose.m[0][3]),
+                  "loaded level starts centered without a first-person round trip");
+            for(float yaw:{-2.f,0.f,2.f}) {
+                const float c=std::cos(yaw),s=std::sin(yaw);
+                const float rotation[3][3]={{c,0,s},{0,1,0},{-s,0,c}};
+                std::memcpy(worldCameraRot,rotation,sizeof(rotation));
+                thirdPersonSample(); centredEyes();
+            }
+        }
+        game=dll.game=which;loadedRooms=itemMemory;
+        std::memcpy(worldCameraRot,identity,sizeof(identity));
+        thirdPersonSample();
+        VR().m_rawHeadPose.m[0][3]+=0.1f;
+        const auto beforeMenu=thirdPersonSample();
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=1;
+        const auto duringMenu=thirdPersonSample();
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=0;
+        const auto afterMenu=thirdPersonSample();
+        Check(Near(beforeMenu.r[0][3],100) && Near(duringMenu.r[0][3],100) && Near(afterMenu.r[0][3],100),
+              "inventory in a loaded level preserves the existing third-person lean");
     }
     game = 1;
     // Diagnostic capture must distinguish camera animation from real motion,

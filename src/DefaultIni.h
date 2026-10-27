@@ -827,6 +827,10 @@ FirstPersonInteractionAnchorZ=16
 ; so standing tracking space does not add your height above Lara's head.
 FirstPersonHeadTranslation=1
 
+; Allow the first-person eye to pass through walls without camera pushback.
+; Lara still collides with walls. Set to 1 to restore camera wall collision.
+FirstPersonWallCollision=0
+
 ; Stabilize standing/walk/side/back eye position and horizontal root motion.
 ; Uses raw HMD tracking without a second physical-yaw orbit. 0 restores legacy.
 FirstPersonMovementStabilization=1

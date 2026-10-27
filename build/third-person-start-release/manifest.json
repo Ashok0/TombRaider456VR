@@ -1,0 +1,11 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-27T00:29:14.5540934-04:00",
+    "dll_sha256":  "F4AB5634C24C3424FC1E2C7AC1FA0CED696EF51002B58E4920A50203DCE3C5C1",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-third-person-start-20261027-002914",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_log":  "build\\third-person-start-tests.log",
+    "hardware_verified":  false,
+    "change":  "Third-person startup waits for loaded rooms and Lara before capturing the camera neutral; title, FMV and level/game/room changes discard stale calibration. Includes the previous first-person free-eye change. 4305569 regression checks passed."
+}

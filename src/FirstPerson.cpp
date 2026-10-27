@@ -3524,6 +3524,14 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
             }
         }
     };
+    if (!Cfg().firstPersonWallCollision) {
+        // Preserve the tracked horizontal eye, even beyond the sweep's old
+        // distance limit. Keep stance/landing floor and ceiling protection at
+        // Lara's valid position: sampling inside a wall could push the eye
+        // vertically instead. Native movement collision is unchanged.
+        if (roll || crouch || UseLandingCamera(item)) clampVertical(body[0],body[2]);
+        return;
+    }
     // A stance transition/physical rise under a low ceiling must lower the
     // eye before the horizontal sweep, not retract it to Lara then pop forward.
     if(crouch) clampVertical(body[0],body[2]);

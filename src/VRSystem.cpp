@@ -285,6 +285,31 @@ void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
     // needs the same relative neutral as an FP handoff, without a mode toggle.
     const int game=CurrentGame();
     if (game != 2) {
+        if (game==0 || game==1) {
+            // A valid w2v matrix can survive loading while InTitle is already
+            // clear. Do not capture a desk/loading pose as the gameplay neutral.
+            const auto* dll=GameDllBound();
+            const auto base=GameDllBase();
+            const bool bound=dll && base && dll->game==game && dll->room && dll->numberRooms && dll->laraItem;
+            const uint64_t rooms=bound ? *reinterpret_cast<const uint64_t*>(base+dll->room) : 0;
+            const bool loaded=rooms && *reinterpret_cast<const int16_t*>(base+dll->numberRooms)>0 &&
+                *reinterpret_cast<const uint64_t*>(base+dll->laraItem);
+            const int level=AppState(drva::app_off::level);
+            if (!loaded || InTitle() || InFMV()) {
+                m_thirdPersonNeutralValid=false;
+                m_thirdPersonGame=m_thirdPersonLevel=-1;
+                m_thirdPersonRooms=0;
+                m_offsetValid=false;
+                for(int i=0;i<3;++i) { pose.m[i][3]=0; m_offsetWorld[i]=0; }
+                return;
+            }
+            if (m_thirdPersonGame!=-1 && (m_thirdPersonGame!=game ||
+                m_thirdPersonLevel!=level || m_thirdPersonRooms!=rooms)) {
+                m_thirdPersonNeutralValid=false;
+                m_offsetValid=false;
+            }
+            m_thirdPersonGame=game; m_thirdPersonLevel=level; m_thirdPersonRooms=rooms;
+        }
         if (m_thirdPersonRecenterPending && m_poseValid) RecenterThirdPersonHead();
         if ((game==0 || game==1) && !m_thirdPersonNeutralValid) {
             float initialRot[3][3], initialPos[3];
@@ -305,6 +330,8 @@ void VRSystem::WorldLockOffset(vr::HmdMatrix34_t& pose) {
             for (int i = 0; i < 3; ++i) pose.m[i][3] -= m_thirdPersonNeutral[i];
     } else {
         m_thirdPersonNeutralValid = m_thirdPersonRecenterPending = false;
+        m_thirdPersonGame=m_thirdPersonLevel=-1;
+        m_thirdPersonRooms=0;
     }
     const auto& c = Cfg();
     const float s = LiveWorldUnitsPerMetre();

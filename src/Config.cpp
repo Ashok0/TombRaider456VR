@@ -312,6 +312,8 @@ void LoadConfig(const wchar_t* ini) {
         L"FirstPersonInteractionAnchorZ", g_cfg.firstPersonInteractionAnchorZ, ini);
     g_cfg.firstPersonHeadTranslation = GetBool(
         L"FirstPersonHeadTranslation", g_cfg.firstPersonHeadTranslation, ini);
+    g_cfg.firstPersonWallCollision = GetBool(
+        L"FirstPersonWallCollision", g_cfg.firstPersonWallCollision, ini);
     g_cfg.firstPersonMovementStabilization = GetBool(
         L"FirstPersonMovementStabilization", g_cfg.firstPersonMovementStabilization, ini);
     g_cfg.firstPersonRoomscaleNeckMetres = GetFloat(
