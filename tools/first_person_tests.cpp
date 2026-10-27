@@ -3253,6 +3253,28 @@ int main() {
                 Detour_DrawHair(0);
                 Check(draws==beforeDraw+3 && hairs==beforeHair+1,"swimming draws native HD body and braid");
             }
+            const auto exitAnimation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            const auto exitGunStatus=*reinterpret_cast<int16_t*>(laraMemory+2);
+            for(int clip:{111,191,193}) {
+                water=2;state=33;UpdateSceneCamera(camera);
+                // Native LaraTestWaterClimbOut changes water_status to dry
+                // immediately, while WATEROUT and hands-busy remain active.
+                water=0;state=55;
+                *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=int16_t(clip);
+                *reinterpret_cast<int16_t*>(laraMemory+2)=1;
+                const auto nativeRoot=pos;
+                UpdateSceneCamera(camera);
+                Check(g_active && g_ledgeArmsOnly && g_mountBodyTransition.active &&
+                      bits==(baseBits&kArmMeshBits),
+                      "surface-to-dry transition keeps water-exit climb framing until the animation finishes");
+                Check(FullBodyGripState(itemMemory) && !UnarmedIKReady(),
+                      "water exit keeps authored ledge grips instead of following motion-controller hands");
+                Check(!std::memcmp(&pos,&nativeRoot,sizeof(pos)),
+                      "water-exit presentation never moves Lara through native collision");
+            }
+            *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=exitAnimation;
+            *reinterpret_cast<int16_t*>(laraMemory+2)=exitGunStatus;
+            water=2;UpdateSceneCamera(camera);
             for (int otherWater:{4,0,3,-1}) {
                 water=otherWater; state=2; pos.y_rot=Angle(-1.1f); UpdateSceneCamera(camera);
                 Check(g_active && bits==(hideHead ? baseBits&~kHeadMeshBit : baseBits) &&
@@ -3269,7 +3291,7 @@ int main() {
                   "leaving water cannot force FP on when the user selected third person");
             g_runtimeEnabled=true; state=2; UpdateSceneCamera(camera);
         }
-        for (bool hideHead:{false,true}) for (int hanging:{10,30,31,75,82,83,139,19,54}) {
+        for (bool hideHead:{false,true}) for (int hanging:{10,30,31,75,82,83,139,19,54,55}) {
             RestoreHeadMesh(); bits=baseBits; config.firstPersonHideHead=hideHead;
             state=int16_t(hanging); UpdateSceneCamera(camera);
             Check(g_ledgeArmsOnly && bits==(baseBits&kArmMeshBits),
@@ -4498,10 +4520,14 @@ int main() {
     // Stand -> jump/hang -> vault/pull-up -> stand. The last climb skeleton
     // can coexist with a newly relocated standing root during interpolation.
     // It must never replace the persistent standing reference (sky/side drift).
-    for (int which:{0,1}) for (float heading:{0.f,0.8f,-1.9f}) for (int anchor:{80,100,144}) {
+    Check(locomotion::IsLedgeMountState(55) && locomotion::FirstPersonAnchorZ(55,140,16)==16,
+          "water climb-out uses the constrained mount camera instead of the standing forward offset");
+    for (int which:{0,1}) for (float heading:{0.f,0.8f,-1.9f}) for (int anchor:{80,100,144})
+    for(int mountState:{19,54,55}) {
         game=dll.game=which; resetRoomscale(); ResetMovementStabilization();
         config.firstPersonMovementStabilization=true; config.firstPersonRoomscaleMove=false;
         config.firstPersonBodyFollowsHead=false; collisionMode=0;
+        config.firstPersonWallCollision=false; // Climb framing must work with free physical leaning.
         config.firstPersonAnchorZ=anchor;
         physicalPose(0); FirstPersonRecenter(); g_headingBase=heading;
         pos.y_rot=prev.y_rot=Angle(heading); fraction=256; gaitSway={};
@@ -4509,7 +4535,7 @@ int main() {
         Check(Anchor(camera),"capture standing reference before ledge sequence");
         const auto standingReference=g_groundEye.local;
         float neutral[3]; std::copy(VR().m_firstPersonNeutral,VR().m_firstPersonNeutral+3,neutral);
-        for (int interaction:{3,10,30,31,75,82,83,139,19,54,56,57,58,59,60,61}) {
+        for (int interaction:{3,10,30,31,75,82,83,139,19,54,55,56,57,58,59,60,61}) {
             state=int16_t(interaction); gaitSway={120,-480,-250};
             Head(0.7f,0.2f);
             VR().m_rawHeadPose.m[0][3]=neutral[0]+0.06f;
@@ -4532,7 +4558,7 @@ int main() {
         }
         // Native mount completion advances root onto crate while cached head
         // matrices still contain a high, laterally shifted pull-up frame.
-        state=19; Anchor(camera);
+        state=int16_t(mountState); Anchor(camera);
         Check(g_mountBodyTransition.active,"pull-up arms-only interval arms body handoff correction");
         prev=pos; pos.x_pos+=96; pos.z_pos+=128; pos.y_pos-=768;
         state=2; gaitSway={240,-1200,300};

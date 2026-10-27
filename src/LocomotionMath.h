@@ -87,7 +87,9 @@ inline bool IsLedgeHangState(int state) {
     }
 }
 inline bool IsLedgeMountState(int state) {
-    return state==19 || state==54; // pull-up/vault and gymnast pull-up
+    // LaraTestWaterClimbOut in both TR4/5 sets AS_WATEROUT (55),
+    // hands busy and water_status=0 before animations 111/191/193 finish.
+    return state==19 || state==54 || state==55; // vault, gymnast, water exit
 }
 inline bool IsLadderState(int state) {
     return state>=56 && state<=61; // stance, up, left, end, right, down
@@ -100,6 +102,7 @@ inline bool IsConstrainedInteractionState(int state) {
     case 10: case 19: case 30: case 31:
     case 36: case 37: case 38:
     case 54: // Gymnast pull-up, also pitches the head through the ledge.
+    case 55: // Water climb-out needs the same short eye offset and native grips.
     case 56: case 57: case 58: case 59: case 60: case 61:
         return true;
     default: return false;

@@ -1,0 +1,11 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-27T01:16:30.9875915-04:00",
+    "dll_sha256":  "C05E1B505377D117175B7D8ED76A7B39B254B41D465CCC98AD49A816131F5CF5",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-water-exit-20261027-011630",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_log":  "build\\water-exit-tests.log",
+    "hardware_verified":  false,
+    "change":  "Recognize TR4/5 water-exit state 55 as a constrained ledge mount: short camera anchor, native hand grips, arms-only climb presentation and mount recovery. Free head leaning retained. 4324007 regression checks passed; native state verified against both PDB game binaries and current runtime log."
+}
