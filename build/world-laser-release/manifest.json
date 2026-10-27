@@ -1,0 +1,11 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-27T19:14:17.7245919-04:00",
+    "dll_sha256":  "A9E8114BC8236774A1B6D028DE17BFBE28A0CC1C51AE42AAF3FCFE9AD2E4302B",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-laser-20261027-191417",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_log":  "build\\world-laser-regression.log",
+    "hardware_verified":  false,
+    "change":  "Decouples first-person weapon aim from laser attachment and rendering toggle. Adds measured bare Revolver, Desert Eagle and Crossbow bore/bolt-guide calibration, retains attached laser and HK calibration, and suppresses beams for bare meshes. Tests cover native firing, fresh controller movement, attach/remove cycles and render toggle independence. 4328412 first-person regressions, 60 GPU/native-memory checks and 21 mesh verifications passed; bare hand indices verified in both native PDB binaries."
+}

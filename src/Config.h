@@ -505,6 +505,7 @@ struct Config {
     // means "look" or "aim the zoom camera", so this follows the game's own
     // notion of "currently zoomed" rather than a guess at one.
     bool  decoupledPitchZoomOff = true;
+    bool  worldLaserSight = true; // native laser ray drawn in stereo world space
 
     // Hold the head CENTRE at the game camera while looking through an optic, so
     // the LASER SIGHT hits what it points at. On by default.

@@ -632,7 +632,8 @@ void TestFullBodyIK() {
                           "pistol attachment cannot run another body solve or advance torso filtering");
                     for(int hand=0;hand<2;++hand) {
                         GunPose after{};
-                        Check(BuildGunPose(hand,after) && !std::memcmp(&gunsBefore[hand],&after,sizeof(after)),
+                        Check(BuildGunPose(hand,after) && !std::memcmp(&gunsBefore[hand],&after,offsetof(GunPose,meshAligned)) &&
+                              gunsBefore[hand].meshAligned==after.meshAligned,
                               "shared pistol arms retain exact tracked gun pose muzzle and aim");
                     }
                 }

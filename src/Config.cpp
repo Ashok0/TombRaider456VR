@@ -290,6 +290,7 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.hideBinocularOverlay   = GetBool (L"HideBinocularOverlay",   g_cfg.hideBinocularOverlay,   ini);
     g_cfg.hideScopeOverlay       = GetBool (L"HideScopeOverlay",       g_cfg.hideScopeOverlay,       ini);
     g_cfg.hideOpticsTint         = GetBool (L"HideOpticsTint",         g_cfg.hideOpticsTint,         ini);
+    g_cfg.worldLaserSight        = GetBool (L"WorldLaserSight",        g_cfg.worldLaserSight,        ini);
     g_cfg.gamepadMenuUsesBack = GetBool (L"GamepadMenuUsesBack", g_cfg.gamepadMenuUsesBack, ini);
     g_cfg.portalCulling       = GetBool (L"PortalCulling",      g_cfg.portalCulling,      ini);
     g_cfg.cullFovMarginDegrees = GetFloat(L"CullFovMarginDegrees", g_cfg.cullFovMarginDegrees, ini);

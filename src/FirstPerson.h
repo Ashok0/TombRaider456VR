@@ -30,6 +30,8 @@ bool FirstPersonDrawingTrackedHands();
 // Palette index only while a successfully corrected tracked-hand draw is active.
 int FirstPersonTrackedHandJoint();
 bool FirstPersonHKScopeAiming();
+// Current equipped laser weapon, from tracked muzzle in FP or native wrist in TP.
+bool WeaponLaserAim(motiongun::Vec& muzzle,motiongun::Vec& direction,int16_t& room);
 bool FirstPersonCalibrationKeyReserved(int virtualKey);
 // Called after view/graphics chords and physical-pad merge. Returns Y ownership.
 bool FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed, bool y=false);

@@ -1,0 +1,14 @@
+    WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"HKScopeTest";wc.style=CS_OWNDC;
+    Check(RegisterClassW(&wc)!=0,"register hidden window");
+    HWND window=CreateWindowW(wc.lpszClassName,L"Scope test",WS_OVERLAPPED,0,0,64,64,nullptr,nullptr,wc.hInstance,nullptr);
+    Check(window!=nullptr,"create hidden window");HDC dc=GetDC(window);
+    PIXELFORMATDESCRIPTOR pfd{};pfd.nSize=sizeof(pfd);pfd.nVersion=1;pfd.dwFlags=PFD_DRAW_TO_WINDOW|PFD_SUPPORT_OPENGL|PFD_DOUBLEBUFFER;pfd.iPixelType=PFD_TYPE_RGBA;pfd.cColorBits=32;pfd.cDepthBits=24;
+    Check(SetPixelFormat(dc,ChoosePixelFormat(dc,&pfd),&pfd)!=0,"set pixel format");
+    HGLRC context=wglCreateContext(dc);Check(context && wglMakeCurrent(dc,context),"create GL context");
+    using CreateContext=HGLRC(WINAPI*)(HDC,HGLRC,const int*);
+    auto create=reinterpret_cast<CreateContext>(wglGetProcAddress("wglCreateContextAttribsARB"));
+    Check(create!=nullptr,"GL 3.2 context creation available");
+    const int attribs[]={0x2091,3,0x2092,2,0x9126,1,0};
+    HGLRC core=create(dc,nullptr,attribs);Check(core!=nullptr,"create GL 3.2 core");
+    wglMakeCurrent(nullptr,nullptr);wglDeleteContext(context);Check(wglMakeCurrent(dc,core)!=0,"activate core context");
+    std::printf("GL: %s\n",glGetString(GL_VERSION));Check(gl::Load(),"load GL entry points");

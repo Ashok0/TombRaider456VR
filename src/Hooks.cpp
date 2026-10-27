@@ -46,6 +46,7 @@
 #include "VRSystem.h"
 #include "FirstPerson.h"
 #include "HKScope.h"
+#include "WorldLaser.h"
 
 #include <cstring>
 #include <intrin.h>
@@ -2391,6 +2392,7 @@ bool BringUpVR() {
 void __cdecl Detour_ogl_present() {
     // Composite using this frame's poses before polling/advancing any state.
     HKScopePresent();
+    WorldLaserPresent();
     ++g_frameIndex;
 
     // Frame-graph trace bookkeeping, around the frame boundary.
@@ -2748,6 +2750,7 @@ void RemoveHooks() {
     InventorySceneShutdown();
     TR4EffectsShutdown();
     HKScopeShutdown();
+    WorldLaserShutdown();
     GamepadShutdown();
     FirstPersonShutdown();
     OverlayShutdown();

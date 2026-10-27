@@ -599,6 +599,9 @@ OpticsHeadAtCamera=1
 HideBinocularOverlay=1
 HideScopeOverlay=1
 HideOpticsTint=1
+; Draw a red beam from a drawn weapon with a combined/built-in laser sight.
+; Works without zoom; native scoped aim remains supported too.
+WorldLaserSight=1
 
 ; Hold R3 (right stick click) to turn the LEFT stick into a D-pad.
 ;

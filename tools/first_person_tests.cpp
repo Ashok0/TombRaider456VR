@@ -83,6 +83,11 @@ void __cdecl FakeHandJoint(uint8_t* item,tr::PHD_VECTOR* p,int joint,int) {
     const auto& body=*reinterpret_cast<const tr::PHD_3DPOS*>(item+tr::off::item_pos);
     *p={body.x_pos,body.y_pos,body.z_pos};
 }
+void __cdecl FakeLaserNativeJoint(uint8_t* item,tr::PHD_VECTOR* p,int joint,int) {
+    Check(joint==10,"third-person laser uses native right wrist");
+    const auto& body=*reinterpret_cast<const tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    p->x+=body.x_pos;p->y+=body.y_pos;p->z+=body.z_pos;
+}
 int32_t __cdecl FakeFire(int32_t,void*,void*,const int16_t*) {
     ++nativeShotCalls; nativeShotHand=tr::g_firingHand;
     return nativeFireResult; // A native miss (-1) is still a successfully fired shot.
@@ -1018,6 +1023,10 @@ int main() {
         auto& farTarget=*reinterpret_cast<PHD_3DPOS*>(targetItems[2]+off::item_pos);
         farTarget.x_pos=200; ray=gun.direction;
         Check(SelectGunTarget(gun,ray)==targetItems[2] && ray.x>0,"off-axis living sphere receives bounded assist");
+        gun.meshAligned=true;ray=gun.direction;
+        Check(!SelectGunTarget(gun,ray) && ray.x==gun.direction.x && ray.z==gun.direction.z,
+              "laser-aligned shot cannot be bent toward an off-beam enemy");
+        gun.meshAligned=false;
         farTarget={0,-999,1000}; ray={0,-.70675f,.70746f}; gun.direction=ray;
         Check(!SelectGunTarget(gun,ray),"occluded sphere is not acquired");
         activeTarget=-1; gun.direction={0,0,1}; ray=gun.direction;
@@ -1437,6 +1446,218 @@ int main() {
         const auto savedFloor=dll.getFloor;
         dll.getFloor=rva(reinterpret_cast<void*>(&FakeProjectileFloor));
         const int savedGame=dll.game;
+        {
+            const int oldGame=game,oldDllGame=dll.game;const auto oldWeapon=gun,oldGunStatus=status;
+            const auto oldCrossbow=laraMemory[0x163],oldRevolver=laraMemory[0x166];
+            const bool oldZoom=opticsZoomed,oldActive=g_active;
+            const int oldShots=nativeShotCalls;
+            opticsZoomed=false;status=4;
+            motiongun::Vec muzzle{},direction{};int16_t laserRoom=0;
+            for(int which:{0,1}) for(int weapon:{1,2,3,4,5,6,7}) for(bool combined:{false,true}) {
+                game=dll.game=which;gun=int16_t(weapon);
+                laraMemory[0x163]=laraMemory[0x166]=combined ? 5 : 1;
+                const bool expected=weapon==2 ? combined : weapon==6 ? which==0 && combined : which==1 && weapon==5;
+                // Seed a current draw to isolate attachment/status gating here;
+                // the following fixture exercises real model capture separately.
+                GunPose reference{};
+                if(expected) {
+                    Check(BuildGunPose(1,reference),"laser fixture has tracked hand");
+                    g_weaponLaser={itemMemory,g_boundBase,VR().PoseSerial(),which,weapon,reference.muzzle,reference.direction};
+                } else g_weaponLaser={};
+                Check(WeaponLaserAim(muzzle,direction,laserRoom)==expected,
+                      "unscoped laser follows combined attachment bits or built-in HK sight");
+                if(expected) {
+                    Check(Near(muzzle.x,reference.muzzle.x) && Near(muzzle.y,reference.muzzle.y) && Near(muzzle.z,reference.muzzle.z) &&
+                          Near(direction.x,reference.direction.x) && Near(direction.y,reference.direction.y) && Near(direction.z,reference.direction.z),
+                          "unscoped laser returns the seeded rendered ray");
+                }
+            }
+            game=dll.game=1;gun=2;laraMemory[0x166]=5;
+            GunPose ready{};Check(BuildGunPose(1,ready),"status gating fixture has tracked weapon");
+            g_weaponLaser={itemMemory,g_boundBase,VR().PoseSerial(),game,gun,ready.muzzle,ready.direction};
+            Check(WeaponLaserAim(muzzle,direction,laserRoom),"status checks begin with an available laser pose");
+            for(int unavailable:{0,1,2,3}) { status=int16_t(unavailable);Check(!WeaponLaserAim(muzzle,direction,laserRoom),"no free laser while holstered drawing or holstering"); }
+            status=4;VR().m_controllerPoseValid[1]=false;
+            Check(!WeaponLaserAim(muzzle,direction,laserRoom),"lost tracked hand cannot leave stale laser");VR().m_controllerPoseValid[1]=true;
+            opticsZoomed=true;Check(!WeaponLaserAim(muzzle,direction,laserRoom),"native scope keeps its own precise collision ray");opticsZoomed=false;
+            const auto savedJoint=dll.getJointAbsPositionLerp;
+            dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeLaserNativeJoint));
+            g_active=false;Check(WeaponLaserAim(muzzle,direction,laserRoom) && Near(direction.y,1),"third person uses native equipped weapon muzzle without entering scope");
+            dll.getJointAbsPositionLerp=savedJoint;
+            Check(nativeShotCalls==oldShots,"laser aim queries do not fire");
+            game=oldGame;dll.game=oldDllGame;gun=oldWeapon;status=oldGunStatus;g_active=oldActive;opticsZoomed=oldZoom;
+            laraMemory[0x163]=oldCrossbow;laraMemory[0x166]=oldRevolver;
+        }
+        {
+            // Exercise the real hand draw with a translated, rotated inverse
+            // bind. Generic gameplay muzzle/controller axes cannot pass this.
+            using namespace motiongun;
+            const int oldGame=game,oldDllGame=dll.game;const auto oldWeapon=gun;
+            const auto oldAttachment=laraMemory[0x166],oldCrossbow=laraMemory[0x163];
+            const auto oldObjects=dll.objects;
+            const auto oldObject=*reinterpret_cast<int16_t*>(itemMemory+off::item_object);
+            const auto oldGetJoints=g_hGetJoints.m_trampoline;
+            const auto* oldHandDll=g_unarmedHandDll;
+            alignas(16) static uint8_t laserHands[91*off::geom_stride]{};
+            UnarmedHandDll handDll{dll.timestamp,rva(laserHands)};g_unarmedHandDll=&handDll;
+            const auto oldCalibration=testCalibration;
+            const auto oldTriggers=g_gunTriggers;
+            const int oldShotCalls=nativeShotCalls,oldShotHand=nativeShotHand;
+            const auto oldHaptics=VR().m_gunHaptics;
+            const auto oldCameraValid=worldCameraValid;
+            float oldCamera[3];std::memcpy(oldCamera,worldCameraPos,sizeof(oldCamera));
+            alignas(16) static uint8_t laserObject[off::object_stride]{};
+            dll.objects=rva(laserObject);*reinterpret_cast<int16_t*>(itemMemory+off::item_object)=0;
+            auto* bind=reinterpret_cast<float*>(laserObject+1676)+10*16;
+            bind[0]=1;bind[6]=1;bind[9]=-1;bind[15]=1;
+            bind[12]=-51;bind[13]=17;bind[14]=23;
+            game=dll.game=0;gun=2;laraMemory[0x163]=laraMemory[0x166]=5;worldCameraValid=true;
+            g_hGetJoints.m_trampoline=reinterpret_cast<void*>(&FakeSkinJoints);
+            g_weaponLaser={};g_weaponAimBinding={};
+            Vec muzzle{},direction{};int16_t room=0;
+            Check(!WeaponLaserAim(muzzle,direction,room),"laser waits for its actual rendered mesh");
+            for(const auto& model:weaponlaser::models) for(int which:{0,1}) for(int bank:{0,30,60}) for(int pose=0;pose<4;++pose) {
+                if(model.game>=0 && model.game!=which) continue;
+                game=dll.game=which;gun=int16_t(model.weapon);
+                laraMemory[0x163]=laraMemory[0x166]=model.HasLaser() ? 5 : 1;
+                std::memset(laserHands,0,sizeof(laserHands));
+                auto* geom=laserObject+off::object_geom;
+                auto* handMesh=laserHands+(bank+model.handIndex)*off::geom_stride+off::geom_mesh;
+                *reinterpret_cast<const void**>(geom+off::geom_mesh)=laserObject;
+                *reinterpret_cast<const void**>(handMesh)=laserObject;
+                ++VR().m_poseSerial;
+                testCalibration.pitchDegrees=float(pose*21-30);
+                testCalibration.yawDegrees=float(pose*27-45);
+                testCalibration.rollDegrees=float(pose*49-80);
+                worldCameraPos[0]=float(3000+pose*57);worldCameraPos[1]=-650;worldCameraPos[2]=float(-1900-pose*71);
+                float palette[15*12]{};g_renderArm=1;
+                Check(Detour_GetJoints(itemMemory,palette,0)==15,"weapon mesh passes through actual wrist correction");
+                g_renderArm=-1;
+                Check(WeaponLaserAim(muzzle,direction,room)==model.HasLaser(),"only sight-equipped meshes provide a beam");
+                const auto mesh=ReadRows(palette+10*12);
+                const auto front=Add(Transform(mesh,model.front),
+                                     {worldCameraPos[0],worldCameraPos[1],worldCameraPos[2]});
+                const auto rear=Add(Transform(mesh,model.rear),
+                                    {worldCameraPos[0],worldCameraPos[1],worldCameraPos[2]});
+                const auto delta=Sub(front,rear),unit=Scale(delta,1/std::sqrt(Dot(delta,delta)));
+                if(model.HasLaser()) {
+                Check(Near(muzzle.x,front.x) && Near(muzzle.y,front.y) && Near(muzzle.z,front.z),
+                      "weapon beam touches mesh aperture under camera translation and gun rotation");
+                Check(Near(direction.x,unit.x) && Near(direction.y,unit.y) && Near(direction.z,unit.z),
+                      "weapon beam follows rendered laser tube instead of generic controller axis");
+                }
+                GunPose shot{};
+                Check(BuildGunPose(1,shot) && shot.meshAligned,"rendered weapon calibrates actual firing pose with or without attachment");
+                Check(Near(shot.muzzle.x,front.x) && Near(shot.muzzle.y,front.y) && Near(shot.muzzle.z,front.z) &&
+                      Near(shot.direction.x,unit.x) && Near(shot.direction.y,unit.y) && Near(shot.direction.z,unit.z),
+                      "firing uses the measured bare bore or attached sight for every weapon and hand model");
+                // Verify native shot pose, not just the renderer's calibrated data.
+                PHD_3DPOS launched{};
+                g_gunTriggers.pending[1]=true;
+                if(model.weapon==6) {
+                    RunLongShot(6,true,[&](const LongShot* operation) {
+                        Check(operation!=nullptr,"crossbow enters tracked projectile firing path");
+                        PHD_VECTOR point{0,228,32};Detour_GunJoint(itemMemory,&point,10);
+                        const auto& body=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+                        launched={point.x,point.y,point.z,
+                            int16_t(*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+off::arm_x_rot)+body.x_rot),
+                            int16_t(*reinterpret_cast<int16_t*>(laraMemory+off::lara_left_arm+off::arm_y_rot)+body.y_rot),0,0};
+                    });
+                } else {
+                    const int16_t aim[]={shot.yaw,shot.pitch};
+                    if(model.weapon==5) RunLongShot(5,false,[&](const LongShot* operation) {
+                        Check(operation!=nullptr,"HK enters tracked rifle firing path");
+                        FireWeaponForHand(1,5,nullptr,nullptr,aim);
+                    });
+                    else FireWeaponForHand(1,2,nullptr,nullptr,aim);
+                    launched=g_firingPose;
+                }
+                const Vec shotStart{float(launched.x_pos),float(launched.y_pos),float(launched.z_pos)};
+                const auto shotRay=ShotForward(Radians(launched.y_rot),Radians(launched.x_rot));
+                for(float distance:{512.f,8192.f}) {
+                    const Vec wall=Add(front,Scale(unit,distance));
+                    const float t=Dot(Sub(wall,shotStart),unit)/Dot(shotRay,unit);
+                    const Vec error=Sub(Add(shotStart,Scale(shotRay,t)),wall);
+                    Check(Dot(error,error)<4.f,"native shot follows model bore or laser axis at near and far walls within integer angle precision");
+                }
+                const auto savedController=VR().m_rawControllerPose[1];
+                const auto serial=VR().m_poseSerial;
+                ++VR().m_poseSerial;VR().m_rawControllerPose[1].m[0][3]+=.05f;
+                GunPose moved{};Check(BuildGunPose(1,moved) && moved.meshAligned,"pre-draw firing keeps model calibration across pose frames");
+                auto shift=Sub(moved.muzzle,shot.muzzle);
+                Check(std::fabs(std::sqrt(Dot(shift,shift))-50.f)<.02f,"new shot follows live controller translation without waiting for gun draw");
+                const float oldYaw=testCalibration.yawDegrees;testCalibration.yawDegrees+=17;
+                Check(BuildGunPose(1,moved) && Dot(Sub(moved.direction,shot.direction),Sub(moved.direction,shot.direction))>.001f,
+                      "new shot follows live controller rotation instead of cached world ray");
+                testCalibration.yawDegrees=oldYaw;VR().m_rawControllerPose[1]=savedController;VR().m_poseSerial=serial;
+                const auto binding=g_weaponAimBinding;
+                ++g_weaponAimBinding.level;
+                Check(BuildGunPose(1,moved) && !moved.meshAligned,"level changes cannot reuse laser firing calibration");
+                g_weaponAimBinding=binding;g_weaponAimBinding.weapon=-1;
+                Check(BuildGunPose(1,moved) && !moved.meshAligned,"weapon changes cannot reuse laser firing calibration");
+                g_weaponAimBinding=binding;
+                const bool oldLaser=config.worldLaserSight;config.worldLaserSight=false;
+                Check(BuildGunPose(1,moved) && moved.meshAligned &&
+                      Dot(Sub(moved.muzzle,shot.muzzle),Sub(moved.muzzle,shot.muzzle))<.0001f &&
+                      Dot(Sub(moved.direction,shot.direction),Sub(moved.direction,shot.direction))<.0001f,
+                      "disabling laser rendering cannot change weapon aim");
+                config.worldLaserSight=oldLaser;
+                if(model.weapon!=5) {
+                    laraMemory[0x163]=laraMemory[0x166]=1;
+                    Check(BuildGunPose(1,moved) && moved.meshAligned,"removing attachment bit cannot restore generic firing axis");
+                    Check(!WeaponLaserAim(muzzle,direction,room),"removing sight suppresses the beam while retaining corrected aim");
+                    laraMemory[0x163]=laraMemory[0x166]=model.HasLaser() ? 5 : 1;
+                }
+                if(!model.HasLaser()) {
+                    // Reproduce adding then removing a sight on this same gun,
+                    // including the native replacement of the drawn hand mesh.
+                    const auto* sight=weaponlaser::Find(model.handIndex+1,which,model.weapon);
+                    Check(sight && sight->HasLaser(),"bare weapon has corresponding sight model");
+                    auto* sightMesh=laserHands+(bank+sight->handIndex)*off::geom_stride+off::geom_mesh;
+                    *reinterpret_cast<const void**>(sightMesh)=laserObject+1;
+                    *reinterpret_cast<const void**>(geom+off::geom_mesh)=laserObject+1;
+                    laraMemory[0x163]=laraMemory[0x166]=5;
+                    g_renderArm=1;Detour_GetJoints(itemMemory,palette,0);g_renderArm=-1;
+                    Check(BuildGunPose(1,moved) && moved.meshAligned && WeaponLaserAim(muzzle,direction,room),
+                          "attaching sight switches to aligned laser firing");
+                    laraMemory[0x163]=laraMemory[0x166]=1;
+                    *reinterpret_cast<const void**>(geom+off::geom_mesh)=laserObject;
+                    g_renderArm=1;Detour_GetJoints(itemMemory,palette,0);g_renderArm=-1;
+                    Check(BuildGunPose(1,moved) && moved.meshAligned && !WeaponLaserAim(muzzle,direction,room) &&
+                          Dot(Sub(moved.muzzle,shot.muzzle),Sub(moved.muzzle,shot.muzzle))<.0001f &&
+                          Dot(Sub(moved.direction,shot.direction),Sub(moved.direction,shot.direction))<.0001f,
+                          "removing sight restores measured bare barrel rather than generic firing offsets");
+                }
+                auto saved=g_weaponLaser;
+                g_weaponLaser.item=laraMemory;
+                Check(!WeaponLaserAim(muzzle,direction,room),"weapon beam rejects another Lara item pose");
+                g_weaponLaser=saved;g_weaponLaser.base=0;
+                Check(!WeaponLaserAim(muzzle,direction,room),"weapon beam rejects another level binding");
+                g_weaponLaser=saved;g_weaponLaser.weapon=-1;
+                Check(!WeaponLaserAim(muzzle,direction,room),"weapon changes cannot reuse another beam");
+                g_weaponLaser=saved;g_weaponLaser.game=-1;
+                Check(!WeaponLaserAim(muzzle,direction,room),"game changes cannot reuse another beam");
+                g_weaponLaser=saved;
+                // Subsequent face geometry must not affect an already captured ray.
+                *reinterpret_cast<const void**>(geom+off::geom_mesh)=nullptr;
+                Check(WeaponLaserAim(muzzle,direction,room)==model.HasLaser(),"face draw descriptor cannot change captured weapon beam");
+                g_renderArm=1;Detour_GetJoints(itemMemory,palette,0);g_renderArm=-1;
+                Check(!WeaponLaserAim(muzzle,direction,room),"unknown or unequipped mesh cannot use guessed offsets");
+                g_weaponLaser=saved;
+                ++VR().m_poseSerial;
+                Check(!WeaponLaserAim(muzzle,direction,room),"undrawn weapon cannot leave a floating old beam");
+            }
+            worldCameraValid=false;g_renderArm=1;float palette[15*12]{};
+            *reinterpret_cast<const void**>(laserObject+off::object_geom+off::geom_mesh)=laserObject;
+            Detour_GetJoints(itemMemory,palette,0);g_renderArm=-1;
+            Check(!WeaponLaserAim(muzzle,direction,room),"missing render camera suppresses misplaced weapon beam");
+            g_weaponLaser={};g_weaponAimBinding={};g_hGetJoints.m_trampoline=oldGetJoints;g_unarmedHandDll=oldHandDll;
+            g_gunTriggers=oldTriggers;nativeShotCalls=oldShotCalls;nativeShotHand=oldShotHand;VR().m_gunHaptics=oldHaptics;
+            game=oldGame;dll.game=oldDllGame;gun=oldWeapon;laraMemory[0x166]=oldAttachment;laraMemory[0x163]=oldCrossbow;
+            dll.objects=oldObjects;*reinterpret_cast<int16_t*>(itemMemory+off::item_object)=oldObject;
+            testCalibration=oldCalibration;worldCameraValid=oldCameraValid;
+            std::memcpy(worldCameraPos,oldCamera,sizeof(oldCamera));
+        }
         {
             const auto settings=config;
             config.firstPersonHKScope=true;config.eyeOffsetMode=3;

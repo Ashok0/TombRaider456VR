@@ -13,6 +13,7 @@
 #include "FirstPersonVisibility.h"
 #include "FirstPersonStabilization.h"
 #include "MotionGunMath.h"
+#include "WeaponLaserMesh.h"
 #include "FirstPersonIK.h"
 #include "FirstPersonBodyIK.h"
 #include "BodyFollower.h"
@@ -430,6 +431,20 @@ int g_renderHandJoint = -1;
 // Cache that binding, never a world/controller pose (which would add lag).
 motiongun::Frame g_hkScopeInverseBind{};
 const uint8_t* g_hkScopeBindItem=nullptr;
+struct WeaponLaserPose {
+    const uint8_t* item=nullptr;
+    uint64_t base=0,serial=0;
+    int game=-1,weapon=-1;
+    motiongun::Vec origin{},direction{};
+} g_weaponLaser;
+// Firing runs before drawing. Retain the mesh-to-controller calibration,
+// never last frame's world ray, and apply it to the live controller pose.
+struct WeaponAimBinding {
+    const uint8_t* item=nullptr;
+    uint64_t base=0;
+    int game=-1,weapon=-1,level=-1;
+    motiongun::Vec origin{},direction{}; // controller wrist space
+} g_weaponAimBinding;
 motiongun::TriggerInput g_gunTriggers;
 motiongun::EquipInput g_gunEquip;
 motiongun::HolsterInput g_holsters;
@@ -907,6 +922,7 @@ struct GunPose {
     GunVec nativeHand{}, trackedHand{}, muzzle{}, direction{};
     GunBasis desired{};
     int16_t yaw = 0, pitch = 0;
+    bool meshAligned=false;
 };
 
 struct LongShot {
@@ -920,6 +936,13 @@ const LongShot* g_longShot=nullptr;
 
 int CurrentMotionWeapon() {
     return g_boundDll ? *Ptr<int16_t>(g_boundDll->lara+4) : 0;
+}
+bool LaserAttachmentEquipped(int weapon) {
+    if(!g_boundDll || !g_boundBase) return false;
+    const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
+    return (weapon==2 && (lara[0x166]&4)) ||
+        (g_boundDll->game==0 && weapon==6 && (lara[0x163]&4)) ||
+        (g_boundDll->game==1 && weapon==5);
 }
 bool MotionWeaponSupported(int gun) {
     return motiongun::DualWeapon(gun) ||
@@ -1310,10 +1333,22 @@ bool BuildGunPose(int hand, GunPose& out) {
         return rejected("native-wrist-out-of-range");
     out.muzzle = Add(out.trackedHand,
         Transform(out.desired, motiongun::MuzzleLocal(gun, hand, g_boundDll->game)));
+    GunVec ray{controller.r[0][2], controller.r[1][2],
+                     controller.r[2][2]};
+    out.meshAligned=false;
+    const auto& binding=g_weaponAimBinding;
+    if(hand==1 &&
+       binding.item==item && binding.base==g_boundBase && binding.game==g_boundDll->game &&
+       binding.weapon==gun && binding.level==AppState(drva::app_off::level)) {
+        out.muzzle=Transform(wrist,binding.origin);
+        ray=Transform(wrist.basis,binding.direction);
+        const float length=std::sqrt(motiongun::Dot(ray,ray));
+        if(!std::isfinite(length) || length<.001f) return rejected("nonfinite-laser-barrel");
+        ray=motiongun::Scale(ray,1.f/length);
+        out.meshAligned=true;
+    }
     if (!std::isfinite(out.muzzle.x) || !std::isfinite(out.muzzle.y) ||
         !std::isfinite(out.muzzle.z)) return rejected("nonfinite-muzzle");
-    const GunVec ray{controller.r[0][2], controller.r[1][2],
-                     controller.r[2][2]};
     out.direction = ray;
     const float flat = std::hypot(ray.x, ray.z);
     if (!std::isfinite(flat)) return rejected("nonfinite-barrel");
@@ -1974,6 +2009,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     // head-dependent body fit used only to keep geometry out of the eye view.
     // Also exclude shadow palettes from tracked-hand transforms and physics.
     if (DrawingNativeShadow()) return count;
+    if (g_renderArm==1) { g_weaponLaser.item=nullptr;g_weaponAimBinding.item=nullptr; }
     if (g_renderArm<0 && joints && count>0 && count<=33 && g_active &&
         g_boundDll && item && item==g_headingItem &&
         item==*Ptr<uint8_t*>(g_boundDll->laraItem)) {
@@ -2077,6 +2113,38 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
         motiongun::WriteRows(motiongun::Multiply(correction,
             motiongun::ReadRows(bone)), bone);
     }
+    if (g_renderArm==1 && g_unarmedHandDll && g_unarmedHandDll->hands) {
+        // Match the actual drawn mesh against the native hand bank. TR5 uses
+        // weapon slot 2 for BOTH revolver and Desert Eagle, so game/weapon IDs
+        // alone cannot select the right aperture. Face/body draws replace geom.
+        const auto meshPointer=*reinterpret_cast<const void* const*>(geom+off::geom_mesh);
+        const auto* hands=Ptr<uint8_t>(g_unarmedHandDll->hands);
+        const weaponlaser::Model* model=nullptr;
+        const int weapon=CurrentMotionWeapon(),game=g_boundDll->game;
+        if(meshPointer) for(int bank:{0,30,60}) for(const auto& candidate:weaponlaser::models) {
+            if(weaponlaser::Find(candidate.handIndex,game,weapon) && meshPointer==
+               *reinterpret_cast<const void* const*>(hands+(bank+candidate.handIndex)*off::geom_stride+off::geom_mesh))
+                model=&candidate;
+        }
+        float rotation[3][3]{},camera[3]{};
+        if(model && CameraViewFrame(rotation,camera)) {
+            const auto mesh=motiongun::ReadRows(joints+pivot*12);
+            const auto origin=Add(motiongun::Transform(mesh,model->front),{camera[0],camera[1],camera[2]});
+            const auto direction=motiongun::Transform(mesh.basis,Sub(model->front,model->rear));
+            if(model->HasLaser()) {
+                g_weaponLaser.origin=origin;g_weaponLaser.direction=direction;
+                g_weaponLaser.base=g_boundBase;
+                g_weaponLaser.serial=VR().PoseSerial();
+                g_weaponLaser.game=game;g_weaponLaser.weapon=weapon;
+                g_weaponLaser.item=item;
+            }
+            motiongun::Frame toWrist{};
+            if(motiongun::Inverse({gun.desired,gun.trackedHand},toWrist)) {
+                g_weaponAimBinding={item,g_boundBase,game,weapon,AppState(drva::app_off::level),
+                    Transform(toWrist,origin),Transform(toWrist.basis,direction)};
+            }
+        }
+    }
     ++g_motionArmDraws[g_renderArm];
     g_renderHandJoint = pivot;
     return count;
@@ -2163,7 +2231,7 @@ uint8_t* SelectGunTarget(const GunPose& gun, motiongun::Vec& ray) {
     uint8_t* assisted=nullptr;
     Vec assistRay{};
     float nearest=20480.f, bestCos=-1.f, bestDistance=8192.f*8192.f;
-    const bool allowAssist=!FirstPersonHKScopeAiming();
+    const bool allowAssist=!gun.meshAligned && !FirstPersonHKScopeAiming();
     int index=*Ptr<int16_t>(d.nextItemActive);
     for (int visited=0; index>=0 && index<4096 && visited<4096; ++visited) {
         auto* item=items+index*off::item_stride;
@@ -2466,7 +2534,7 @@ void __cdecl Detour_GunJoint(uint8_t* item, PHD_VECTOR* point, int32_t joint) {
     if(FlareJointPoint(item,point,joint,false)) return;
     if (g_longShot && item==g_headingItem && point && joint==10) {
         const auto& gun=g_longShot->gun;
-        const auto p=Add(gun.trackedHand,Transform(gun.desired,
+        const auto p=gun.meshAligned ? gun.muzzle : Add(gun.trackedHand,Transform(gun.desired,
             {float(point->x),float(point->y),float(point->z)}));
         *point={int32_t(std::lround(p.x)),int32_t(std::lround(p.y)),int32_t(std::lround(p.z))};
         return;
@@ -4440,6 +4508,8 @@ void Remove() {
     g_motionHooksReady = false;
     g_firingHand = g_renderArm = g_renderHandJoint = -1;
     g_hkScopeBindItem=nullptr;
+    g_weaponLaser={};
+    g_weaponAimBinding={};
     g_scenePoseValid = false;
     g_motionArmDraws[0] = g_motionArmDraws[1] = 0;
     g_motionShots[0] = g_motionShots[1] = 0;
@@ -4543,6 +4613,42 @@ bool FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed, b
 }
 
 bool FirstPersonShadowPass() { return g_shadowDepthScope; }
+bool WeaponLaserAim(motiongun::Vec& muzzle,motiongun::Vec& direction,int16_t& room) {
+    using namespace motiongun;
+    if(!Cfg().enabled || !Cfg().worldLaserSight || !g_boundDll || !g_boundBase ||
+       g_boundDll!=GameDllBound() || g_boundBase!=GameDllBase() || CurrentGame()!=g_boundDll->game ||
+       InTitle() || InInventory() || InFMV() || AppState(drva::app_off::photoMode) ||
+       ScriptedCameraActive() || IsOpticsZoomed()) return false;
+    const int weapon=CurrentMotionWeapon();
+    const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
+    // Native ControlPhase: bit 4 is the combined attachment, not ownership of
+    // a loose sight. TR5's HK (5) has its sight built in.
+    const bool attached=LaserAttachmentEquipped(weapon);
+    if(!attached || *reinterpret_cast<const int16_t*>(lara+2)!=4) return false;
+    auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(!item || *reinterpret_cast<const int16_t*>(item+off::item_hit_points)<=0 ||
+       LaraWaterStatus()==1 || LaraWaterStatus()==2) return false;
+    room=*reinterpret_cast<const int16_t*>(item+off::item_room);
+    if(g_active) {
+        if(g_holsters.active && (!g_holsters.Has(1) || g_holsters.hand[1].claimed)) return false;
+        GunPose gun{};if(!BuildGunPose(1,gun)) return false;
+        // Present consumes the exact palette used for this frame's weapon.
+        // Do not fall back to guessed offsets when an attachment wasn't drawn.
+        if(g_weaponLaser.item!=item || g_weaponLaser.base!=g_boundBase ||
+           g_weaponLaser.serial!=VR().PoseSerial() || g_weaponLaser.game!=g_boundDll->game ||
+           g_weaponLaser.weapon!=weapon) return false;
+        muzzle=g_weaponLaser.origin;direction=g_weaponLaser.direction;
+    } else {
+        if(!g_boundDll->getJointAbsPositionLerp) return false;
+        const auto local=MuzzleLocal(weapon,1,g_boundDll->game);
+        muzzle=JointPoint(item,10,int(local.x),int(local.y),int(local.z));
+        direction=Sub(JointPoint(item,10,0,1024,0),JointPoint(item,10,0,0,0));
+    }
+    const float length=std::sqrt(Dot(direction,direction));
+    if(!std::isfinite(length) || length<.001f) return false;
+    direction=Scale(direction,1/length);
+    return std::isfinite(muzzle.x) && std::isfinite(muzzle.y) && std::isfinite(muzzle.z);
+}
 bool FirstPersonDrawingTrackedHands() { return g_renderArm>=0; }
 int FirstPersonTrackedHandJoint() {
     return g_renderArm>=0 && g_renderHandJoint>=0 && g_renderHandJoint<72 ? g_renderHandJoint : -1;
@@ -4607,6 +4713,8 @@ void FirstPersonControlModeUpdate() {
 void FirstPersonUpdate() {
     FirstPersonControlModeUpdate();
     if (!MotionReady() || CurrentMotionWeapon()!=5) g_hkScopeBindItem=nullptr;
+    if (!MotionReady() || g_weaponLaser.weapon!=CurrentMotionWeapon()) g_weaponLaser.item=nullptr;
+    if (!MotionReady() || g_weaponAimBinding.weapon!=CurrentMotionWeapon()) g_weaponAimBinding.item=nullptr;
     if (g_gunTriggers.active && !MotionTriggerMode()) {
         g_gunTriggers.Reset();
     }
