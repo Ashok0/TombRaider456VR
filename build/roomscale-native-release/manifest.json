@@ -1,0 +1,11 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-26T22:56:58.5165929-04:00",
+    "dll_sha256":  "258C5107B735E5240C811AE52CEFC6056A255CE5A9704BAF4F28B8B2E0637B0C",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-roomscale-native-20261026-225658",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4304961,
+    "hardware_verified":  false,
+    "change":  "Corrects the native standing collision pass that undid roomscale steps near ledges. Verified global Lara collision record and scoped GetCollisionInfo override preserve wall and joystick rules. Eye clearance permits deep drops. Revised regression reproduces the previous failure and covers native pushback, falling, landing, camera movement and exclusion gates."
+}

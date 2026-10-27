@@ -1,0 +1,11 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-26T22:28:00.0405919-04:00",
+    "dll_sha256":  "141A566AAC828DFDC2DCBBECBF7C0E7312DB862F157D5AFB2B714C1BCF441D67",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-roomscale-ledge-20261026-222759",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4276658,
+    "hardware_verified":  false,
+    "change":  "Roomscale sweeps allow ledge crossings, stop at the first unsupported step, and hand off falling to native physics. Airborne gravity blocks further root dragging. Regression coverage includes TR4/TR5 directional drops, camera descent, landing, walls, missing geometry, full-body IK and stabilization."
+}

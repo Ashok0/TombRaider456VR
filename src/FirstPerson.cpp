@@ -123,6 +123,7 @@ hook::InlineHook g_hAnimatePistols;
 hook::InlineHook g_hSetGunFlash;
 hook::InlineHook g_hGetTargetOnLOS;
 hook::InlineHook g_hLaraAboveWater;
+hook::InlineHook g_hGetCollisionInfo;
 hook::InlineHook g_hAnimateLara;
 hook::InlineHook g_hDrawActionIndicators;
 struct ActionIconDll {
@@ -2717,6 +2718,46 @@ using Fn_GetFloor = void*(__cdecl*)(int32_t, int32_t, int32_t, int16_t*);
 using Fn_GetHeight = int32_t(__cdecl*)(void*, int32_t, int32_t, int32_t);
 using Fn_ItemNewRoom = void(__cdecl*)(int16_t, int16_t);
 
+thread_local RoomCollision* g_roomscaleNativeCollision=nullptr;
+thread_local uint8_t* g_roomscaleNativeItem=nullptr;
+RoomCollision* g_nativeLaraCollision=nullptr;
+
+struct RoomscaleCollisionScope {
+    RoomCollision* previous=g_roomscaleNativeCollision;
+    uint8_t* previousItem=g_roomscaleNativeItem;
+    explicit RoomscaleCollisionScope(uint8_t* item) {
+        g_roomscaleNativeCollision=nullptr;g_roomscaleNativeItem=nullptr;
+        if(!g_nativeLaraCollision || !item || item!=g_headingItem || !g_active || !g_haveHeading || !Gate() ||
+           !CanTurnBody(item) || g_shifted || g_jumpPressed || !VR().poseValid() ||
+           !Cfg().firstPersonRoomscaleMove || !Cfg().positionalTracking || !Cfg().firstPersonHeadTranslation ||
+           (g_haveManualInput && locomotion::Length(g_manualLocal)>.0001f) ||
+           (*Ptr<uint64_t>(g_boundDll->input)&(locomotion::Directions|locomotion::Walk|0x10u))) return;
+        // Keep the same allowance while pausing between physical steps. A
+        // STOP query must not push a supported root back from the front edge
+        // after roomscale has moved it there. Stick/Walk retains native rules.
+        g_roomscaleNativeCollision=g_nativeLaraCollision;
+        g_roomscaleNativeItem=item;
+    }
+    ~RoomscaleCollisionScope() {
+        g_roomscaleNativeCollision=previous;g_roomscaleNativeItem=previousItem;
+    }
+};
+
+void __cdecl Detour_GetCollisionInfo(RoomCollision* coll,int32_t x,int32_t y,int32_t z,
+                                    int16_t room,int32_t height) {
+    const bool roomscale=coll && coll==g_roomscaleNativeCollision && g_roomscaleNativeItem &&
+        height==762 && CanTurnBody(g_roomscaleNativeItem) &&
+        !(*reinterpret_cast<const uint32_t*>(g_roomscaleNativeItem+0x1820)&8);
+    const int badPos=coll ? coll->badPos : 0;
+    const uint16_t lavaPit=coll ? coll->flags&4u : 0;
+    if(roomscale) { coll->badPos=32512;coll->flags&=uint16_t(~4u); }
+    g_hGetCollisionInfo.Original<Fn_GetCollisionInfo>()(coll,x,y,z,room,height);
+    if(roomscale) {
+        coll->badPos=badPos;
+        coll->flags=uint16_t((coll->flags&~4u)|lavaPit);
+    }
+}
+
 void UpdateLaraRoom(uint8_t* item) {
     // TR4/5 inline TR1-3's UpdateLaraRoom(item, -381) in LaraAboveWater.
     // Reproduce that exact sequence after each accepted room-scale sweep.
@@ -2738,6 +2779,7 @@ locomotion::Vec DragBody(uint8_t* item) {
     using namespace locomotion;
     if (!CanTurnBody(item) || g_shifted || !Cfg().firstPersonRoomscaleMove ||
         !Cfg().positionalTracking || !Cfg().firstPersonHeadTranslation) return {};
+    if (*reinterpret_cast<const uint32_t*>(item+0x1820)&8) return {};
     if (!g_boundDll->getCollisionInfo || !g_boundDll->getFloor ||
         !g_boundDll->getHeight || !g_boundDll->itemNewRoom) return {};
     Vec pending;
@@ -2768,15 +2810,18 @@ locomotion::Vec DragBody(uint8_t* item) {
         remainder = remainder - Vec{float(dx), float(dz)};
         RoomCollision coll{};
         coll.radius = 100;
-        coll.badPos = 384; coll.badNeg = -384; coll.badCeiling = 0;
-        coll.flags = 5; // slopes are walls, lava is a pit (native lara_col_stop)
+        // Use lara_col_run's drop allowance. The STOP probe treats a ledge
+        // within the front radius as a wall, leaving Lara grounded while the
+        // tracked eye/body render continues over the edge.
+        coll.badPos = 32512; coll.badNeg = -384; coll.badCeiling = 0;
+        coll.flags = 1; // slopes remain walls; drops go to native fall handling
         coll.old[0] = pos.x_pos; coll.old[1] = pos.y_pos; coll.old[2] = pos.z_pos;
         coll.facing = Angle(std::atan2(step.x, step.z));
         const int x = pos.x_pos + dx, z = pos.z_pos + dz;
         const int16_t room = *reinterpret_cast<int16_t*>(item + off::item_room);
         reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase + g_boundDll->getCollisionInfo)(
             &coll, x, pos.y_pos, z, room, 762);
-        if (coll.floorSamples[0] < -384 || coll.floorSamples[0] > 384 ||
+        if (coll.floorSamples[0] < -384 ||
             coll.floorSamples[1] >= 0 || coll.type == 8 || coll.type == 16 || coll.type == 32)
             break;
         const int acceptedX = x + coll.shift[0] - pos.x_pos;
@@ -2785,6 +2830,10 @@ locomotion::Vec DragBody(uint8_t* item) {
             {float(acceptedX),float(acceptedZ)})) break;
         pos.x_pos += acceptedX; pos.z_pos += acceptedZ;
         UpdateLaraRoom(item);
+        // Stop at the first unsupported step. LaraAboveWater runs immediately
+        // after this sweep; its collision routine starts the native fall.
+        // Do not sweep across a gap or snap Y to the lower floor ourselves.
+        if (coll.floorSamples[0] > 384) break;
         if (!acceptedX && !acceptedZ) break;
     }
     const Vec actual = Vec{float(pos.x_pos), float(pos.z_pos)} - initial;
@@ -3325,6 +3374,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         IdleTrackedGunHeadingScope idleGunHeading(item);
         CrouchWeaponScope crouchWeapons(item);
         DirectionalJumpAxesScope jumpAxes(item);
+        RoomscaleCollisionScope roomscaleCollision(item);
         g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
     }
     if (grabFeedback && g_ledgeGrab.Finish(Gate() && LaraWaterStatus()==0,
@@ -3454,7 +3504,7 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
         // Query the final horizontal eye, then keep that rendered centre clear
         // of floor/ceiling without changing Lara, tracking neutral or calibration.
         RoomCollision coll{};
-        coll.radius=64; coll.badPos=4096; coll.badNeg=-4096;
+        coll.radius=64; coll.badPos=32512; coll.badNeg=-4096;
         coll.old[0]=x; coll.old[1]=body[1]; coll.old[2]=z;
         coll.facing=Angle(g_lastHeadWorld);
         reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase+g_boundDll->getCollisionInfo)(
@@ -3481,7 +3531,7 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
         [&](int32_t x, int32_t z, int32_t clearX, int32_t clearZ) {
             RoomCollision coll{};
             coll.radius = 64;
-            coll.badPos = 4096;
+            coll.badPos = 32512; // A deep floor drop is not a wall at eye height.
             coll.badNeg = -4096;
             coll.badCeiling = 0;
             coll.flags = 0; // Eye clearance permits empty space beyond a ledge.
@@ -4173,6 +4223,21 @@ bool Install(const GameDllLayout& d, uint64_t base) {
         return false;
     }
     const uint8_t* movement = d.game == 0 ? kLaraAboveWaterTR4 : kLaraAboveWaterTR5;
+    // LaraAboveWater uses the global laracoll, not its incoming RDX register.
+    // Verify its initial old-X/old-Y stores and resolve that exact record.
+    const auto* store=reinterpret_cast<const uint8_t*>(base+d.laraAboveWater+(d.game==0 ? 0x16 : 0x20));
+    int32_t oldX=0,oldY=0;
+    std::memcpy(&oldX,store+2,4);std::memcpy(&oldY,store+13,4);
+    if(store[0]!=0x89 || store[1]!=0x05 || store[11]!=0x89 || store[12]!=0x05 ||
+       store+6+oldX+4!=store+17+oldY) {
+        Log("firstperson: native Lara collision record could not be verified");
+        return false;
+    }
+    g_nativeLaraCollision=reinterpret_cast<RoomCollision*>(const_cast<uint8_t*>(store+6+oldX)-offsetof(RoomCollision,old));
+    if (!g_hGetCollisionInfo.Install(
+            reinterpret_cast<void*>(base+d.getCollisionInfo),
+            reinterpret_cast<void*>(&Detour_GetCollisionInfo),sizeof(kCollisionDebug),
+            retail ? kCollisionRetail : kCollisionDebug,sizeof(kCollisionDebug),"RoomscaleGetCollisionInfo")) return false;
     if (!g_hLaraAboveWater.Install(
             reinterpret_cast<void*>(base + d.laraAboveWater),
             reinterpret_cast<void*>(&Detour_LaraAboveWater), 5,
@@ -4387,6 +4452,8 @@ void Remove() {
     g_hGenerateW2V.Remove();
     g_hAimWeapon.Remove();
     g_hLaraAboveWater.Remove();
+    g_hGetCollisionInfo.Remove();
+    g_nativeLaraCollision=nullptr;
     g_hAnimateLara.Remove();
     g_active = false;
     g_haveHeading = false;

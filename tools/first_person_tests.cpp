@@ -43,6 +43,8 @@ uint64_t actionInput = 0, seenInput = 0;
 int16_t seenAnalog[4]{}, seenYaw = 0, seenMove = 0, seenTurn = 0;
 int animationTicks = 0, simulationTicks = 0;
 int collisionMode = 0, collisionCalls = 0, floorCalls = 0, roomChanges = 0;
+tr::RoomCollision* roomscaleNativeCollision=nullptr;
+int roomscaleDropHeight=1024;
 int cameraCollisionCalls = 0;
 float impactNormalX=0,impactNormalZ=1;
 int cutseq = 0, floorToken = 0, draws = 0, hairs = 0;
@@ -479,7 +481,7 @@ void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z
                           int16_t room, int32_t height) {
     if (c->radius == 64) {
         ++cameraCollisionCalls;
-        const bool airborne = c->badPos == 4096 && c->badNeg == -4096;
+        const bool airborne = c->badPos == 32512 && c->badNeg == -4096;
         Check((airborne || (c->badPos == 384 && c->badNeg == -384)) &&
               c->badCeiling == 0 && c->flags == (airborne ? 0 : 5) &&
               height == (tr::CanUseCrouchCamera(itemMemory) ? 400 : 762),
@@ -511,12 +513,20 @@ void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z
                 c->floorSamples[sample+1]=(collisionMode==18 ? -600 : -1600)-(y-height);
             }
         }
+        if(collisionMode==19) for(int sample=0;sample<18;sample+=3) {
+            c->floorSamples[sample]=(x*impactNormalX+z*impactNormalZ>=80 ? roomscaleDropHeight : 0)-y;
+            c->floorSamples[sample+1]=-4096-(y-height);
+            if(c->floorSamples[sample]>c->badPos) {
+                c->shift[0]=c->old[0]-x;c->shift[2]=c->old[2]-z;
+            }
+        }
         (void)y;
         return;
     }
-    ++collisionCalls;
-    Check(c->radius == 100 && c->badPos == 384 && c->badNeg == -384 &&
-          c->badCeiling == 0 && c->flags == 5 && height == 762,
+    const bool nativeStanding=c==roomscaleNativeCollision;
+    if(!nativeStanding) ++collisionCalls;
+    Check(c->radius == 100 && (c->badPos == 32512 || (nativeStanding && c->badPos==384)) && c->badNeg == -384 &&
+          c->badCeiling == 0 && (c->flags == 1 || (nativeStanding && c->flags==5)) && height == 762,
           "native room-scale query uses verified standing collision parameters");
     Check(std::hypot(float(x - c->old[0]), float(z - c->old[2])) <= 32+std::sqrt(2.f),
           "physical displacement split into short collision sweeps");
@@ -530,6 +540,24 @@ void __cdecl FakeCollision(tr::RoomCollision* c, int32_t x, int32_t y, int32_t z
     if (collisionMode == 7) c->floorSamples[0] = -385;
     if (collisionMode == 8) c->shift[0] = 1000;
     if (collisionMode == 9 && x > 50) c->shift[0] = 50 - x;
+    if(collisionMode>=19 && collisionMode<=21) {
+        const float along=x*impactNormalX+z*impactNormalZ;
+        c->floorSamples[0]=along>=80 ? roomscaleDropHeight-y : -y;
+        c->floorSamples[3]=along+100>=80 ? roomscaleDropHeight-y : -y;
+        // Model the native front-radius pit rejection, not just the centre
+        // sample: the old STOP probe could never bring the root to the edge.
+        if(c->floorSamples[3]>c->badPos || collisionMode==21) {
+            c->shift[0]=c->old[0]-x;c->shift[2]=c->old[2]-z;c->type=1;
+            if(nativeStanding) {
+                // Native STOP's front radius pushes the centre back to the
+                // edge-minus-radius even when its middle is still supported.
+                const float push=79-(along+100);
+                c->shift[0]=int32_t(std::round(push*impactNormalX));
+                c->shift[2]=int32_t(std::round(push*impactNormalZ));
+            }
+        }
+        if(collisionMode==20) c->floorSamples[0]=-32512;
+    }
     (void)y;
 }
 void* __cdecl FakeFloor(int32_t x, int32_t y, int32_t z, int16_t* room) {
@@ -538,11 +566,42 @@ void* __cdecl FakeFloor(int32_t x, int32_t y, int32_t z, int16_t* room) {
     Check(x == pos.x_pos && y == pos.y_pos - 381 && z == pos.z_pos,
           "room update samples Lara's accepted position with native height offset");
     if (collisionMode == 10 && x >= 64) *room = 2;
+    if(collisionMode==19 && x*impactNormalX+z*impactNormalZ>=80) *room=2;
     return &floorToken;
 }
-int32_t __cdecl FakeHeight(void* floor, int32_t, int32_t, int32_t) {
+int32_t __cdecl FakeHeight(void* floor, int32_t x, int32_t, int32_t z) {
     Check(floor == &floorToken, "floor result passed to native height query");
-    return 123;
+    return collisionMode==19 ? (x*impactNormalX+z*impactNormalZ>=80 ? roomscaleDropHeight : 0) : 123;
+}
+void __cdecl FakeRoomscaleFallAboveWater(uint8_t* item,void* collision) {
+    FakeAboveWater(item,collision);
+    auto& flags=*reinterpret_cast<uint32_t*>(item+0x1820);
+    auto& pos=*reinterpret_cast<tr::PHD_3DPOS*>(item+tr::off::item_pos);
+    auto& state=*reinterpret_cast<int16_t*>(item+tr::off::item_anim_state);
+    auto& goal=*reinterpret_cast<int16_t*>(item+tr::off::item_goal_state);
+    auto& fallSpeed=*reinterpret_cast<int16_t*>(item+0x24);
+    if(flags&8) {
+        fallSpeed+=6;pos.y_pos+=fallSpeed;
+        if(pos.y_pos>=roomscaleDropHeight) { pos.y_pos=roomscaleDropHeight;state=goal=2;flags&=~8u;fallSpeed=0; }
+    } else {
+        auto* c=tr::g_nativeLaraCollision;
+        Check(c!=nullptr,"native roomscale fixture has the actual simulation collision record");
+        *c={};c->radius=100;c->badPos=384;c->badNeg=-384;c->flags=5;
+        c->old[0]=pos.x_pos;c->old[1]=pos.y_pos;c->old[2]=pos.z_pos;
+        roomscaleNativeCollision=c;
+        tr::Detour_GetCollisionInfo(c,pos.x_pos,pos.y_pos,pos.z_pos,
+            *reinterpret_cast<int16_t*>(item+tr::off::item_room),762);
+        roomscaleNativeCollision=nullptr;
+        if(c->floorSamples[0]<=384) {
+            pos.x_pos+=c->shift[0];pos.z_pos+=c->shift[2];
+            return;
+        }
+        // Verified TR4/5 lara_col_stop: centre floor >384 starts animation
+        // 34 / state 3, with gravity and zero initial fall speed. Subsequent
+        // native ticks own gravity and landing; the mod only moves X/Z.
+        state=goal=3;*reinterpret_cast<int16_t*>(item+tr::off::item_anim_number)=34;
+        flags|=8;fallSpeed=0;
+    }
 }
 void __cdecl FakeNewRoom(int16_t item, int16_t room) {
     Check(item == *reinterpret_cast<int16_t*>(laraMemory), "room update uses Lara item index");
@@ -2542,6 +2601,119 @@ int main() {
               "wall rejection prevents lazy room-scale follow from moving the native root");
         collisionMode=0;config=settings;resetRoomscale();
     }
+    {
+        const auto settings=config;
+        const auto savedAbove=g_hLaraAboveWater.m_trampoline;
+        const auto savedCollisionHook=g_hGetCollisionInfo.m_trampoline;
+        const auto savedNativeCollision=g_nativeLaraCollision;
+        const bool savedMoves=nativeMoves;
+        const auto savedJoint=dll.getJointAbsPositionLerp;
+        const auto savedSway=gaitSway;
+        const auto savedFlags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+        const auto savedAnimation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+        const auto savedGoal=*reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state);
+        const auto savedFallSpeed=*reinterpret_cast<int16_t*>(itemMemory+0x24);
+        RoomCollision nativeCollision{};
+        g_nativeLaraCollision=&nativeCollision;
+        auto tick=[]() { LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
+            QueryPerformanceCounter(&g_roomscaleFollowTime);g_roomscaleFollowTime.QuadPart-=frequency.QuadPart/30; };
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&FakeRoomscaleFallAboveWater);
+        g_hGetCollisionInfo.m_trampoline=reinterpret_cast<void*>(&FakeCollision);
+        dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));gaitSway={};
+        nativeMoves=false;
+        for(int drop:{1024,8192}) for(int which:{0,1}) for(bool full:{false,true}) for(bool stabilize:{false,true})
+            for(const auto direction:{locomotion::Vec{1,0},{-1,0},{0,1},{0,-1},{.6f,.8f}}) {
+                roomscaleDropHeight=drop;
+                game=dll.game=which;resetRoomscale();collisionMode=19;
+                config.firstPersonFullBodyIK=full;config.firstPersonMovementStabilization=stabilize;
+                config.firstPersonRoomscaleMove=true;
+                *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+                *reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state)=2;
+                impactNormalX=direction.x;impactNormalZ=direction.z;
+                physicalPose(0,.6f*direction.x,.6f*direction.z);
+                actionInput=0;analogMemory[0]=analogMemory[1]=0;
+                for(int frame=0;frame<60 && state==2;++frame) {
+                    prev=pos;tick();const int calls=simulationTicks;
+                    Detour_LaraAboveWater(itemMemory,nullptr);
+                    Check(!g_roomscaleNativeCollision && !g_roomscaleNativeItem && nativeCollision.badPos==384 && nativeCollision.flags==5,
+                          "native collision override ends with the simulation call and restores query settings");
+                    Check(simulationTicks==calls+1 && seenInput==0,"real walking runs native physics once without simulated stick/jump input");
+                    fraction=256;UpdateSceneCamera(camera);
+                }
+                const float crossed=pos.x_pos*direction.x+pos.z_pos*direction.z;
+                Check(state==3 && (*reinterpret_cast<uint32_t*>(itemMemory+0x1820)&8),
+                      "roomscale ledge crossing starts native falling in TR4 and TR5");
+                Check(crossed>=80 && crossed<114 && pos.y_pos==0,
+                      "sweep stops at the first unsupported step without crossing the gap or snapping down");
+                Check(room==2 && *reinterpret_cast<int32_t*>(itemMemory+off::item_floor)==drop,
+                      "fall starts with the lower room and floor registered");
+                const auto headView=InvertRigid(VR().HeadView());
+                const auto offset=locomotion::Rotate({headView.r[0][3],-headView.r[2][3]},g_headingBase);
+                if(stabilize) Check((camera.x_pos+offset.x)*direction.x+(camera.z_pos+offset.z)*direction.z>crossed+100,
+                      "eye follows physical movement beyond both ordinary and deep ledges");
+                const auto falling=pos;const auto eyeY=camera.y_pos;
+                for(int frame=0;frame<8;++frame) {
+                    prev=pos;physicalPose(0,.8f*direction.x,.8f*direction.z);tick();
+                    const int queries=collisionCalls;
+                    Detour_LaraAboveWater(itemMemory,nullptr);
+                    Check(collisionCalls==queries && pos.x_pos==falling.x_pos && pos.z_pos==falling.z_pos && pos.y_pos>prev.y_pos,
+                          "continued real walking cannot drag the airborne root or cancel native gravity");
+                    fraction=256;UpdateSceneCamera(camera);
+                }
+                Check(camera.y_pos>eyeY,"first-person camera descends with the native fall");
+                for(int frame=0;frame<120 && state==3;++frame) { prev=pos;Detour_LaraAboveWater(itemMemory,nullptr); }
+                Check(state==2 && pos.y_pos==drop && !(*reinterpret_cast<uint32_t*>(itemMemory+0x1820)&8),
+                      "native landing completes after roomscale drop");
+            }
+        for(int mode:{20,21}) {
+            resetRoomscale();collisionMode=mode;config.firstPersonFullBodyIK=false;
+            impactNormalX=1;impactNormalZ=0;physicalPose(0,.6f,0);
+            *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+            Check(locomotion::Length(DragBody(itemMemory))==0 && pos.x_pos==0,
+                  "missing geometry and wall pushback still block roomscale movement at drops");
+        }
+        for(int guard=0;guard<15;++guard) {
+            resetRoomscale();collisionMode=19;config.firstPersonFullBodyIK=false;
+            config.firstPersonRoomscaleMove=config.positionalTracking=config.firstPersonHeadTranslation=true;
+            actionInput=0;VR().m_poseValid=true;*reinterpret_cast<uint32_t*>(itemMemory+0x1820)=0;
+            if(guard==1) g_active=false;
+            if(guard==2) g_shifted=true;
+            if(guard==3) config.firstPersonRoomscaleMove=false;
+            if(guard==4) config.positionalTracking=false;
+            if(guard==5) config.firstPersonHeadTranslation=false;
+            if(guard==6) VR().m_poseValid=false;
+            if(guard==7) state=3;
+            if(guard==8) hp=0;
+            if(guard==9) water=1;
+            if(guard==10) { g_haveManualInput=true;g_manualLocal={0,1}; }
+            if(guard==11) actionInput=locomotion::Forward;
+            if(guard==12) actionInput=locomotion::Walk;
+            if(guard==13) g_jumpPressed=true;
+            if(guard==14) *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=8;
+            RoomCollision c{};c.radius=100;c.badPos=384;c.badNeg=-384;c.flags=5;
+            g_nativeLaraCollision=&c;
+            roomscaleNativeCollision=&c;
+            { RoomscaleCollisionScope scope(itemMemory);
+              Detour_GetCollisionInfo(&c,0,0,0,room,762); }
+            Check((c.shift[0]==0)==(guard==0),"native ledge allowance is limited to stationary first-person roomscale ground movement");
+            Check(c.badPos==384 && c.flags==5 && !g_roomscaleNativeCollision && !g_roomscaleNativeItem,
+                  "collision settings and scope are restored for other game queries");
+            roomscaleNativeCollision=nullptr;
+        }
+        VR().m_poseValid=true;roomscaleDropHeight=1024;config=settings;
+        resetRoomscale();collisionMode=0;*reinterpret_cast<uint32_t*>(itemMemory+0x1820)=8;
+        Check(locomotion::Length(DragBody(itemMemory))==0 && collisionCalls==0,
+              "gravity blocks roomscale drag even before the grounded state changes");
+        *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=savedFlags;
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=savedAnimation;
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_goal_state)=savedGoal;
+        *reinterpret_cast<int16_t*>(itemMemory+0x24)=savedFallSpeed;
+        impactNormalX=0;impactNormalZ=1;config=settings;nativeMoves=savedMoves;
+        dll.getJointAbsPositionLerp=savedJoint;gaitSway=savedSway;
+        g_hLaraAboveWater.m_trampoline=savedAbove;resetRoomscale();
+        g_hGetCollisionInfo.m_trampoline=savedCollisionHook;
+        g_nativeLaraCollision=savedNativeCollision;
+    }
     for (int which : {0, 1}) {
         game = dll.game = which;
         resetRoomscale();
@@ -2592,7 +2764,7 @@ int main() {
             const int ticks = simulationTicks;
             Detour_LaraAboveWater(itemMemory, nullptr);
             const int expected = collisionMode == 0 || collisionMode == 10 ? 180 :
-                                 collisionMode == 9 ? 50 : 0;
+                                 collisionMode == 9 ? 50 : collisionMode == 2 ? 30 : 0;
             Check(pos.x_pos == expected && pos.z_pos == 0 && pos.y_pos == 0,
                   "room-scale collision accepts only safe horizontal displacement");
             Check(Near(g_dragCurrent.x, expected / 1000.0f) && Near(g_dragCurrent.z, 0),
