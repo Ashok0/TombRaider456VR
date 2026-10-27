@@ -167,8 +167,8 @@ bool ApplyWorldInventory(XGamepad& pad,bool& shifted) {
     bool owned=false;
     if(g_worldInventory.Update(in,WorldInventoryAllowed(),InInventory(),CurrentGame(),
         GetTickCount64(),Cfg().dpadShiftDeadzone,owned)) {
-        VR().HeadPose(g_inventoryAnchor);
-        Log("inventory: unarmed X observed; spatial anchor prepared if inventory opens");
+        VR().LevelHeadPose(g_inventoryAnchor);
+        Log("inventory: unarmed X prepared level eye-height anchor with horizontal facing");
     }
     if(owned) {
         pad.wButtons=in.buttons;
@@ -668,7 +668,7 @@ Affine WorldInventoryEyeView(Eye eye) {
 }
 
 void WorldInventoryRecenter() {
-    if(g_worldInventory.pending || g_worldInventory.open) VR().HeadPose(g_inventoryAnchor);
+    if(g_worldInventory.pending || g_worldInventory.open) VR().LevelHeadPose(g_inventoryAnchor);
 }
 
 void GamepadUpdate() {

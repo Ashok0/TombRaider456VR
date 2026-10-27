@@ -1,0 +1,11 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-26T20:13:48.2070935-04:00",
+    "dll_sha256":  "DD855021EF1A2D56E6D804F309DDF1A27125C0F8C759F0140A93A0559563A501",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-level-menu-view-20261026-201347",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_checks":  4249280,
+    "hardware_verified":  false,
+    "change":  "Inventory opens at eye height with horizontal facing only, stripping pitch and roll. LT+Y resets local tracking yaw and position for head and controllers, with deferred tracking recovery and System-recenter handling."
+}

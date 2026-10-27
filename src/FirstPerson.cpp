@@ -4609,7 +4609,6 @@ void FirstPersonToggle() {
     ResetMovementStabilization();
     g_calibrationActive=false;
     g_cameraMotionTrace = {};
-    const bool wasActive = g_active;
     if (!g_runtimeInitialized) {
         g_runtimeEnabled = false;
         g_runtimeInitialized = true;
@@ -4625,8 +4624,7 @@ void FirstPersonToggle() {
     g_haveManualInput = false;
     g_groundMoveAction = 0;
     RestoreHeadMesh();
-    if (wasActive && !g_runtimeEnabled) VR().RecenterThirdPersonHead();
-    else VR().RecentreOffset();
+    VR().RecenterView();
     LogF("firstperson: switched to %s",
          g_runtimeEnabled ? "FIRST PERSON" : "third person");
 }

@@ -107,6 +107,11 @@ public:
     // BeginFrame. Hand 0 is left, hand 1 is right.
     bool ControllerPose(int hand, vr::HmdMatrix34_t& out) const;
     bool HeadPose(vr::HmdMatrix34_t& out) const;
+    // Eye-height anchor with horizontal facing only (no headset pitch/roll).
+    bool LevelHeadPose(vr::HmdMatrix34_t& out) const;
+    // Reset the application's tracking heading and position for a view toggle.
+    // Head and both controllers share this origin; runtime room setup is untouched.
+    void RecenterView();
     // Controller translation relative to the FP camera's head anchor, in
     // metres (right, down, forward). Applies the same neck correction as
     // HeadView so the rendered gun does not drift when turning in place.
@@ -175,6 +180,8 @@ private:
 
     Affine m_headFromTracking = Affine::Identity();  // inverse(hmdPose)
     vr::HmdMatrix34_t m_rawHeadPose{};
+    Affine m_trackingFromRuntime = Affine::Identity();
+    bool m_viewRecenterPending = false;
     vr::HmdMatrix34_t m_rawControllerPose[2]{};
     bool m_controllerPoseValid[2] = {};
     float m_firstPersonNeutral[3] = {};

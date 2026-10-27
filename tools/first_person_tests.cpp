@@ -3367,11 +3367,69 @@ int main() {
     const auto returnedHead = InvertRigid(VR().HeadView());
     Check(Near(returnedHead.r[0][3], 0) && Near(returnedHead.r[1][3], 0) &&
           Near(returnedHead.r[2][3], 0), "FP exit immediately centres third person at current physical position");
-    Check(Near(VR().HeadYawRadians(), 0.7f), "handoff preserves physical look rotation");
+    Check(Near(VR().HeadYawRadians(), 0) && Near(returnedHead.r[0][2],0) && Near(returnedHead.r[0][0],1),
+          "LT+Y resets facing as well as position in the first third-person draw");
+    {
+        const auto savedVR=VR();
+        for(float yaw:{-2.f,.7f,2.8f}) for(float pitch:{-.9f,0.f,.9f}) {
+            VR().m_trackingFromRuntime=Affine::Identity();
+            Head(yaw,pitch);
+            const auto runtimeHead=VR().m_rawHeadPose;
+            VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+            vr::HmdMatrix34_t runtimeHands[2];
+            Affine relativeHands[2];
+            for(int hand=0;hand<2;++hand) {
+                auto offset=RotY(hand ? 37.f : -24.f);
+                offset.r[0][3]=hand ? .3f : -.3f;offset.r[1][3]=-.5f;offset.r[2][3]=-.4f;
+                const auto handPose=Mul(FromHmd(runtimeHead),offset);
+                for(int i=0;i<3;++i) for(int j=0;j<4;++j) runtimeHands[hand].m[i][j]=handPose.r[i][j];
+                VR().m_rawControllerPose[hand]=runtimeHands[hand];
+                relativeHands[hand]=Mul(InvertRigid(FromHmd(runtimeHead)),FromHmd(runtimeHands[hand]));
+            }
+            VR().RecenterView();
+            Check(Near(VR().HeadYawRadians(),0) && Near(VR().HeadPitchRadians(),pitch),
+                  "view reset removes horizontal heading while preserving actual headset pitch");
+            for(int repeat=0;repeat<3;++repeat) {
+                // The next runtime pose must keep the reset, not snap back.
+                VR().m_rawHeadPose=TransformHmd(VR().m_trackingFromRuntime,runtimeHead);
+                VR().m_headFromTracking=InvertRigid(FromHmd(VR().m_rawHeadPose));
+                for(int hand=0;hand<2;++hand) {
+                    VR().m_rawControllerPose[hand]=TransformHmd(VR().m_trackingFromRuntime,runtimeHands[hand]);
+                    const auto relative=Mul(InvertRigid(FromHmd(VR().m_rawHeadPose)),FromHmd(VR().m_rawControllerPose[hand]));
+                    for(int i=0;i<3;++i) for(int j=0;j<4;++j)
+                        Check(Near(relative.r[i][j],relativeHands[hand].r[i][j]),"recenter keeps both controllers aligned with the headset");
+                }
+                Check(Near(VR().HeadYawRadians(),0),"new runtime samples retain the calibrated facing");
+                VR().RecenterView();
+            }
+            Head(yaw+.2f,pitch);
+            VR().m_rawHeadPose=TransformHmd(VR().m_trackingFromRuntime,VR().m_rawHeadPose);
+            VR().m_headFromTracking=InvertRigid(FromHmd(VR().m_rawHeadPose));
+            Check(Near(VR().HeadYawRadians(),.2f),"head turning remains tracked relative to the new forward direction");
+            vr::VREvent_t reset{};reset.eventType=vr::VREvent_StandingZeroPoseReset;
+            VR().HandleRuntimeEvent(reset);
+            Head(0);VR().ApplyRuntimeRecenter();
+            Check(Near(VR().m_trackingFromRuntime.r[0][0],1) && Near(VR().m_trackingFromRuntime.r[0][2],0) &&
+                  Near(VR().HeadYawRadians(),0),"System recenter replaces local calibration without applying yaw twice");
+        }
+        const auto oldBase=g_headingBase,oldHeadWorld=g_lastHeadWorld;
+        const auto oldGroundEye=g_groundEye;
+        g_active=true;g_headingBase=.6f;Head(.9f,.3f);
+        const float facing=g_headingBase+VR().HeadYawRadians();
+        VR().m_poseValid=false;VR().RecenterView();
+        Check(VR().m_viewRecenterPending,"view reset waits for tracking instead of capturing an invalid pose");
+        VR().m_poseValid=true;Head(.9f,.3f);VR().RecenterView();
+        Check(!VR().m_viewRecenterPending && Near(VR().HeadYawRadians(),0) &&
+              Near(g_lastHeadWorld,facing) && Near(VR().FirstPersonVerticalOffset(),0),
+              "deferred view reset preserves active first-person world facing and recalibrates height");
+        g_active=false;g_headingBase=oldBase;g_lastHeadWorld=oldHeadWorld;g_groundEye=oldGroundEye;
+        VR()=savedVR;
+    }
     auto thirdPersonSample = [&]() {
         auto pose = VR().m_rawHeadPose;
         VR().WorldLockOffset(pose);
         VR().m_headFromTracking = InvertRigid(FromHmd(pose));
+        if(VR().m_viewRecenterPending && VR().m_poseValid) VR().RecenterView();
         return InvertRigid(VR().HeadView());
     };
     auto centredEyes = [&]() {
@@ -3427,6 +3485,7 @@ int main() {
     VR().m_poseValid = true; Head(1.2f);
     thirdPersonSample(); centredEyes();
     Check(!VR().m_thirdPersonRecenterPending, "tracking reacquisition completes deferred handoff neutral");
+    Check(!VR().m_viewRecenterPending && Near(VR().HeadYawRadians(),0),"tracking reacquisition also completes deferred facing reset");
     game = 2; config.headOffsetWorld = false; Head(0);
     const auto tr6Head = thirdPersonSample();
     Check(Near(tr6Head.r[0][3],1000) && Near(tr6Head.r[1][3],-1700) && Near(tr6Head.r[2][3],-2000),

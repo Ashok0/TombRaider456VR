@@ -53,6 +53,13 @@ Affine FromHmd(const vr::HmdMatrix34_t& m) {
     return a;
 }
 
+vr::HmdMatrix34_t TransformHmd(const Affine& frame,const vr::HmdMatrix34_t& pose) {
+    const auto a=Mul(frame,FromHmd(pose));
+    vr::HmdMatrix34_t result{};
+    for(int i=0;i<3;++i) for(int j=0;j<4;++j) result.m[i][j]=a.r[i][j];
+    return result;
+}
+
 } // namespace
 
 VRSystem& VR() { return g_vr; }
@@ -198,6 +205,8 @@ void VRSystem::Shutdown() {
     m_poseValid = false;
     m_headingYawValid=m_headingYawVertical=false;
     m_runtimeRecenterPending=m_runtimeRecenterHadYaw=false;
+    m_trackingFromRuntime=Affine::Identity();
+    m_viewRecenterPending=false;
     m_controllerPoseValid[0] = m_controllerPoseValid[1] = false;
     m_firstPersonNeutralValid = false;
     m_thirdPersonNeutralValid = m_thirdPersonRecenterPending = false;
@@ -451,7 +460,7 @@ void VRSystem::BeginFrame() {
     const bool wasValid = m_poseValid;
     m_poseValid = hmd.bPoseIsValid && hmd.bDeviceIsConnected;
     if (m_poseValid) {
-        vr::HmdMatrix34_t pose = hmd.mDeviceToAbsoluteTracking;
+        vr::HmdMatrix34_t pose = TransformHmd(m_trackingFromRuntime,hmd.mDeviceToAbsoluteTracking);
         m_rawHeadPose = pose;
 
         // The head's DISPLACEMENT, integrated in world space rather than carried
@@ -479,8 +488,9 @@ void VRSystem::BeginFrame() {
             idx < vr::k_unMaxTrackedDeviceCount && poses[idx].bPoseIsValid &&
             poses[idx].bDeviceIsConnected;
         if (m_controllerPoseValid[hand])
-            m_rawControllerPose[hand] = poses[idx].mDeviceToAbsoluteTracking;
+            m_rawControllerPose[hand] = TransformHmd(m_trackingFromRuntime,poses[idx].mDeviceToAbsoluteTracking);
     }
+    if(m_viewRecenterPending && m_poseValid) RecenterView();
 
     if (wasValid != m_poseValid) {
         LogF("vr: head pose %s", m_poseValid ? "ACQUIRED" : "LOST");
@@ -500,7 +510,7 @@ void VRSystem::BeginFrame() {
 float VRSystem::HeadYawRadians() const {
     if (!m_system) return 0.0f;
     if (!m_poseValid) return 0.0f;
-    const float x=-m_headFromTracking.r[2][0],z=m_headFromTracking.r[2][2];
+    const float x=-m_rawHeadPose.m[0][2],z=m_rawHeadPose.m[2][2];
     const float horizontal=std::hypot(x,z);
     if(!std::isfinite(horizontal)) return m_headingYawValid ? m_headingYaw : 0;
     // Yaw from a nearly vertical forward vector is undefined/noisy. Freeze
@@ -525,14 +535,17 @@ void VRSystem::HandleRuntimeEvent(const vr::VREvent_t& event) {
         m_runtimeRecenterYaw=HeadYawRadians();
     }
     m_runtimeRecenterPending=true;
+    // The runtime has supplied a new origin. Do not apply the previous local
+    // calibration to it; ApplyRuntimeRecenter reconciles the new pose next frame.
+    m_trackingFromRuntime=Affine::Identity();
 }
 
 void VRSystem::ApplyRuntimeRecenter() {
     if(!m_runtimeRecenterPending || !m_poseValid) return;
     m_runtimeRecenterPending=false;
-    WorldInventoryRecenter();
     m_headingYawValid=m_headingYawVertical=false;
     const float yaw=HeadYawRadians();
+    WorldInventoryRecenter();
     if(FirstPersonActive()) {
         FirstPersonTrackingOriginChanged(m_runtimeRecenterHadYaw ? m_runtimeRecenterYaw-yaw : 0);
         Log("vr: runtime System recenter applied; first-person height recalibrated");
@@ -587,6 +600,43 @@ bool VRSystem::HeadPose(vr::HmdMatrix34_t& out) const {
     if (!m_poseValid) return false;
     out = m_rawHeadPose;
     return true;
+}
+
+bool VRSystem::LevelHeadPose(vr::HmdMatrix34_t& out) const {
+    if(!m_poseValid) return false;
+    const float yaw=HeadYawRadians(),c=std::cos(yaw),s=std::sin(yaw);
+    out={{{c,0,-s,m_rawHeadPose.m[0][3]},
+          {0,1,0,m_rawHeadPose.m[1][3]},
+          {s,0,c,m_rawHeadPose.m[2][3]}}};
+    return true;
+}
+
+void VRSystem::RecenterView() {
+    m_viewRecenterPending=!m_poseValid;
+    const float oldYaw=HeadYawRadians();
+    if(m_poseValid) {
+        vr::HmdMatrix34_t level{};
+        LevelHeadPose(level);
+        // Rotate the entire tracking frame, including controller positions.
+        // Position neutrals below remove the physical displacement. Keeping
+        // this yaw-only preserves gravity and real headset pitch/roll.
+        for(int i=0;i<3;++i) level.m[i][3]=0;
+        const auto correction=InvertRigid(FromHmd(level));
+        m_trackingFromRuntime=Mul(correction,m_trackingFromRuntime);
+        m_rawHeadPose=TransformHmd(correction,m_rawHeadPose);
+        for(int hand=0;hand<2;++hand) if(m_controllerPoseValid[hand])
+            m_rawControllerPose[hand]=TransformHmd(correction,m_rawControllerPose[hand]);
+        m_headFromTracking=InvertRigid(FromHmd(m_rawHeadPose));
+        m_headingYaw=0;
+        m_headingYawValid=true;
+    }
+    // Tracking may return after the new first-person camera is already live.
+    // Rebase that camera too, so the deferred reset cannot turn Lara's facing.
+    if(FirstPersonActive() && m_poseValid) FirstPersonTrackingOriginChanged(oldYaw);
+    else FirstPersonRecenter();
+    RecenterThirdPersonHead();
+    WorldInventoryRecenter();
+    Log("vr: view toggle recalibrated shared head/controller heading and position");
 }
 
 bool VRSystem::FirstPersonControllerOffset(int hand, float& right, float& down,

@@ -222,6 +222,37 @@ void TestWorldInventory() {
     Check(std::fabs(view.r[0][2])>.5f,"turning the head looks away from ring instead of dragging it along");
     WorldInventoryRecenter();view=WorldInventoryEyeView(Eye::Left);
     Check(Near(view.r[0][2],0) && Near(view.r[0][0],1),"explicit recenter places ring in front again");
+    // Open while looking up/down and with a tilted head. The ring must be
+    // upright at eye height and face us once we level our gaze, including
+    // vertical gaze where the forward vector cannot supply a reliable yaw.
+    for(float yaw:{-2.f,.7f,2.8f}) for(float pitch:{-kPi/2,-1.1f,0.f,1.1f,kPi/2})
+        for(float roll:{-.4f,0.f,.4f}) {
+            Head(yaw);VR().HeadYawRadians();
+            Head(yaw,pitch);
+            auto tilt=Affine::Identity();
+            tilt.r[0][0]=tilt.r[1][1]=std::cos(roll);
+            tilt.r[0][1]=-std::sin(roll);tilt.r[1][0]=std::sin(roll);
+            const auto tilted=Mul(FromHmd(VR().m_rawHeadPose),tilt);
+            for(int i=0;i<3;++i) for(int j=0;j<4;++j) VR().m_rawHeadPose.m[i][j]=tilted.r[i][j];
+            g_worldInventory.Reset();
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=0;
+            pad={};pad.wButtons=XB_BACK;shifted=false;
+            ApplyWorldInventory(pad,shifted);
+            *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=1;
+            Check(WorldInventoryActive(),"tilted opening uses the actual X inventory path");
+            Check(Near(g_inventoryAnchor.m[1][3],1.7f) && Near(g_inventoryAnchor.m[1][1],1) &&
+                  Near(g_inventoryAnchor.m[0][1],0) && Near(g_inventoryAnchor.m[2][1],0),
+                  "inventory opening retains eye height and removes pitch and roll");
+            const auto levelAnchor=g_inventoryAnchor;
+            Head(yaw);
+            for(Eye eye:{Eye::Left,Eye::Right}) {
+                const auto straight=WorldInventoryEyeView(eye);
+                for(int i=0;i<3;++i) for(int j=0;j<3;++j)
+                    Check(Near(straight.r[i][j],i==j ? 1.f : 0.f),"level gaze sees straight inventory text dead on");
+                Check(Near(straight.r[1][3],0) && Near(straight.r[2][3],0),"level gaze finds ring at eye height");
+            }
+            Check(!std::memcmp(&levelAnchor,&g_inventoryAnchor,sizeof(levelAnchor)),"leveling gaze leaves world anchor fixed");
+        }
     for(int guard=0;guard<8;++guard) {
         config=oldConfig;config.enabled=config.gamepadEnabled=config.worldInventory=true;config.monoTracking=false;
         VR().m_poseValid=true;game=0;std::memset(appMemory,0,sizeof(appMemory));
