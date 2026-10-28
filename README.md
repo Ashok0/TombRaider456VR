@@ -9,6 +9,9 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * Native stereo with 6DOF
 * First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming, cutscenes, switch-use animations, and TR5 X-ray sequences temporarily use third person.
 * Full-body VRIK in TR4/5 HD first person using headset and controllers: inferred torso/hips, leg IK on animated foot targets, and arms sharing the gun wrist calibration.
+* TR4/5 spatial inventory at eye height, with level text and a freshly rendered stereo world behind it (gameplay remains paused).
+* World-space laser sights for the revolver, Desert Eagle and crossbow with an attached sight; the HK uses its scope without a projected laser.
+* Smooth first-person pistol draw/holster animations for LT/Y, with live controller tracking when using physical holster zones.
 * Culling fixes for VR
 * Camera fixes for VR
 * Vignettes removed 
@@ -47,7 +50,7 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Jump | A |
 | Action | Y or LB + RB |
 | Toggle Classic Graphics | Y + RT |
-| Toggle First Person (TR1-5 only) | Y + LT |
+| Toggle First Person (TR1-5 only) | Y + LT; also recalibrates head/controller heading and position in TR4/5 |
 | Equip Weapon (Third Person) | LT (Hold) |
 | Equip Weapon (First Person; TR1-5 only) | LT (Press while unarmed) |
 | Holster Weapon (First Person; TR1-5 only) | Y |
@@ -66,32 +69,137 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 | Recenter Camera + Calibrate First-Person Height | Right System (hold for the runtime recenter) |
 | Adjust Camera Pitch | RT + RB + RS |
 | Menu | X |
-| Spatial Inventory (TR4/5) | X with weapons holstered; release, then LS navigates, A selects/uses, B backs out |
+| Spatial Inventory (TR4/5) | X with weapons holstered opens a level, eye-height ring ahead of your horizontal facing; release, then LS navigates, A selects/uses, B backs out |
 | Change Ammo  | X + Weapon equipped |
 | Sneak (TR6 only) | RB + Y |
 
 
 ## Development Notes
 
-### Animated first-person pistol draw and holster (2026-10-26)
+### Recent changes through 2026-10-28
 
-Pistol drawing/holstering (native weapon statuses 2/3) temporarily gives the
-visible hands to Lara's authored animation, including physical-holster requests.
-Controller aim and physical hand/holster mesh overrides stand down for those
-statuses. Native animation retains the exact frame at which each pistol moves
-between hand and holster. Head tracking and fitted body positioning stay active.
+This overview covers October 13–28. Unless stated otherwise, these changes
+apply to TR4/5 VR. Dated notes below retain the implementation history;
+this overview and the October 26–28 updates describe the current behavior.
+
+| Area | Current behavior |
+|---|---|
+| Controller arms and full-body IK | Rigid arm reach, elbow roll, shared pistol/body arm poses and model-bind pistol references reduce stretching and mismatched attachments. Later fixes prevent idle head glances from requesting native armed turns and remove body jitter from integer head queries and torso deadzone crossings. |
+| Controls and flares | First person uses Modern Controls even when third person uses Tank Controls. VR controller polling survives desktop focus changes. Held flares and their lights follow the left controller; dropped flares cannot enter creature hit-testing and crash gun targeting. |
+| Jump input and presentation | Brief A presses take priority over ordinary gait transitions. Holding A while moving forward queues the running ledge-jump assist. Unarmed side/back takeoffs retain the intended direction; backjumps use the collision-root arc, and airborne legs use native animation. Only backpedal jumps hide the body/hair. |
+| Body transitions | Landing, drawing/holstering and the inventory background retain consistent first-person body placement. Button pistol equip uses a smooth arm blend; physical holster transfers keep hands controller-tracked. |
+| Inventory and calibration | Unarmed X opens the level, eye-height spatial ring; armed X cycles native ammo. LT+Y view changes recalibrate the shared tracking frame. |
+| Roomscale and cameras | Physical steps can cross a ledge and start a native fall. First-person wall pushback is disabled by default. Third-person startup waits for a loaded level before capturing tracking neutral; water exits use constrained climb handling. |
+| Weapon aiming | Attached revolver, Desert Eagle and crossbow sights project collision-tested world beams. Mesh-calibrated firing remains aligned with attached sights or bare barrels. The HK retains its scope and firing calibration but has no world beam. |
+| Shadows and costumes | Unarmed controller arms now update the shadow pose. Armed costume wrists preserve blended cuff surfaces instead of showing transparent gaps. |
+
+The earlier October 13–25 arm, body, jump and flare changes already have detailed
+notes below. The following additions cover the subsequent work. Reverted color
+adjustments are not part of the current changes.
+
+### World-space laser sights and firing alignment (2026-10-27 to 2026-10-28)
+
+`WorldLaserSight=1` enables stereo world-space beams for the TR4/5 revolver,
+TR5 Desert Eagle and TR4 crossbow when a laser sight is attached. The beam works
+without entering the scope and stops at room/static/object collisions. Scope
+aiming can also supply its native hit position. Owning a loose sight does not
+enable a beam; it must be combined with the weapon. Set the option to `0` to
+disable the added beams.
+
+First-person beams use the actual rendered weapon mesh and wrist transform,
+with calibrations for all three hand/skin banks. This fixes the floating beam
+origin and downward angle. Shots use that same calibrated axis, with native
+spread retained. Separate bare revolver, Desert Eagle and crossbow calibrations
+preserve iron-sight/barrel alignment after removing a sight. Firing calibration
+continues to follow the live controller when the beam is disabled or between
+weapon draws.
+
+The October 28 update excludes the HK from world-beam rendering, including the
+native zoom path: it has a scope, not a detachable laser. Its scope state,
+collision queries for aiming and model-aligned firing remain intact.
+
+### Controller shadows and costume wrist visibility (2026-10-27)
+
+Unarmed first-person arms now follow the motion controllers in Lara's shadow,
+as equipped weapon arms already did. The shadow solve preserves the native
+torso, head and legs and uses the shadow camera's reference frame. Tracking
+loss, third person and native interaction poses retain their existing behavior.
+
+Armed first-person body rendering now preserves mixed wrist/forearm surfaces
+on alternate costumes. The previous visibility cutoff removed blended cuff
+vertices along with the hidden native hands, producing transparent wrist gaps.
+The correction keeps those connecting surfaces while still hiding fully masked
+hand geometry. It was checked against 24 installed costumes, 250 wrist blend
+weights and the shipped shader combinations.
+
+### Roomscale ledges and camera corrections (2026-10-26 to 2026-10-27)
+
+Physical roomscale steps now move Lara past an unsupported ledge and hand off
+to the native fall. The standing collision probe no longer treats the drop as
+a wall or pushes Lara back while pausing between physical steps. The sweep
+stops at the first unsupported step so it cannot carry Lara across a gap;
+native gravity and fall handling take over. Walls, slopes, ceilings and normal
+stick/Walk collision rules retain their checks.
+
+`FirstPersonWallCollision=0` is the default: the tracked eye can look through
+walls without horizontal camera pushback. Lara's movement collision still
+applies. Set it to `1` to restore camera wall collision. Relevant crouch, roll
+and landing floor/ceiling protection remains active at Lara's valid position.
+
+Third-person tracking neutral is now captured only after the level rooms and
+Lara are loaded, and resets when the game/level/room allocation changes. This
+addresses camera displacement when starting directly in third person without
+first toggling through first person.
+
+Water climb-out is now treated as a constrained ledge mount through the end
+of its animation, even after the native water flag clears. It uses the short
+interaction eye offset and native grips, preventing premature first-person
+body/camera handling from carrying Lara through the pool edge.
+
+### Level inventory placement and view-toggle calibration (2026-10-26)
+
+Opening the spatial inventory captures the headset's current position and
+horizontal heading, without pitch or roll. The ring is level at eye height:
+opening it while looking at the sky places it straight ahead for when the
+player lowers their gaze. It stays anchored while the player looks around;
+reopening or recentering places it ahead again.
+
+LT+Y switching between first and third person now recalibrates headset and
+controller heading and positional neutrals together. Real headset pitch/roll
+remain tracked. If tracking is temporarily unavailable, calibration waits for
+the next valid pose. The runtime's Right System recenter remains supported.
+
+Validation for the current October 28 build: Release compilation, 4,333,417
+first-person regression checks and 63 world-laser/OpenGL checks passed. The
+tests include HK beam suppression without changing native scope state, other
+weapon beams, firing alignment and physical-versus-button holster transitions.
+These automated results do not substitute for in-headset confirmation.
+
+### Animated first-person pistol draw and holster (2026-10-26; updated 2026-10-28)
+
+Button-triggered pistol drawing/holstering (LT/Y; native weapon statuses 2/3)
+temporarily gives the visible hands to Lara's authored animation. Native
+animation retains the frame at which each pistol moves between hand and
+holster. Head tracking and fitted body positioning stay active.
+
+Physical holster-zone transfers instead keep the visible arms and hands on the
+motion controllers throughout drawing/holstering, with hand/holster meshes
+following physical grip ownership immediately. They do not play the canned
+arm animation. Native equip sequencing and readiness still control firing.
+Using LT/Y clears physical ownership and returns to the animated button path.
 
 With full-body IK, a 160 ms joint-local blend connects tracked arms to animated
 arms and back again. The blend preserves arm reach, follows the fitted chest,
 and shares the resulting wrists with pistol/hand attachments. It advances once
 per tracking pose so stereo redraws cannot speed it up. Other weapons retain
 their existing behavior; native animation speed, equip logic and physics are
-unchanged.
+unchanged. Physical transfers bypass the blend but retain their latest tracked
+pose for a smooth handoff if the next equip change comes from a button.
 
-Release build and 4,247,540 regression checks passed, including controller-motion
-isolation during draw/holster, native mesh timing, arm continuity and reach at
-60/90/120 Hz, repeated draws, and restoration of exact target poses. Headset
-confirmation remains pending.
+Regression coverage includes controller-motion isolation for button animations,
+live tracking and grip occupancy for physical transfers, returning to LT/Y,
+native mesh timing, arm continuity and reach at 60/90/120 Hz, repeated draws,
+and restoration of exact target poses.
 
 ### First-person body continuity during transitions (2026-10-26)
 
@@ -175,7 +283,8 @@ remains pending.
 ### Spatial inventory shortcut (2026-10-25)
 
 In TR4/5 stereo VR, X with weapons holstered opens the native paused inventory
-at the headset's current position and orientation. Release X, then
+at the headset's current eye height and horizontal heading, with pitch/roll
+removed so the ring and text remain level. Release X, then
 use LS left/right to cycle items, LS up/down for native categories/options, A to
 select/use, and B to back out or close. Native item actions, ammo selection and
 submenus remain in charge. With weapons active, X is consumed before the menu
@@ -6819,6 +6928,7 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonAnchorZ` | `144` | Local forward eye offset |
 | `FirstPersonInteractionAnchorZ` | `16` | Retract forward eye offset during constrained interactions; cannot extend a custom normal anchor |
 | `FirstPersonHeadTranslation` | `1` | Physical leaning/ducking relative to neutral; tracked rotation remains active |
+| `FirstPersonWallCollision` | `0` | Allow the tracked eye through walls without camera pushback; `1` restores camera wall collision. Lara's movement collision remains active. |
 | `FirstPersonMovementStabilization` | `1` | Stable grounded eye anchor, pre-collision horizontal root-motion stabilization and raw relative HMD view; `0` restores the legacy paths |
 | `FirstPersonRoomscaleNeckMetres` | `0.15` | Body room-scale neck compensation, clamped to 0–0.4 m; also used for the rendered eye with stabilization disabled |
 | `FirstPersonRoomscaleMove` | `1` | Let collision-checked physical steps move Lara |
