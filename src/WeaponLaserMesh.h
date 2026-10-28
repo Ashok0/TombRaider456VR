@@ -5,13 +5,13 @@ namespace tr::weaponlaser {
 struct Model {
     int handIndex,weapon,game; // HAND_NAMES index within each 30-entry skin bank; -1 = both games
     motiongun::Vec front,rear;
-    bool HasLaser() const { return handIndex==8 || handIndex==10 || handIndex==14 || handIndex==15; }
+    bool HasLaser() const { return handIndex==8 || handIndex==10 || handIndex==14; }
 };
 // Measured bore/bolt-guide and laser tube centres in shipped TRM mesh
 // coordinates, fully weighted to wrist 10. Bare weapons need their own firing
 // calibration too; disabling/removing a laser must never restore generic aim.
 // End-cap bevel normals are NOT necessarily the tube's forward direction.
-// HK has no separate laser mesh: its built-in aiming beam uses the muzzle.
+// HK has no laser attachment; retain its muzzle calibration for firing only.
 // tools/verify_weapon_laser_mesh.py checks these against all three skin banks.
 inline constexpr Model models[]={
     {10,2,-1,{56.523163f,82.748322f,59.557335f},{56.523163f,42.401154f,50.810116f}}, // Revolver

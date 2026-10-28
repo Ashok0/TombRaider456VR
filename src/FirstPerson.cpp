@@ -946,8 +946,7 @@ bool LaserAttachmentEquipped(int weapon) {
     if(!g_boundDll || !g_boundBase) return false;
     const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
     return (weapon==2 && (lara[0x166]&4)) ||
-        (g_boundDll->game==0 && weapon==6 && (lara[0x163]&4)) ||
-        (g_boundDll->game==1 && weapon==5);
+        (g_boundDll->game==0 && weapon==6 && (lara[0x163]&4));
 }
 bool MotionWeaponSupported(int gun) {
     return motiongun::DualWeapon(gun) ||
@@ -4641,7 +4640,7 @@ bool WeaponLaserAim(motiongun::Vec& muzzle,motiongun::Vec& direction,int16_t& ro
     const int weapon=CurrentMotionWeapon();
     const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
     // Native ControlPhase: bit 4 is the combined attachment, not ownership of
-    // a loose sight. TR5's HK (5) has its sight built in.
+    // a loose sight. The HK scope is not a laser attachment.
     const bool attached=LaserAttachmentEquipped(weapon);
     if(!attached || *reinterpret_cast<const int16_t*>(lara+2)!=4) return false;
     auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);

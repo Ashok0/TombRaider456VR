@@ -1,11 +1,11 @@
 ﻿{
     "status":  "deployed-and-hash-verified",
-    "deployed_at":  "2026-10-27T23:46:23.6605754-04:00",
-    "dll_sha256":  "9391503301F62DE0222463204A373977C6AF41AB387CC842FC9D07A7BB8C4718",
+    "deployed_at":  "2026-10-28T04:35:08.3351242-04:00",
+    "dll_sha256":  "5670742AAE7C6BE730357D4EAC9BC11B2101918C483F7C16F06B6AE9921B54C1",
     "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
-    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-laser-20261027-234623",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-laser-20261028-043508",
     "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
     "regression_log":  "build\\world-laser-regression.log",
     "hardware_verified":  false,
-    "change":  "Physical holster transfers keep pistol arms controller-tracked during native draw and holster states and immediately respect physical hand occupancy. LT/Y resets physical ownership and retains smooth authored equip animations, including handoff from tracked poses. Release build and 4333544 first-person regression checks passed."
+    "change":  "Disable HK world-space laser projection in first person, third person and native zoom, while retaining HK scope state and model-aligned firing. Other weapon laser attachments remain enabled. Release build, 4333417 first-person regression checks and 63 GPU/world-laser checks passed."
 }

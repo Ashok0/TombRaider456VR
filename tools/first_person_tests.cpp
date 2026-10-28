@@ -1456,7 +1456,7 @@ int main() {
             for(int which:{0,1}) for(int weapon:{1,2,3,4,5,6,7}) for(bool combined:{false,true}) {
                 game=dll.game=which;gun=int16_t(weapon);
                 laraMemory[0x163]=laraMemory[0x166]=combined ? 5 : 1;
-                const bool expected=weapon==2 ? combined : weapon==6 ? which==0 && combined : which==1 && weapon==5;
+                const bool expected=combined && (weapon==2 || (which==0 && weapon==6));
                 // Seed a current draw to isolate attachment/status gating here;
                 // the following fixture exercises real model capture separately.
                 GunPose reference{};
@@ -1465,7 +1465,7 @@ int main() {
                     g_weaponLaser={itemMemory,g_boundBase,VR().PoseSerial(),which,weapon,reference.muzzle,reference.direction};
                 } else g_weaponLaser={};
                 Check(WeaponLaserAim(muzzle,direction,laserRoom)==expected,
-                      "unscoped laser follows combined attachment bits or built-in HK sight");
+                      "unscoped laser requires an attached sight and excludes HK");
                 if(expected) {
                     Check(Near(muzzle.x,reference.muzzle.x) && Near(muzzle.y,reference.muzzle.y) && Near(muzzle.z,reference.muzzle.z) &&
                           Near(direction.x,reference.direction.x) && Near(direction.y,reference.direction.y) && Near(direction.z,reference.direction.z),
@@ -1483,6 +1483,7 @@ int main() {
             const auto savedJoint=dll.getJointAbsPositionLerp;
             dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeLaserNativeJoint));
             g_active=false;Check(WeaponLaserAim(muzzle,direction,laserRoom) && Near(direction.y,1),"third person uses native equipped weapon muzzle without entering scope");
+            gun=5;Check(!WeaponLaserAim(muzzle,direction,laserRoom),"third-person HK cannot project a laser");
             dll.getJointAbsPositionLerp=savedJoint;
             Check(nativeShotCalls==oldShots,"laser aim queries do not fire");
             game=oldGame;dll.game=oldDllGame;gun=oldWeapon;status=oldGunStatus;g_active=oldActive;opticsZoomed=oldZoom;
@@ -1608,7 +1609,7 @@ int main() {
                     Check(!WeaponLaserAim(muzzle,direction,room),"removing sight suppresses the beam while retaining corrected aim");
                     laraMemory[0x163]=laraMemory[0x166]=model.HasLaser() ? 5 : 1;
                 }
-                if(!model.HasLaser()) {
+                if(!model.HasLaser() && model.weapon!=5) {
                     // Reproduce adding then removing a sight on this same gun,
                     // including the native replacement of the drawn hand mesh.
                     const auto* sight=weaponlaser::Find(model.handIndex+1,which,model.weapon);

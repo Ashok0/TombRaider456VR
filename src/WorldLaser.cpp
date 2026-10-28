@@ -26,7 +26,12 @@ bool ReadNativeRay(Ray& ray) {
         Log(native ? "laser: verified native world-space hit output" : "laser: unsupported native output; beam disabled");
     }
     if(!native) return false;
-    if(IsOpticsZoomed()) return Read(reinterpret_cast<const uint8_t*>(base),*native,ray);
+    if(IsOpticsZoomed()) {
+        // HK native scope output is for aiming, not a projected laser beam.
+        // Leave the scope itself and its collision/firing state untouched.
+        if(dll->game==1 && *reinterpret_cast<const int16_t*>(base+dll->lara+4)==5) return false;
+        return Read(reinterpret_cast<const uint8_t*>(base),*native,ray);
+    }
     motiongun::Vec muzzle{},direction{};int16_t room=0;
     if(!dll->getFloor || !WeaponLaserAim(muzzle,direction,room)) return false;
     using Floor=void* (__cdecl*)(int32_t,int32_t,int32_t,int16_t*);

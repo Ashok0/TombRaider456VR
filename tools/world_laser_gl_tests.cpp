@@ -51,6 +51,7 @@ void Seed(const tr::worldlaser::Build& b) {
     const tr::worldlaser::Ray ray{{-200,0,200},{200,0,1000}};
     std::memcpy(memory.data()+b.light+0x14,&ray.start,12);
     std::memcpy(memory.data()+b.light+0x2c,&ray.end,12);
+    dll.lara=0x600000;*reinterpret_cast<int16_t*>(memory.data()+dll.lara+4)=2;
     dll.timestamp=b.stamp;dll.game=game;tr::worldlaser::checkedBase=0;
 }
 }
@@ -134,6 +135,12 @@ int main() {
     Check(!glIsEnabled(GL_DEPTH_TEST) && glIsEnabled(GL_BLEND) && glIsEnabled(GL_CULL_FACE) && Get(GL_DEPTH_FUNC)==GL_GREATER &&
           !mask[0] && mask[1] && !mask[3] && std::fabs(range[0]-.2)<.001 && std::fabs(range[1]-.8)<.001,"render state restored");
     Check(redCount()>100,"world beam draws visible pixels");
+    *reinterpret_cast<int16_t*>(memory.data()+dll.lara+4)=5;
+    const auto hkMemory=memory;
+    clear();WorldLaserPresent();Check(redCount()==0,"HK scope output does not project a world beam");
+    Check(memory==hkMemory,"suppressing HK beam leaves native scope state untouched");
+    *reinterpret_cast<int16_t*>(memory.data()+dll.lara+4)=2;
+    clear();WorldLaserPresent();Check(redCount()>100,"switching from HK restores another weapon laser");
     auto endpoint=[&](int eye,float offset) {
         const auto p=pixels();const int x=int(256+256*(200+(eye==0?32:-32)-offset)/1000)+eye*512;
         bool found=false;for(int y=254;y<=258;++y) for(int dx=-2;dx<=2;++dx) found|=p[(y*1024+x+dx)*4]>100;
