@@ -1,11 +1,11 @@
 ﻿{
     "status":  "deployed-and-hash-verified",
-    "deployed_at":  "2026-10-27T23:08:27.0816158-04:00",
-    "dll_sha256":  "172A5D249CFD29942C586F690D362BFDF2CCA2B80EA1324BC2AEB9B55773832F",
+    "deployed_at":  "2026-10-27T23:46:23.6605754-04:00",
+    "dll_sha256":  "9391503301F62DE0222463204A373977C6AF41AB387CC842FC9D07A7BB8C4718",
     "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
-    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-laser-20261027-230826",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-laser-20261027-234623",
     "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
     "regression_log":  "build\\world-laser-regression.log",
     "hardware_verified":  false,
-    "change":  "Preserves mixed costume wrist/forearm surfaces in armed first-person body draws instead of cutting them at 50 percent visible skin weight. Uses mapped wrist palette slots and a scoped shader mask; pure hidden hands and unrelated torso/head masks remain excluded. Audited 24 installed costumes and 250 actual wrist blend weights. All 480 compatible shipped shader pairs linked; 4396 real GPU checks and 4333558 first-person regression checks passed."
+    "change":  "Physical holster transfers keep pistol arms controller-tracked during native draw and holster states and immediately respect physical hand occupancy. LT/Y resets physical ownership and retains smooth authored equip animations, including handoff from tracked poses. Release build and 4333544 first-person regression checks passed."
 }

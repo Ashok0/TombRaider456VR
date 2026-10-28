@@ -400,8 +400,8 @@ void TestFullBodyIK() {
             anim=oldAnim;
         }
         g_pistolAnimation.Reset();
-        // Controller movement cannot override native pistol hands during draw
-        // or holster, including equipment requested from physical holsters.
+        // Buttons retain authored draw/holster poses. Physical holsters keep
+        // live controller arms throughout the same native equipment states.
         {
             const auto savedHolsters=g_holsters;const auto cfg=config;
             vr::HmdMatrix34_t oldControllers[2];std::memcpy(oldControllers,VR().m_rawControllerPose,sizeof(oldControllers));
@@ -412,12 +412,26 @@ void TestFullBodyIK() {
                 status=int16_t(next);g_holsters.active=physical;g_holsters.weapon=1;
                 g_bodyFollower.Reset();g_torsoPose.Reset();g_pistolAnimation.Reset();
                 ++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
-                Check(!MotionReady() && FullBodyIKReady(),"pistol animation disables tracked hands while retaining fitted body");
+                Check(MotionReady()==physical && FullBodyIKReady(),"physical holsters track hands while button animations retain fitted body");
+                if(physical) Check(g_pistolAnimation.mode==0 && !g_pistolAnimation.blending,
+                    "physical holster cannot enter canned animation or return-to-controller blend");
                 for(int hand=0;hand<2;++hand) VR().m_rawControllerPose[hand].m[0][3]+=.3f;
                 ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
-                for(int i=0;i<count;++i) if(mapping[i]>=8 && mapping[i]<=13)
-                    Check(nearVec(ReadRows(palette+i*12).origin,ReadRows(baseline+i*12).origin),
-                          "moving controllers during draw/holster cannot move animated hands");
+                bool moved=false;
+                for(int i=0;i<count;++i) if(mapping[i]>=8 && mapping[i]<=13) {
+                    const bool same=nearVec(ReadRows(palette+i*12).origin,ReadRows(baseline+i*12).origin);
+                    moved|=!same;
+                    if(!physical) Check(same,"moving controllers during button draw/holster cannot move animated hands");
+                }
+                if(physical) Check(moved && !g_pistolAnimation.blending && g_pistolAnimation.mode==0,
+                    "moving controllers during physical draw/holster moves arms immediately without animation blend");
+                if(physical) {
+                    Check(g_pistolAnimation.valid,"physical pose remains available for later button handoff");
+                    g_holsters.active=false;++VR().m_poseSerial;
+                    Detour_GetJoints(itemMemory,palette,0);
+                    Check(g_pistolAnimation.mode==next && g_pistolAnimation.blending && !MotionReady(),
+                          "returning to button equip smoothly blends from the last physical controller pose");
+                }
                 std::memcpy(VR().m_rawControllerPose,oldControllers,sizeof(oldControllers));
             }
             g_holsters=savedHolsters;config=cfg;g_pistolAnimation.Reset();

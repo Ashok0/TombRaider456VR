@@ -103,9 +103,9 @@ struct HolsterRenderScope {
         for(int slot=0;slot<3;++slot) g_holsterKinds[slot]=saved[slot+2];
         previous=g_holsterRenderScope;g_holsterRenderScope=true;
         const int status=*Ptr<int16_t>(g_boundDll->lara+2);
-        // Native draw/undraw owns the exact frame when each pistol changes
-        // between hand and holster. Do not replace those meshes with grip state.
-        if(CurrentMotionWeapon()==1 && (status==2 || status==3)) return;
+        // Button equip uses native animation/mesh timing. Physical transfers
+        // use grip ownership immediately, including during native status 2/3.
+        if(CurrentMotionWeapon()==1 && (status==2 || status==3) && !PhysicalHolsterOwnsWeapon()) return;
         if(!g_holsters.active || CurrentMotionWeapon()!=g_holsters.weapon ||
            (status!=4 && status!=2 && status!=3)) return;
         const int weapon=g_holsters.weapon;

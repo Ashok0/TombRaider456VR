@@ -133,15 +133,24 @@ template<class Rva> void TestPhysicalHolsters(Rva rva) {
     g_holsters.active=true;g_holsters.weapon=1;g_holsters.mask=2;
     for(int nativeStatus:{2,3,4}) {
         status=int16_t(nativeStatus);
-        Check(MotionReady()==(nativeStatus==4),"pistol draw and holster temporarily suspend tracked hand rendering");
+        Check(MotionReady(),"physical pistol draw and holster retain tracked hand rendering throughout native equipment states");
         {
             HolsterRenderScope scope(itemMemory,appMemory);
-            Check(appMemory[0x508]==(nativeStatus==4 ? 1 : 5) && appMemory[0x509]==5 &&
-                appMemory[0x50a]==(nativeStatus==4 ? 1 : 0) && appMemory[0x50b]==0 && appMemory[0x50c]==5,
-                "pistol animation owns hand/holster mesh timing before independent grip selectors resume");
+            Check(appMemory[0x508]==1 && appMemory[0x509]==5 &&
+                appMemory[0x50a]==1 && appMemory[0x50b]==0 && appMemory[0x50c]==5,
+                "physical ownership immediately selects drawn and holstered pistols without native animation timing");
         }
         Check(appMemory[0x508]==5 && !appMemory[0x50a],"render scope restores native pair selectors");
     }
+    g_holsters.active=false;
+    for(int nativeStatus:{2,3}) {
+        status=int16_t(nativeStatus);
+        Check(!MotionReady(),"button pistol equip keeps authored transition arms");
+        HolsterRenderScope scope(itemMemory,appMemory);
+        Check(appMemory[0x508]==5 && appMemory[0x509]==5 && !appMemory[0x50a] && !appMemory[0x50b],
+              "button pistol animation keeps native hand/holster mesh timing");
+    }
+    g_holsters.active=true;
     status=4;
     const auto* savedShadow=g_shadowDll;
     ShadowDll shadow{};shadow.renderPass=rva(&nativeShadowPass);
@@ -177,6 +186,7 @@ template<class Rva> void TestPhysicalHolsters(Rva rva) {
         Check(lt==255 && *reinterpret_cast<int16_t*>(laraMemory+6)==1,"physical draw requests selected native gun in hold and toggle styles");
         status=2;lt=rt=0;UpdateGunTriggers(lt,rt,true,110);
         Check(lt==(style?0:255) && !g_gunTriggers.WantsShot(),"native draw acknowledges grip request without firing");
+        Check(MotionReady(),"physical trigger request keeps controller hands during drawing");
         status=4;g_holsters.Poll(1,false,true,1,1,.40f,4,1);
         lt=rt=0;UpdateGunTriggers(lt,rt,true,120);
         lt=rt=255;UpdateGunTriggers(lt,rt,true,130);
@@ -188,6 +198,14 @@ template<class Rva> void TestPhysicalHolsters(Rva rva) {
         g_holsters.Poll(1,false,true,1,1,.02f,4,1);
         lt=rt=0;UpdateGunTriggers(lt,rt,true,140);
         Check(lt==(style?255:0) && !g_gunTriggers.WantsShot(),"returning last gun requests native undraw in either style");
+        status=3;Check(MotionReady(),"returning last physical pistol keeps hands tracked while native equipment finishes");
+        status=4;lt=rt=0;UpdateGunTriggers(lt,rt,true,150,true);
+        Check(!g_holsters.active,"Y hands equipment ownership back to button animation");
+        status=3;Check(!MotionReady(),"Y holster uses native animation after physical holster interaction");
+        g_holsters.active=true;g_holsters.weapon=1;g_holsters.mask=0;
+        g_gunEquip.leftHeld=false;status=0;lt=255;rt=0;UpdateGunTriggers(lt,rt,true,160);
+        Check(!g_holsters.active,"fresh LT draw releases physical holster ownership");
+        status=2;Check(!MotionReady(),"LT draw uses native animation after physical holster interaction");
     }
     ResetPhysicalHolsters();status=4;gun=1;
     static uint8_t object[3792]{};

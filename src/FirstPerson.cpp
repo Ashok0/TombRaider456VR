@@ -939,6 +939,9 @@ const LongShot* g_longShot=nullptr;
 int CurrentMotionWeapon() {
     return g_boundDll ? *Ptr<int16_t>(g_boundDll->lara+4) : 0;
 }
+bool PhysicalHolsterOwnsWeapon() {
+    return g_holsters.active && CurrentMotionWeapon()==g_holsters.weapon;
+}
 bool LaserAttachmentEquipped(int weapon) {
     if(!g_boundDll || !g_boundBase) return false;
     const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
@@ -986,8 +989,7 @@ const char* MotionBlockedReason() {
     const uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
     const int16_t status = *reinterpret_cast<const int16_t*>(lara + 2);
     const int16_t gun = *reinterpret_cast<const int16_t*>(lara + 4);
-    const bool physicalTransition=g_holsters.active && gun==g_holsters.weapon &&
-        gun!=1 && (status==2 || status==3);
+    const bool physicalTransition=PhysicalHolsterOwnsWeapon() && (status==2 || status==3);
     if (status != 4 && !physicalTransition) return "guns-not-ready";
     if (!MotionWeaponSupported(gun)) return "weapon-not-supported";
     vr::HmdMatrix34_t pose{};
@@ -1804,8 +1806,13 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     }
     if(CurrentMotionWeapon()==1 && !grip) {
         // Main body owns the blend; attachments consume its published arm pose.
-        if(g_bodySkinScope && (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49)
-            g_pistolAnimation.Apply(item,weaponStatus,VR().PoseSerial(),TurnTime(),posed);
+        if(g_bodySkinScope && (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49) {
+            const bool physical=PhysicalHolsterOwnsWeapon();
+            // Physical grabs stay exactly controller-driven. Record the live
+            // pose without blending so a later button equip can start smoothly.
+            if(physical) g_pistolAnimation.Reset();
+            g_pistolAnimation.Apply(item,physical ? 0 : weaponStatus,VR().PoseSerial(),TurnTime(),posed);
+        }
     } else g_pistolAnimation.Reset();
     // Validate every correction before touching a palette. Helpers sharing a
     // native joint receive the same transform, including nonidentity bindings.
