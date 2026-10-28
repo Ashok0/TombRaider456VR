@@ -3037,10 +3037,10 @@ int main() {
             state=int16_t(freeState);
             for (float lean : {0.2f,0.8f}) {
                 physicalPose(0,lean,0,-0.1f);
-                PHD_3DPOS freeEye{800,-600,800,0,0,0,0};
+                PHD_3DPOS freeEye{0,-600,0,0,0,0,0};
                 ClampRenderedHeadToCollision(itemMemory,freeEye);
-                Check(freeEye.x_pos==800 && freeEye.z_pos==800,
-                      "disabled camera wall collision preserves physical lean through walls and beyond old sweep limit");
+                Check(freeEye.x_pos==0 && freeEye.z_pos==0,
+                      "free physical lean through walls cannot retract the safe base camera, even beyond the old sweep limit");
             }
         }
         Check(!std::memcmp(&pos,&rootBeforeFreeEye,sizeof(pos)) &&
@@ -4877,8 +4877,9 @@ int main() {
         TestDynamicBonesChestPosition(chest);
         skinFixture=nullptr;skinFixtureCount=0;g_bodySkinScope=false;
     };
-    for(int which:{0,1}) for(float heading:{0.f,.8f,-1.9f}) for(int anchor:{100,144,220}) {
+    for(bool trackedCollision:{false,true}) for(int which:{0,1}) for(float heading:{0.f,.8f,-1.9f}) for(int anchor:{100,144,220}) {
         game=dll.game=which;resetRoomscale();ResetMovementStabilization();
+        config.firstPersonWallCollision=trackedCollision;
         g_scenePoseValid=true;
         config.firstPersonMovementStabilization=true;config.firstPersonRoomscaleMove=false;
         config.firstPersonBodyFollowsHead=false;config.firstPersonAnchorZ=anchor;
@@ -4914,9 +4915,9 @@ int main() {
                 Check(BodyVisualOffsetApplies(itemMemory),"wall impact retains standing torso fit");
                 if(wallState==12) Check(!CanTurnBody(itemMemory),"wall impact rendering does not enable gameplay steering");
                 if(mode==14) {
-                    const auto physical=locomotion::Rotate({0,lean*1000},g_headingBase);
+                    const auto physical=locomotion::Rotate({0,trackedCollision ? lean*1000 : 0},g_headingBase);
                     Check((camera.x_pos+physical.x)*impactNormalX+(camera.z_pos+physical.z)*impactNormalZ<101.5f,
-                          "body stability retains eye wall collision");
+                          "body stability retains base eye wall collision with either physical lean policy");
                     const float freeForward=(freeCamera.x_pos+physical.x)*impactNormalX+(freeCamera.z_pos+physical.z)*impactNormalZ;
                     if(freeForward>120 && wallState!=12)
                         Check(std::hypot(float(camera.x_pos-freeCamera.x_pos),float(camera.z_pos-freeCamera.z_pos))>10,
@@ -4938,8 +4939,10 @@ int main() {
     config.firstPersonAnchorZ=144;
     // Run -> wall impact (AS_SPLAT=12) -> stop. Raised crate floors must
     // remain blocking throughout, even when a query returns no X/Z shift.
-    for (int which:{0,1}) for (float heading:{0.f,.8f,-1.9f}) {
+    const bool savedCrateCollision=config.firstPersonWallCollision;
+    for (bool trackedCollision:{false,true}) for (int which:{0,1}) for (float heading:{0.f,.8f,-1.9f}) {
         game=dll.game=which; resetRoomscale(); collisionMode=14;
+        config.firstPersonWallCollision=trackedCollision;
         config.firstPersonMovementStabilization=true;
         g_headingBase=heading;
         impactNormalX=std::sin(heading); impactNormalZ=std::cos(heading);
@@ -4957,7 +4960,17 @@ int main() {
             ClampRenderedHeadToCollision(itemMemory,p);
             const auto physical=locomotion::Rotate({0,lean*1000},heading);
             const float rendered=(p.x_pos+physical.x)*impactNormalX+(p.z_pos+physical.z)*impactNormalZ;
-            Check(rendered<101.5f,"walk/impact/prepare-jump/jump/fall camera consistently stops before raised crate");
+            const float baseEye=p.x_pos*impactNormalX+p.z_pos*impactNormalZ;
+            Check((trackedCollision ? rendered : baseEye)<101.5f,
+                  "walk/impact/prepare-jump/jump/fall base camera stops before raised crate even with free physical leaning");
+            if(!trackedCollision) {
+                VR().m_rawHeadPose.m[2][3]=neutral[2];
+                PHD_3DPOS noLean{int32_t(std::lround(wanted.x)),-700,int32_t(std::lround(wanted.z)),0,0,0,0};
+                ClampRenderedHeadToCollision(itemMemory,noLean);
+                Check(p.x_pos==noLean.x_pos && p.z_pos==noLean.z_pos,
+                      "crate clearance is independent of physical lean when tracked wall collision is disabled");
+                VR().m_rawHeadPose.m[2][3]=neutral[2]-lean;
+            }
             Check(p.y_pos==-700,"wall-impact correction preserves camera height");
             Check(!std::memcmp(&pos,&savedPos,sizeof(pos)) && !std::memcmp(&prev,&savedPrev,sizeof(prev)),
                   "wall-impact camera never changes Lara's current or interpolated root");
@@ -4967,6 +4980,7 @@ int main() {
         collisionMode=0; impactNormalX=0; impactNormalZ=1;
         resetRoomscale();
     }
+    config.firstPersonWallCollision=savedCrateCollision;
     // Real-height jump clearance: floor drops remain open; a crate at head
     // height blocks, and clears as soon as both the eye and margin are above.
     for (int which:{0,1}) for (float heading:{0.f,.8f,-1.9f}) {

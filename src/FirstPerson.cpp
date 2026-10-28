@@ -264,6 +264,8 @@ firstperson::ArmRollContinuity PistolRollSeed(int hand,const uint8_t* item) {
 firstperson::BodyFollower g_bodyFollower;
 firstperson::BodySizeCalibration g_bodySize;
 firstperson::TorsoPoseFilter g_torsoPose;
+firstperson::GroundGaitReference g_groundGait;
+int g_groundGaitObject=-1;
 bool g_bodyLanding=false;
 firstperson::PistolAnimationBlend g_pistolAnimation;
 firstperson::BodyVisibilityRecovery g_bodyVisibility;
@@ -286,6 +288,7 @@ void ResetBodyFollower() {
     g_bodyFollower.Reset();g_roomscaleFollower={};g_roomscaleFollowTime={};
     g_bodySize.Reset();g_bodySizeObject=-1;
     g_torsoPose.Reset();
+    g_groundGait.Reset();g_groundGaitObject=-1;
     g_bodyLanding=false;
     g_pistolAnimation.Reset();
     g_heightCrouch={};g_physicalCrouchCamera=false;
@@ -1597,13 +1600,14 @@ motiongun::Vec BodyPaletteCameraOrigin(uint8_t* item,const motiongun::Frame& hea
 
 bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
-    if(!FullBodyIKReady() || count<15 || count>33) return false;
+    if(!FullBodyIKReady()) { g_groundGait.Reset();return false; }
+    if(count<15 || count>33) return false;
     if(IsNativeAirborneBodyState(item)) {
         // Airborne feet must follow this frame's native animation. Standing
         // body fitting and mount-recovery filtering can otherwise pull them
         // toward a headset-relative pose or ease them out over several frames.
         // Fall through to arm-only IK, which leaves hips/legs/chest untouched.
-        g_bodyFollower.Reset();g_torsoPose.Reset();g_bodyLanding=false;g_pistolAnimation.Reset();
+        g_bodyFollower.Reset();g_torsoPose.Reset();g_groundGait.Reset();g_bodyLanding=false;g_pistolAnimation.Reset();
         return false;
     }
     const bool landing=UseLandingCamera(item);
@@ -1632,9 +1636,29 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         native[joint]=original[joint];native[joint].origin=Sub(native[joint].origin,fit);
     }
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    const auto& current=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const auto& previous=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
+    const float fraction=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256)/256.f;
+    const float nativeHeading=Radians(previous.y_rot)+Wrap(Radians(current.y_rot)-Radians(previous.y_rot))*fraction;
+    const Vec simulationRoot{previous.x_pos+(current.x_pos-previous.x_pos)*fraction,
+        previous.y_pos+(current.y_pos-previous.y_pos)*fraction,previous.z_pos+(current.z_pos-previous.z_pos)*fraction};
+    const bool mainBody=g_bodySkinScope &&
+        (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49;
+    const Vec cameraOffset=BodyPaletteCameraOrigin(item,native[14]);
+    if(mainBody && (g_groundGaitObject!=object || !g_bodyFollower.valid)) {
+        g_groundGait.Reset();g_groundGaitObject=object;
+    }
+    if(!CanFitStandingBody(item) || landing || !Cfg().firstPersonMovementStabilization) {
+        if(mainBody) g_groundGait.Reset();
+    } else {
+        const Frame gaitRoot{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},nativeHeading)),
+                             Sub(simulationRoot,cameraOffset)};
+        const bool sideBack=state==5 || state==16 || state==21 || state==22;
+        if(!g_groundGait.Apply(native,gaitRoot,sideBack,mainBody,MotionReady() || UnarmedIKReady(),
+                              {std::sin(nativeHeading),0,std::cos(nativeHeading)})) return false;
+    }
     const int anchorJoint=Cfg().firstPersonJoint;
     if(anchorJoint<0 || anchorJoint>=15) return false;
-    const Vec cameraOffset=BodyPaletteCameraOrigin(item,native[14]);
     const Vec anchorInPalette=Transform(native[anchorJoint],{float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),
         float(locomotion::FirstPersonAnchorZ(state,Cfg().firstPersonAnchorZ,Cfg().firstPersonInteractionAnchorZ))});
     const Vec anchor=Add(anchorInPalette,cameraOffset);
@@ -1645,10 +1669,6 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
                   float(g_scenePose.z_pos)+view.z};
     Vec headDelta=Sub(eye,anchor);
     if(!firstperson::Finite({firstperson::IdentityBasis(),headDelta}) || firstperson::Length(headDelta)>4096) return false;
-    const auto& current=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
-    const auto& previous=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
-    const float fraction=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256)/256.f;
-    const float nativeHeading=Radians(previous.y_rot)+Wrap(Radians(current.y_rot)-Radians(previous.y_rot))*fraction;
     const bool grip=FullBodyGripState(item) && !MotionReady();
     const float headYaw=Wrap(g_headingBase+VR().HeadYawRadians());
     const Vec nativeRoot=Add(native[0].origin,cameraOffset);
@@ -1679,8 +1699,6 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
                 facing=Wrap(facing+std::clamp(Wrap(std::atan2(handHint.x,handHint.z)-facing),-.35f,.35f)*Cfg().firstPersonBodyHandYawWeight);
         }
     }
-    const Vec simulationRoot{previous.x_pos+(current.x_pos-previous.x_pos)*fraction,
-        previous.y_pos+(current.y_pos-previous.y_pos)*fraction,previous.z_pos+(current.z_pos-previous.z_pos)*fraction};
     // Collision retraction belongs to the shared eye/body frame, not the
     // inferred physical step. Apply it immediately once to the whole body.
     const Vec wallShift{g_bodyWallOffset.x,0,g_bodyWallOffset.z};
@@ -1713,8 +1731,6 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         // Eye, anchor and controller targets all use this render camera frame.
         // Do not mix gameplay integer joint queries into visual placement.
         if(joint==14 && g_bodyFollower.valid) {
-            const bool mainBody=g_bodySkinScope &&
-                (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49;
             if(mainBody && (g_bodySizeObject!=object ||
                (g_bodySize.valid && std::fabs(g_bodySize.units-scale)>.01f))) {
                 g_bodySize.Reset();g_bodySizeObject=object;
@@ -3569,8 +3585,12 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
     }
     if (!std::isfinite(tracked.x) || !std::isfinite(tracked.z) ||
         std::fabs(tracked.x) > 4096 || std::fabs(tracked.z) > 4096) return;
-    const int32_t offsetX = int32_t(std::lround(tracked.x));
-    const int32_t offsetZ = int32_t(std::lround(tracked.z));
+    // Always protect the game's forward eye anchor. The option controls only
+    // physical head translation: free leaning must not let ordinary stick
+    // movement place the untracked camera inside a crate or wall.
+    const bool collideTracking=Cfg().firstPersonWallCollision;
+    const int32_t offsetX = collideTracking ? int32_t(std::lround(tracked.x)) : 0;
+    const int32_t offsetZ = collideTracking ? int32_t(std::lround(tracked.z)) : 0;
     const int64_t eyeX = int64_t(pose.x_pos) + offsetX;
     const int64_t eyeZ = int64_t(pose.z_pos) + offsetZ;
     if (eyeX < INT32_MIN || eyeX > INT32_MAX ||
@@ -3607,17 +3627,15 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
             }
         }
     };
-    if (!Cfg().firstPersonWallCollision) {
-        // Preserve the tracked horizontal eye, even beyond the sweep's old
-        // distance limit. Keep stance/landing floor and ceiling protection at
-        // Lara's valid position: sampling inside a wall could push the eye
-        // vertically instead. Native movement collision is unchanged.
+    if (!collideTracking) {
+        // Keep physical leaning independent of the base-camera sweep. Retain
+        // stance/landing vertical protection at Lara's valid position.
         if (roll || crouch || UseLandingCamera(item)) clampVertical(body[0],body[2]);
-        return;
     }
     // A stance transition/physical rise under a low ceiling must lower the
     // eye before the horizontal sweep, not retract it to Lara then pop forward.
-    if(crouch) clampVertical(body[0],body[2]);
+    else if(crouch) clampVertical(body[0],body[2]);
+    const double sweepY=collideTracking ? eyeY : double(pose.y_pos);
     firstperson::ClampEyeToWall(body, eye,
         [&](int32_t x, int32_t z, int32_t clearX, int32_t clearZ) {
             RoomCollision coll{};
@@ -3630,15 +3648,15 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
             coll.facing = Angle(std::atan2(float(x - clearX), float(z - clearZ)));
             reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase + g_boundDll->getCollisionInfo)(
                 &coll, x, body[1], z, room, capsuleHeight);
-            return firstperson::EyeBlocked(coll.floorSamples,body[1],eyeY,coll.hitStatic!=0,capsuleHeight) ||
+            return firstperson::EyeBlocked(coll.floorSamples,body[1],sweepY,coll.hitStatic!=0,capsuleHeight) ||
                 coll.type == 8 || coll.type == 16 || coll.type == 32 ||
                 coll.shift[0] || coll.shift[2];
         });
-    // Stereo adds the physical translation after the scene pose. Undo that
-    // amount here so both rendered eyes remain on the clear side of the wall.
+    // With tracked collision enabled, undo the physical translation which
+    // stereo adds later. Otherwise keep it entirely outside this correction.
     pose.x_pos = eye[0] - offsetX;
     pose.z_pos = eye[2] - offsetZ;
-    if (roll || crouch || UseLandingCamera(item)) clampVertical(eye[0],eye[2]);
+    if (collideTracking && (roll || crouch || UseLandingCamera(item))) clampVertical(eye[0],eye[2]);
 }
 
 // Diagnostic only: distinguish animated lateral sway from actual root motion

@@ -85,17 +85,39 @@ this overview and the October 26–28 updates describe the current behavior.
 | Area | Current behavior |
 |---|---|
 | Controller arms and full-body IK | Rigid arm reach, elbow roll, shared pistol/body arm poses and model-bind pistol references reduce stretching and mismatched attachments. Later fixes prevent idle head glances from requesting native armed turns and remove body jitter from integer head queries and torso deadzone crossings. |
+| Side/back VRIK arm stability | Sidestep/backpedal torso animation no longer rocks the tracked shoulders and elbows. Both empty hands and equipped weapons retain live tracking while stepping feet continue to animate. |
 | Controls and flares | First person uses Modern Controls even when third person uses Tank Controls. VR controller polling survives desktop focus changes. Held flares and their lights follow the left controller; dropped flares cannot enter creature hit-testing and crash gun targeting. |
 | Jump input and presentation | Brief A presses take priority over ordinary gait transitions. Holding A while moving forward queues the running ledge-jump assist. Unarmed side/back takeoffs retain the intended direction; backjumps use the collision-root arc, and airborne legs use native animation. Only backpedal jumps hide the body/hair. |
 | Body transitions | Landing, drawing/holstering and the inventory background retain consistent first-person body placement. Button pistol equip uses a smooth arm blend; physical holster transfers keep hands controller-tracked. |
 | Inventory and calibration | Unarmed X opens the level, eye-height spatial ring; armed X cycles native ammo. LT+Y view changes recalibrate the shared tracking frame. |
-| Roomscale and cameras | Physical steps can cross a ledge and start a native fall. First-person wall pushback is disabled by default. Third-person startup waits for a loaded level before capturing tracking neutral; water exits use constrained climb handling. |
+| Roomscale and cameras | Physical steps can cross a ledge and start a native fall. The base first-person camera stops at crates/walls while physical head leaning can pass through them by default. Third-person startup waits for a loaded level before capturing tracking neutral; water exits use constrained climb handling. |
 | Weapon aiming | Attached revolver, Desert Eagle and crossbow sights project collision-tested world beams. Mesh-calibrated firing remains aligned with attached sights or bare barrels. The HK retains its scope and firing calibration but has no world beam. |
 | Shadows and costumes | Unarmed controller arms now update the shadow pose. Armed costume wrists preserve blended cuff surfaces instead of showing transparent gaps. |
 
 The earlier October 13–25 arm, body, jump and flare changes already have detailed
 notes below. The following additions cover the subsequent work. Reverted color
 adjustments are not part of the current changes.
+
+### VRIK sidestep and backpedal arm stability (2026-10-28)
+
+With full-body IK and movement stabilization enabled, side/back gaits now use
+the last ordinary ground upper-body pose as a reference in Lara's root/yaw
+frame. The native gait's lateral torso sway previously reached the shoulder
+and elbow solver even with steady controllers, in both armed and unarmed play.
+The reference travels and turns with Lara; the body solver still responds to
+actual headset lean and the hands remain directly controller-driven.
+
+Animated feet remain targets for leg IK. Forward movement, native weapon
+draw/holster arms, crouches, jumps, interactions, shadows and gameplay physics
+retain their existing paths. Leaving upright ground poses, losing tracking,
+changing the model or recalibrating releases the reference.
+
+The render-hook regression reproduces rocking torso/arm animation with fixed
+controllers while the root and camera travel, for both games and 15/33-joint
+palettes. It fails with the correction disabled. Coverage also checks animated
+feet, live controller/head movement, repeated stereo draws and crouch reset.
+Release compilation and 4,640,825 first-person regression checks passed;
+in-headset confirmation of the reported wobble remains pending.
 
 ### World-space laser sights and firing alignment (2026-10-27 to 2026-10-28)
 
@@ -141,10 +163,21 @@ stops at the first unsupported step so it cannot carry Lara across a gap;
 native gravity and fall handling take over. Walls, slopes, ceilings and normal
 stick/Walk collision rules retain their checks.
 
-`FirstPersonWallCollision=0` is the default: the tracked eye can look through
-walls without horizontal camera pushback. Lara's movement collision still
-applies. Set it to `1` to restore camera wall collision. Relevant crouch, roll
+`FirstPersonWallCollision=0` is the default: physical head leaning can pass
+through walls without tracking pushback. The base camera's forward eye offset
+and Lara's movement still receive collision checks. Set it to `1` to include
+physical leaning in camera wall collision. Relevant crouch, roll
 and landing floor/ceiling protection remains active at Lara's valid position.
+
+October 28 correction: the initial free-lean implementation skipped the entire
+camera sweep, allowing normal walking to put the forward eye anchor inside a
+crate even though Lara's collision root stopped. The base-camera sweep now
+always runs; physical head translation is included only when the setting is
+enabled. The fitted body accompanies camera retraction so the torso does not
+pop toward the eye. Regression coverage includes crate approach/impact/release,
+jumping, both games, several headings/eye offsets and both lean policies.
+The crate regression fails before the correction; the Release build and
+4,780,070 first-person checks pass afterward. Headset confirmation is pending.
 
 Third-person tracking neutral is now captured only after the level rooms and
 Lara are loaded, and resets when the game/level/room allocation changes. This
@@ -169,7 +202,7 @@ controller heading and positional neutrals together. Real headset pitch/roll
 remain tracked. If tracking is temporarily unavailable, calibration waits for
 the next valid pose. The runtime's Right System recenter remains supported.
 
-Validation for the current October 28 build: Release compilation, 4,333,417
+Validation for the October 28 HK laser update: Release compilation, 4,333,417
 first-person regression checks and 63 world-laser/OpenGL checks passed. The
 tests include HK beam suppression without changing native scope state, other
 weapon beams, firing alignment and physical-versus-button holster transitions.
@@ -6928,7 +6961,7 @@ defaults, not a promise that an older installed INI has been updated.
 | `FirstPersonAnchorZ` | `144` | Local forward eye offset |
 | `FirstPersonInteractionAnchorZ` | `16` | Retract forward eye offset during constrained interactions; cannot extend a custom normal anchor |
 | `FirstPersonHeadTranslation` | `1` | Physical leaning/ducking relative to neutral; tracked rotation remains active |
-| `FirstPersonWallCollision` | `0` | Allow the tracked eye through walls without camera pushback; `1` restores camera wall collision. Lara's movement collision remains active. |
+| `FirstPersonWallCollision` | `0` | Allow physical leaning through walls; `1` also clamps tracked leaning. Base-camera clearance and Lara's movement collision always remain active. |
 | `FirstPersonMovementStabilization` | `1` | Stable grounded eye anchor, pre-collision horizontal root-motion stabilization and raw relative HMD view; `0` restores the legacy paths |
 | `FirstPersonRoomscaleNeckMetres` | `0.15` | Body room-scale neck compensation, clamped to 0–0.4 m; also used for the rendered eye with stabilization disabled |
 | `FirstPersonRoomscaleMove` | `1` | Let collision-checked physical steps move Lara |

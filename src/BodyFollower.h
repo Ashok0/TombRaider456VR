@@ -139,6 +139,32 @@ struct HeightCrouch {
         return active;
     }
 };
+// Side/back gaits swing the authored torso even with fixed tracking. Keep the
+// last ordinary ground upper-body reference in Lara's root/yaw frame, then
+// solve real headset lean and controller motion on top. Animated feet remain
+// targets, rather than freezing a whole walking palette.
+struct GroundGaitReference {
+    bool valid=false;
+    Frame local[15]{};
+    void Reset() { *this={}; }
+    bool Apply(Frame (&pose)[15],const Frame& root,bool sideways,bool capture,bool trackedArms,Vec forward) {
+        Frame inverse{};
+        if(!Inverse(root,inverse)) return false;
+        if(capture && (!valid || !sideways)) {
+            for(int j=0;j<15;++j) local[j]=Multiply(inverse,pose[j]);
+            valid=true;
+        }
+        if(!valid || !sideways) return true;
+        Frame stable[15]{};
+        for(int j=0;j<15;++j) stable[j]=Multiply(root,local[j]);
+        const Frame targets[4]={stable[0],stable[7],pose[3],pose[6]};
+        if(!ReposeTorso(pose,targets,forward)) return false;
+        pose[14]=stable[14];
+        if(trackedArms) for(int j=8;j<14;++j) pose[j]=stable[j];
+        return true;
+    }
+};
+
 // Filter only inferred body motion, never tracked head/controller targets.
 struct TorsoPoseFilter {
     bool valid=false,mountPending=false,recovering=false,lastGrip=false;

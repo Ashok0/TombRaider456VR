@@ -703,8 +703,8 @@ struct Config {
     int   firstPersonAnchorZ    = 144;
     int   firstPersonInteractionAnchorZ = 16;
     bool  firstPersonHeadTranslation = true;
-    // Let the tracked eye pass through walls without pushing the view back.
-    // Lara's native movement collision is independent of this camera option.
+    // Let physical head translation pass through walls without pushback.
+    // The base eye anchor and Lara's native movement retain collision checks.
     bool  firstPersonWallCollision = false;
     bool  firstPersonMovementStabilization = true; // stable ground eye + pre-collision root motion
     float firstPersonRoomscaleNeckMetres = 0.15f;

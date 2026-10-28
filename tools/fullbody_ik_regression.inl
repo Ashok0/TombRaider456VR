@@ -80,6 +80,7 @@ void TestFullBodyIK() {
     const auto savedPistolRoll=g_pistolRoll;g_pistolRoll={};
     const auto savedFollower=g_bodyFollower;const auto savedSerial=VR().m_poseSerial;
     const auto savedTorso=g_torsoPose;const auto savedMount=g_mountBodyTransition;
+    const auto savedGait=g_groundGait;const auto savedGaitObject=g_groundGaitObject;
     const bool savedLanding=g_bodyLanding;g_bodyLanding=false;
     const auto savedPistolAnimation=g_pistolAnimation;g_pistolAnimation.Reset();
     const auto savedVisibility=g_bodyVisibility;g_bodyVisibility={};
@@ -332,6 +333,99 @@ void TestFullBodyIK() {
             g_pistolBodyScope=oldScope;worldCameraValid=cameraValid;
             std::memcpy(worldCameraPos,oldCamera,sizeof(oldCamera));
             g_torsoPose.Reset();g_bodyFollower.Reset();
+        }
+        // Side/back animation can rock the whole upper skeleton while the
+        // player holds both controllers still. Exercise real palette upload,
+        // camera/root travel, moving feet, and both tracked-arm paths.
+        {
+            const auto oldSettings=config;const auto oldScene=g_scenePose;
+            const auto oldGround=g_groundEye;
+            const bool oldCameraValid=worldCameraValid,oldManual=g_haveManualInput,oldPistolScope=g_pistolBodyScope;
+            const auto oldLocal=g_manualLocal,oldWorld=g_manualWorld;
+            float oldCamera[3];std::memcpy(oldCamera,worldCameraPos,sizeof(oldCamera));
+            auto& current=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+            auto& previous=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos_prev);
+            const auto oldCurrent=current,oldPrevious=previous;
+            const auto oldAnim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=103;
+            config.firstPersonMovementStabilization=true;config.firstPersonBodyScale=1;
+            worldCameraValid=true;g_groundEye.Reset();
+            for(int which:{0,1}) for(bool armed:{false,true}) for(int gait:{5,16,21,22}) {
+                game=dll.game=which;gun=1;status=armed ? 4 : 0;state=2;g_pistolBodyScope=armed;g_pistolRoll={};
+                g_pistolAnimation.Reset();g_groundGait.Reset();g_bodyFollower.Reset();g_torsoPose.Reset();
+                current=oldCurrent;previous=oldPrevious;g_scenePose=oldScene;
+                for(int i=0;i<3;++i) worldCameraPos[i]=i==0 ? camera.x : i==1 ? camera.y : camera.z;
+                skinFixture=fixture;g_haveManualInput=false;
+                ++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+                Check(g_groundGait.valid,"standing main body captures an upper-body gait reference");
+                state=int16_t(gait);g_haveManualInput=true;
+                g_manualLocal=g_manualWorld=gait==21 ? locomotion::Vec{1,0} : gait==22 ? locomotion::Vec{-1,0} : locomotion::Vec{0,-1};
+                ++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+                for(int sample=1;sample<=24;++sample) {
+                    const float wave=std::sin(sample*.6f);
+                    const Vec travel{g_manualWorld.x*sample*6,0,g_manualWorld.z*sample*6};
+                    current.x_pos=oldCurrent.x_pos+int(travel.x);current.z_pos=oldCurrent.z_pos+int(travel.z);
+                    previous.x_pos=oldPrevious.x_pos+int(travel.x);previous.z_pos=oldPrevious.z_pos+int(travel.z);
+                    g_scenePose.x_pos=oldScene.x_pos+int(travel.x);g_scenePose.z_pos=oldScene.z_pos+int(travel.z);
+                    worldCameraPos[0]=camera.x+travel.x;worldCameraPos[2]=camera.z+travel.z;
+                    const Basis rock=firstperson::RotationMatrix(firstperson::AxisRotation({0,0,1},wave*.12f));
+                    const Vec pivot=Sub(bodyJointWorld[0],camera);
+                    const Frame sway{rock,Sub(Add(pivot,{wave*18,0,wave*9}),Transform(rock,pivot))};
+                    float animated[33*12]{};
+                    for(int i=0;i<count;++i) {
+                        const int j=mapping[i];auto frame=Multiply(ReadRows(fixture+i*12),bind[i]);
+                        if(j==0 || j>=7) frame=Multiply(sway,frame);
+                        if(j==3 || j==6) frame.origin.z+=(j==3 ? 1 : -1)*wave*45;
+                        Frame inverse{};Inverse(bind[i],inverse);WriteRows(Multiply(frame,inverse),animated+i*12);
+                    }
+                    skinFixture=animated;++VR().m_poseSerial;
+                    g_bodyFollower.time=g_torsoPose.time=TurnTime()-1./90.;
+                    const auto itemBefore=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
+                    Detour_GetJoints(itemMemory,palette,0);
+                    bool feetMoved=false;
+                    for(int i=0;i<count;++i) {
+                        const int j=mapping[i];const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                        const auto base=Multiply(ReadRows(baseline+i*12),bind[i]);
+                        if(j>=7 && j<=13) {
+                            Check(nearVec(actual.origin,base.origin),"side/back torso and tracked arms reject native lateral gait sway");
+                            for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                                Check(std::fabs(actual.basis.r[r][c]-base.basis.r[r][c])<.001f,
+                                      "side/back arm rotation remains stable with fixed controllers");
+                        }
+                        if(j==3 || j==6) feetMoved|=firstperson::Length(Sub(actual.origin,base.origin))>1;
+                    }
+                    Check(feetMoved,"stabilizing the upper body retains animated stepping feet");
+                    Check(!std::memcmp(itemMemory,itemBefore.data(),sizeof(itemMemory)),"gait stabilization never changes native movement or animation state");
+                    float repeated[33*12]{};Detour_GetJoints(itemMemory,repeated,0);
+                    for(int i=0;i<count*12;++i) Check(std::fabs(repeated[i]-palette[i])<.001f,"stereo redraw does not advance gait stabilization");
+                }
+                skinFixture=fixture;
+                const auto oldTrackedHead=VR().m_rawHeadPose;
+                const auto oldRightHand=VR().m_rawControllerPose[1];
+                VR().m_rawControllerPose[1].m[0][3]+=.07f;
+                VR().m_rawHeadPose.m[0][3]+=.15f;
+                ++VR().m_poseSerial;g_bodyFollower.time=g_torsoPose.time=TurnTime()-1./90.;
+                Detour_GetJoints(itemMemory,palette,0);
+                Frame target{};Basis controller{};Check(BuildControllerWrist(1,target,controller),"side/back movement retains a live controller target");
+                const Vec liveCamera{worldCameraPos[0],worldCameraPos[1],worldCameraPos[2]};
+                locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+                view=locomotion::Rotate(view,g_headingBase)*LiveWorldUnitsPerMetre();
+                const Vec liveEye{g_scenePose.x_pos+view.x,g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre(),g_scenePose.z_pos+view.z};
+                for(int i=0;i<count;++i) {
+                    const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                    if(mapping[i]==10) Check(nearVec(Add(actual.origin,liveCamera),target.origin),"side/back stabilization never delays real controller movement");
+                    if(mapping[i]==14) Check(nearVec(Add(actual.origin,liveCamera),liveEye),"side/back stabilization preserves live headset lean");
+                }
+                VR().m_rawHeadPose=oldTrackedHead;VR().m_rawControllerPose[1]=oldRightHand;
+                state=71;++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                Check(!g_groundGait.valid,"crouching releases the cached upright gait reference");
+            }
+            config=oldSettings;g_scenePose=oldScene;g_groundEye=oldGround;
+            current=oldCurrent;previous=oldPrevious;*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=oldAnim;
+            worldCameraValid=oldCameraValid;std::memcpy(worldCameraPos,oldCamera,sizeof(oldCamera));
+            g_pistolBodyScope=oldPistolScope;
+            g_haveManualInput=oldManual;g_manualLocal=oldLocal;g_manualWorld=oldWorld;
+            g_groundGait.Reset();g_bodyFollower.Reset();g_torsoPose.Reset();
         }
         // Weapon status must not switch the torso back to native placement.
         // Native draw/holster arms remain attached to that same fitted chest.
@@ -1207,6 +1301,7 @@ void TestFullBodyIK() {
     g_bodyFollower=savedFollower;VR().m_poseSerial=savedSerial;
     g_pistolRoll=savedPistolRoll;
     g_torsoPose=savedTorso;g_mountBodyTransition=savedMount;
+    g_groundGait=savedGait;g_groundGaitObject=savedGaitObject;
     g_bodyLanding=savedLanding;
     g_pistolAnimation=savedPistolAnimation;
     g_bodyVisibility=savedVisibility;
