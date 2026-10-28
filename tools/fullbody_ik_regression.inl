@@ -54,6 +54,9 @@ void __cdecl ObserveRestrictedBodyDraw(uint8_t* item,int32_t masked,int32_t) {
         Check(FirstPersonBodyPalette(visible,count) && count==33 &&
               visible==firstperson::SkinJointMask(bits,restrictedMapping,count),
               "uploaded HD skin mask follows draw restriction while retaining complete solver skeleton");
+        Check(FirstPersonBodyWristSeamMask()==(g_bodyWristSeamScope ?
+              firstperson::SkinJointMask(firstperson::HandMeshBits,restrictedMapping,count)&~visible : 0),
+              "costume wrist preservation follows mapped palette slots only in the armed body draw");
     }
 }
 void __cdecl ObserveFullBodyDraw(uint8_t* item,int32_t masked,int32_t) {
@@ -1166,6 +1169,7 @@ void TestFullBodyIK() {
         Detour_DrawCreatureHD(itemMemory,0,0);
         Check(restrictedBodyDraws==(crouched && armed ? 0 : 1) && bits==UINT32_MAX,
               "transition body draw keeps restriction and restores native item mask");
+        Check(!g_bodyWristSeamScope && !FirstPersonBodyWristSeamMask(),"costume wrist mask cannot leak beyond body draw");
         if(armed) { bits=0x3600;Detour_DrawCreatureHD(itemMemory,1,0); }
         if(armed && stance!=2) {
             const int before=restrictedBodyDraws;bits=0x92;Detour_DrawCreatureHD(itemMemory,1,0);

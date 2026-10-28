@@ -223,6 +223,8 @@ locomotion::Vec g_ladderTorsoOffset{};
 float g_lastBodyYaw=0;
 int g_headingLevel=-1;
 bool g_bodySkinScope=false, g_bodySkinReady=false;
+bool g_bodyWristSeamScope=false;
+uint64_t g_bodyWristSeamMask=0;
 unsigned g_armIKSolved=0, g_armIKFailed=0;
 float g_bodySkinPalette[33*12]{};
 float g_bodyRenderPalette[33*12]{};
@@ -2031,6 +2033,8 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
             if (bones<=0 || (bones==count && mapping)) {
                 g_bodySkinMask=firstperson::SkinJointMask(
                     *reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits),mapping,count);
+                g_bodyWristSeamMask=g_bodyWristSeamScope ?
+                    firstperson::SkinJointMask(firstperson::HandMeshBits,mapping,count)&~g_bodySkinMask : 0;
                 std::memcpy(g_bodySkinPalette,joints,count*12*sizeof(float));
                 g_bodySkinCount=count; g_bodySkinReady=true;
             }
@@ -4032,9 +4036,12 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
                 bits=bodyMask & ~firstperson::HeadMeshBit & ~0x2400u;
                 g_renderArm=-1;g_bodySkinScope=true;g_bodySkinReady=false;
                 const bool previousPistolScope=g_pistolBodyScope;
+                const bool previousWristScope=g_bodyWristSeamScope;
+                g_bodyWristSeamScope=true;
                 g_pistolBodyScope=CurrentMotionWeapon()==1;
                 g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
                 g_pistolBodyScope=previousPistolScope;
+                g_bodyWristSeamScope=previousWristScope;
                 g_bodySkinScope=g_bodySkinReady=false;g_renderArm=previousArm;bits=savedBits;
             }
             return;
@@ -4850,6 +4857,9 @@ const float* FirstPersonBodyPalette(uint64_t& mask,int& count) {
 }
 const float* FirstPersonRenderBodyPalette(uint64_t& mask,int& count) {
     return FirstPersonBodyPalette(mask,count) ? g_bodyRenderPalette : nullptr;
+}
+uint64_t FirstPersonBodyWristSeamMask() {
+    return g_bodyWristSeamScope && g_bodySkinScope && g_bodySkinReady && g_renderArm<0 ? g_bodyWristSeamMask : 0;
 }
 
 bool FirstPersonSwitchGrip(bool down, bool allowed) {

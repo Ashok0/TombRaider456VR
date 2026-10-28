@@ -21,10 +21,14 @@ inline bool Patch(std::string& vertex,std::string& fragment) {
         "\n    ivec3 bodyIndices = ivec3(j.xyz);\n"
         "    uint bodyBits = uint(uVisibleBody.x) | (uint(uVisibleBody.y) << 16u);\n"
         "    vVisibleBodyWeight = 0.0;\n"
+        "    vBodyWristWeight = 0.0;\n"
+        "    uint wristBits = uint(uBodyWristSeams.x) | (uint(uBodyWristSeams.y) << 16u);\n"
         "    for (int b=0;b<3;++b) {\n"
         "        int joint=bodyIndices[b];\n"
         "        if (joint>=0 && joint<33 && ((joint<32 ? bodyBits : uint(uVisibleBody.z)) & (1u << uint(joint % 32)))!=0u)\n"
         "            vVisibleBodyWeight += w[b];\n"
+        "        if (joint>=0 && joint<33 && ((joint<32 ? wristBits : uint(uBodyWristSeams.z)) & (1u << uint(joint % 32)))!=0u)\n"
+        "            vBodyWristWeight += w[b];\n"
         "    }\n"
         "    vTrackedHandWeight = 1.0;\n"
         "    if (uTrackedHandJoint > 0) {\n"
@@ -35,9 +39,12 @@ inline bool Patch(std::string& vertex,std::string& fragment) {
         "        j.xyz = vec3(float(handJoint));\n"
         "        w.xyz = vec3(1.0,0.0,0.0);\n"
         "    }\n");
-    vertex.insert(main,"uniform int uTrackedHandJoint;\nout float vTrackedHandWeight;\nuniform vec4 uVisibleBody;\nout float vVisibleBodyWeight;\n");
-    fragment.insert(brace+1,"\n    if (vTrackedHandWeight < 0.5) discard;\n    if (uVisibleBody.w > 0.5 && vVisibleBodyWeight < 0.5) discard;\n");
-    fragment.insert(fm,"in float vTrackedHandWeight;\nuniform vec4 uVisibleBody;\nin float vVisibleBodyWeight;\n");
+    vertex.insert(main,"uniform int uTrackedHandJoint;\nout float vTrackedHandWeight;\nuniform vec4 uVisibleBody;\nout float vVisibleBodyWeight;\nuniform vec4 uBodyWristSeams;\nout float vBodyWristWeight;\n");
+    // Costume cuffs can be mostly wrist-weighted. Keep their full blended
+    // surface wherever it still has visible forearm/body support. Pure hidden
+    // hand surfaces stay excluded, and head/torso masking keeps its threshold.
+    fragment.insert(brace+1,"\n    if (vTrackedHandWeight < 0.5) discard;\n    if (uVisibleBody.w > 0.5 && vVisibleBodyWeight < 0.5 && !(vBodyWristWeight > 0.0 && vVisibleBodyWeight > 0.0)) discard;\n");
+    fragment.insert(fm,"in float vTrackedHandWeight;\nuniform vec4 uVisibleBody;\nin float vVisibleBodyWeight;\nin float vBodyWristWeight;\n");
     return true;
 }
 } // namespace tr::motionhandskin

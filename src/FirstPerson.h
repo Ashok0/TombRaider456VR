@@ -24,6 +24,8 @@ bool FirstPersonShadowPass();
 const float* FirstPersonBodyPalette(uint64_t& mask,int& count);
 // Complete eye-view palette, including unarmed IK; physics uses the native capture above.
 const float* FirstPersonRenderBodyPalette(uint64_t& mask,int& count);
+// Hidden wrist palette slots whose mixed costume/forearm surfaces remain visible.
+uint64_t FirstPersonBodyWristSeamMask();
 // Render-only HK optic pose; no native zoom, weapon or camera state mutations.
 bool FirstPersonHKScopePose(motiongun::Frame& lens, motiongun::Frame& camera,float* radiusMetres=nullptr);
 bool FirstPersonDrawingTrackedHands();

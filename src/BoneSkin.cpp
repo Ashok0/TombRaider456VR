@@ -262,7 +262,7 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
 constexpr uint32_t kMaxProgram = 4096;
 
 struct ProgramState {
-    GLint locBodyMask=-2, locJoints=-2;
+    GLint locBodyMask=-2, locJoints=-2, locWristSeams=-2;
     bool bodyMaskLive=false;
     GLint locHand = -2;
     int handJoint = -1;
@@ -759,6 +759,7 @@ void BoneSkinAfterValidate() {
     if (ps.locBodyMask==-2) {
         ps.locBodyMask=gl::GetUniformLocation(prog,"uVisibleBody");
         ps.locJoints=gl::GetUniformLocation(prog,"uJoints");
+        ps.locWristSeams=gl::GetUniformLocation(prog,"uBodyWristSeams");
     }
     if (ps.locBodyMask>=0) {
         uint64_t mask=0; int count=0;
@@ -768,6 +769,11 @@ void BoneSkinAfterValidate() {
             const float visible[4]={float(mask&0xffffu),float((mask>>16)&0xffffu),
                 float(mask>>32),active ? 1.f : 0.f};
             gl::Uniform4fv(ps.locBodyMask,1,visible);
+            if(ps.locWristSeams>=0) {
+                const uint64_t seams=active ? FirstPersonBodyWristSeamMask() : 0;
+                const float seamMask[4]={float(seams&0xffff),float((seams>>16)&0xffff),float(seams>>32),0};
+                gl::Uniform4fv(ps.locWristSeams,1,seamMask);
+            }
             ps.bodyMaskLive=active;
         }
         if (active) {

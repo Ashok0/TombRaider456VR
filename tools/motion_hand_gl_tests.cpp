@@ -37,7 +37,7 @@ std::vector<std::string> Sources(const char* filename) {
     return out;
 }
 int main(int argc,char** argv) {
-    Check(argc==2,"pass path to installed tomb456.exe");
+    Check(argc==2 || argc==3,"pass path to installed tomb456.exe and optional audited costume weights");
     WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"MotionHandTest";wc.style=CS_OWNDC;
     Check(RegisterClassW(&wc)!=0,"register hidden window");
     HWND window=CreateWindowW(wc.lpszClassName,L"Hand test",WS_OVERLAPPED,0,0,256,256,nullptr,nullptr,wc.hInstance,nullptr);
@@ -88,7 +88,7 @@ int main(int argc,char** argv) {
     Check(gl::CheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE,"pixel target complete");
     gl::GenVertexArrays(1,&vao);gl::BindVertexArray(vao);gl::GenBuffers(1,&vbo);gl::BindBuffer(GL_ARRAY_BUFFER,vbo);
     glViewport(0,0,128,128);glDisable(GL_DEPTH_TEST);glDisable(GL_CULL_FACE);glDisable(GL_BLEND);
-    auto render=[&](GLuint program,int hand,float weight,bool enabled,float angle,bool body=false,bool full=false) {
+    auto render=[&](GLuint program,int hand,float weight,bool enabled,float angle,bool body=false,bool full=false,bool seams=false) {
         gl::UseProgram(program);const GLint uniform=gl::GetUniformLocation(program,"uTrackedHandJoint");
         if(uniform>=0) gl::Uniform1i(uniform,enabled ? hand+1 : 0);
         const GLint bodyUniform=gl::GetUniformLocation(program,"uVisibleBody");
@@ -96,6 +96,12 @@ int main(int argc,char** argv) {
             const uint64_t bits=uint64_t(1)<<hand;
             const float mask[4]={float(bits&0xffff),float((bits>>16)&0xffff),float(bits>>32),body ? 1.f : 0.f};
             gl::Uniform4fv(bodyUniform,1,mask);
+        }
+        const GLint seamUniform=gl::GetUniformLocation(program,"uBodyWristSeams");
+        if(seamUniform>=0) {
+            const uint64_t bits=seams ? uint64_t(1)<<(hand-1) : 0;
+            const float mask[4]={float(bits&0xffff),float((bits>>16)&0xffff),float(bits>>32),0};
+            gl::Uniform4fv(seamUniform,1,mask);
         }
         float palette[72*12]{};float* wrist=palette+hand*12;
         wrist[0]=wrist[5]=std::cos(angle);wrist[1]=-std::sin(angle);wrist[4]=std::sin(angle);wrist[10]=1;
@@ -136,6 +142,37 @@ int main(int argc,char** argv) {
             Check(blank,"hidden torso/head fragments trimmed by original skin weights");
             Check(render(fixed,joint,.75f,false,angle,false,true)==expected,"subsequent NPC or third-person draw clears visibility");
         }
+    }
+    // Costumes use widely different wrist weights. A cuff can be 99% hand
+    // and still belong to the visible sleeve/forearm rather than a second hand.
+    for(int joint:{1,9,12,32}) for(float angle:{0.f,.7f,-1.4f}) {
+        for(float weight:{1.f/255.f,.1f,.25f,.49f,.75f,1.f}) {
+            const auto expected=render(native,joint,weight,false,angle,false,true);
+            Check(render(fixed,joint,weight,false,angle,true,true,true)==expected,
+                  "costume wrist seam retains full original skin surface even below half visible weight");
+            Check(render(fixed,joint,weight,false,angle,false,true,true)==expected,
+                  "inactive body mask leaves native skinning unchanged");
+        }
+        const auto hidden=render(fixed,joint,0,false,angle,true,true,true);
+        bool blank=true;for(size_t i=1;i<hidden.size();i+=4) if(hidden[i]) blank=false;
+        Check(blank,"pure hidden hand surfaces stay excluded instead of duplicating weapon hands");
+        const auto cleared=render(fixed,joint,.25f,false,angle,true,true,false);
+        blank=true;for(size_t i=1;i<cleared.size();i+=4) if(cleared[i]) blank=false;
+        Check(blank,"clearing wrist scope restores ordinary torso head and attachment masks");
+    }
+    if(argc==3) {
+        std::ifstream weights(argv[2]);Check(bool(weights),"audited costume weights open");
+        float weight=0;int samples=0;
+        while(weights>>weight) {
+            Check(weight>0 && weight<=1,"valid installed costume wrist blend");
+            for(int joint:{9,12,32}) {
+                const auto expected=render(native,joint,weight,false,.7f,false,true);
+                Check(render(fixed,joint,weight,false,.7f,true,true,true)==expected,
+                      "installed costume wrist blend renders complete opaque geometry");
+            }
+            ++samples;
+        }
+        Check(samples>0,"installed costume wrist samples were exercised");
     }
     gl::UseProgram(0);gl::BindVertexArray(0);gl::DeleteBuffers(1,&vbo);gl::DeleteVertexArrays(1,&vao);gl::BindFramebuffer(GL_FRAMEBUFFER,0);gl::DeleteFramebuffers(1,&fbo);glDeleteTextures(1,&tex);
     gl::DeleteProgram(native);gl::DeleteProgram(fixed);for(auto s:{nativeVs,nativeFs,fixedVs,fixedFs}) gl::DeleteShader(s);
