@@ -1117,7 +1117,9 @@ void TestFullBodyIK() {
         state=2;status=0;gun=1;g_active=true;appMemory[0x9e4]=1;config.firstPersonFullBodyIK=true;VR().m_controllerPoseValid[0]=true;
         ShadowDll shadow{};static int pass=4;shadow.renderPass=rva(&pass);g_shadowDll=&shadow;
         Detour_GetJoints(itemMemory,palette,0);
-        Check(!std::memcmp(palette,fixture,count*12*sizeof(float)),"full-body never changes native shadow caster skeleton");
+        for(int i=0;i<count;++i) if(mapping[i]<8 || mapping[i]>13)
+            Check(!std::memcmp(palette+i*12,fixture+i*12,12*sizeof(float)),
+                  "full-body fitting never moves the shadow root torso head or legs; only free arms track controllers");
         g_shadowDll=nullptr;
         Detour_GetJoints(laraMemory,palette,0);
         Check(!std::memcmp(palette,fixture,count*12*sizeof(float)),"full-body cannot pose another creature");

@@ -870,8 +870,88 @@ void TestUnarmedIK() {
         *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=2;
         VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
         ShadowDll shadow{};static int pass=4;shadow.renderPass=rva(&pass);g_shadowDll=&shadow;
-        Detour_GetJoints(itemMemory,palette,0);
-        Check(!std::memcmp(palette,fixture,count*12*sizeof(float)),"active IK cannot move any native shadow bone");
+        {
+            const auto fit=g_bodyVisualOffset,wall=g_bodyWallOffset;
+            const bool bodyScope=g_pistolBodyScope,fullBody=config.firstPersonFullBodyIK;
+            // A native-position eye palette provides an independent reference
+            // for the shadow's controller arms, without head-clearance shifts.
+            float expected[33*12]{};
+            g_shadowDll=nullptr;g_bodyVisualOffset=g_bodyWallOffset={};
+            Detour_GetJoints(itemMemory,expected,0);
+            g_shadowDll=&shadow;g_bodyVisualOffset=fit;g_bodyWallOffset=wall;
+            const auto torsoBefore=std::string(reinterpret_cast<char*>(&g_torsoPose),sizeof(g_torsoPose));
+            const auto pistolBefore=std::string(reinterpret_cast<char*>(&g_pistolArmPose),sizeof(g_pistolArmPose));
+            const auto itemBefore=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
+            const auto laraBefore=std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory));
+            g_pistolBodyScope=true; // A nested light draw must not write eye-view caches.
+            for(bool full:{false,true}) for(int interpolation:{0,2,4}) {
+                config.firstPersonFullBodyIK=full;
+                Check(Detour_GetJoints(itemMemory,palette,interpolation)==count,"unarmed shadow retains complete skeleton");
+                for(int i=0;i<count;++i) {
+                    const int joint=mapping[i];
+                    if(joint<8 || joint>13)
+                        Check(!std::memcmp(palette+i*12,fixture+i*12,12*sizeof(float)),
+                              "unarmed controller shadow keeps root torso legs and head native");
+                    for(int k=0;k<12;++k)
+                        Check(std::fabs(palette[i*12+k]-expected[i*12+k])<.003f,
+                              "unarmed shadow arms follow controllers without eye-view body or wall offsets");
+                }
+                uint64_t mask=0;int captured=0;
+                Check(!FirstPersonBodyPalette(mask,captured) && !FirstPersonRenderBodyPalette(mask,captured),
+                      "shadow cannot publish eye visibility or jiggle-physics palettes");
+            }
+            Check(torsoBefore==std::string(reinterpret_cast<char*>(&g_torsoPose),sizeof(g_torsoPose)) &&
+                  pistolBefore==std::string(reinterpret_cast<char*>(&g_pistolArmPose),sizeof(g_pistolArmPose)) &&
+                  itemBefore==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)) &&
+                  laraBefore==std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory)),
+                  "shadow arm solve leaves eye pose caches and gameplay skeleton untouched");
+            const auto drawHook=g_hDrawCreatureHD.m_trampoline;
+            const int oldArm=g_renderArm,oldJoint=g_renderHandJoint,oldDraws=draws;
+            g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeShadowDraw);
+            g_renderArm=1;g_renderHandJoint=10;
+            const auto bits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
+            Detour_DrawCreatureHD(itemMemory,0,2);
+            Check(draws==oldDraws+1 && shadowDrawCount==count && drawnUseBits==0 && drawnBodyBits==bits &&
+                  g_renderArm==1 && g_renderHandJoint==10,
+                  "actual shadow draw keeps full mesh and restores eye hand state");
+            for(int i=0;i<count*12;++i) Check(std::fabs(shadowDrawPalette[i]-expected[i])<.003f,
+                  "actual shadow draw uploads controller-driven unarmed arms");
+            g_hDrawCreatureHD.m_trampoline=drawHook;g_renderArm=oldArm;g_renderHandJoint=oldJoint;draws=oldDraws;
+            // Light camera translation must not change the arms' world pose.
+            float shifted[33*12]{};std::memcpy(shifted,fixture,count*12*sizeof(float));
+            for(int i=0;i<count;++i) { shifted[i*12+3]-=1000;shifted[i*12+7]+=500;shifted[i*12+11]-=700; }
+            skinFixture=shifted;Detour_GetJoints(itemMemory,palette,0);
+            for(int i=0;i<count;++i) {
+                Check(std::fabs(palette[i*12+3]+1000-expected[i*12+3])<.01f &&
+                      std::fabs(palette[i*12+7]-500-expected[i*12+7])<.01f &&
+                      std::fabs(palette[i*12+11]+700-expected[i*12+11])<.01f,
+                      "moving light camera preserves world-space unarmed shadow pose");
+            }
+            skinFixture=fixture;
+            const auto left=VR().m_rawControllerPose[0];
+            VR().m_rawControllerPose[0].m[0][3]+=.12f;
+            Detour_GetJoints(itemMemory,palette,0);
+            bool moved=false;
+            for(int i=0;i<count;++i) {
+                const int joint=mapping[i];
+                if(joint>=11 && joint<=13) moved|=std::memcmp(palette+i*12,expected+i*12,12*sizeof(float))!=0;
+                else for(int k=0;k<12;++k) Check(std::fabs(palette[i*12+k]-expected[i*12+k])<.003f,
+                     "moving left controller cannot move right shadow arm or body");
+            }
+            Check(moved,"moving unarmed controller visibly moves its shadow arm");
+            VR().m_rawControllerPose[0]=left;
+            for(int blocked=0;blocked<4;++blocked) {
+                if(blocked==0) g_active=false;
+                if(blocked==1) config.firstPersonUnarmedIK=false;
+                if(blocked==2) VR().m_controllerPoseValid[0]=false;
+                if(blocked==3) status=1;
+                Detour_GetJoints(itemMemory,palette,0);
+                Check(!std::memcmp(palette,fixture,count*12*sizeof(float)),
+                      "third person disabled IK tracking loss and native interactions retain native shadow arms");
+                g_active=true;config.firstPersonUnarmedIK=true;VR().m_controllerPoseValid[0]=true;status=0;
+            }
+            g_pistolBodyScope=bodyScope;config.firstPersonFullBodyIK=fullBody;
+        }
         g_shadowDll=nullptr;
         Detour_GetJoints(laraMemory,palette,0);
         Check(!std::memcmp(palette,fixture,count*12*sizeof(float)),"active IK cannot affect another creature");

@@ -1,11 +1,11 @@
 ﻿{
     "status":  "deployed-and-hash-verified",
-    "deployed_at":  "2026-10-27T19:14:17.7245919-04:00",
-    "dll_sha256":  "A9E8114BC8236774A1B6D028DE17BFBE28A0CC1C51AE42AAF3FCFE9AD2E4302B",
+    "deployed_at":  "2026-10-27T19:42:30.5285924-04:00",
+    "dll_sha256":  "40375825BC89302BC6D3522CC46C055BA437EC94CAC47DB8A81A1036A0E49C68",
     "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
-    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-laser-20261027-191417",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-laser-20261027-194230",
     "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
     "regression_log":  "build\\world-laser-regression.log",
     "hardware_verified":  false,
-    "change":  "Decouples first-person weapon aim from laser attachment and rendering toggle. Adds measured bare Revolver, Desert Eagle and Crossbow bore/bolt-guide calibration, retains attached laser and HK calibration, and suppresses beams for bare meshes. Tests cover native firing, fresh controller movement, attach/remove cycles and render toggle independence. 4328412 first-person regressions, 60 GPU/native-memory checks and 21 mesh verifications passed; bare hand indices verified in both native PDB binaries."
+    "change":  "Unarmed first-person shadow arms follow motion controllers through arm-only IK in the light palette. Excludes eye-view body/wall offsets and preserves native root, torso, head, legs, draw masks, gameplay state, and eye pose caches. Tests cover 15/33-joint meshes, real DrawCreatureHD path, full-body IK toggle, light-camera translation, independent hand movement, third person and tracking-loss/native-interaction fallbacks. Release build and 4333252 first-person regression checks passed."
 }

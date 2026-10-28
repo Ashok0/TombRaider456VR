@@ -1824,10 +1824,10 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     return true;
 }
 
-// Work only on the eye-view skinning palette. Native simulation joints and
-// the separately captured physics palette retain the original animation.
-bool ApplyArmIK(uint8_t* item, float* joints, int count) {
-    const bool armed=MotionReady();
+// Pose rendered arms without changing simulation joints. Shadow palettes use
+// their own camera-relative origin and must not inherit eye-view body fitting.
+bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
+    const bool armed=!shadow && MotionReady();
     if ((!armed && !UnarmedIKReady()) || count<15 || count>33) return false;
     const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
     if (object<0) return false;
@@ -1878,7 +1878,7 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count) {
             std::fabs(nativeWrist.y-body.y_pos)>4096 ||
             std::fabs(nativeWrist.z-body.z_pos)>4096) return false;
         target.origin=Add(native[2].origin,Sub(target.origin,nativeWrist));
-        if (BodyVisualOffsetApplies(item)) {
+        if (!shadow && BodyVisualOffsetApplies(item)) {
             const auto offset=BodyRenderOffset();
             target.origin=Sub(target.origin,{offset.x,0,offset.z});
         }
@@ -1937,7 +1937,7 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count) {
         if (index>=0 && solved[index/3]) motiongun::WriteRows(motiongun::Multiply(correction[index],
             motiongun::ReadRows(joints+i*12)),joints+i*12);
     }
-    if(g_pistolBodyScope && solved[0] && solved[1]) {
+    if(!shadow && g_pistolBodyScope && solved[0] && solved[1]) {
         for(int i=0;i<6;++i) g_pistolArmPose.joint[i]=solvedArms[i];
         g_pistolArmPose.bindReference=bindReference[0] && bindReference[1];
         g_pistolArmSolveReady=true;
@@ -2005,10 +2005,15 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     g_renderHandJoint = -1;
     g_bodySkinReady=false;
     const int32_t count = g_hGetJoints.Original<Fn_GetJoints>()(item, joints, pass);
-    // Shadow positions must match native third person, independent of the
-    // head-dependent body fit used only to keep geometry out of the eye view.
-    // Also exclude shadow palettes from tracked-hand transforms and physics.
-    if (DrawingNativeShadow()) return count;
+    // Keep the native shadow body/root and all visibility/physics state.
+    // Only free unarmed arms follow the controllers; their targets are rebased
+    // through the light-pass wrist, not the scene-camera or eye-fit offset.
+    if (DrawingNativeShadow()) {
+        if(joints && item && g_boundDll && g_boundBase &&
+           item==*Ptr<uint8_t*>(g_boundDll->laraItem) && UnarmedIKReady())
+            ApplyArmIK(item,joints,count,true);
+        return count;
+    }
     if (g_renderArm==1) { g_weaponLaser.item=nullptr;g_weaponAimBinding.item=nullptr; }
     if (g_renderArm<0 && joints && count>0 && count<=33 && g_active &&
         g_boundDll && item && item==g_headingItem &&
@@ -4350,7 +4355,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
         if (!g_hDrawToShadow.Install(reinterpret_cast<void*>(base+entry.cast),
                 reinterpret_cast<void*>(&Detour_DrawToShadow),size,bytes,size,"FirstPersonDrawToShadow"))
             Log("firstperson: shadow receiver origin correction unavailable");
-        Log("firstperson: intact native shadows; eye-view body and hand offsets excluded");
+        Log("firstperson: intact shadows with unarmed controller arms; eye-view body offsets excluded");
     }
     if (Cfg().firstPersonMotionGuns) {
         if (g_motionDll &&
