@@ -120,7 +120,7 @@ constexpr GameDllLayout kDlls[] = {
       /* DrawNormalLas.. */ 0x000D1E40,
       /* DoInfraRedQuad  */ 0x000D21B0,
       kPrintRoomsListTR4, sizeof(kPrintRoomsListTR4),
-      kSaveRbx08, kSaveRbx10, kSaveRbx10, /* anims */ 0x00699CA8, /* lara_as_compress */ 0x00052C10 },
+      kSaveRbx08, kSaveRbx10, kSaveRbx10, /* anims */ 0x00699CA8, /* lara_as_compress */ 0x00052C10, /* bDisableLaraControl */ 0x001BB1A0 },
 
     { 1, 0x696B499C, L"tomb5.dll", "Tomb Raider V",
       /* lara            */ 0x004EE740,
@@ -173,7 +173,7 @@ constexpr GameDllLayout kDlls[] = {
       /* DrawNormalLas.. */ 0x000C5110,
       /* DoInfraRedQuad  */ 0x000C5480,
       kPrintRoomsListTR5, sizeof(kPrintRoomsListTR5),
-      kSaveRbx08, kSaveRbx10, kSaveRbx10, /* anims */ 0x0066D1B0, /* lara_as_compress */ 0x00051680 },
+      kSaveRbx08, kSaveRbx10, kSaveRbx10, /* anims */ 0x0066D1B0, /* lara_as_compress */ 0x00051680, /* bDisableLaraControl */ 0x001B6BE0 },
 
     // --- retail Steam builds (2025-09-10), no PDB ------------------------------
     //
@@ -241,7 +241,7 @@ constexpr GameDllLayout kDlls[] = {
       /* DrawNormalLas.. */ 0x000D2970,
       /* DoInfraRedQuad  */ 0x000D2CD0,
       kPrintRoomsListTR4, sizeof(kPrintRoomsListTR4),
-      kSaveRbx18, kSaveRbx08, kSaveRbx08, /* anims */ 0x0069ABE8, /* lara_as_compress */ 0x00052900 },
+      kSaveRbx18, kSaveRbx08, kSaveRbx08, /* anims */ 0x0069ABE8, /* lara_as_compress */ 0x00052900, /* bDisableLaraControl */ 0x001BC0E0 },
 
     { 1, 0x68C12FE9, L"tomb5.dll", "Tomb Raider V (retail)",
       /* lara            */ 0x004EE680,
@@ -294,7 +294,7 @@ constexpr GameDllLayout kDlls[] = {
       /* DrawNormalLas.. */ 0x000C5380,
       /* DoInfraRedQuad  */ 0x000C56E0,
       kPrintRoomsListTR5, sizeof(kPrintRoomsListTR5),
-      kSaveRbx18, kSaveRbx08, kSaveRbx08, /* anims */ 0x0066D0F0, /* lara_as_compress */ 0x00052390 },
+      kSaveRbx18, kSaveRbx08, kSaveRbx08, /* anims */ 0x0066D0F0, /* lara_as_compress */ 0x00052390, /* bDisableLaraControl */ 0x001B6B20 },
 };
 
 // TR6 is a different engine, so it cannot share GameDllLayout. Its embedded

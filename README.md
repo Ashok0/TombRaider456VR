@@ -99,6 +99,45 @@ The earlier October 13–25 arm, body, jump and flare changes already have detai
 notes below. The following additions cover the subsequent work. Reverted color
 adjustments are not part of the current changes.
 
+### Armed directional jumps and sideways-jump comfort (2026-10-30)
+
+First-person backward jumps with guns drawn now retain the requested direction.
+Native armed standing control was adding a left/right turn bit before jump
+selection, which selected a side jump instead. The first-person hook temporarily
+suppresses analog steering for armed back/side takeoff requests, preserving the
+digital jump direction, native clearance checks and subsequent airborne steering.
+Third-person input remains native.
+
+Left/right jumps now use the calibrated, interpolated collision-root camera
+already used by backjumps. Authored neck sway no longer moves the view; physical
+head tracking and the native jump trajectory remain live. Back/side jumps show
+hands and weapons while hiding the animated body and hair from the first-person
+view. Native shadows and third-person rendering retain the full body.
+
+Regression tests reproduce the armed direction error and side-jump camera sway
+before correction. The native-code probe reproduces the armed back-to-side jump
+selection in both TR4 and TR5. Headset comfort confirmation remains pending.
+
+### Auto-jump through playable camera changes (2026-10-30)
+
+First-person sessions also retain the held request when reacquiring their view
+heading after a native camera interruption. During a playable camera override,
+the session keeps Modern Controls even if the saved third-person preference is
+Tank Controls. Explicit view exit and noninteractive interruptions still restore
+the saved preference. First-person regressions reproduce both cancellation paths
+and verify that the original hold reaches the ledge after camera recovery.
+
+Holding Jump while running in third person now keeps the ledge-jump assist
+active through fixed/heavy camera triggers, controllable spot cameras and the
+TR5 X-ray view. Camera ownership no longer cancels the held request. The game
+keeps its own camera and normal third-person takeoff animation and timing.
+
+The assist checks the native control-disable flag separately. Actual control
+locks, cinematic playback, cutscene transitions and tutorial scenes still cancel
+the request without creating another jump when gameplay resumes. Regression
+coverage includes camera entry before and during a hold, return to chase view,
+takeoff while the alternate view remains active, and control-loss cancellation.
+
 ### Immediate first-person landing recovery (2026-10-30)
 
 TR4/5 first person now leaves ordinary landing recovery as soon as native

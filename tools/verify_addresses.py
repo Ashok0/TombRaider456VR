@@ -149,7 +149,7 @@ LAYOUT = ['lara', 'lara_item', 'camera', 'room', 'number_rooms',
           'GetCollisionInfo', 'GetFloor', 'GetHeight', 'ItemNewRoom', 'GLOBAL_playing_cutseq',
           'cutseq_num', 'cutseq_trig', 'bUseSpotCam', 'bVoncroyCutScene',
           'DrawNormalBinocs', 'DrawVCIHeadset', 'DrawLabyrinthFishEye',
-          'DrawNormalLaserSight', 'DoInfraRedQuad', 'anims', 'lara_as_compress']
+          'DrawNormalLaserSight', 'DoInfraRedQuad', 'anims', 'lara_as_compress', 'bDisableLaraControl']
 
 def pe_stamp(path):
     import struct

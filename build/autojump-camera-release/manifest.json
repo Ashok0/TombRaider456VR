@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-30T01:24:42.8103206-04:00",
+    "dll_sha256":  "F17DD064902FF22FE6A680110EA99DC0C7DCCD7E997A20556C187B4006BCC8D7",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-autojump-camera-20261030-012442",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_log":  "build\\autojump-camera-tests.log",
+    "address_verification":  "build\\autojump-camera-addresses.log",
+    "hardware_verified":  false,
+    "change":  "TR4/5 third-person held running ledge jumps survive fixed/heavy and controllable spot-camera changes, including TR5 X-ray presentation. Native control locks and actual cutscenes still cancel requests. Camera and third-person takeoff timing remain native. Release build, 4798959 regression checks and 814 address/binary checks passed."
+}

@@ -3383,7 +3383,7 @@ int main() {
                   "inventory during a roll restores full original mask");
             std::memset(appMemory, 0, sizeof(appMemory));
         }
-        for(bool hideHead:{false,true}) for(int jump:{25}) {
+        for(bool hideHead:{false,true}) for(int jump:{25,26,27}) {
             RestoreHeadMesh();bits=baseBits;config.firstPersonHideHead=hideHead;
             state=int16_t(jump);UpdateSceneCamera(camera);
             Check(g_active && !IsCrouchState(itemMemory) && IsHandsOnlyBodyState(itemMemory) &&
@@ -3413,7 +3413,7 @@ int main() {
             }
             state=2;UpdateSceneCamera(camera);
         }
-        for(bool hideHead:{false,true}) for(int jump:{3,15,26,27}) {
+        for(bool hideHead:{false,true}) for(int jump:{3,15}) {
             RestoreHeadMesh();bits=baseBits;config.firstPersonHideHead=hideHead;
             state=int16_t(jump);UpdateSceneCamera(camera);
             Check(g_active && !IsHandsOnlyBodyState(itemMemory) &&
@@ -5460,7 +5460,7 @@ int main() {
         const auto savedConfig=config;
         const auto oldJoint=dll.getJointAbsPositionLerp;
         for(int which:{0,1}) for(bool stable:{false,true}) for(bool calibrated:{false,true})
-        for(float heading:{0.f,.7f,-1.9f}) {
+        for(float heading:{0.f,.7f,-1.9f}) for(int jumpState:{25,26,27}) {
             game=dll.game=which;resetRoomscale();ResetMovementStabilization();
             config.firstPersonMovementStabilization=stable;
             config.firstPersonBodyFollowsHead=config.firstPersonRoomscaleMove=false;
@@ -5470,7 +5470,7 @@ int main() {
             animation=0;fraction=256;Anchor(camera);
             if(!calibrated) g_groundEye.Reset();
             const auto reference=g_groundEye;
-            state=25;animation=75;g_headingBase=heading;
+            state=int16_t(jumpState);animation=jumpState==25 ? 75 : jumpState==26 ? 81 : 79;g_headingBase=heading;
             physicalPose(0,.02f,-.03f,.04f);
             const auto tracking=VR().m_rawHeadPose;
             const float neutral=VR().m_firstPersonNeutral[1];

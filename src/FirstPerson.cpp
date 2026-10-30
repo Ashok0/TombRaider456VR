@@ -90,6 +90,7 @@ constexpr uint32_t kArmMeshBits = 0x3f00; // upper arm, forearm, hand on both si
 constexpr int kLaraHeadGeoms = 4;
 constexpr int32_t kCamFixed = 1;
 constexpr int32_t kCamCinematic = 4;
+constexpr int32_t kCamHeavy = 5;
 
 using Fn_GenerateW2V = void (__cdecl*)(PHD_3DPOS*);
 using Fn_DrawCreatureHD = void (__cdecl*)(uint8_t*, int32_t, int32_t);
@@ -771,12 +772,12 @@ bool IsCrouchState(const uint8_t* item) {
 
 bool IsHandsOnlyBodyState(const uint8_t* item) {
     if(!item) return false;
-    // TR4/5 lara_control_routines[25]: backjump. Side jumps stay visible.
+    // Back/side jump poses swing the torso through the stable first-person eye.
     // Use the current animation state, not stick input or the requested goal,
     // so the body returns as soon as the directional jump ends. Camera and
     // locomotion still distinguish these jumps from actual crouching.
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
-    return IsCrouchState(item) || state==25;
+    return IsCrouchState(item) || (state>=25 && state<=27);
 }
 
 bool IsNativeAirborneBodyState(const uint8_t* item) {
@@ -789,7 +790,7 @@ bool ShowJumpHair(const uint8_t* item) {
     if(!g_active || !item || !g_boundDll || !g_boundBase ||
        item!=*Ptr<uint8_t*>(g_boundDll->laraItem)) return false;
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
-    return state==3 || state==15 || state==26 || state==27;
+    return state==3 || state==15;
 }
 
 bool CanUseCrouchCamera(const uint8_t* item) {
@@ -3126,18 +3127,31 @@ bool OrdinaryGroundAnimation(const uint8_t* item) {
         (state==21 && (animation==67 || animation==68));
 }
 
+bool GroundJumpControlsAvailable() {
+    const auto& d=*g_boundDll;
+    // Fixed/heavy cameras, controllable spot cameras and the TR5 X-ray view
+    // can change the view while Lara is still running. They must not cancel
+    // a held ledge jump. Keep camera presentation's stricter Gate separate
+    // from native control ownership and actual cutscene playback.
+    if ((d.disableLaraControl && *Ptr<int32_t>(d.disableLaraControl)) ||
+        (d.playingCutseq && *Ptr<int32_t>(d.playingCutseq)) ||
+        (d.cutseqNum && d.cutseqTrigger && *Ptr<int32_t>(d.cutseqNum) && *Ptr<int32_t>(d.cutseqTrigger)) ||
+        (d.vonCroyCutscene && *Ptr<uint8_t>(d.vonCroyCutscene))) return false;
+    const int camera=*Ptr<int32_t>(d.camera+off::camera_type);
+    return camera!=kCamCinematic && camera>=0 && camera<=kCamHeavy;
+}
+
 bool GroundJumpReady(const uint8_t* item) {
     // Shared VR input behavior: no first-person runtime/head-heading gate.
     if (!item || !g_boundDll || !g_boundBase || !Cfg().enabled || !Cfg().gamepadEnabled ||
         !VR().active() || !VR().poseValid() || g_shifted || InInventory() || InTitle() || InFMV() ||
-        ScriptedCameraActive() || (g_boundDll->game!=0 && g_boundDll->game!=1) ||
+        (g_boundDll->game!=0 && g_boundDll->game!=1) ||
         item!=*Ptr<uint8_t*>(g_boundDll->laraItem) || !CanTurnBody(item) ||
         (*reinterpret_cast<const uint32_t*>(item+0x1820)&8u) ||
-        *reinterpret_cast<const int16_t*>(item+22)!=0 || !OrdinaryGroundAnimation(item)) return false;
+        *reinterpret_cast<const int16_t*>(item+22)!=0 || !OrdinaryGroundAnimation(item) ||
+        !GroundJumpControlsAvailable()) return false;
     // Sprint's jump is its native dive. Leave that control and its momentum intact.
     if (*reinterpret_cast<const int16_t*>(item+off::item_anim_state)==73) return false;
-    const int camera=*Ptr<int32_t>(g_boundDll->camera+off::camera_type);
-    if (camera==kCamFixed || camera>=kCamCinematic) return false;
     const int goal=*reinterpret_cast<const int16_t*>(item+off::item_goal_state);
     switch(goal) {
     case 0: case 1: case 2: case 3: case 5: case 6: case 7: case 15:
@@ -3393,21 +3407,27 @@ struct IdleTrackedGunHeadingScope {
 
 // Unarmed lara_as_compress calls ModernControlsRotation before selecting the
 // directional jump. Our FP input already supplies body-relative Left/Right/Back;
-// rotating toward that same stick applies its direction twice. Guns-out uses
-// a separate dispatcher which does not rotate, hence the armed/unarmed split.
+// rotating toward that same stick applies its direction twice. Armed STOP
+// instead calls ModernControlsGunRotation BEFORE compression: it injects a
+// Left/Right bit which wins over Back in the jump dispatcher. Suppress that
+// analog steering during a directional jump request, retaining digital input.
 struct DirectionalJumpAxesScope {
     int16_t* axes=nullptr;
     int16_t saved[2]{};
     explicit DirectionalJumpAxesScope(uint8_t* item) {
         if(!item || item!=g_headingItem || !g_active || !g_haveHeading || !Gate() ||
            !Cfg().gamepadEnabled || !NewControls() || !g_haveManualInput || g_shifted ||
-           LaraWaterStatus()!=0 || *reinterpret_cast<const int16_t*>(item+off::item_hit_points)<=0 ||
-           *reinterpret_cast<const int16_t*>(item+off::item_anim_state)!=15) return;
+           LaraWaterStatus()!=0 || *reinterpret_cast<const int16_t*>(item+off::item_hit_points)<=0) return;
         const auto direction=locomotion::MovementAction(g_manualLocal,true)&locomotion::Directions;
         if(direction!=locomotion::Left && direction!=locomotion::Right && direction!=locomotion::Back) return;
         const int status=*Ptr<int16_t>(g_boundDll->lara+2),weapon=CurrentMotionWeapon();
-        // Preserve the native guns-out branch, including its flare/torch exceptions.
-        if(weapon!=8 && (status==4 || (status==2 && weapon!=7))) return;
+        const bool armed=weapon!=8 && (status==4 || (status==2 && weapon!=7));
+        const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+        if(state==15) {
+            // Guns-out compression itself does not rotate or add turn bits.
+            if(armed) return;
+        } else if(!armed || !CanTurnBody(item) ||
+                  !(*Ptr<uint64_t>(g_boundDll->input)&0x10u)) return;
         axes=Ptr<int16_t>(g_boundDll->analogInput);
         saved[0]=axes[0];saved[1]=axes[1];axes[0]=axes[1]=0;
         // Keep digital direction/Jump and native floor checks. Restore analog
@@ -3701,7 +3721,10 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
     }
     if (!g_haveHeading || !sameBody || relocated) {
         ResetBodyFollower();
-        g_groundJump.Reset();
+        // A native camera interruption invalidates the view heading, not a
+        // held jump. Control-loss paths already cancel it; only a new body,
+        // level or relocation needs to discard the input identity here.
+        if(!sameBody || relocated) g_groundJump.Reset();
         g_ledgePull.Reset(); g_ledgeGrab.Reset();
         g_mountBodyTransition.Reset();
         g_renderTurn.Reset(); g_turnTrace={}; g_rootMotion.Reset();
@@ -4038,10 +4061,10 @@ bool Anchor(PHD_3DPOS& pose) {
         const auto flat=locomotion::Rotate({local.x,local.z},g_headingBase);
         pose.x_pos=int32_t(std::lround(body[0]+flat.x));
         pose.z_pos=int32_t(std::lround(body[2]+flat.z));
-    } else if (Cfg().firstPersonMovementStabilization && state==25 &&
+    } else if (Cfg().firstPersonMovementStabilization && state>=25 && state<=27 &&
                LaraWaterStatus()==0 && g_groundEye.valid) {
-        // Backjump's animated neck rises again just after the physics apex,
-        // producing an apparent second jump in first person. Follow the
+        // Directional jump neck animation sways sideways or rises again after
+        // the physics apex. Keep that authored motion out of the view. Follow the
         // interpolated collision root with the existing standing eye offset.
         // No temporal filter: native ascent/descent and HMD tracking stay live.
         // Entering FP midair without calibration retains the native eye.
@@ -4927,9 +4950,19 @@ bool FirstPersonHKScopeAiming() {
 void FirstPersonControlModeUpdate() {
     // Only frame/input boundaries. The crouch draw temporarily clears this
     // bit to bypass native proximity hiding; getters must not reassert it.
-    UpdateControlMode(g_active && g_runtimeEnabled && g_boundDll && g_boundBase &&
+    const bool enabled=g_runtimeEnabled && g_boundDll && g_boundBase &&
         CurrentGame()==g_boundDll->game && (CurrentGame()==0 || CurrentGame()==1) &&
-        Cfg().enabled && Cfg().firstPerson && VR().active());
+        Cfg().enabled && Cfg().firstPerson && VR().active();
+    // A playable camera override still belongs to the current FP session.
+    // Restoring a saved Tank Controls preference here disables the ledge
+    // assist mid-hold. Keep Modern Controls until FP resumes or really exits.
+    bool playableOverride=false;
+    if(enabled && g_controlModeOwned && VR().poseValid() && LaraWaterStatus()==0 &&
+       !InInventory() && !InTitle() && !InFMV() && GroundJumpControlsAvailable()) {
+        const int camera=*Ptr<int32_t>(g_boundDll->camera+off::camera_type);
+        playableOverride=camera==kCamFixed || camera==kCamHeavy || ScriptedCameraActive();
+    }
+    UpdateControlMode(enabled && (g_active || playableOverride));
 }
 
 void FirstPersonUpdate() {

@@ -5,6 +5,7 @@ uint8_t* jumpAnimationTable=jumpAnimations;
 int jumpTicks=0,jumpClipSeen=-1;
 uint64_t jumpBitsSeen=0;
 bool jumpClearance=true;
+int jumpControlsDisabled=0;
 int16_t compressionAxes[2]{};
 void __cdecl NativeCompressionConsumer(uint8_t* item,void*) {
     using namespace tr;
@@ -19,8 +20,8 @@ void __cdecl NativeCompressionConsumer(uint8_t* item,void*) {
         body.y_rot=Angle(Radians(body.y_rot)+.5f);
     if(!jumpClearance) return;
     const auto direction=actionInput&locomotion::Directions;
-    const int target=direction==locomotion::Left ? 27 : direction==locomotion::Right ? 26 :
-        direction==locomotion::Back ? 25 : 3;
+    const int target=(direction&locomotion::Forward) ? 3 : (direction&locomotion::Left) ? 27 :
+        (direction&locomotion::Right) ? 26 : (direction&locomotion::Back) ? 25 : 3;
     *reinterpret_cast<int16_t*>(item+off::item_goal_state)=int16_t(target);
     *reinterpret_cast<int16_t*>(laraMemory+off::lara_move_angle)=
         Angle(Radians(body.y_rot)+(target==27 ? -kPi/2 : target==26 ? kPi/2 : target==25 ? kPi : 0));
@@ -90,6 +91,7 @@ void TestGroundJumpPriority() {
         *reinterpret_cast<int16_t*>(jumpAnimations+11*48+28)=184;
         *reinterpret_cast<int16_t*>(jumpAnimations+11*48+30)=185;
         dll.anims=rva(&jumpAnimationTable);jumpAnimationTable=jumpAnimations;
+        dll.disableLaraControl=rva(&jumpControlsDisabled);jumpControlsDisabled=0;
         config.enabled=config.firstPerson=config.gamepadEnabled=true;
         config.firstPersonRoomscaleMove=false;
         game=dll.game=which;water=cutseq=cutseqNumber=cutseqTransition=spotCamera=0;vonCroyScene=0;
@@ -206,7 +208,7 @@ void TestGroundJumpPriority() {
         if(reason==8) *reinterpret_cast<uint32_t*>(laraMemory+off::lara_movement_flags)=0x20;
         if(reason==9) config.enabled=false;
         if(reason==10) g_shifted=true;
-        if(reason==11) *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=kCamFixed;
+        if(reason==11) *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=kCamCinematic;
         if(reason==12) actionInput=0x100;
         if(reason==13) actionInput=0x1000;
         if(reason==14) dll.anims=0;
@@ -220,7 +222,7 @@ void TestGroundJumpPriority() {
         if(reason==22) config.gamepadEnabled=false;
         if(reason==23) cutseq=1;
         if(reason==24) VR().m_poseValid=false;
-        if(reason==25) {if(which==0) *reinterpret_cast<int16_t*>(laraMemory+off::lara_vehicle)=4;else laraMemory[off::lara_skelebob]=1;}
+        if(reason==25) {if(which==0) *reinterpret_cast<int16_t*>(laraMemory+off::lara_vehicle)=4;else jumpControlsDisabled=1;}
         if(reason==26) {state=goal=10;clip=96;}
         actionInput|=0x10;
         const auto before=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
@@ -265,6 +267,96 @@ void TestGroundJumpPriority() {
         FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10;
         Detour_LaraAboveWater(itemMemory,nullptr);
         Check(!(jumpBitsSeen&0x10) && state==1,"held button cannot rearm after landing");
+    }
+    // Exercise the real render/input/simulation hooks with a camera takeover
+    // before the press, during an expired held request, and on camera return.
+    for(int which:{0,1}) for(int cameraMode:{1,5,6,7}) for(bool startInside:{false,true})
+    for(bool returnBeforeLedge:{false,true}) {
+        if(cameraMode==7 && which==0) continue; // TR5 X-ray only.
+        edgeReset(which,false);edgeDistance=2048;
+        for(int tick=0;tick<70 && edgeLaunch<0;++tick) {
+            const bool takeover=(startInside || tick>=3) && (!returnBeforeLedge || tick<22);
+            auto& cameraType=*reinterpret_cast<int32_t*>(cameraMemory+off::camera_type);
+            cameraType=takeover && cameraMode<=5 ? cameraMode : 0;
+            spotCamera=takeover && cameraMode==6;
+            laraMemory[off::lara_skelebob]=takeover && cameraMode==7;
+            // Render both before and after polling, including extra eye views.
+            const PHD_3DPOS originalCamera{500,600,700,10,20,30,0};
+            for(int draw=0;draw<4;++draw) {
+                PHD_3DPOS camera=originalCamera;UpdateSceneCamera(camera);
+                Check(!std::memcmp(&camera,&originalCamera,sizeof(camera)) && !g_active,
+                      "auto-jump preserves the game's third-person scripted camera");
+            }
+            float x=0,y=1,r=0;FirstPersonInput(x,y,r,false,true);
+            actionInput=locomotion::Forward|0x10|(uint64_t(1)<<40);
+            PHD_3DPOS camera=originalCamera;UpdateSceneCamera(camera);
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            if(state==1) Check(g_groundJump.edgeWaiting && !g_groundJump.edgeBlocked,
+                              "fixed, heavy, playable spot and X-ray camera changes retain the held ledge-jump request");
+            if(tick==0) g_groundJump.until=TurnTime()-1;
+        }
+        Check(edgeLaunch>=0 && edgeDistance-edgeLaunch>0 && edgeDistance-edgeLaunch<=49,
+              "third-person camera changes retain native run-up and launch on the last supported run tick");
+        Check(g_groundJump.edgeBlocked && !g_groundJump.edgeWaiting,
+              "camera-independent auto-jump still consumes a hold only once");
+    }
+    // FP reacquires its heading after a native camera interruption. This
+    // render-side reset must not discard an already-held running jump.
+    for(int which:{0,1}) for(int interruption:{1,5,6}) for(bool modern:{false,true}) {
+        UpdateControlMode(false);edgeReset(which,true);edgeDistance=2048;
+        *reinterpret_cast<int32_t*>(appMemory+drva::app_off::cfgFlags)=modern?2:0;
+        FirstPersonControlModeUpdate();
+        g_headingLevel=AppState(drva::app_off::level);g_previousBody={};
+        float x=0,y=1,r=0;FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        g_groundJump.until=TurnTime()-1;
+        *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=interruption==6?0:interruption;
+        spotCamera=interruption==6;
+        PHD_3DPOS camera{};UpdateSceneCamera(camera);
+        Check(!g_haveHeading && g_groundJump.edgeWaiting,"playable native camera suspension retains the FP ledge-jump hold");
+        for(int tick=0;tick<5;++tick) {
+            x=0;y=1;r=0;FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(NewControls() && g_groundJump.edgeWaiting,
+                  "first-person camera interruption retains Modern Controls and auto-jump even with a Tank Controls preference");
+        }
+        *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=0;spotCamera=0;
+        UpdateLocomotion(camera);g_active=true;
+        Check(g_haveHeading && g_groundJump.edgeWaiting && g_groundJump.held,
+              "reacquiring first-person heading preserves the original held jump after its tap timeout");
+        for(int tick=0;tick<70 && edgeLaunch<0;++tick) {
+            x=0;y=1;r=0;FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+        }
+        Check(edgeLaunch>=0 && edgeDistance-edgeLaunch>0 && edgeDistance-edgeLaunch<=49,
+              "the same FP hold still launches at the ledge after native camera suspension and heading reacquisition");
+        UpdateControlMode(false);
+    }
+    for(int which:{0,1}) for(int blocker=0;blocker<6;++blocker) {
+        if(blocker==5 && which==1) continue;
+        edgeReset(which,false);
+        const auto oldVon=dll.vonCroyCutscene;
+        if(which==0) dll.vonCroyCutscene=rva(&vonCroyScene);
+        float x=0,y=1,r=0;FirstPersonInput(x,y,r,false,true);actionInput=locomotion::Forward|0x10;
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(g_groundJump.edgeWaiting,"control-loss fixture starts with a live held ledge jump");
+        if(blocker==0) jumpControlsDisabled=1;
+        if(blocker==1) {spotCamera=1;jumpControlsDisabled=1;}
+        if(blocker==2) cutseq=1;
+        if(blocker==3) {cutseqNumber=12;cutseqTransition=1;}
+        if(blocker==4) *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=kCamCinematic;
+        if(blocker==5) vonCroyScene=1;
+        PHD_3DPOS camera{};UpdateSceneCamera(camera);
+        FirstPersonInput(x,y,r,false,true);actionInput=0; // Native control lock clears input.
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(!g_groundJump.pending && !g_groundJump.edgeWaiting && g_groundJump.held && !(jumpBitsSeen&0x10),
+              "actual control loss and noninteractive cutscenes cancel the assist without injecting Jump");
+        jumpControlsDisabled=spotCamera=cutseq=cutseqNumber=cutseqTransition=0;vonCroyScene=0;
+        *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=0;
+        FirstPersonInput(x,y,r,false,true);
+        Check(!g_groundJump.pending && !g_groundJump.edgeWaiting,
+              "returning from a control lock cannot invent a new Jump press");
+        dll.vonCroyCutscene=oldVon;
     }
     for(int which:{0,1}) for(int terrain:{0,256,384,-512,-32512,1024}) {
         edgeReset(which,true);edgeDistance=200;edgeDrop=terrain;edgeMissing=terrain==1024;
@@ -313,7 +405,9 @@ void TestGroundJumpPriority() {
     reset(1,false,0,1);float x=0,y=1,r=0;FirstPersonInput(x,y,r,false,true);
     *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=kCamFixed;
     UpdateGroundJumpCameraContext(itemMemory);
-    Check(!g_groundJump.pending && g_groundJump.held,"camera takeover cancels tap without inventing a new press edge");
+    Check(g_groundJump.pending && g_groundJump.held,"playable camera takeover preserves the buffered tap");
+    jumpControlsDisabled=1;UpdateGroundJumpCameraContext(itemMemory);
+    Check(!g_groundJump.pending && g_groundJump.held,"native control lock cancels tap without inventing a new press edge");
     TestInstantJump(reset);
 }
 } // namespace

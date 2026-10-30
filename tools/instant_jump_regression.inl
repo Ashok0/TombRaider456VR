@@ -53,6 +53,17 @@ void __cdecl InstantAboveWater(uint8_t* item,void* collision) {
     ++jumpTicks;
     auto& state=*reinterpret_cast<int16_t*>(item+off::item_anim_state);
     auto& goal=*reinterpret_cast<int16_t*>(item+off::item_goal_state);
+    // Native STOP calls ModernControlsGunRotation before accepting Jump.
+    // It adds a turn bit towards the stick even when body and camera agree.
+    const int status=*reinterpret_cast<int16_t*>(laraMemory+2);
+    const int weapon=*reinterpret_cast<int16_t*>(laraMemory+4);
+    if(state==2 && NewControls() && weapon!=8 && (status==4 || (status==2 && weapon!=7)) &&
+       (analogMemory[0] || analogMemory[1])) {
+        const auto& body=*reinterpret_cast<PHD_3DPOS*>(item+off::item_pos);
+        const float delta=Wrap(std::atan2(float(analogMemory[0]),float(analogMemory[1]))+
+            Radians(analogMemory[2])-Radians(body.y_rot));
+        if(std::fabs(delta)>.02f) actionInput|=delta>0 ? locomotion::Right : locomotion::Left;
+    }
     if(state==15) InstantCompression(item,collision);
     else if((state==1 || state==2) && (actionInput&0x10) && jumpClearance) goal=state==1 ? 3 : 15;
     Detour_AnimateLara(item);
@@ -104,11 +115,14 @@ void TestInstantJump(const Reset& reset) {
         g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(&InstantAboveWater);
     };
     for(int which:{0,1}) for(bool first:{false,true}) for(bool armed:{false,true})
-    for(int direction:{0,1,2,4,8}) for(bool tap:{false,true}) {
+    for(int direction:{0,1,2,4,8}) for(bool tap:{false,true}) for(float heading:{0.f,.7f,-2.9f}) {
         setup(which,first,false);
         *reinterpret_cast<int16_t*>(laraMemory+2)=armed?4:0;
         *reinterpret_cast<int16_t*>(laraMemory+4)=1;
         float x=direction==4?-1.f:direction==8?1.f:0.f,y=direction==1?1.f:direction==2?-1.f:0.f,r=0;
+        Head(heading);pos.y_rot=Angle(heading);
+        analogMemory[0]=int16_t(x*20000);analogMemory[1]=int16_t(y*20000);
+        analogMemory[2]=analogMemory[3]=Angle(heading);
         FirstPersonInput(x,y,r,false,true);if(tap) FirstPersonInput(x,y,r,false,false);
         actionInput=(uint64_t(1)<<40)|direction|(tap?0:0x10);
         Detour_LaraAboveWater(itemMemory,nullptr);
@@ -116,6 +130,14 @@ void TestInstantJump(const Reset& reset) {
             Check((flags&8) && pos.y_pos<0 && clip==(direction==0?28:direction==1?77:direction==2?75:direction==4?79:81),
                   "first-person standing/forward/side/back jumps reach native airborne clip on the input tick");
             Check(instantCommands==1 && instantCompression==1,"instant jump runs native direction selection and takeoff once");
+            if(direction==2 || direction==4 || direction==8) {
+                const float expected=heading+(direction==2 ? kPi : direction==4 ? -kPi/2 : direction==8 ? kPi/2 : 0);
+                Check(std::fabs(Wrap(Radians(*reinterpret_cast<int16_t*>(laraMemory+off::lara_move_angle))-expected))<.001f &&
+                      std::fabs(pos.x_pos-std::sin(expected)*50)<2 && std::fabs(pos.z_pos-std::cos(expected)*50)<2,
+                      "armed and unarmed takeoff travel in the requested direction at every world heading");
+                Check(std::hypot(float(analogMemory[0]),float(analogMemory[1]))>19000,
+                      "directional takeoff restores analog axes for subsequent airborne steering");
+            }
         } else Check(!(flags&8) && clip==73 && frame==1485 && instantCommands==0,
                      "third person retains the complete feet-together compression animation");
         Check(instantAnimations==1 && instantCollisions==1 && jumpTicks==1,

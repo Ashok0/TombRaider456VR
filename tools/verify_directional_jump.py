@@ -91,6 +91,33 @@ for game in (4, 5):
                                 assert floor_angles==[signed(yaw+turn)]
                                 if clear: assert field('lara',offset=0xde).value==signed(yaw+turn)
                             checks+=1
-        print(f'TR{game}: {checks} native cases passed; reproduced {failures_reproduced} unarmed rotations; corrected direction, armed parity and clearance verified',flush=True)
+        # STOP calls this BEFORE compression. A backward armed stick injects
+        # Left/Right, which the native jump dispatcher prioritizes over Back.
+        gun_rotation=C.CFUNCTYPE(None,C.c_void_p)(image+symbols['ModernControlsGunRotation'])
+        armed_failures=0
+        for status in (2,4):
+            for yaw in (0,7300,-28000):
+                for corrected in (False,True):
+                    C.memset(item,0,len(item));C.memset(image+symbols['lara'],0,448)
+                    field('lara',offset=2).value=status;field('lara',offset=4).value=1
+                    C.c_int16.from_buffer(item,0x12).value=2
+                    C.c_int16.from_buffer(item,0x14).value=15
+                    C.c_int16.from_buffer(item,0x6e).value=yaw
+                    field('input',C.c_uint64).value=2|0x10|0x80
+                    field('analogInput').value=0
+                    field('analogInput',offset=2).value=0 if corrected else -32767
+                    field('analogInput',offset=4).value=yaw
+                    field('camera',C.c_int32,0x20).value=0
+                    gun_rotation(item)
+                    clear=True;floor_angles.clear();native(item,None)
+                    goal=C.c_int16.from_buffer(item,0x14).value
+                    if corrected:
+                        assert goal==25 and floor_angles==[signed(yaw+32768)], (game,status,yaw,goal,floor_angles)
+                        assert field('lara',offset=0xde).value==signed(yaw+32768)
+                    else:
+                        assert goal in (26,27), (game,status,yaw,goal)
+                        armed_failures+=1
+                    checks+=1
+        print(f'TR{game}: {checks} native cases passed; reproduced {failures_reproduced} unarmed rotations and {armed_failures} armed back-to-side misdirections; corrected direction and clearance verified',flush=True)
     finally:
         kernel.VirtualFree(image,0,0x8000)

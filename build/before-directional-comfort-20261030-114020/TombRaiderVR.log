@@ -1,0 +1,963 @@
+TombRaiderVR: starting
+config: mode=stereo tracking=rotation+position origin=seated units/m=423.0 ss=1.00 flipProjY=1 flipViewY=1 dup=1 flatHud=1
+config: culling=head frustum margin=8.0deg depth<=16 portals<=4096 far=0 widen=1 objects=1  sky=infinity
+config: first person TR4/TR5 joint=14 anchor=(0,-32,140), translation=on head=hidden move-with-head=on turn=120deg/s stabilization=on
+config: first person body-follow=1 deadzone=0.0 turn=4.0deg/60Hz head-aim=1; Y+LT=view, Y+RT=graphics (including menus)
+config: dynamic-bone measurement ON (torso joint 7, report every 900 frames) -- TR4/TR5 only
+config: dynamic-bone DEBUG DISPLACEMENT ON at 1.0x -- joint 7 is TORSO, so the whole upper body moves, not just the chest. This is a debug view, not the feature.
+engine: bound to 00007FF621CF0000 (reference base 0000000140000000, slide +140689737187328)
+engine: build identified as retail / community HD pack v1.0.2 (2025-09-10)
+hook[vid_setPass]: 00007FF621CFC770 -> 00007FF970817700 (stole 10, tramp 00007FF6306E000E)
+hook[validate_draw]: 00007FF621D01FF0 -> 00007FF9708180C0 (stole 6, tramp 00007FF6306F000E)
+hook[ogl_draw]: 00007FF621D02EF0 -> 00007FF97081AB20 (stole 5, tramp 00007FF63070000E)
+hook[ogl_drawVB]: 00007FF621D03010 -> 00007FF97081AB40 (stole 5, tramp 00007FF63071000E)
+hook[ogl_present]: 00007FF621D02920 -> 00007FF97081C730 (stole 6, tramp 00007FF63072000E)
+hook[fmvShow]: 00007FF621D01680 -> 00007FF97081C710 (stole 7, tramp 00007FF63073000E)
+hooks: all six installed
+hook[shader_init]: 00007FF621D01B50 -> 00007FF97082AED0 (stole 7, tramp 00007FF63074000E)
+hook[TR4 ogl_texUpdate]: 00007FF621D04570 -> 00007FF97082F9F0 (stole 5, tramp 00007FF63075000E)
+hook[TR4 vidLoadTexture]: 00007FF621CFB490 -> 00007FF97082FB70 (stole 5, tramp 00007FF63076000E)
+TR4 effects: native sunray/atlas upload enhancement ready (TR4 resources only)
+TombRaiderVR: hooks installed; OpenVR will be brought up on the first frame
+gl: loader ready (shader api ready)
+motion hands: rigid wrist skinning and forearm seam trim ready
+TR4 effects: TEX\EFFECT.DDS array 6 layer 1: 6 enhanced mips, load OK
+boneskin: 15 skin program(s) matched, 15 patched, 0 fell back to the original
+hook[VRPadMessages]: relocated rip disp32 at +7 (1455589 -> -244412313)
+hook[VRPadMessages]: 00007FF621CF5A90 -> 00007FF970830520 (stole 11, tramp 00007FF63077000E)
+hook[VRPadUpdate]: relocated rip disp32 at +7 (1455173 -> -244477849)
+hook[VRPadUpdate]: 00007FF621CF5C30 -> 00007FF9708305D0 (stole 11, tramp 00007FF63078000E)
+pad: TR4/5 VR controller polling survives desktop focus loss; native window messages retained
+pad: Touch controllers presented as an Xbox pad (_XInputGetState 00007FF6223849F8 -> 00007FF970831190, real 00007FF9C04B4EE0)
+pad: move=Lstick look=Rstick(yaw only; hold RT+RB for pitch) jump=A(R lower) roll=B(R upper) action=Y(L upper)/LB+RB(both grips) system=BACK(L lower) walk=LS+RB(R grip) sneak=RB+Y duck=LB(L grip) equip=LT shoot=RT sprint=L3 photo=L3+R3 dpad=R3+Lstick
+pad: FP motion guns: LT=left pistol/Uzi, RT=right/single gun; press fires, hold repeats; LT draws from unarmed, Y holsters; physical holsters use matching grip; desktop focus does not change bindings
+gamedll: bound to tomb5.dll (Tomb Raider V (retail), build 0x68C12FE9, game=1) at 00007FF91E060000
+hook[InventoryWorldBackground]: relocated rip disp32 at +7 (5933157 -> -10825529)
+hook[InventoryWorldBackground]: 00007FF91E124870 -> 00007FF970831E20 (stole 11, tramp 00007FF91F12000E)
+inventory: Tomb Raider V (retail) live world background ready
+gun calibration: Ctrl+F1..F6 position, Ctrl+Shift+F1..F6 angles; F7 save/restore
+firstperson: startup is third person; Y+LT switches views
+hook[RoomscaleGetCollisionInfo]: 00007FF91E0694A0 -> 00007FF97085C1E0 (stole 7, tramp 00007FF91F13000E)
+hook[LaraAboveWater]: 00007FF91E0AB2F0 -> 00007FF970861B90 (stole 5, tramp 00007FF91F14000E)
+hook[AnimateLara]: 00007FF91E0BF9B0 -> 00007FF97085CFA0 (stole 6, tramp 00007FF91F15000E)
+hook[AimWeapon]: 00007FF91E0BC430 -> 00007FF97085BE20 (stole 5, tramp 00007FF91F16000E)
+hook[GetJoints]: 00007FF91E115A00 -> 00007FF970857DE0 (stole 5, tramp 00007FF91F17000E)
+hook[FirstPersonDrawToShadow]: 00007FF91E11CAB0 -> 00007FF97084CA10 (stole 6, tramp 00007FF91F18000E)
+firstperson: intact shadows with unarmed controller arms; eye-view body offsets excluded
+hook[AnimatePistols]: 00007FF91E0B8710 -> 00007FF97085BC00 (stole 5, tramp 00007FF91F19000E)
+hook[FireWeapon]: 00007FF91E0BC4E0 -> 00007FF97085B6C0 (stole 5, tramp 00007FF91F1A000E)
+hook[PistolHandler]: 00007FF91E0B83F0 -> 00007FF97085BD30 (stole 5, tramp 00007FF91F1B000E)
+hook[GetTargetOnLOS]: 00007FF91E0733A0 -> 00007FF97085BBD0 (stole 6, tramp 00007FF91F1C000E)
+hook[SetGunFlash]: 00007FF91E0EDAA0 -> 00007FF970859630 (stole 7, tramp 00007FF91F1D000E)
+firstperson: Touch bind-pose wrist + native muzzle/flash hooks ready
+firstperson: unarmed HD arm IK enabled, using shared gun calibration
+hook[phd_GenerateW2V]: 00007FF91E1014D0 -> 00007FF970869060 (stole 5, tramp 00007FF91F1E000E)
+hook[DrawActionIndicators]: 00007FF91E12AC70 -> 00007FF970849700 (stole 5, tramp 00007FF91F1F000E)
+firstperson: nearby Action icon HUD placement hook ready
+hook[DrawCreatureHD]: 00007FF91E116510 -> 00007FF970867530 (stole 5, tramp 00007FF91F20000E)
+hook[DrawHair]: 00007FF91E14E760 -> 00007FF970867F80 (stole 5, tramp 00007FF91F21000E)
+hook[MotionRifleHandler]: 00007FF91E0B5A70 -> 00007FF97085B680 (stole 6, tramp 00007FF91F22000E)
+hook[MotionFireShotgun]: 00007FF91E0B5E80 -> 00007FF97085A850 (stole 5, tramp 00007FF91F23000E)
+hook[MotionFireSpecial]: 00007FF91E0B64C0 -> 00007FF97085A870 (stole 8, tramp 00007FF91F24000E)
+hook[MotionFireCrossbow]: 00007FF91E0B65E0 -> 00007FF97085A890 (stole 5, tramp 00007FF91F25000E)
+hook[MotionGunJoint]: 00007FF91E0FCD30 -> 00007FF97085B3E0 (stole 5, tramp 00007FF91F26000E)
+hook[MotionInitialiseProjectile]: 00007FF91E0A6160 -> 00007FF97085B540 (stole 5, tramp 00007FF91F27000E)
+firstperson: Touch all-weapon hooks ready (single weapons use right controller)
+hook[FlarePreviousWrist]: 00007FF91E0FCE90 -> 00007FF97085AED0 (stole 5, tramp 00007FF91F28000E)
+hook[FlareTrackedHand]: 00007FF91E0BD700 -> 00007FF97085AF20 (stole 6, tramp 00007FF91F29000E)
+hook[FlareDynamicLight]: 00007FF91E130B30 -> 00007FF97085A8F0 (stole 5, tramp 00007FF91F2A000E)
+firstperson: left-controller flare hand and render-time tip light ready
+hook[CrouchTrackedHandVisibility]: 00007FF91E077490 -> 00007FF970867410 (stole 7, tramp 00007FF91F2B000E)
+hook[CrouchMotionGuns]: relocated rip disp32 at +7 (4798345 -> -14096533)
+hook[CrouchMotionGuns]: 00007FF91E0BAFF0 -> 00007FF97084A940 (stole 11, tramp 00007FF91F2C000E)
+firstperson: crouched tracked weapons enabled
+hook[VRSwitchTestPosition]: 00007FF91E06B580 -> 00007FF970860120 (stole 6, tramp 00007FF91F2D000E)
+hook[VRSwitchMovePosition]: 00007FF91E06BBE0 -> 00007FF970860160 (stole 5, tramp 00007FF91F2E000E)
+hook[VRWallSwitch]: 00007FF91E0EACA0 -> 00007FF970860480 (stole 5, tramp 00007FF91F2F000E)
+vr-switch: hand-attached wall levers enabled; pose follows grip, native completion at end stop
+firstperson: Tomb Raider V (retail) camera + head-aim + directional/room-scale locomotion ready; joint 14
+hook[PrintRoomsList]: 00007FF91E11A040 -> 00007FF970826820 (stole 5, tramp 00007FF91F30000E)
+hook[S_GetObjectBounds]: 00007FF91E10BD20 -> 00007FF970826EC0 (stole 5, tramp 00007FF91F31000E)
+cull: hooked tomb5.dll (Tomb Raider V (retail))
+hook[DrawSkyHD]: 00007FF91E119B50 -> 00007FF970827F60 (stole 5, tramp 00007FF91F32000E)
+sky: hooked tomb5.dll (Tomb Raider V (retail)) -- sky draws use rotation-only eye transform (optical infinity) and far-plane depth
+overlay: 5 optic overlay draw(s) stubbed in tomb5.dll (Tomb Raider V (retail)) -- binocular=1 scope=1 tint=1. The laser dot is a separate sprite and is untouched.
+hook[DrawLaraHD]: 00007FF91E118FB0 -> 00007FF970827F80 (stole 8, tramp 00007FF91F33000E)
+dynbones: hooked tomb5.dll (Tomb Raider V (retail)) -- measuring only, nothing is drawn differently
+vr: initialisation attempt 1 at frame 1
+vr: using C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered\openvr_api.dll
+vr: runtime installed=yes, IsHmdPresent=yes
+vr: initialised as a Scene app
+vr: eye 0 raw tangents l=-1.3764 r=0.8391 t=-1.4281 b=0.9657
+vr: eye 0 eyeToHead offset = (-0.0318, +0.0000, +0.0000) m
+vr: eye 1 raw tangents l=-0.8391 r=1.3764 t=-1.4281 b=0.9657
+vr: eye 1 eyeToHead offset = (+0.0318, +0.0000, +0.0000) m
+vr: ready, per-eye target 1728x1824
+vr: up and running
+stereo: created 3456x1824 double-wide target (fbo 2, tex 39)
+present: redirected FBO_default 0 -> 2
+stereo: mono scratch ready (2560x1440, fbo 3, tex 40)
+video: offscreen panel ready (2560x1440, fbo 4, tex 41, prog 609)
+vr: head pose ACQUIRED
+present: first stereo frame submitted
+pad: water_status=0 (above water) -- stick pitch decoupled
+pad: optics zoom left -- stick pitch decoupled
+laser: verified native world-space hit output
+hook[InventoryAmmoHotkeys]: 00007FF91E075400 -> 00007FF970830130 (stole 6, tramp 00007FF91F34000E)
+ammo: armed X routing to native ammo hotkeys ready
+firstperson: headset neutral=(-0.004,0.430,0.125)m
+cull: head-frustum portal traversal live on Tomb Raider V (retail) -- frustum 124.0 x 126.0 degrees, depth<=16, 4096 portals/frame budget
+sky: first DrawSkyHD draw (shader 1) -- rotation-only eye transform, far-plane depth
+inject: eye=0 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=-0.2425 proj[9]=-0.1932
+inject: eye=0 eyeView translation = (+13.5, +0.0, -0.0) world units
+inject: eye=0 final view translation = (56623.7, -5762.8, 16838.2)
+inject: eye=0 packed view translation IN MEMORY = (52758.0, 1791.0, 27136.0) [floats 3,7,11 at 00007FF63020ECD0]
+inject: eye=0 uid[1] (uViewMatrix location) = 3, shader=1
+inject: eye=1 proj[0]=0.9027 proj[5]=-0.8355 proj[8]=0.2425 proj[9]=-0.1932
+inject: eye=1 eyeView translation = (-13.5, +0.0, -0.0) world units
+inject: eye=1 final view translation = (56623.7, -5762.8, 16838.2)
+inject: eye=1 packed view translation IN MEMORY = (52758.0, 1791.0, 27136.0) [floats 3,7,11 at 00007FF63020ECD0]
+inject: eye=1 uid[1] (uViewMatrix location) = 3, shader=1
+inject: SEPARATION between eyes = 0.00 world units (dx=0.00 dy=0.00 dz=0.00)
+inject: *** ZERO SEPARATION -- both eyes are rendering the SAME view. This is why depth is flat and why world scale changes nothing. ***
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+firstperson: headset neutral=(0.017,0.433,0.123)m
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: TR4/5 third-person startup neutral captured at gameplay camera
+dynbones: TR4/TR5 Lara draws with 15 joints (renderer ceiling is 72), so 57 slots are free for synthesised bones
+dynbones: locked to shader 20 (15 joints) -- the latch stays here so the drive stays continuous
+boneskin: measured buffer 4 -- 27349 vertices, 4185 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+boneskin: front of the torso is local +Z (30 samples, mean alignment 0.96 with Lara's facing)
+boneskin: torso shape, side view -- BACK on the left, FRONT on the right, top row is the neck end. x -68..68  y -249..-82  depth -81..75
+boneskin:   |        ....            |
+boneskin:   |        .......         |
+boneskin:   |      . :-=--..         |
+boneskin:   |.::...=-=:...=+:        |
+boneskin:   |:.......:......=-.      |
+boneskin:   |=.-:-:=.:......--::.    |
+boneskin:   |%..:+:..:.....:::...::. |
+boneskin:   |@-......:.:::::. .....:.|
+boneskin:   |#.....:.:.......... ...:|
+boneskin:   |:::.....:....... .......|
+boneskin:   |  .:......... ..... ... |
+boneskin:   |         ......... ..   |
+boneskin:   |          ..... .. ..   |
+boneskin:   |           ....... ..   |
+boneskin: front profile, neck to waist: -10 8 13 13 17 25 28 39 52 63 70 73 75 75 72 67 58 55 53 53
+boneskin: chest region (measured bust) -- height -179..-114 of -249..-82, depth from 25 forward (front 75, belly line 55), within 46 of centre. Selects 200 torso vertices at full weight (y -170..-123) and 117 partly.
+boneskin: live -- Lara's body (shader 20) now deforms per vertex, and the whole-torso view has stood down
+vr: ceiling clamp active -- headroom 27 units, eye held -101 units above the camera
+firstperson: headset neutral=(0.034,0.426,0.116)m
+firstperson: head position and height recalibrated; shared controller neutral; world heading preserved
+vr: third-person positional neutral captured; tracked rotation preserved
+vr: view toggle recalibrated shared head/controller heading and position
+firstperson: switched to FIRST PERSON
+firstperson: headset neutral=(0.034,0.426,0.116)m
+firstperson: resolved body fit yaw=-30.2 base=-30.2 offset=(-0.2,0.6) pending=(0.000,-0.000)m
+firstperson: native joint 14 anchored; offset from body=(-97,-697,151)
+firstperson shadow: receiver origin native=(47464,-909,30831) FP=(46559,-697,32463); light camera isolated
+cull: first-person eye in room 0; game camera seeded room 0
+firstperson: body stance state=1 posture=0.000m idle=0 recovery=0 hands=0 planted=0 follow=0.00 gait=0.00 knee-bend=(35.6,117.5)deg
+vr-glance: t=78874859 pose=705 history=32 frames=151902..151933 max-ms gpu=18.25 app=15.58 interval=21.50 submit=2.30 dropped=0 mispresented=52 motion-smoothed=0 flags=334
+locomotion: state=1 head=-29.9 body=-30.2 manual=(+0.00,+0.00) pending=(-0.000,+0.000)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78875109 pose=720 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.14 native=0.78 draw=0.00 native-yaw=-30.18 draw-forward=(0.503,0.000,-0.864) hmd-forward=(-0.015,-0.068,0.998)
+locomotion: state=1 head=-23.3 body=-30.2 manual=(+0.00,+0.00) pending=(-0.006,+0.001)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78875406 pose=735 shader=26 max-frame-ms=63 max-rotation-deg hmd=1.07 native=0.78 draw=0.00 native-yaw=-30.18 draw-forward=(0.503,0.000,-0.864) hmd-forward=(-0.119,-0.032,0.992)
+arm-glance: t=78875406 pose=735 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=30 head-step=1.076deg controller-step=(5.915mm,2.214deg) arm-relative-step=(30.870,49.517)mm arm-turn=(10.281,12.373)deg torso-relative-step=(31.933mm,4.138deg) redraw=0.000mm
+arm-glance: t=78875406 pose=735 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=30 head-step=1.076deg controller-step=(1.754mm,0.615deg) arm-relative-step=(35.055,30.557)mm arm-turn=(9.761,8.383)deg torso-relative-step=(31.842mm,4.138deg) redraw=0.000mm
+vr-glance: t=78875421 pose=735 history=32 frames=151932..151963 max-ms gpu=11.41 app=17.44 interval=20.86 submit=4.17 dropped=0 mispresented=54 motion-smoothed=0 flags=334
+firstperson: standing body scale=0.971 (eye/floor fit; fixed until recenter or model change)
+locomotion: state=2 head=-13.3 body=-28.4 manual=(+0.00,+0.00) pending=(-0.013,+0.004)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78875656 pose=745 shader=26 max-frame-ms=110 max-rotation-deg hmd=4.41 native=2.15 draw=2.03 native-yaw=-16.64 draw-forward=(0.286,0.000,-0.958) hmd-forward=(-0.295,0.031,0.955)
+fp-turn: 1.01s polls=60 views=43 turned=11 max-step=2.029deg
+locomotion: state=2 head=7.4 body=-16.5 manual=(+0.00,+0.00) pending=(-0.021,+0.014)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78875968 pose=748 shader=26 max-frame-ms=125 max-rotation-deg hmd=4.42 native=0.82 draw=0.13 native-yaw=-16.28 draw-forward=(0.280,0.000,-0.960) hmd-forward=(-0.402,0.072,0.913)
+arm-glance: t=78875968 pose=748 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=13 head-step=4.417deg controller-step=(9.469mm,2.833deg) arm-relative-step=(26.530,36.176)mm arm-turn=(6.714,8.846)deg torso-relative-step=(20.939mm,1.849deg) redraw=0.000mm
+arm-glance: t=78875968 pose=748 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=13 head-step=4.417deg controller-step=(11.067mm,3.930deg) arm-relative-step=(30.142,25.704)mm arm-turn=(4.083,6.088)deg torso-relative-step=(19.274mm,1.849deg) redraw=0.000mm
+vr-glance: t=78875968 pose=748 history=32 frames=151945..151976 max-ms gpu=11.58 app=17.44 interval=20.86 submit=4.17 dropped=0 mispresented=47 motion-smoothed=0 flags=334
+fp-view: t=78876296 pose=751 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.49 native=0.80 draw=0.14 native-yaw=-15.92 draw-forward=(0.274,0.000,-0.962) hmd-forward=(-0.413,0.077,0.907)
+locomotion: state=2 head=9.4 body=-16.0 manual=(+0.00,+0.00) pending=(-0.023,+0.016)m drag=(+0.000,+0.000)m input=0000000000000000
+arm-glance: t=78876515 pose=752 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=4 head-step=0.904deg controller-step=(1.926mm,0.580deg) arm-relative-step=(3.629,2.219)mm arm-turn=(1.025,0.748)deg torso-relative-step=(3.759mm,0.289deg) redraw=0.000mm
+arm-glance: t=78876515 pose=752 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=4 head-step=0.904deg controller-step=(1.398mm,0.247deg) arm-relative-step=(4.339,2.540)mm arm-turn=(0.984,0.659)deg torso-relative-step=(4.536mm,0.289deg) redraw=0.000mm
+vr-glance: t=78876515 pose=752 history=32 frames=151950..151981 max-ms gpu=11.89 app=15.72 interval=20.86 submit=4.17 dropped=0 mispresented=103 motion-smoothed=0 flags=334
+fp-view: t=78876687 pose=753 shader=26 max-frame-ms=219 max-rotation-deg hmd=4.93 native=0.80 draw=0.29 native-yaw=-15.42 draw-forward=(0.266,0.000,-0.964) hmd-forward=(-0.353,0.053,0.934)
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+fp-turn: 1.02s polls=60 views=7 turned=7 max-step=0.289deg
+locomotion: state=2 head=6.3 body=-15.4 manual=(+0.00,+0.00) pending=(-0.020,+0.014)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78877078 pose=755 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.42 native=0.71 draw=0.24 native-yaw=-14.96 draw-forward=(0.258,0.000,-0.966) hmd-forward=(-0.366,0.058,0.929)
+arm-glance: t=78877078 pose=755 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=4.929deg controller-step=(10.531mm,3.161deg) arm-relative-step=(7.170,5.941)mm arm-turn=(1.747,1.706)deg torso-relative-step=(6.963mm,0.240deg) redraw=0.000mm
+arm-glance: t=78877078 pose=755 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=4.929deg controller-step=(7.622mm,1.346deg) arm-relative-step=(3.811,3.094)mm arm-turn=(0.928,0.765)deg torso-relative-step=(3.826mm,0.240deg) redraw=0.000mm
+vr-glance: t=78877078 pose=755 history=32 frames=151953..151984 max-ms gpu=11.92 app=15.60 interval=16.25 submit=1.27 dropped=0 mispresented=168 motion-smoothed=0 flags=334
+fp-view: t=78877406 pose=759 shader=26 max-frame-ms=110 max-rotation-deg hmd=4.28 native=5.98 draw=5.94 native-yaw=-7.40 draw-forward=(0.129,0.000,-0.992) hmd-forward=(-0.322,0.034,0.946)
+locomotion: state=1 head=15.3 body=16.2 manual=(+0.00,+0.00) pending=(-0.021,+0.020)m drag=(+0.000,+0.000)m input=0000000000000000
+arm-glance: t=78877578 pose=770 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=15 head-step=4.276deg controller-step=(20.059mm,7.932deg) arm-relative-step=(128.912,109.045)mm arm-turn=(23.828,29.928)deg torso-relative-step=(123.223mm,23.800deg) redraw=0.000mm
+arm-glance: t=78877578 pose=770 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=15 head-step=4.276deg controller-step=(21.003mm,4.715deg) arm-relative-step=(161.032,125.620)mm arm-turn=(30.429,33.361)deg torso-relative-step=(143.452mm,23.800deg) redraw=0.000mm
+vr-glance: t=78877578 pose=770 history=32 frames=151968..151999 max-ms gpu=11.92 app=15.77 interval=16.25 submit=1.27 dropped=0 mispresented=224 motion-smoothed=0 flags=334
+fp-view: t=78877656 pose=775 shader=26 max-frame-ms=31 max-rotation-deg hmd=1.98 native=2.07 draw=1.96 native-yaw=-3.43 draw-forward=(0.060,0.000,-0.998) hmd-forward=(-0.364,-0.003,0.931)
+fp-turn: 1.01s polls=60 views=35 turned=8 max-step=5.943deg
+fp-view: t=78877906 pose=790 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.11 native=0.70 draw=0.00 native-yaw=-3.43 draw-forward=(0.060,0.000,-0.998) hmd-forward=(-0.357,-0.005,0.934)
+locomotion: state=1 head=17.3 body=17.3 manual=(+0.30,+0.96) pending=(-0.022,+0.020)m drag=(+0.000,+0.000)m input=0000000010000001
+arm-glance: t=78878078 pose=800 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=30 head-step=0.112deg controller-step=(0.276mm,0.149deg) arm-relative-step=(19.494,19.557)mm arm-turn=(7.091,4.824)deg torso-relative-step=(8.065mm,3.146deg) redraw=0.000mm
+arm-glance: t=78878078 pose=800 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=30 head-step=0.112deg controller-step=(1.113mm,0.508deg) arm-relative-step=(22.593,15.330)mm arm-turn=(7.232,3.995)deg torso-relative-step=(8.130mm,3.146deg) redraw=0.000mm
+vr-glance: t=78878078 pose=800 history=32 frames=151998..152029 max-ms gpu=3.84 app=15.88 interval=16.47 submit=1.39 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78878156 pose=805 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.09 native=0.70 draw=0.00 native-yaw=-3.43 draw-forward=(0.060,0.000,-0.998) hmd-forward=(-0.354,-0.010,0.935)
+fp-view: t=78878406 pose=820 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.09 native=1.76 draw=1.59 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.359,-0.014,0.933)
+locomotion: state=1 head=6.0 body=5.9 manual=(+0.00,+0.00) pending=(-0.020,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+arm-glance: t=78878578 pose=830 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=30 head-step=0.089deg controller-step=(4.119mm,1.519deg) arm-relative-step=(27.384,33.193)mm arm-turn=(6.283,8.684)deg torso-relative-step=(24.903mm,4.184deg) redraw=0.000mm
+arm-glance: t=78878578 pose=830 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=30 head-step=0.089deg controller-step=(1.499mm,0.990deg) arm-relative-step=(25.619,43.940)mm arm-turn=(10.022,11.310)deg torso-relative-step=(24.987mm,4.184deg) redraw=0.000mm
+vr-glance: t=78878578 pose=830 history=32 frames=152028..152059 max-ms gpu=3.92 app=16.62 interval=17.12 submit=1.20 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78878656 pose=835 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.07 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.363,-0.010,0.932)
+locomotion: state=16 head=6.4 body=6.4 manual=(+0.21,-0.79) pending=(-0.019,+0.014)m drag=(+0.000,+0.000)m input=00000000A0000082
+fp-turn: 1.00s polls=60 views=60 turned=12 max-step=1.596deg
+fp-view: t=78878906 pose=850 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.07 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.366,-0.007,0.930)
+arm-glance: t=78879078 pose=860 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=30 head-step=0.069deg controller-step=(0.871mm,0.595deg) arm-relative-step=(49.320,43.932)mm arm-turn=(6.577,11.333)deg torso-relative-step=(52.588mm,4.789deg) redraw=0.000mm
+arm-glance: t=78879078 pose=860 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=30 head-step=0.069deg controller-step=(0.922mm,0.551deg) arm-relative-step=(51.053,50.001)mm arm-turn=(8.207,12.947)deg torso-relative-step=(53.362mm,4.789deg) redraw=0.000mm
+vr-glance: t=78879078 pose=860 history=32 frames=152058..152089 max-ms gpu=4.89 app=15.98 interval=16.31 submit=1.45 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78879156 pose=865 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.05 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.366,-0.006,0.931)
+locomotion: state=25 head=6.4 body=6.4 manual=(+0.19,-0.98) pending=(-0.020,+0.013)m drag=(+0.000,+0.000)m input=00000000A010001A
+fp-view: t=78879406 pose=880 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.07 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.365,-0.003,0.931)
+vr-glance: t=78879578 pose=890 history=32 frames=152088..152119 max-ms gpu=4.00 app=15.88 interval=16.27 submit=1.22 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78879656 pose=895 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.09 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.365,0.002,0.931)
+locomotion: state=25 head=6.3 body=6.4 manual=(+0.19,-0.98) pending=(-0.019,+0.014)m drag=(+0.000,+0.000)m input=00000000A000000A
+fp-view: t=78879906 pose=910 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.364,0.006,0.931)
+vr-glance: t=78880078 pose=916 history=32 frames=152114..152145 max-ms gpu=4.09 app=17.47 interval=18.05 submit=2.27 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78880156 pose=922 shader=26 max-frame-ms=62 max-rotation-deg hmd=0.20 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.370,0.020,0.929)
+locomotion: state=25 head=6.8 body=6.4 manual=(+0.19,-0.98) pending=(-0.019,+0.015)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=6.4 base=-15.1 offset=(-43.8,-6.5) pending=(-0.019,0.014)m
+firstperson: body stance state=2 posture=-0.000m idle=1 recovery=0 hands=0 planted=1 follow=0.00 gait=0.00 knee-bend=(70.5,1.1)deg
+locomotion: state=2 head=6.5 body=6.5 manual=(+0.00,+0.00) pending=(-0.019,+0.014)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78880421 pose=932 shader=26 max-frame-ms=109 max-rotation-deg hmd=1.33 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.365,0.144,0.920)
+vr-glance: t=78880640 pose=934 history=32 frames=152132..152163 max-ms gpu=22.63 app=60.80 interval=61.33 submit=21.77 dropped=0 mispresented=38 motion-smoothed=0 flags=334
+fp-view: t=78880750 pose=935 shader=26 max-frame-ms=125 max-rotation-deg hmd=4.22 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.352,0.259,0.899)
+arm-glance: t=78880859 pose=936 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=4.223deg controller-step=(25.426mm,9.189deg) arm-relative-step=(39.460,115.179)mm arm-turn=(31.179,31.160)deg torso-relative-step=(38.658mm,0.538deg) redraw=0.000mm
+arm-glance: t=78880859 pose=936 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=4.223deg controller-step=(10.806mm,3.763deg) arm-relative-step=(21.289,86.317)mm arm-turn=(23.991,24.484)deg torso-relative-step=(20.412mm,0.538deg) redraw=0.000mm
+locomotion: state=2 head=6.3 body=6.5 manual=(+0.00,+0.00) pending=(-0.021,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78881078 pose=938 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.40 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.351,0.272,0.896)
+vr-glance: t=78881281 pose=939 history=32 frames=152138..152169 max-ms gpu=22.63 app=60.80 interval=61.33 submit=21.77 dropped=0 mispresented=106 motion-smoothed=0 flags=334
+fp-view: t=78881375 pose=940 shader=26 max-frame-ms=203 max-rotation-deg hmd=4.78 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.358,0.207,0.910)
+arm-glance: t=78881375 pose=940 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=4 head-step=4.777deg controller-step=(28.012mm,10.394deg) arm-relative-step=(45.011,25.486)mm arm-turn=(9.085,6.759)deg torso-relative-step=(45.011mm,0.070deg) redraw=0.000mm
+arm-glance: t=78881375 pose=940 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=4 head-step=4.777deg controller-step=(12.151mm,4.256deg) arm-relative-step=(15.187,13.523)mm arm-turn=(1.726,3.386)deg torso-relative-step=(15.187mm,0.070deg) redraw=0.000mm
+locomotion: state=2 head=6.3 body=6.5 manual=(+0.00,+0.00) pending=(-0.020,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78881765 pose=942 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.41 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.357,0.221,0.908)
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+firstperson: arm IK palettes solved=732 failed=0 unarmed-enabled=1
+vr-glance: t=78881781 pose=942 history=32 frames=152141..152172 max-ms gpu=22.63 app=60.80 interval=61.33 submit=21.77 dropped=0 mispresented=161 motion-smoothed=0 flags=334
+locomotion: state=2 head=6.3 body=6.5 manual=(+0.00,+0.00) pending=(-0.020,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78882171 pose=943 shader=26 max-frame-ms=406 max-rotation-deg hmd=0.41 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.356,0.227,0.906)
+vr-glance: t=78882281 pose=944 history=32 frames=152144..152175 max-ms gpu=22.63 app=60.80 interval=61.33 submit=21.77 dropped=0 mispresented=226 motion-smoothed=0 flags=334
+fp-view: t=78882468 pose=945 shader=26 max-frame-ms=187 max-rotation-deg hmd=0.82 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.354,0.248,0.902)
+locomotion: state=2 head=6.3 body=6.3 manual=(+0.00,+0.00) pending=(-0.021,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78882984 pose=947 shader=26 max-frame-ms=406 max-rotation-deg hmd=0.41 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.352,0.262,0.899)
+vr-glance: t=78882984 pose=947 history=32 frames=152148..152179 max-ms gpu=13.32 app=15.64 interval=203.80 submit=1.23 dropped=0 mispresented=282 motion-smoothed=0 flags=334
+fp-view: t=78883281 pose=949 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.82 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.349,0.282,0.893)
+locomotion: state=2 head=6.2 body=6.3 manual=(+0.00,+0.00) pending=(-0.021,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78883781 pose=951 shader=26 max-frame-ms=406 max-rotation-deg hmd=0.41 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.348,0.296,0.890)
+vr-glance: t=78883781 pose=951 history=32 frames=152153..152184 max-ms gpu=12.49 app=15.64 interval=205.26 submit=1.00 dropped=0 mispresented=370 motion-smoothed=0 flags=334
+fp-view: t=78884078 pose=953 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.82 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.345,0.316,0.884)
+locomotion: state=2 head=6.2 body=6.2 manual=(+0.00,+0.00) pending=(-0.022,+0.013)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78884593 pose=955 shader=26 max-frame-ms=406 max-rotation-deg hmd=0.41 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.343,0.329,0.880)
+vr-glance: t=78884593 pose=955 history=32 frames=152158..152189 max-ms gpu=12.49 app=15.64 interval=205.26 submit=1.00 dropped=0 mispresented=456 motion-smoothed=0 flags=334
+fp-view: t=78884890 pose=957 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.82 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.340,0.349,0.873)
+locomotion: state=2 head=6.1 body=6.2 manual=(+0.00,+0.00) pending=(-0.022,+0.012)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=6.2 base=-15.1 offset=(-42.4,-6.5) pending=(-0.022,0.012)m
+fp-view: t=78885390 pose=959 shader=26 max-frame-ms=406 max-rotation-deg hmd=0.41 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.338,0.363,0.869)
+firstperson: body stance state=2 posture=-0.007m idle=1 recovery=0 hands=1 planted=1 follow=0.00 gait=0.00 knee-bend=(3.8,1.1)deg
+vr-glance: t=78885390 pose=959 history=32 frames=152163..152194 max-ms gpu=18.57 app=4.16 interval=205.26 submit=1.45 dropped=0 mispresented=542 motion-smoothed=0 flags=304
+fp-view: t=78885687 pose=961 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.82 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.335,0.382,0.861)
+locomotion: state=2 head=6.1 body=6.1 manual=(+0.00,+0.00) pending=(-0.023,+0.012)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78886203 pose=963 shader=26 max-frame-ms=407 max-rotation-deg hmd=0.41 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.333,0.395,0.856)
+vr-glance: t=78886203 pose=963 history=32 frames=152168..152199 max-ms gpu=18.57 app=4.16 interval=205.26 submit=1.45 dropped=0 mispresented=582 motion-smoothed=0 flags=304
+fp-view: t=78886593 pose=965 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.82 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.329,0.415,0.848)
+locomotion: state=2 head=6.1 body=6.1 manual=(+0.00,+0.00) pending=(-0.023,+0.012)m drag=(+0.000,+0.000)m input=0000000000000000
+arm-glance: t=78886703 pose=966 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.817deg controller-step=(4.222mm,1.778deg) arm-relative-step=(8.694,2.864)mm arm-turn=(2.341,0.769)deg torso-relative-step=(8.694mm,0.000deg) redraw=0.000mm
+arm-glance: t=78886703 pose=966 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.817deg controller-step=(2.025mm,0.728deg) arm-relative-step=(2.751,1.656)mm arm-turn=(0.487,0.436)deg torso-relative-step=(2.752mm,0.000deg) redraw=0.000mm
+boneskin: measured buffer 126 -- 5008 vertices, 0 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+vr-glance: t=78886703 pose=966 history=32 frames=152171..152202 max-ms gpu=19.67 app=4.16 interval=205.26 submit=1.45 dropped=0 mispresented=603 motion-smoothed=0 flags=304
+fp-view: t=78887000 pose=967 shader=26 max-frame-ms=297 max-rotation-deg hmd=0.41 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.327,0.428,0.843)
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+locomotion: state=2 head=6.1 body=6.1 manual=(+0.00,+0.00) pending=(-0.024,+0.012)m drag=(+0.000,+0.000)m input=0000000000000000
+vr-glance: t=78887218 pose=969 history=32 frames=152175..152206 max-ms gpu=30.39 app=10.55 interval=205.26 submit=1.45 dropped=0 mispresented=583 motion-smoothed=0 flags=304
+fp-view: t=78887328 pose=970 shader=26 max-frame-ms=125 max-rotation-deg hmd=0.82 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.323,0.453,0.831)
+arm-glance: t=78887531 pose=971 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=4 head-step=0.817deg controller-step=(4.096mm,1.778deg) arm-relative-step=(8.739,4.061)mm arm-turn=(2.592,1.035)deg torso-relative-step=(8.739mm,0.000deg) redraw=0.000mm
+arm-glance: t=78887531 pose=971 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=4 head-step=0.817deg controller-step=(2.013mm,0.728deg) arm-relative-step=(2.761,1.914)mm arm-turn=(0.435,0.496)deg torso-relative-step=(2.762mm,0.000deg) redraw=0.000mm
+locomotion: state=1 head=5.7 body=5.7 manual=(-0.17,+0.98) pending=(-0.019,+0.012)m drag=(+0.000,+0.000)m input=0000000050000001
+fp-view: t=78887640 pose=972 shader=26 max-frame-ms=203 max-rotation-deg hmd=17.31 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.350,0.176,0.920)
+vr-glance: t=78887734 pose=973 history=32 frames=152179..152210 max-ms gpu=30.39 app=40.51 interval=205.26 submit=1.45 dropped=0 mispresented=561 motion-smoothed=0 flags=304
+fp-eye: state=1 anim=10 gun=1 status=0 camera=0 residual=(0.0,-0.0,-0.0) wall=(0.0,0.0) root=(46686.0,0.0,31464.0) hmd=(0.082,0.312,0.085) neutral=(0.035,0.426,0.123)
+fp-eye: state=1 anim=10 gun=1 status=0 camera=0 residual=(-0.0,0.0,0.0) wall=(0.0,0.0) root=(46686.0,0.0,31464.0) hmd=(0.070,0.404,0.116) neutral=(0.035,0.426,0.123)
+fp-view: t=78887937 pose=975 shader=26 max-frame-ms=109 max-rotation-deg hmd=31.88 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.328,0.118,0.937)
+arm-glance: t=78888031 pose=976 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=31.882deg controller-step=(252.766mm,134.125deg) arm-relative-step=(147.043,156.672)mm arm-turn=(104.609,108.729)deg torso-relative-step=(171.512mm,8.251deg) redraw=0.000mm
+arm-glance: t=78888031 pose=976 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=31.882deg controller-step=(85.261mm,16.126deg) arm-relative-step=(131.720,147.902)mm arm-turn=(29.977,38.145)deg torso-relative-step=(134.502mm,8.251deg) redraw=0.000mm
+locomotion: state=1 head=6.4 body=6.2 manual=(+0.00,+0.00) pending=(-0.013,+0.015)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78888250 pose=978 shader=26 max-frame-ms=110 max-rotation-deg hmd=4.99 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.409,0.026,0.912)
+vr-glance: t=78888250 pose=978 history=32 frames=152184..152215 max-ms gpu=30.39 app=40.51 interval=205.02 submit=1.45 dropped=0 mispresented=526 motion-smoothed=0 flags=304
+locomotion: state=2 head=8.0 body=6.2 manual=(+0.00,+0.00) pending=(-0.010,+0.031)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78888546 pose=981 shader=26 max-frame-ms=109 max-rotation-deg hmd=9.92 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.321,-0.425,0.846)
+arm-glance: t=78888546 pose=981 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=9.920deg controller-step=(33.151mm,5.740deg) arm-relative-step=(62.563,31.289)mm arm-turn=(26.977,26.663)deg torso-relative-step=(78.640mm,10.090deg) redraw=0.000mm
+arm-glance: t=78888546 pose=981 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=9.920deg controller-step=(75.206mm,13.826deg) arm-relative-step=(91.889,101.025)mm arm-turn=(10.810,26.190)deg torso-relative-step=(86.832mm,10.090deg) redraw=0.000mm
+fp-view: t=78888843 pose=984 shader=26 max-frame-ms=109 max-rotation-deg hmd=2.76 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.313,-0.417,0.853)
+vr-glance: t=78888843 pose=984 history=32 frames=152190..152221 max-ms gpu=30.39 app=40.51 interval=205.02 submit=1.45 dropped=0 mispresented=477 motion-smoothed=0 flags=304
+locomotion: state=2 head=4.9 body=6.2 manual=(+0.00,+0.00) pending=(-0.008,+0.058)m drag=(+0.000,+0.000)m input=0000000000000000
+arm-glance: t=78889046 pose=986 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=2.757deg controller-step=(11.289mm,5.009deg) arm-relative-step=(6.247,3.104)mm arm-turn=(5.514,5.557)deg torso-relative-step=(12.963mm,0.423deg) redraw=0.000mm
+arm-glance: t=78889046 pose=986 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=2.757deg controller-step=(78.997mm,16.182deg) arm-relative-step=(40.212,35.724)mm arm-turn=(6.597,8.916)deg torso-relative-step=(38.378mm,0.423deg) redraw=0.000mm
+fp-view: t=78889140 pose=987 shader=26 max-frame-ms=110 max-rotation-deg hmd=3.74 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.338,-0.303,0.891)
+vr-glance: t=78889343 pose=989 history=32 frames=152195..152226 max-ms gpu=30.39 app=40.51 interval=204.55 submit=1.05 dropped=0 mispresented=442 motion-smoothed=0 flags=304
+locomotion: state=2 head=7.2 body=6.2 manual=(+0.00,+0.00) pending=(-0.012,+0.062)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78889453 pose=990 shader=26 max-frame-ms=110 max-rotation-deg hmd=1.22 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.366,-0.265,0.892)
+arm-glance: t=78889546 pose=991 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=3.843deg controller-step=(3.512mm,2.907deg) arm-relative-step=(3.457,1.718)mm arm-turn=(3.665,3.689)deg torso-relative-step=(5.452mm,0.375deg) redraw=0.000mm
+arm-glance: t=78889546 pose=991 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=5 head-step=3.843deg controller-step=(5.616mm,3.517deg) arm-relative-step=(8.588,30.126)mm arm-turn=(7.875,7.460)deg torso-relative-step=(7.573mm,0.375deg) redraw=0.000mm
+fp-view: t=78889750 pose=992 shader=26 max-frame-ms=204 max-rotation-deg hmd=3.84 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.401,-0.167,0.901)
+locomotion: state=2 head=9.0 body=6.2 manual=(+0.00,+0.00) pending=(-0.010,+0.063)m drag=(+0.000,+0.000)m input=0000000000000000
+vr-glance: t=78889953 pose=993 history=32 frames=152200..152231 max-ms gpu=30.39 app=40.51 interval=204.55 submit=1.05 dropped=0 mispresented=407 motion-smoothed=0 flags=304
+fp-view: t=78890078 pose=994 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.28 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.405,-0.158,0.901)
+arm-glance: t=78890078 pose=994 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=2.190deg controller-step=(3.646mm,0.879deg) arm-relative-step=(3.712,1.849)mm arm-turn=(0.475,0.466)deg torso-relative-step=(5.844mm,0.000deg) redraw=0.000mm
+arm-glance: t=78890078 pose=994 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=2.190deg controller-step=(1.937mm,0.292deg) arm-relative-step=(0.976,0.989)mm arm-turn=(0.328,0.252)deg torso-relative-step=(0.976mm,0.000deg) redraw=0.000mm
+locomotion: state=2 head=9.2 body=6.2 manual=(+0.00,+0.00) pending=(-0.010,+0.064)m drag=(+0.000,+0.000)m input=0000000000000000
+firstperson: resolved body fit yaw=6.2 base=-15.1 offset=(-39.2,-7.0) pending=(-0.010,0.064)m
+fp-view: t=78890453 pose=996 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.28 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.408,-0.148,0.901)
+firstperson: body stance state=2 posture=0.010m idle=1 recovery=0 hands=0 planted=1 follow=0.00 gait=0.00 knee-bend=(0.2,2.4)deg
+vr-glance: t=78890453 pose=996 history=32 frames=152203..152234 max-ms gpu=30.39 app=40.51 interval=114.86 submit=1.05 dropped=0 mispresented=395 motion-smoothed=0 flags=304
+arm-glance: t=78890656 pose=997 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.278deg controller-step=(0.231mm,0.196deg) arm-relative-step=(0.537,0.267)mm arm-turn=(0.243,0.241)deg torso-relative-step=(0.955mm,0.000deg) redraw=0.000mm
+arm-glance: t=78890656 pose=997 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.278deg controller-step=(0.325mm,0.042deg) arm-relative-step=(0.955,1.638)mm arm-turn=(0.467,0.421)deg torso-relative-step=(0.955mm,0.000deg) redraw=0.000mm
+fp-view: t=78890843 pose=998 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.55 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.411,-0.139,0.901)
+locomotion: state=2 head=9.4 body=6.2 manual=(+0.00,+0.00) pending=(-0.010,+0.064)m drag=(+0.000,+0.000)m input=0000000000000000
+vr-glance: t=78891046 pose=999 history=32 frames=152206..152237 max-ms gpu=30.39 app=40.51 interval=114.86 submit=1.05 dropped=0 mispresented=417 motion-smoothed=0 flags=304
+fp-view: t=78891453 pose=1000 shader=26 max-frame-ms=407 max-rotation-deg hmd=0.56 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.414,-0.130,0.901)
+locomotion: state=2 head=9.7 body=6.2 manual=(+0.00,+0.00) pending=(-0.009,+0.064)m drag=(+0.000,+0.000)m input=0000000000000000
+vr-glance: t=78891656 pose=1001 history=32 frames=152209..152240 max-ms gpu=16.55 app=40.51 interval=40.72 submit=1.05 dropped=0 mispresented=451 motion-smoothed=0 flags=304
+fp-view: t=78891750 pose=1002 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.55 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.418,-0.116,0.901)
+arm-glance: t=78891953 pose=1003 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.464mm,0.392deg) arm-relative-step=(2.832,1.421)mm arm-turn=(0.639,0.633)deg torso-relative-step=(1.316mm,1.161deg) redraw=0.000mm
+arm-glance: t=78891953 pose=1003 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.649mm,0.084deg) arm-relative-step=(4.072,7.289)mm arm-turn=(1.705,1.892)deg torso-relative-step=(1.489mm,1.161deg) redraw=0.000mm
+fp-view: t=78892046 pose=1004 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.28 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.421,-0.107,0.900)
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=0 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+locomotion: state=2 head=10.0 body=9.5 manual=(+0.00,+0.00) pending=(-0.009,+0.064)m drag=(+0.000,+0.000)m input=0000000000000000
+vr-glance: t=78892250 pose=1005 history=32 frames=152213..152244 max-ms gpu=16.80 app=30.82 interval=204.05 submit=1.34 dropped=0 mispresented=472 motion-smoothed=0 flags=304
+fp-view: t=78892453 pose=1006 shader=26 max-frame-ms=204 max-rotation-deg hmd=0.56 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.424,-0.098,0.900)
+arm-glance: t=78892453 pose=1006 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.465mm,0.392deg) arm-relative-step=(0.814,0.406)mm arm-turn=(0.374,0.375)deg torso-relative-step=(1.303mm,0.054deg) redraw=0.000mm
+arm-glance: t=78892453 pose=1006 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.649mm,0.084deg) arm-relative-step=(1.265,2.252)mm arm-turn=(0.571,0.578)deg torso-relative-step=(1.454mm,0.054deg) redraw=0.000mm
+locomotion: state=2 head=10.3 body=9.5 manual=(+0.00,+0.00) pending=(-0.008,+0.065)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78893062 pose=1008 shader=26 max-frame-ms=406 max-rotation-deg hmd=0.55 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.427,-0.089,0.900)
+vr-glance: t=78893062 pose=1008 history=32 frames=152217..152248 max-ms gpu=16.80 app=30.82 interval=204.05 submit=1.34 dropped=0 mispresented=520 motion-smoothed=0 flags=304
+fp-view: t=78893359 pose=1010 shader=26 max-frame-ms=188 max-rotation-deg hmd=0.55 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.431,-0.075,0.899)
+locomotion: state=2 head=10.6 body=10.3 manual=(+0.00,+0.00) pending=(-0.008,+0.065)m drag=(+0.000,+0.000)m input=0000000000000000
+arm-glance: t=78893562 pose=1011 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.467mm,0.392deg) arm-relative-step=(0.933,0.467)mm arm-turn=(0.380,0.381)deg torso-relative-step=(1.976mm,0.000deg) redraw=0.000mm
+arm-glance: t=78893562 pose=1011 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.649mm,0.084deg) arm-relative-step=(2.065,4.255)mm arm-turn=(1.212,1.089)deg torso-relative-step=(2.065mm,0.000deg) redraw=0.000mm
+vr-glance: t=78893562 pose=1011 history=32 frames=152220..152251 max-ms gpu=16.80 app=30.82 interval=204.87 submit=1.34 dropped=0 mispresented=544 motion-smoothed=0 flags=304
+fp-view: t=78893656 pose=1012 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.28 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.434,-0.066,0.898)
+locomotion: state=2 head=10.8 body=10.3 manual=(+0.00,+0.00) pending=(-0.008,+0.065)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78894062 pose=1014 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.56 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.437,-0.056,0.898)
+arm-glance: t=78894062 pose=1014 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.469mm,0.392deg) arm-relative-step=(0.679,0.339)mm arm-turn=(0.371,0.372)deg torso-relative-step=(1.493mm,0.000deg) redraw=0.000mm
+arm-glance: t=78894062 pose=1014 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.649mm,0.084deg) arm-relative-step=(1.575,3.057)mm arm-turn=(0.864,0.783)deg torso-relative-step=(1.575mm,0.000deg) redraw=0.000mm
+vr-glance: t=78894062 pose=1014 history=32 frames=152223..152254 max-ms gpu=16.80 app=30.82 interval=204.87 submit=1.34 dropped=0 mispresented=568 motion-smoothed=0 flags=304
+locomotion: state=2 head=11.0 body=10.3 manual=(+0.00,+0.00) pending=(-0.007,+0.065)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78894656 pose=1016 shader=26 max-frame-ms=391 max-rotation-deg hmd=0.55 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.440,-0.047,0.897)
+vr-glance: t=78894656 pose=1016 history=32 frames=152226..152257 max-ms gpu=16.80 app=30.82 interval=204.87 submit=1.34 dropped=0 mispresented=603 motion-smoothed=0 flags=304
+fp-view: t=78894968 pose=1018 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.56 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.444,-0.033,0.896)
+locomotion: state=2 head=11.3 body=11.0 manual=(+0.00,+0.00) pending=(-0.007,+0.066)m drag=(+0.000,+0.000)m input=0000000000000000
+arm-glance: t=78895171 pose=1019 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.470mm,0.392deg) arm-relative-step=(0.832,0.415)mm arm-turn=(0.387,0.387)deg torso-relative-step=(1.759mm,0.000deg) redraw=0.000mm
+arm-glance: t=78895171 pose=1019 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.649mm,0.084deg) arm-relative-step=(1.839,3.863)mm arm-turn=(1.088,0.988)deg torso-relative-step=(1.839mm,0.000deg) redraw=0.000mm
+vr-glance: t=78895171 pose=1019 history=32 frames=152229..152260 max-ms gpu=16.80 app=30.82 interval=204.87 submit=1.34 dropped=0 mispresented=626 motion-smoothed=0 flags=304
+fp-view: t=78895265 pose=1020 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.28 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.446,-0.024,0.895)
+firstperson: resolved body fit yaw=11.0 base=-15.1 offset=(-51.7,-5.8) pending=(-0.007,0.066)m
+firstperson: body stance state=2 posture=0.027m idle=1 recovery=0 hands=0 planted=1 follow=0.00 gait=0.00 knee-bend=(3.9,1.1)deg
+locomotion: state=2 head=11.5 body=11.0 manual=(+0.00,+0.00) pending=(-0.007,+0.066)m drag=(+0.000,+0.000)m input=0000000000000000
+fp-view: t=78895671 pose=1022 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.56 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.449,-0.015,0.894)
+arm-glance: t=78895671 pose=1022 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.472mm,0.392deg) arm-relative-step=(0.465,0.233)mm arm-turn=(0.361,0.362)deg torso-relative-step=(1.082mm,0.000deg) redraw=0.000mm
+arm-glance: t=78895671 pose=1022 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.649mm,0.084deg) arm-relative-step=(1.159,2.343)mm arm-turn=(0.648,0.600)deg torso-relative-step=(1.159mm,0.000deg) redraw=0.000mm
+vr-glance: t=78895671 pose=1022 history=32 frames=152232..152263 max-ms gpu=19.28 app=30.82 interval=204.87 submit=1.34 dropped=0 mispresented=650 motion-smoothed=0 flags=304
+fp-view: t=78896078 pose=1023 shader=26 max-frame-ms=407 max-rotation-deg hmd=0.28 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.450,-0.010,0.893)
+locomotion: state=2 head=11.8 body=11.0 manual=(+0.00,+0.00) pending=(-0.006,+0.066)m drag=(+0.000,+0.000)m input=0000000000000000
+vr-glance: t=78896281 pose=1024 history=32 frames=152235..152266 max-ms gpu=19.28 app=5.70 interval=204.87 submit=1.34 dropped=0 mispresented=662 motion-smoothed=0 flags=304
+fp-view: t=78896468 pose=1025 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.55 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.453,0.004,0.891)
+arm-glance: t=78896578 pose=1026 hand=0 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.473mm,0.392deg) arm-relative-step=(0.737,0.368)mm arm-turn=(0.362,0.363)deg torso-relative-step=(1.606mm,0.000deg) redraw=0.000mm
+arm-glance: t=78896578 pose=1026 hand=1 pass=0 status=0 gun=1 joints=15 pivot=wrist frames=3 head-step=0.555deg controller-step=(0.649mm,0.084deg) arm-relative-step=(1.672,3.604)mm arm-turn=(1.013,0.922)deg torso-relative-step=(1.672mm,0.000deg) redraw=0.000mm
+locomotion: state=2 head=9.4 body=11.6 manual=(+0.00,+0.00) pending=(-0.010,+0.063)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78896765 pose=1027 shader=26 max-frame-ms=187 max-rotation-deg hmd=8.67 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.411,-0.135,0.902)
+firstperson: pistol forearms source=body-IK joints=15 full-body=1 reference=model-bind roll-min=(1.0000,1.0000) roll-recovery=(0,0)
+vr-glance: t=78896781 pose=1027 history=32 frames=152238..152269 max-ms gpu=19.28 app=6.33 interval=204.87 submit=1.34 dropped=0 mispresented=664 motion-smoothed=0 flags=304
+fp-eye: state=2 anim=103 gun=1 status=2 camera=0 residual=(-0.0,-0.0,0.0) wall=(0.0,0.0) root=(46686.0,0.0,31464.0) hmd=(0.065,0.387,0.116) neutral=(0.035,0.426,0.123)
+fp-view: t=78897093 pose=1030 shader=26 max-frame-ms=110 max-rotation-deg hmd=20.70 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.362,0.192,0.912)
+firstperson: Touch state [periodic] blocked=guns-not-ready game=1 gun=1 status=2 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=not-built/not-built head-fallbacks=0/0
+locomotion: state=2 head=6.5 body=11.6 manual=(+0.00,+0.00) pending=(-0.021,+0.017)m drag=(+0.000,+0.000)m input=0000000000000020
+vr-glance: t=78897281 pose=1032 history=32 frames=152243..152274 max-ms gpu=19.28 app=9.44 interval=204.87 submit=2.91 dropped=0 mispresented=616 motion-smoothed=0 flags=304
+fp-view: t=78897375 pose=1033 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.361,0.194,0.912)
+fp-view: t=78897687 pose=1036 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.29 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.364,0.199,0.910)
+locomotion: state=2 head=7.4 body=11.6 manual=(+0.00,+0.00) pending=(-0.021,+0.017)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78897781 pose=1037 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=1.212deg controller-step=(3.488mm,1.672deg) arm-relative-step=(192.978,85.667)mm arm-turn=(36.081,27.409)deg torso-relative-step=(192.945mm,0.082deg) redraw=0.000mm
+arm-glance: t=78897781 pose=1037 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=1.212deg controller-step=(3.740mm,1.392deg) arm-relative-step=(170.958,74.314)mm arm-turn=(35.951,20.819)deg torso-relative-step=(170.910mm,0.082deg) redraw=0.000mm
+vr-glance: t=78897781 pose=1037 history=32 frames=152248..152279 max-ms gpu=19.28 app=9.44 interval=204.87 submit=2.91 dropped=0 mispresented=569 motion-smoothed=0 flags=304
+fp-view: t=78897984 pose=1039 shader=26 max-frame-ms=109 max-rotation-deg hmd=5.47 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.424,0.354,0.834)
+locomotion: state=2 head=14.4 body=11.6 manual=(+0.00,+0.00) pending=(-0.020,+0.022)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78898390 pose=1042 shader=26 max-frame-ms=203 max-rotation-deg hmd=3.18 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.446,0.423,0.789)
+arm-glance: t=78898390 pose=1042 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=5.472deg controller-step=(4.340mm,1.532deg) arm-relative-step=(2.228,1.890)mm arm-turn=(1.210,1.041)deg torso-relative-step=(2.791mm,0.148deg) redraw=0.000mm
+arm-glance: t=78898390 pose=1042 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=5.472deg controller-step=(3.809mm,1.501deg) arm-relative-step=(3.139,5.378)mm arm-turn=(0.981,1.385)deg torso-relative-step=(2.706mm,0.148deg) redraw=0.000mm
+vr-glance: t=78898390 pose=1042 history=32 frames=152254..152285 max-ms gpu=19.28 app=9.44 interval=203.84 submit=2.91 dropped=0 mispresented=523 motion-smoothed=0 flags=304
+fp-view: t=78898796 pose=1045 shader=26 max-frame-ms=203 max-rotation-deg hmd=0.87 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.445,0.412,0.795)
+locomotion: state=2 head=14.1 body=11.6 manual=(+0.00,+0.00) pending=(-0.019,+0.022)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78898890 pose=1046 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=4 head-step=0.872deg controller-step=(0.429mm,0.604deg) arm-relative-step=(0.858,1.306)mm arm-turn=(0.642,0.692)deg torso-relative-step=(0.912mm,0.040deg) redraw=0.000mm
+arm-glance: t=78898890 pose=1046 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=4 head-step=0.872deg controller-step=(2.118mm,0.592deg) arm-relative-step=(1.787,3.145)mm arm-turn=(0.715,0.850)deg torso-relative-step=(1.819mm,0.040deg) redraw=0.000mm
+vr-glance: t=78898890 pose=1046 history=32 frames=152258..152289 max-ms gpu=19.28 app=9.44 interval=203.84 submit=2.91 dropped=0 mispresented=489 motion-smoothed=0 flags=304
+firstperson: Touch left muzzle=(46641,-608,31829) yaw=1569 pitch=2857
+firstperson: Touch left LOS src=(46641,-608,31829) ray=(50101,-6344,51183) result=0 sphere=0
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+fp-view: t=78899125 pose=1047 shader=26 max-frame-ms=235 max-rotation-deg hmd=0.03 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.445,0.411,0.796)
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+locomotion: state=2 head=12.5 body=11.6 manual=(+0.00,+0.00) pending=(-0.018,+0.025)m drag=(+0.000,+0.000)m input=0000000000004020
+fp-view: t=78899390 pose=1050 shader=26 max-frame-ms=109 max-rotation-deg hmd=2.47 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.431,0.367,0.824)
+arm-glance: t=78899390 pose=1050 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=4 head-step=2.471deg controller-step=(16.055mm,7.479deg) arm-relative-step=(13.896,13.150)mm arm-turn=(1.030,3.315)deg torso-relative-step=(13.896mm,0.007deg) redraw=0.000mm
+arm-glance: t=78899390 pose=1050 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=4 head-step=2.471deg controller-step=(17.309mm,3.091deg) arm-relative-step=(7.284,3.829)mm arm-turn=(2.452,2.084)deg torso-relative-step=(7.284mm,0.007deg) redraw=0.000mm
+vr-glance: t=78899390 pose=1050 history=32 frames=152263..152294 max-ms gpu=16.42 app=9.44 interval=200.22 submit=2.91 dropped=0 mispresented=463 motion-smoothed=0 flags=304
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+fp-view: t=78899687 pose=1052 shader=26 max-frame-ms=188 max-rotation-deg hmd=0.53 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.431,0.358,0.828)
+locomotion: state=2 head=12.3 body=11.6 manual=(+0.00,+0.00) pending=(-0.019,+0.024)m drag=(+0.000,+0.000)m input=0000000000004020
+arm-glance: t=78899906 pose=1054 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=4 head-step=0.529deg controller-step=(1.935mm,1.109deg) arm-relative-step=(1.270,1.297)mm arm-turn=(0.983,0.999)deg torso-relative-step=(1.270mm,0.000deg) redraw=0.000mm
+arm-glance: t=78899906 pose=1054 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=4 head-step=0.529deg controller-step=(1.538mm,0.304deg) arm-relative-step=(1.665,3.373)mm arm-turn=(0.945,0.863)deg torso-relative-step=(1.665mm,0.000deg) redraw=0.000mm
+vr-glance: t=78899906 pose=1054 history=32 frames=152267..152298 max-ms gpu=17.20 app=9.44 interval=200.22 submit=2.91 dropped=0 mispresented=417 motion-smoothed=0 flags=304
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+fp-view: t=78899984 pose=1055 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.09 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.430,0.358,0.829)
+firstperson: Touch left shot target=0000000000000000 assist=0 hp=0->0 native=-1
+fp-view: t=78900296 pose=1058 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.07 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.429,0.358,0.829)
+locomotion: state=2 head=12.2 body=11.6 manual=(+0.00,+0.00) pending=(-0.018,+0.024)m drag=(+0.000,+0.000)m input=0000000000004020
+firstperson: resolved body fit yaw=11.6 base=-15.1 offset=(-52.7,-5.7) pending=(-0.018,0.024)m
+firstperson: body stance state=2 posture=0.006m idle=1 recovery=0 hands=1 planted=1 follow=0.00 gait=0.00 knee-bend=(3.9,1.1)deg
+arm-glance: t=78900500 pose=1060 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=6 head-step=0.069deg controller-step=(2.773mm,1.027deg) arm-relative-step=(1.043,1.427)mm arm-turn=(0.529,0.564)deg torso-relative-step=(1.043mm,0.000deg) redraw=0.000mm
+arm-glance: t=78900500 pose=1060 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=6 head-step=0.069deg controller-step=(0.985mm,0.428deg) arm-relative-step=(1.250,2.362)mm arm-turn=(0.647,0.602)deg torso-relative-step=(1.250mm,0.000deg) redraw=0.000mm
+vr-glance: t=78900500 pose=1060 history=32 frames=152273..152304 max-ms gpu=17.20 app=8.80 interval=105.93 submit=2.24 dropped=0 mispresented=378 motion-smoothed=0 flags=304
+fp-view: t=78900609 pose=1061 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.09 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.429,0.356,0.830)
+locomotion: state=1 head=12.0 body=12.0 manual=(-0.04,+1.00) pending=(-0.018,+0.024)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-view: t=78900890 pose=1064 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.37 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.428,0.346,0.835)
+arm-glance: t=78901000 pose=1065 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.368deg controller-step=(4.971mm,3.084deg) arm-relative-step=(42.959,45.219)mm arm-turn=(12.941,11.704)deg torso-relative-step=(43.176mm,6.279deg) redraw=0.000mm
+arm-glance: t=78901000 pose=1065 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.368deg controller-step=(0.825mm,0.306deg) arm-relative-step=(34.112,44.555)mm arm-turn=(7.290,11.102)deg torso-relative-step=(42.867mm,6.279deg) redraw=0.000mm
+vr-glance: t=78901000 pose=1065 history=32 frames=152278..152309 max-ms gpu=17.20 app=8.80 interval=105.93 submit=2.24 dropped=0 mispresented=379 motion-smoothed=0 flags=304
+fp-view: t=78901187 pose=1067 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.35 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.426,0.336,0.840)
+locomotion: state=1 head=11.7 body=11.7 manual=(-0.02,+1.00) pending=(-0.019,+0.023)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-view: t=78901578 pose=1070 shader=26 max-frame-ms=172 max-rotation-deg hmd=0.14 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.425,0.333,0.841)
+arm-glance: t=78901578 pose=1070 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.229deg controller-step=(2.161mm,1.801deg) arm-relative-step=(41.470,42.018)mm arm-turn=(13.176,10.850)deg torso-relative-step=(10.404mm,9.136deg) redraw=0.000mm
+arm-glance: t=78901578 pose=1070 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.229deg controller-step=(0.902mm,0.208deg) arm-relative-step=(35.956,37.444)mm arm-turn=(10.069,9.363)deg torso-relative-step=(10.600mm,9.136deg) redraw=0.000mm
+vr-glance: t=78901593 pose=1070 history=32 frames=152283..152314 max-ms gpu=17.20 app=8.80 interval=105.93 submit=2.24 dropped=0 mispresented=382 motion-smoothed=0 flags=304
+firstperson: pistol forearms source=body-IK joints=15 full-body=1 reference=model-bind roll-min=(0.9328,0.9561) roll-recovery=(0,0)
+locomotion: state=1 head=11.7 body=11.7 manual=(-0.02,+1.00) pending=(-0.018,+0.023)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-forward: game=5 state=1 samples=11 elapsed=1016ms frac=69..184 animSide=-73.77..15.03u rootSideStep=-0.46..0.68u eyeSideStep=-0.62..0.55u trackedSide=0.0407..0.0412m bodyYawError=-0.18..0.14deg
+fp-view: t=78901906 pose=1074 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.14 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.425,0.332,0.842)
+arm-glance: t=78902109 pose=1076 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=6 head-step=0.137deg controller-step=(0.763mm,0.243deg) arm-relative-step=(25.936,20.572)mm arm-turn=(9.026,5.303)deg torso-relative-step=(31.543mm,11.793deg) redraw=0.000mm
+arm-glance: t=78902109 pose=1076 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=6 head-step=0.137deg controller-step=(0.762mm,0.645deg) arm-relative-step=(39.458,41.606)mm arm-turn=(15.063,10.377)deg torso-relative-step=(31.582mm,11.793deg) redraw=0.000mm
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=135 R=135 shots L=5 R=0
+vr-glance: t=78902109 pose=1076 history=32 frames=152289..152320 max-ms gpu=25.43 app=11.38 interval=105.93 submit=2.24 dropped=0 mispresented=363 motion-smoothed=0 flags=304
+fp-view: t=78902203 pose=1077 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.08 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.425,0.332,0.842)
+locomotion: state=1 head=11.6 body=11.9 manual=(+0.00,+0.00) pending=(-0.019,+0.023)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78902500 pose=1080 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.424,0.334,0.842)
+arm-glance: t=78902609 pose=1081 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.122deg controller-step=(0.628mm,0.145deg) arm-relative-step=(28.990,24.260)mm arm-turn=(3.441,6.135)deg torso-relative-step=(36.459mm,5.065deg) redraw=0.000mm
+arm-glance: t=78902609 pose=1081 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.122deg controller-step=(0.204mm,0.053deg) arm-relative-step=(43.968,48.366)mm arm-turn=(5.068,12.038)deg torso-relative-step=(36.379mm,5.065deg) redraw=0.000mm
+vr-glance: t=78902609 pose=1081 history=32 frames=152294..152325 max-ms gpu=25.43 app=11.38 interval=41.40 submit=2.24 dropped=0 mispresented=353 motion-smoothed=0 flags=304
+locomotion: state=2 head=11.6 body=11.9 manual=(+0.00,+0.00) pending=(-0.018,+0.024)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78902796 pose=1083 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.12 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.425,0.334,0.841)
+fp-view: t=78903109 pose=1086 shader=26 max-frame-ms=110 max-rotation-deg hmd=0.06 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.424,0.334,0.842)
+arm-glance: t=78903109 pose=1086 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.102deg controller-step=(0.578mm,0.149deg) arm-relative-step=(17.906,14.992)mm arm-turn=(1.391,3.789)deg torso-relative-step=(19.114mm,1.229deg) redraw=0.000mm
+arm-glance: t=78903109 pose=1086 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.102deg controller-step=(0.412mm,0.064deg) arm-relative-step=(20.022,23.211)mm arm-turn=(1.798,5.762)deg torso-relative-step=(19.133mm,1.229deg) redraw=0.000mm
+vr-glance: t=78903109 pose=1086 history=32 frames=152299..152330 max-ms gpu=25.43 app=11.38 interval=41.40 submit=1.44 dropped=0 mispresented=351 motion-smoothed=0 flags=304
+locomotion: state=2 head=11.6 body=11.9 manual=(+0.00,+0.00) pending=(-0.018,+0.023)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78903406 pose=1089 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.08 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.424,0.333,0.842)
+arm-glance: t=78903609 pose=1091 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.080deg controller-step=(0.335mm,0.075deg) arm-relative-step=(1.124,1.257)mm arm-turn=(0.483,0.346)deg torso-relative-step=(1.445mm,0.127deg) redraw=0.000mm
+arm-glance: t=78903609 pose=1091 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.080deg controller-step=(0.365mm,0.060deg) arm-relative-step=(1.074,1.544)mm arm-turn=(0.551,0.385)deg torso-relative-step=(1.499mm,0.127deg) redraw=0.000mm
+vr-glance: t=78903609 pose=1091 history=32 frames=152304..152335 max-ms gpu=25.43 app=11.38 interval=41.40 submit=1.44 dropped=0 mispresented=349 motion-smoothed=0 flags=304
+fp-view: t=78903703 pose=1092 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.06 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.424,0.333,0.842)
+locomotion: state=2 head=11.6 body=11.9 manual=(+0.00,+0.00) pending=(-0.018,+0.023)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78904015 pose=1095 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.424,0.331,0.843)
+arm-glance: t=78904109 pose=1096 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.097deg controller-step=(0.482mm,0.089deg) arm-relative-step=(0.879,1.521)mm arm-turn=(0.332,0.389)deg torso-relative-step=(0.879mm,0.000deg) redraw=0.000mm
+arm-glance: t=78904109 pose=1096 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=5 head-step=0.097deg controller-step=(0.467mm,0.061deg) arm-relative-step=(0.829,1.789)mm arm-turn=(0.443,0.447)deg torso-relative-step=(0.829mm,0.000deg) redraw=0.000mm
+vr-glance: t=78904109 pose=1096 history=32 frames=152309..152340 max-ms gpu=25.43 app=11.38 interval=41.40 submit=1.20 dropped=0 mispresented=351 motion-smoothed=0 flags=304
+locomotion: state=2 head=11.7 body=11.9 manual=(+0.00,+0.00) pending=(-0.018,+0.023)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78904312 pose=1098 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.08 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.425,0.331,0.842)
+fp-view: t=78904578 pose=1103 shader=26 max-frame-ms=109 max-rotation-deg hmd=0.06 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.426,0.331,0.842)
+vr-glance: t=78904609 pose=1104 history=32 frames=152317..152348 max-ms gpu=25.43 app=11.38 interval=23.13 submit=1.08 dropped=0 mispresented=321 motion-smoothed=0 flags=334
+arm-glance: t=78904640 pose=1105 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=9 head-step=0.089deg controller-step=(0.819mm,0.169deg) arm-relative-step=(0.842,1.490)mm arm-turn=(0.303,0.377)deg torso-relative-step=(0.842mm,0.000deg) redraw=0.000mm
+arm-glance: t=78904640 pose=1105 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=9 head-step=0.089deg controller-step=(0.230mm,0.095deg) arm-relative-step=(0.827,1.860)mm arm-turn=(0.446,0.464)deg torso-relative-step=(0.827mm,0.000deg) redraw=0.000mm
+locomotion: state=2 head=11.6 body=11.9 manual=(+0.00,+0.00) pending=(-0.018,+0.024)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78904828 pose=1111 shader=26 max-frame-ms=94 max-rotation-deg hmd=0.08 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.425,0.331,0.842)
+fp-view: t=78905078 pose=1125 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.428,0.329,0.842)
+vr-glance: t=78905125 pose=1128 history=32 frames=152366..152397 max-ms gpu=4.86 app=7.19 interval=14.62 submit=1.05 dropped=0 mispresented=3 motion-smoothed=0 flags=334
+arm-glance: t=78905140 pose=1129 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=24 head-step=0.103deg controller-step=(0.413mm,0.089deg) arm-relative-step=(0.479,0.759)mm arm-turn=(0.227,0.197)deg torso-relative-step=(0.492mm,0.006deg) redraw=0.000mm
+arm-glance: t=78905140 pose=1129 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=24 head-step=0.103deg controller-step=(0.324mm,0.068deg) arm-relative-step=(0.506,1.063)mm arm-turn=(0.311,0.267)deg torso-relative-step=(0.532mm,0.006deg) redraw=0.000mm
+locomotion: state=2 head=9.8 body=11.9 manual=(+0.00,+0.00) pending=(-0.016,+0.021)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78905328 pose=1141 shader=26 max-frame-ms=31 max-rotation-deg hmd=1.38 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.410,0.238,0.881)
+firstperson: resolved body fit yaw=11.9 base=-15.1 offset=(-61.9,-4.3) pending=(-0.013,0.009)m
+firstperson: body stance state=2 posture=0.005m idle=1 recovery=0 hands=1 planted=1 follow=0.00 gait=0.00 knee-bend=(10.0,9.7)deg
+fp-view: t=78905578 pose=1156 shader=26 max-frame-ms=31 max-rotation-deg hmd=2.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.314,-0.013,0.949)
+vr-glance: t=78905625 pose=1158 history=32 frames=152424..152455 max-ms gpu=6.28 app=8.94 interval=15.71 submit=1.44 dropped=0 mispresented=1 motion-smoothed=0 flags=134
+arm-glance: t=78905640 pose=1159 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=2.103deg controller-step=(3.166mm,1.939deg) arm-relative-step=(3.973,3.473)mm arm-turn=(1.379,1.500)deg torso-relative-step=(3.973mm,0.097deg) redraw=0.000mm
+arm-glance: t=78905640 pose=1159 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=2.103deg controller-step=(3.937mm,1.643deg) arm-relative-step=(2.366,4.001)mm arm-turn=(0.875,1.048)deg torso-relative-step=(2.191mm,0.097deg) redraw=0.000mm
+locomotion: state=2 head=-0.8 body=11.9 manual=(+0.00,+0.00) pending=(-0.013,-0.008)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78905843 pose=1171 shader=26 max-frame-ms=32 max-rotation-deg hmd=1.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.246,-0.092,0.965)
+fp-view: t=78906093 pose=1187 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.17 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.231,-0.099,0.968)
+vr-glance: t=78906125 pose=1188 history=32 frames=152478..152509 max-ms gpu=5.17 app=15.34 interval=14.53 submit=1.44 dropped=0 mispresented=4 motion-smoothed=0 flags=334
+arm-glance: t=78906140 pose=1189 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=1.003deg controller-step=(4.997mm,2.490deg) arm-relative-step=(3.840,4.714)mm arm-turn=(1.129,1.193)deg torso-relative-step=(3.333mm,0.136deg) redraw=0.000mm
+arm-glance: t=78906140 pose=1189 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=1.003deg controller-step=(6.187mm,1.727deg) arm-relative-step=(1.809,4.334)mm arm-turn=(1.134,1.085)deg torso-relative-step=(1.432mm,0.136deg) redraw=0.000mm
+fp-view: t=78906359 pose=1202 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.235,-0.093,0.968)
+locomotion: state=2 head=-1.5 body=11.9 manual=(+0.00,+0.00) pending=(-0.015,-0.010)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78906625 pose=1218 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.14 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.240,-0.089,0.967)
+vr-glance: t=78906625 pose=1218 history=32 frames=152526..152557 max-ms gpu=4.23 app=15.86 interval=18.31 submit=1.27 dropped=0 mispresented=12 motion-smoothed=0 flags=334
+arm-glance: t=78906640 pose=1219 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.138deg controller-step=(0.519mm,0.226deg) arm-relative-step=(0.470,2.953)mm arm-turn=(0.783,0.766)deg torso-relative-step=(0.470mm,0.029deg) redraw=0.000mm
+arm-glance: t=78906640 pose=1219 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.138deg controller-step=(0.725mm,0.371deg) arm-relative-step=(0.629,5.076)mm arm-turn=(1.327,1.255)deg torso-relative-step=(0.832mm,0.029deg) redraw=0.000mm
+firstperson: pistol forearms source=body-IK joints=15 full-body=1 reference=model-bind roll-min=(0.9378,0.8836) roll-recovery=(0,0)
+locomotion: state=2 head=-0.3 body=11.9 manual=(+0.00,+0.00) pending=(-0.016,-0.011)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-view: t=78906875 pose=1233 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.29 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.255,-0.076,0.964)
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=513 R=513 shots L=0 R=0
+fp-view: t=78907125 pose=1248 shader=26 max-frame-ms=32 max-rotation-deg hmd=1.12 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.326,0.039,0.945)
+vr-glance: t=78907125 pose=1248 history=32 frames=152556..152587 max-ms gpu=2.35 app=15.54 interval=16.00 submit=1.31 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+arm-glance: t=78907140 pose=1249 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=1.119deg controller-step=(1.797mm,1.527deg) arm-relative-step=(49.827,25.393)mm arm-turn=(6.570,6.650)deg torso-relative-step=(42.482mm,8.222deg) redraw=0.000mm
+arm-glance: t=78907140 pose=1249 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=1.119deg controller-step=(5.896mm,2.259deg) arm-relative-step=(49.663,77.483)mm arm-turn=(14.211,19.565)deg torso-relative-step=(40.712mm,8.222deg) redraw=0.000mm
+locomotion: state=1 head=4.6 body=4.6 manual=(+0.07,+1.00) pending=(-0.021,-0.007)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-view: t=78907375 pose=1259 shader=26 max-frame-ms=94 max-rotation-deg hmd=0.49 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.344,0.063,0.937)
+fp-view: t=78907640 pose=1275 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.12 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.348,0.072,0.935)
+arm-glance: t=78907640 pose=1275 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=26 head-step=0.494deg controller-step=(2.144mm,1.173deg) arm-relative-step=(35.589,57.364)mm arm-turn=(10.351,14.774)deg torso-relative-step=(23.479mm,13.036deg) redraw=0.000mm
+arm-glance: t=78907640 pose=1275 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=26 head-step=0.494deg controller-step=(2.593mm,0.750deg) arm-relative-step=(53.907,53.410)mm arm-turn=(21.450,13.347)deg torso-relative-step=(22.953mm,13.036deg) redraw=0.000mm
+vr-glance: t=78907640 pose=1275 history=32 frames=152583..152614 max-ms gpu=2.73 app=15.77 interval=16.20 submit=1.06 dropped=0 mispresented=38 motion-smoothed=0 flags=334
+locomotion: state=1 head=5.3 body=5.3 manual=(-0.11,+0.51) pending=(-0.020,-0.003)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-view: t=78907890 pose=1291 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.11 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.347,0.074,0.935)
+fp-view: t=78908140 pose=1306 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.348,0.068,0.935)
+arm-glance: t=78908140 pose=1306 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=31 head-step=0.113deg controller-step=(2.030mm,1.467deg) arm-relative-step=(16.402,23.865)mm arm-turn=(5.885,6.184)deg torso-relative-step=(33.841mm,2.620deg) redraw=0.000mm
+arm-glance: t=78908140 pose=1306 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=31 head-step=0.113deg controller-step=(1.109mm,0.608deg) arm-relative-step=(20.712,19.054)mm arm-turn=(6.098,4.729)deg torso-relative-step=(32.394mm,2.620deg) redraw=0.000mm
+vr-glance: t=78908140 pose=1306 history=32 frames=152614..152645 max-ms gpu=2.42 app=16.19 interval=16.61 submit=1.23 dropped=0 mispresented=31 motion-smoothed=0 flags=334
+locomotion: state=1 head=5.3 body=5.3 manual=(+0.07,+1.00) pending=(-0.020,-0.001)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-view: t=78908406 pose=1320 shader=26 max-frame-ms=47 max-rotation-deg hmd=0.08 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.346,0.074,0.935)
+arm-glance: t=78908640 pose=1334 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.100deg controller-step=(2.107mm,1.064deg) arm-relative-step=(15.948,47.145)mm arm-turn=(11.408,12.313)deg torso-relative-step=(22.853mm,4.647deg) redraw=0.000mm
+arm-glance: t=78908640 pose=1334 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.100deg controller-step=(0.651mm,0.354deg) arm-relative-step=(20.823,29.022)mm arm-turn=(8.227,7.229)deg torso-relative-step=(22.907mm,4.647deg) redraw=0.000mm
+vr-glance: t=78908640 pose=1334 history=32 frames=152642..152673 max-ms gpu=32.86 app=55.03 interval=55.90 submit=36.62 dropped=0 mispresented=36 motion-smoothed=0 flags=334
+fp-view: t=78908656 pose=1335 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.344,0.077,0.936)
+locomotion: state=1 head=5.1 body=5.7 manual=(+0.00,+0.00) pending=(-0.019,+0.001)m drag=(+0.000,+0.000)m input=0000000000000020
+locomotion: state=16 head=5.1 body=5.1 manual=(+0.22,-0.84) pending=(-0.019,+0.001)m drag=(+0.000,+0.000)m input=00000000A00000A2
+fp-view: t=78908906 pose=1350 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.345,0.077,0.936)
+arm-glance: t=78909140 pose=1364 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.056deg controller-step=(2.936mm,1.353deg) arm-relative-step=(18.048,29.029)mm arm-turn=(9.779,7.733)deg torso-relative-step=(31.598mm,2.966deg) redraw=0.000mm
+arm-glance: t=78909140 pose=1364 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.056deg controller-step=(0.287mm,0.081deg) arm-relative-step=(27.071,23.919)mm arm-turn=(8.141,6.049)deg torso-relative-step=(31.159mm,2.966deg) redraw=0.000mm
+boneskin: measured buffer 134 -- 9070 vertices, 0 mainly on joint 7 (coord 0x1406 x3, joints 0x1401 x4 norm 0, weights 0x1401 x4 norm 1, stride 24)
+vr-glance: t=78909140 pose=1364 history=32 frames=152672..152703 max-ms gpu=3.47 app=15.64 interval=16.15 submit=1.05 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78909156 pose=1365 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.06 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.348,0.077,0.934)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(79.8,90.9,-50.3) wall=(0.0,0.0) root=(47032.8,-16.9,33557.1) hmd=(0.068,0.406,0.134) neutral=(0.035,0.426,0.123)
+locomotion: state=26 head=5.3 body=5.3 manual=(+0.23,-0.97) pending=(-0.019,-0.001)m drag=(+0.000,+0.000)m input=00000000A0100031
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-10.5,46.8,-11.0) wall=(0.0,0.0) root=(47132.1,-199.0,33547.0) hmd=(0.068,0.406,0.134) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-36.4,36.2,12.4) wall=(0.0,0.0) root=(47203.2,-313.9,33539.7) hmd=(0.068,0.406,0.134) neutral=(0.035,0.426,0.123)
+fp-view: t=78909406 pose=1380 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.349,0.076,0.934)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-42.5,-19.3,42.4) wall=(0.0,0.0) root=(47302.7,-454.0,33529.6) hmd=(0.068,0.406,0.134) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-2.9,-55.6,10.5) wall=(0.0,0.0) root=(47400.7,-567.8,33519.6) hmd=(0.068,0.406,0.134) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(31.0,-39.3,-11.0) wall=(0.0,0.0) root=(47500.2,-658.8,33509.4) hmd=(0.068,0.406,0.133) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(10.5,2.4,-2.4) wall=(0.0,0.0) root=(47573.1,-709.8,33502.0) hmd=(0.068,0.406,0.133) neutral=(0.035,0.426,0.123)
+arm-glance: t=78909640 pose=1394 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.094deg controller-step=(0.240mm,0.139deg) arm-relative-step=(310.448,155.870)mm arm-turn=(41.963,41.929)deg torso-relative-step=(474.439mm,32.398deg) redraw=0.000mm
+arm-glance: t=78909640 pose=1394 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.094deg controller-step=(0.781mm,0.537deg) arm-relative-step=(328.592,278.325)mm arm-turn=(70.521,82.747)deg torso-relative-step=(474.776mm,32.398deg) redraw=0.000mm
+vr-glance: t=78909640 pose=1394 history=32 frames=152702..152733 max-ms gpu=3.47 app=16.89 interval=17.34 submit=1.21 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78909656 pose=1395 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.09 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.349,0.079,0.934)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(1.9,9.7,3.5) wall=(0.0,0.0) root=(47669.8,-756.9,33492.1) hmd=(0.068,0.406,0.133) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-8.1,10.8,7.5) wall=(0.0,0.0) root=(47767.8,-780.7,33482.1) hmd=(0.068,0.405,0.132) neutral=(0.035,0.426,0.123)
+locomotion: state=26 head=5.4 body=5.3 manual=(+0.23,-0.97) pending=(-0.019,+0.000)m drag=(+0.000,+0.000)m input=00000000A0000021
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-18.9,-1.2,5.4) wall=(0.0,0.0) root=(47867.1,-780.3,33472.0) hmd=(0.068,0.405,0.132) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-11.5,-10.7,1.4) wall=(0.0,0.0) root=(47939.7,-764.4,33464.6) hmd=(0.068,0.405,0.132) neutral=(0.035,0.426,0.123)
+fp-view: t=78909906 pose=1410 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.07 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.349,0.085,0.933)
+fp-eye: state=9 anim=32 gun=1 status=4 camera=0 residual=(8.9,-89.5,-137.0) wall=(0.0,0.0) root=(48020.5,-721.3,33458.0) hmd=(0.068,0.405,0.132) neutral=(0.035,0.426,0.123)
+locomotion: state=9 head=5.4 body=5.3 manual=(+0.23,-0.97) pending=(-0.019,+0.001)m drag=(+0.000,+0.000)m input=00000000A0000021
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(7.4,-6.3,10.0) wall=(0.0,0.0) root=(48026.6,-655.9,33457.0) hmd=(0.068,0.405,0.132) neutral=(0.035,0.426,0.123)
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(5.6,28.6,50.5) wall=(0.0,0.0) root=(48002.3,-565.6,33458.7) hmd=(0.068,0.404,0.132) neutral=(0.035,0.426,0.123)
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(2.5,17.7,13.0) wall=(0.0,0.0) root=(47967.0,-481.2,33461.4) hmd=(0.068,0.404,0.132) neutral=(0.035,0.426,0.123)
+arm-glance: t=78910140 pose=1424 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.076deg controller-step=(0.614mm,0.340deg) arm-relative-step=(138.637,160.723)mm arm-turn=(31.420,40.710)deg torso-relative-step=(373.192mm,48.512deg) redraw=0.000mm
+arm-glance: t=78910140 pose=1424 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.076deg controller-step=(0.453mm,0.149deg) arm-relative-step=(140.526,195.141)mm arm-turn=(28.065,50.752)deg torso-relative-step=(373.177mm,48.512deg) redraw=0.000mm
+vr-glance: t=78910140 pose=1424 history=32 frames=152732..152763 max-ms gpu=3.57 app=16.09 interval=16.51 submit=1.37 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78910156 pose=1425 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.349,0.088,0.933)
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(3.2,-6.6,-19.6) wall=(0.0,0.0) root=(47900.7,-348.7,33466.6) hmd=(0.068,0.404,0.132) neutral=(0.035,0.426,0.123)
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(4.9,1.0,-20.8) wall=(0.0,0.0) root=(47814.0,-194.5,33473.7) hmd=(0.068,0.404,0.131) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.8,11.6,11.9) wall=(0.0,0.0) root=(47716.9,-25.4,33481.8) hmd=(0.068,0.404,0.132) neutral=(0.035,0.426,0.123)
+locomotion: state=2 head=5.3 body=5.3 manual=(+0.00,+0.00) pending=(-0.019,+0.001)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(1.0,39.0,35.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.404,0.131) neutral=(0.035,0.426,0.123)
+fp-view: t=78910406 pose=1440 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.348,0.089,0.933)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(2.0,55.0,46.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.404,0.131) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.0,10.0,5.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.404,0.131) neutral=(0.035,0.426,0.123)
+firstperson: body stance state=2 posture=0.003m idle=0 recovery=0 hands=1 planted=0 follow=0.91 gait=0.91 knee-bend=(145.3,147.8)deg
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.0,4.0,1.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.404,0.131) neutral=(0.035,0.426,0.123)
+arm-glance: t=78910640 pose=1454 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.047deg controller-step=(0.215mm,0.197deg) arm-relative-step=(85.633,43.312)mm arm-turn=(10.835,10.869)deg torso-relative-step=(210.857mm,21.564deg) redraw=0.000mm
+arm-glance: t=78910640 pose=1454 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.047deg controller-step=(0.146mm,0.056deg) arm-relative-step=(77.838,23.006)mm arm-turn=(22.081,5.609)deg torso-relative-step=(210.808mm,21.564deg) redraw=0.000mm
+vr-glance: t=78910640 pose=1454 history=32 frames=152762..152793 max-ms gpu=3.36 app=16.08 interval=16.42 submit=1.24 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78910656 pose=1455 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.05 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.347,0.091,0.934)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.0,-5.0,-2.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.404,0.131) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.0,-8.0,-3.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.131) neutral=(0.035,0.426,0.123)
+locomotion: state=2 head=5.2 body=5.3 manual=(+0.00,+0.00) pending=(-0.019,+0.002)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.0,-19.0,-9.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.131) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-1.0,-23.0,-24.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.131) neutral=(0.035,0.426,0.123)
+fp-view: t=78910906 pose=1470 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.03 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.346,0.092,0.934)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-2.0,-7.0,-22.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.131) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-1.0,-4.0,-21.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.130) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(1.0,-4.0,4.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.130) neutral=(0.035,0.426,0.123)
+arm-glance: t=78911140 pose=1484 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.038deg controller-step=(0.620mm,0.473deg) arm-relative-step=(30.893,66.708)mm arm-turn=(16.124,17.432)deg torso-relative-step=(79.031mm,9.282deg) redraw=0.000mm
+arm-glance: t=78911140 pose=1484 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.038deg controller-step=(0.421mm,0.448deg) arm-relative-step=(29.796,55.002)mm arm-turn=(14.302,13.862)deg torso-relative-step=(79.004mm,9.282deg) redraw=0.000mm
+vr-glance: t=78911140 pose=1484 history=32 frames=152792..152823 max-ms gpu=3.43 app=15.74 interval=16.19 submit=1.37 dropped=0 mispresented=33 motion-smoothed=0 flags=334
+fp-view: t=78911156 pose=1485 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.03 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.345,0.094,0.934)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(1.0,-15.0,3.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.130) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-2.0,-14.0,-1.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.130) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-2.0,-15.0,-1.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.068,0.403,0.130) neutral=(0.035,0.426,0.123)
+locomotion: state=2 head=4.9 body=4.9 manual=(-0.91,+0.20) pending=(-0.019,+0.002)m drag=(+0.000,+0.000)m input=0000000040000420
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-17.0,-31.0,-5.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.067,0.402,0.130) neutral=(0.035,0.426,0.123)
+fp-view: t=78911406 pose=1500 shader=26 max-frame-ms=47 max-rotation-deg hmd=0.10 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.338,0.099,0.936)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-5.0,-1.0,-1.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.067,0.402,0.129) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(3.0,-3.0,-3.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.066,0.402,0.129) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(4.0,-1.0,-3.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.066,0.402,0.129) neutral=(0.035,0.426,0.123)
+firstperson: resolved body fit yaw=5.3 base=-15.1 offset=(-41.2,-6.5) pending=(-0.019,0.003)m
+fp-eye: state=2 anim=11 gun=1 status=4 camera=0 residual=(-45.0,5.0,44.0) wall=(0.0,0.0) root=(47682.0,0.0,33485.0) hmd=(0.066,0.402,0.129) neutral=(0.035,0.426,0.123)
+arm-glance: t=78911640 pose=1514 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.103deg controller-step=(1.095mm,0.729deg) arm-relative-step=(19.345,30.604)mm arm-turn=(8.185,8.000)deg torso-relative-step=(29.103mm,2.555deg) redraw=0.000mm
+arm-glance: t=78911640 pose=1514 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.103deg controller-step=(0.454mm,0.104deg) arm-relative-step=(19.178,35.540)mm arm-turn=(8.595,8.870)deg torso-relative-step=(28.988mm,2.555deg) redraw=0.000mm
+vr-glance: t=78911640 pose=1514 history=32 frames=152822..152853 max-ms gpu=5.03 app=15.67 interval=16.21 submit=1.44 dropped=0 mispresented=33 motion-smoothed=0 flags=334
+fp-view: t=78911656 pose=1515 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.337,0.102,0.936)
+locomotion: state=22 head=4.7 body=4.7 manual=(-0.97,+0.24) pending=(-0.019,+0.003)m drag=(+0.000,+0.000)m input=0000000040000420
+firstperson: pistol forearms source=body-IK joints=15 full-body=1 reference=model-bind roll-min=(0.6314,0.7028) roll-recovery=(0,0)
+fp-view: t=78911906 pose=1530 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.06 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.334,0.105,0.937)
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=885 R=885 shots L=0 R=0
+firstperson: arm IK palettes solved=192 failed=0 unarmed-enabled=1
+arm-glance: t=78912140 pose=1544 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.061deg controller-step=(0.214mm,0.105deg) arm-relative-step=(15.834,7.945)mm arm-turn=(2.050,2.053)deg torso-relative-step=(14.507mm,1.365deg) redraw=0.000mm
+arm-glance: t=78912140 pose=1544 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.061deg controller-step=(0.168mm,0.039deg) arm-relative-step=(13.262,18.057)mm arm-turn=(3.372,4.469)deg torso-relative-step=(14.489mm,1.365deg) redraw=0.000mm
+vr-glance: t=78912140 pose=1544 history=32 frames=152852..152883 max-ms gpu=3.64 app=15.61 interval=16.11 submit=1.16 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78912156 pose=1545 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.05 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.336,0.110,0.935)
+locomotion: state=22 head=4.6 body=4.6 manual=(-0.97,+0.23) pending=(-0.018,+0.005)m drag=(+0.000,+0.000)m input=0000000040000420
+fp-view: t=78912406 pose=1560 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.08 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.333,0.114,0.936)
+dynbones: joints=15 shader=20 lock=20  frames=900 dup=0% snaps=5  drive_peak=4738.7 accel_raw=1482517 drive_used=0  disp_peak=40.00  L=(1.63,8.29,-0.23) R=(1.63,8.29,-0.23)
+dynbones: engine drive -- jumps=3 lands=3  last landing fallspeed=92 (grounded now)
+dynbones: this frame ran 3 DrawLaraHD scope(s), joints [15,15,0]
+dynbones: displacement hit the 40.0-unit clamp during this window. Either the anchor joint is wrong or DynamicBonesDriveScale is too high for these units.
+arm-glance: t=78912640 pose=1574 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.082deg controller-step=(2.078mm,1.130deg) arm-relative-step=(6.383,3.216)mm arm-turn=(1.414,1.384)deg torso-relative-step=(12.297mm,1.015deg) redraw=0.000mm
+arm-glance: t=78912640 pose=1574 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.082deg controller-step=(0.556mm,0.173deg) arm-relative-step=(7.405,4.319)mm arm-turn=(1.158,1.124)deg torso-relative-step=(12.173mm,1.015deg) redraw=0.000mm
+vr-glance: t=78912640 pose=1574 history=32 frames=152882..152913 max-ms gpu=3.75 app=15.91 interval=16.32 submit=1.31 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78912656 pose=1575 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.03 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.333,0.115,0.936)
+locomotion: state=1 head=4.5 body=4.5 manual=(-0.13,+0.97) pending=(-0.018,+0.006)m drag=(+0.000,+0.000)m input=0000000010000021
+fp-view: t=78912906 pose=1590 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.07 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.334,0.121,0.935)
+locomotion: state=16 head=4.6 body=4.6 manual=(+0.25,-0.97) pending=(-0.017,+0.006)m drag=(+0.000,+0.000)m input=00000000A00000A2
+arm-glance: t=78913140 pose=1604 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.068deg controller-step=(1.589mm,1.030deg) arm-relative-step=(20.169,60.164)mm arm-turn=(13.743,15.583)deg torso-relative-step=(18.602mm,3.060deg) redraw=0.000mm
+arm-glance: t=78913140 pose=1604 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.068deg controller-step=(0.143mm,0.058deg) arm-relative-step=(22.970,22.611)mm arm-turn=(8.643,5.615)deg torso-relative-step=(17.979mm,3.060deg) redraw=0.000mm
+vr-glance: t=78913140 pose=1604 history=32 frames=152912..152943 max-ms gpu=3.78 app=15.91 interval=16.42 submit=1.15 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78913156 pose=1605 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.03 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.336,0.123,0.934)
+fp-view: t=78913406 pose=1620 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.07 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.341,0.126,0.932)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(114.1,109.9,-63.1) wall=(0.0,0.0) root=(47078.5,-27.9,33576.5) hmd=(0.070,0.398,0.126) neutral=(0.035,0.426,0.123)
+locomotion: state=26 head=5.3 body=5.3 manual=(+0.23,-0.97) pending=(-0.017,+0.006)m drag=(+0.000,+0.000)m input=00000000A0100031
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-16.5,59.9,-14.4) wall=(0.0,0.0) root=(47176.5,-206.3,33566.5) hmd=(0.070,0.398,0.126) neutral=(0.035,0.426,0.123)
+arm-glance: t=78913640 pose=1634 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.081deg controller-step=(0.707mm,0.371deg) arm-relative-step=(316.260,246.573)mm arm-turn=(40.023,66.165)deg torso-relative-step=(485.074mm,33.498deg) redraw=0.000mm
+arm-glance: t=78913640 pose=1634 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.081deg controller-step=(0.277mm,0.138deg) arm-relative-step=(306.577,262.459)mm arm-turn=(71.571,78.299)deg torso-relative-step=(485.012mm,33.498deg) redraw=0.000mm
+vr-glance: t=78913640 pose=1634 history=32 frames=152942..152973 max-ms gpu=3.71 app=16.02 interval=16.55 submit=1.04 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78913656 pose=1635 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.07 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.347,0.128,0.929)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-44.5,24.7,26.6) wall=(0.0,0.0) root=(47274.5,-360.8,33556.5) hmd=(0.070,0.397,0.127) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-35.1,-34.1,37.5) wall=(0.0,0.0) root=(47371.2,-489.6,33546.7) hmd=(0.070,0.397,0.127) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-2.5,-53.0,10.4) wall=(0.0,0.0) root=(47446.6,-574.0,33539.0) hmd=(0.070,0.397,0.127) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(15.5,-12.8,-6.6) wall=(0.0,0.0) root=(47544.6,-662.3,33529.0) hmd=(0.070,0.397,0.127) neutral=(0.035,0.426,0.123)
+fp-view: t=78913906 pose=1650 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.06 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.350,0.130,0.927)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(7.5,6.5,0.4) wall=(0.0,0.0) root=(47641.1,-725.8,33519.1) hmd=(0.070,0.397,0.128) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-0.1,9.2,2.6) wall=(0.0,0.0) root=(47742.2,-767.4,33508.8) hmd=(0.071,0.397,0.128) neutral=(0.035,0.426,0.123)
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-13.5,8.9,9.4) wall=(0.0,0.0) root=(47837.1,-783.1,33499.1) hmd=(0.071,0.397,0.128) neutral=(0.035,0.426,0.123)
+locomotion: state=26 head=5.8 body=5.3 manual=(+0.23,-0.97) pending=(-0.017,+0.005)m drag=(+0.000,+0.000)m input=00000000A0000021
+arm-glance: t=78914140 pose=1664 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.057deg controller-step=(0.179mm,0.137deg) arm-relative-step=(58.851,83.937)mm arm-turn=(16.913,21.358)deg torso-relative-step=(162.329mm,13.134deg) redraw=0.000mm
+arm-glance: t=78914140 pose=1664 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.057deg controller-step=(0.191mm,0.088deg) arm-relative-step=(62.927,74.657)mm arm-turn=(18.646,18.201)deg torso-relative-step=(162.285mm,13.134deg) redraw=0.000mm
+vr-glance: t=78914140 pose=1664 history=32 frames=152972..153003 max-ms gpu=3.78 app=16.10 interval=16.52 submit=1.22 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-eye: state=26 anim=81 gun=1 status=4 camera=0 residual=(-19.5,-4.8,4.4) wall=(0.0,0.0) root=(47935.1,-775.8,33489.1) hmd=(0.071,0.397,0.128) neutral=(0.035,0.426,0.123)
+fp-view: t=78914156 pose=1665 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.354,0.133,0.926)
+fp-eye: state=9 anim=32 gun=1 status=4 camera=0 residual=(6.6,-106.2,-147.0) wall=(0.0,0.0) root=(48020.9,-743.8,33483.0) hmd=(0.071,0.397,0.128) neutral=(0.035,0.426,0.123)
+locomotion: state=9 head=5.8 body=5.3 manual=(+0.23,-0.97) pending=(-0.017,+0.005)m drag=(+0.000,+0.000)m input=00000000A0000021
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(3.8,-15.3,1.2) wall=(0.0,0.0) root=(48028.5,-704.5,33482.0) hmd=(0.071,0.397,0.128) neutral=(0.035,0.426,0.123)
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(4.8,16.9,37.5) wall=(0.0,0.0) root=(48009.0,-630.9,33483.3) hmd=(0.071,0.397,0.128) neutral=(0.035,0.426,0.123)
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(2.1,10.1,5.0) wall=(0.0,0.0) root=(47963.5,-531.6,33486.7) hmd=(0.072,0.397,0.128) neutral=(0.035,0.426,0.123)
+fp-view: t=78914406 pose=1680 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.06 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.356,0.136,0.925)
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(3.7,-6.0,-20.6) wall=(0.0,0.0) root=(47897.1,-411.8,33491.9) hmd=(0.071,0.396,0.128) neutral=(0.035,0.426,0.123)
+fp-eye: state=9 anim=33 gun=1 status=4 camera=0 residual=(4.5,-1.9,-24.0) wall=(0.0,0.0) root=(47830.4,-301.9,33497.4) hmd=(0.071,0.396,0.127) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.6,16.9,18.3) wall=(0.0,0.0) root=(47669.8,-22.5,33510.9) hmd=(0.071,0.396,0.127) neutral=(0.035,0.426,0.123)
+arm-glance: t=78914640 pose=1694 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.061deg controller-step=(0.451mm,0.329deg) arm-relative-step=(128.842,121.692)mm arm-turn=(22.694,30.469)deg torso-relative-step=(413.633mm,54.695deg) redraw=0.000mm
+arm-glance: t=78914640 pose=1694 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.061deg controller-step=(0.225mm,0.064deg) arm-relative-step=(138.544,194.840)mm arm-turn=(29.391,50.512)deg torso-relative-step=(413.634mm,54.695deg) redraw=0.000mm
+vr-glance: t=78914640 pose=1694 history=32 frames=153002..153033 max-ms gpu=4.06 app=15.82 interval=16.26 submit=1.22 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78914656 pose=1695 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.05 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.355,0.137,0.925)
+locomotion: state=2 head=5.8 body=5.9 manual=(+0.00,+0.00) pending=(-0.017,+0.006)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(2.0,46.0,38.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.071,0.396,0.127) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(2.0,31.0,26.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.071,0.396,0.127) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.0,7.0,3.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.070,0.396,0.127) neutral=(0.035,0.426,0.123)
+fp-view: t=78914906 pose=1710 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.353,0.138,0.925)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(0.0,-4.0,-1.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.071,0.396,0.126) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-0.0,-8.0,-3.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.071,0.396,0.126) neutral=(0.035,0.426,0.123)
+arm-glance: t=78915140 pose=1724 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.041deg controller-step=(0.166mm,0.098deg) arm-relative-step=(24.771,12.527)mm arm-turn=(3.246,3.247)deg torso-relative-step=(72.562mm,9.684deg) redraw=0.000mm
+arm-glance: t=78915140 pose=1724 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.041deg controller-step=(0.159mm,0.044deg) arm-relative-step=(17.728,9.146)mm arm-turn=(2.488,2.473)deg torso-relative-step=(72.537mm,9.684deg) redraw=0.000mm
+vr-glance: t=78915140 pose=1724 history=32 frames=153032..153063 max-ms gpu=3.84 app=15.73 interval=16.26 submit=1.22 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78915156 pose=1725 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.03 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.353,0.139,0.925)
+locomotion: state=2 head=5.8 body=5.9 manual=(+0.00,+0.00) pending=(-0.017,+0.007)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-1.0,-24.0,-13.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.071,0.396,0.126) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-2.0,-20.0,-26.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.071,0.396,0.126) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-8.0,-33.0,-110.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.071,0.396,0.126) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-1.0,-2.0,-5.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.071,0.396,0.126) neutral=(0.035,0.426,0.123)
+fp-view: t=78915406 pose=1738 shader=26 max-frame-ms=63 max-rotation-deg hmd=0.08 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.355,0.139,0.925)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(2.0,-5.0,6.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.396,0.126) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-0.0,-14.0,4.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.396,0.126) neutral=(0.035,0.426,0.123)
+firstperson: body stance state=2 posture=0.004m idle=0 recovery=0 hands=1 planted=0 follow=0.99 gait=0.99 knee-bend=(111.4,133.4)deg
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-1.0,-14.0,-0.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.396,0.126) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-3.0,-14.0,-1.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.396,0.126) neutral=(0.035,0.426,0.123)
+arm-glance: t=78915640 pose=1752 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.090deg controller-step=(0.334mm,0.191deg) arm-relative-step=(107.330,98.919)mm arm-turn=(17.367,25.936)deg torso-relative-step=(233.626mm,25.366deg) redraw=0.000mm
+arm-glance: t=78915640 pose=1752 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.090deg controller-step=(0.238mm,0.075deg) arm-relative-step=(105.683,79.105)mm arm-turn=(19.589,19.813)deg torso-relative-step=(233.647mm,25.366deg) redraw=0.000mm
+vr-glance: t=78915640 pose=1752 history=32 frames=153060..153091 max-ms gpu=4.41 app=15.83 interval=16.25 submit=1.02 dropped=0 mispresented=36 motion-smoothed=0 flags=334
+fp-view: t=78915656 pose=1753 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.03 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.354,0.140,0.925)
+locomotion: state=2 head=5.8 body=5.9 manual=(+0.00,+0.00) pending=(-0.017,+0.007)m drag=(+0.000,+0.000)m input=0000000000000020
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-3.0,-5.0,-1.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.396,0.125) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(-5.0,-3.0,-0.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.396,0.125) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(2.0,-3.0,-2.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.396,0.125) neutral=(0.035,0.426,0.123)
+fp-eye: state=2 anim=24 gun=1 status=4 camera=0 residual=(4.0,-1.0,-3.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.396,0.125) neutral=(0.035,0.426,0.123)
+fp-view: t=78915906 pose=1768 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.05 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.353,0.143,0.925)
+fp-eye: state=2 anim=11 gun=1 status=4 camera=0 residual=(-48.0,5.0,45.0) wall=(0.0,0.0) root=(47641.0,0.0,33513.0) hmd=(0.072,0.395,0.125) neutral=(0.035,0.426,0.123)
+locomotion: state=22 head=5.8 body=5.8 manual=(-0.94,+0.26) pending=(-0.017,+0.008)m drag=(+0.000,+0.000)m input=0000000040000420
+arm-glance: t=78916140 pose=1782 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.047deg controller-step=(1.209mm,0.631deg) arm-relative-step=(19.848,12.689)mm arm-turn=(2.611,3.222)deg torso-relative-step=(23.077mm,3.010deg) redraw=0.000mm
+arm-glance: t=78916140 pose=1782 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.047deg controller-step=(0.183mm,0.034deg) arm-relative-step=(24.428,44.044)mm arm-turn=(7.020,10.983)deg torso-relative-step=(22.874mm,3.010deg) redraw=0.000mm
+vr-glance: t=78916140 pose=1782 history=32 frames=153090..153121 max-ms gpu=4.03 app=15.62 interval=15.98 submit=1.24 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78916156 pose=1783 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.04 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.352,0.145,0.924)
+fp-view: t=78916406 pose=1798 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.12 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.359,0.142,0.923)
+stereo health @frame 1800: world draws=115017  duplicated=57864  injected eye0=56262 eye1=56262  (97% of world draws got per-eye matrices)  offscreen-skipped=2493  classify-mismatch=0  ortho3D=0  sky=10506  projoffset=0
+verify: uProjMatrix translation column ON GPU  eye0=(12.1, 0.0, -64.0) prog=79 loc=26  eye1=(-12.1, 0.0, -64.0) prog=79 loc=26  separation=24.29
+halves: 13 of 25 sampled pixels differ (image shift indicator only -- not a depth measure)
+proj pointers: mProj[0](ortho)=00007FF63020E8A0  mProj[1](persp)=00007FF63020E8E0
+  proj=00007FF63020E8A0  draws=3187     ortho/2D
+  proj=00007FF63020E8E0  draws=115017   perspective/world
+cull: 16.1 rooms/frame from the engine + 1.0 added by the head frustum, 0.8 items rescued/frame
+locomotion: state=22 head=12.8 body=6.1 manual=(+0.00,+0.00) pending=(-0.022,+0.007)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: resolved body fit yaw=6.1 base=-15.1 offset=(-21.2,-12.6) pending=(-0.030,0.012)m
+arm-glance: t=78916640 pose=1812 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=3.628deg controller-step=(6.969mm,2.627deg) arm-relative-step=(6.635,16.099)mm arm-turn=(3.501,4.132)deg torso-relative-step=(7.721mm,0.499deg) redraw=0.000mm
+arm-glance: t=78916640 pose=1812 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=3.628deg controller-step=(10.394mm,3.639deg) arm-relative-step=(10.559,13.055)mm arm-turn=(2.155,3.616)deg torso-relative-step=(9.797mm,0.499deg) redraw=0.000mm
+vr-glance: t=78916640 pose=1812 history=32 frames=153120..153151 max-ms gpu=3.96 app=21.84 interval=22.19 submit=0.99 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78916656 pose=1813 shader=26 max-frame-ms=32 max-rotation-deg hmd=3.63 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.685,-0.004,0.729)
+firstperson: pistol forearms source=body-IK joints=15 full-body=1 reference=model-bind roll-min=(0.6334,0.6948) roll-recovery=(0,0)
+fp-view: t=78916906 pose=1828 shader=26 max-frame-ms=32 max-rotation-deg hmd=2.87 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.861,-0.052,0.506)
+locomotion: state=2 head=48.2 body=6.1 manual=(+0.00,+0.00) pending=(-0.023,+0.036)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=894 R=894 shots L=0 R=0
+firstperson: arm IK palettes solved=192 failed=0 unarmed-enabled=1
+arm-glance: t=78917140 pose=1842 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=2.870deg controller-step=(31.174mm,7.327deg) arm-relative-step=(13.832,23.586)mm arm-turn=(7.859,7.840)deg torso-relative-step=(28.003mm,3.564deg) redraw=0.000mm
+arm-glance: t=78917140 pose=1842 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=2.870deg controller-step=(24.764mm,5.476deg) arm-relative-step=(12.633,20.641)mm arm-turn=(7.622,5.575)deg torso-relative-step=(21.964mm,3.564deg) redraw=0.000mm
+vr-glance: t=78917140 pose=1842 history=32 frames=153150..153181 max-ms gpu=3.96 app=15.89 interval=16.24 submit=1.14 dropped=0 mispresented=31 motion-smoothed=0 flags=134
+fp-view: t=78917156 pose=1843 shader=26 max-frame-ms=32 max-rotation-deg hmd=1.61 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.902,-0.034,0.430)
+fp-view: t=78917406 pose=1858 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.68 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.874,0.064,0.481)
+locomotion: state=2 head=43.7 body=6.1 manual=(+0.00,+0.00) pending=(-0.038,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78917640 pose=1872 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.783deg controller-step=(14.579mm,5.944deg) arm-relative-step=(9.840,4.937)mm arm-turn=(6.075,6.117)deg torso-relative-step=(25.812mm,0.132deg) redraw=0.000mm
+arm-glance: t=78917640 pose=1872 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.783deg controller-step=(11.470mm,5.732deg) arm-relative-step=(8.950,4.607)mm arm-turn=(4.508,4.521)deg torso-relative-step=(13.864mm,0.132deg) redraw=0.000mm
+vr-glance: t=78917640 pose=1872 history=32 frames=153180..153211 max-ms gpu=4.04 app=15.54 interval=16.11 submit=1.10 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78917656 pose=1873 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.78 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.829,0.146,0.540)
+fp-view: t=78917906 pose=1888 shader=26 max-frame-ms=31 max-rotation-deg hmd=1.30 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.732,0.270,0.626)
+locomotion: state=2 head=33.2 body=6.1 manual=(+0.00,+0.00) pending=(-0.030,+0.064)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78918140 pose=1902 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=3.106deg controller-step=(6.837mm,5.763deg) arm-relative-step=(5.612,2.817)mm arm-turn=(4.408,4.390)deg torso-relative-step=(16.030mm,0.185deg) redraw=0.000mm
+arm-glance: t=78918140 pose=1902 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=3.106deg controller-step=(4.742mm,3.871deg) arm-relative-step=(8.371,4.313)mm arm-turn=(3.188,3.168)deg torso-relative-step=(16.695mm,0.185deg) redraw=0.000mm
+vr-glance: t=78918140 pose=1902 history=32 frames=153210..153241 max-ms gpu=3.96 app=15.89 interval=16.32 submit=1.14 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78918156 pose=1903 shader=26 max-frame-ms=31 max-rotation-deg hmd=3.11 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.767,0.181,0.616)
+fp-view: t=78918406 pose=1918 shader=26 max-frame-ms=31 max-rotation-deg hmd=2.80 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78918640 pose=1932 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=2.797deg controller-step=(2.843mm,2.524deg) arm-relative-step=(1.807,0.907)mm arm-turn=(1.749,1.741)deg torso-relative-step=(2.863mm,0.167deg) redraw=0.000mm
+arm-glance: t=78918640 pose=1932 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=2.797deg controller-step=(0.120mm,0.004deg) arm-relative-step=(0.739,0.380)mm arm-turn=(0.096,0.095)deg torso-relative-step=(0.205mm,0.167deg) redraw=0.000mm
+vr-glance: t=78918640 pose=1932 history=32 frames=153240..153271 max-ms gpu=4.15 app=15.92 interval=16.60 submit=1.09 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78918656 pose=1933 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78918906 pose=1948 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78919140 pose=1962 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.011mm,0.006deg) arm-relative-step=(0.075,0.038)mm arm-turn=(0.010,0.010)deg torso-relative-step=(0.493mm,0.002deg) redraw=0.000mm
+arm-glance: t=78919140 pose=1962 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.003mm,0.002deg) arm-relative-step=(0.069,0.036)mm arm-turn=(0.009,0.009)deg torso-relative-step=(0.494mm,0.002deg) redraw=0.000mm
+vr-glance: t=78919140 pose=1962 history=32 frames=153270..153301 max-ms gpu=4.16 app=15.76 interval=16.28 submit=1.12 dropped=0 mispresented=34 motion-smoothed=0 flags=334
+fp-view: t=78919156 pose=1963 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78919406 pose=1976 shader=26 max-frame-ms=63 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78919640 pose=1990 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.095,0.047)mm arm-turn=(0.012,0.012)deg torso-relative-step=(0.195mm,0.026deg) redraw=0.000mm
+arm-glance: t=78919640 pose=1990 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.099,0.052)mm arm-turn=(0.013,0.013)deg torso-relative-step=(0.196mm,0.026deg) redraw=0.000mm
+vr-glance: t=78919640 pose=1990 history=32 frames=153298..153329 max-ms gpu=4.20 app=15.64 interval=16.04 submit=1.24 dropped=0 mispresented=36 motion-smoothed=0 flags=334
+fp-view: t=78919671 pose=1991 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78919921 pose=2007 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78920140 pose=2020 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.036,0.018)mm arm-turn=(0.005,0.005)deg torso-relative-step=(0.216mm,0.000deg) redraw=0.000mm
+arm-glance: t=78920140 pose=2020 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.039,0.020)mm arm-turn=(0.005,0.005)deg torso-relative-step=(0.216mm,0.000deg) redraw=0.000mm
+vr-glance: t=78920140 pose=2020 history=32 frames=153328..153359 max-ms gpu=4.14 app=15.82 interval=16.39 submit=1.35 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78920171 pose=2022 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78920421 pose=2037 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: body stance state=2 posture=-0.029m idle=1 recovery=0 hands=0 planted=1 follow=0.00 gait=0.00 knee-bend=(3.3,0.2)deg
+arm-glance: t=78920640 pose=2050 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.209mm,0.000deg) redraw=0.000mm
+arm-glance: t=78920640 pose=2050 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.020,0.010)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.209mm,0.000deg) redraw=0.000mm
+vr-glance: t=78920640 pose=2050 history=32 frames=153358..153389 max-ms gpu=4.14 app=15.87 interval=16.52 submit=1.18 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78920671 pose=2052 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78920937 pose=2067 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78921140 pose=2080 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.022,0.011)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.185mm,0.001deg) redraw=0.000mm
+arm-glance: t=78921140 pose=2080 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.019,0.010)mm arm-turn=(0.002,0.002)deg torso-relative-step=(0.185mm,0.001deg) redraw=0.000mm
+vr-glance: t=78921140 pose=2080 history=32 frames=153388..153419 max-ms gpu=4.27 app=16.36 interval=16.84 submit=1.16 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78921187 pose=2082 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78921437 pose=2097 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: resolved body fit yaw=6.1 base=-15.1 offset=(-8.8,-20.6) pending=(0.000,0.081)m
+arm-glance: t=78921640 pose=2110 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.028,0.014)mm arm-turn=(0.004,0.004)deg torso-relative-step=(0.214mm,0.000deg) redraw=0.000mm
+arm-glance: t=78921640 pose=2110 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.027,0.014)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.213mm,0.000deg) redraw=0.000mm
+vr-glance: t=78921640 pose=2110 history=32 frames=153418..153449 max-ms gpu=4.23 app=15.78 interval=16.11 submit=0.95 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78921687 pose=2112 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+firstperson: pistol forearms source=body-IK joints=15 full-body=1 reference=model-bind roll-min=(0.9191,0.9173) roll-recovery=(0,0)
+fp-view: t=78921937 pose=2127 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=894 R=894 shots L=0 R=0
+arm-glance: t=78922140 pose=2140 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.025,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.207mm,0.000deg) redraw=0.000mm
+arm-glance: t=78922140 pose=2140 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.023,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.207mm,0.000deg) redraw=0.000mm
+vr-glance: t=78922156 pose=2140 history=32 frames=153448..153479 max-ms gpu=4.33 app=15.89 interval=16.62 submit=1.23 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78922187 pose=2142 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78922437 pose=2157 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78922640 pose=2170 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.020,0.010)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.160mm,0.001deg) redraw=0.000mm
+arm-glance: t=78922640 pose=2170 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.018,0.009)mm arm-turn=(0.002,0.002)deg torso-relative-step=(0.160mm,0.001deg) redraw=0.000mm
+vr-glance: t=78922671 pose=2171 history=32 frames=153479..153510 max-ms gpu=4.40 app=16.12 interval=16.58 submit=1.15 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78922687 pose=2172 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78922937 pose=2187 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78923140 pose=2200 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.027,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.213mm,0.000deg) redraw=0.000mm
+arm-glance: t=78923140 pose=2200 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.213mm,0.000deg) redraw=0.000mm
+vr-glance: t=78923171 pose=2201 history=32 frames=153509..153540 max-ms gpu=4.32 app=15.57 interval=16.03 submit=1.00 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78923187 pose=2202 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78923437 pose=2215 shader=26 max-frame-ms=78 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78923640 pose=2228 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.034,0.018)mm arm-turn=(0.004,0.005)deg torso-relative-step=(0.302mm,0.000deg) redraw=0.000mm
+arm-glance: t=78923640 pose=2228 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.031,0.016)mm arm-turn=(0.004,0.004)deg torso-relative-step=(0.302mm,0.000deg) redraw=0.000mm
+vr-glance: t=78923671 pose=2229 history=32 frames=153537..153568 max-ms gpu=4.30 app=15.86 interval=16.45 submit=1.14 dropped=0 mispresented=36 motion-smoothed=0 flags=334
+fp-view: t=78923687 pose=2230 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78923937 pose=2245 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78924156 pose=2258 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.016,0.009)mm arm-turn=(0.002,0.002)deg torso-relative-step=(0.124mm,0.001deg) redraw=0.000mm
+arm-glance: t=78924156 pose=2258 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.015,0.008)mm arm-turn=(0.002,0.002)deg torso-relative-step=(0.124mm,0.001deg) redraw=0.000mm
+vr-glance: t=78924171 pose=2259 history=32 frames=153567..153598 max-ms gpu=4.49 app=15.57 interval=16.14 submit=1.44 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78924187 pose=2260 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78924437 pose=2275 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78924656 pose=2288 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.026,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.213mm,0.000deg) redraw=0.000mm
+arm-glance: t=78924656 pose=2288 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.213mm,0.000deg) redraw=0.000mm
+vr-glance: t=78924671 pose=2289 history=32 frames=153597..153628 max-ms gpu=4.49 app=15.63 interval=16.21 submit=1.06 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78924687 pose=2290 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78924937 pose=2305 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78925156 pose=2318 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.029,0.014)mm arm-turn=(0.004,0.004)deg torso-relative-step=(0.238mm,0.000deg) redraw=0.000mm
+arm-glance: t=78925156 pose=2318 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.026,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.238mm,0.000deg) redraw=0.000mm
+vr-glance: t=78925171 pose=2319 history=32 frames=153627..153658 max-ms gpu=4.26 app=15.77 interval=16.32 submit=1.25 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78925187 pose=2320 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78925437 pose=2335 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+firstperson: body stance state=2 posture=-0.029m idle=1 recovery=0 hands=0 planted=1 follow=0.00 gait=0.00 knee-bend=(3.3,0.2)deg
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78925656 pose=2348 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.023,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.181mm,0.000deg) redraw=0.000mm
+arm-glance: t=78925656 pose=2348 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.021,0.011)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.181mm,0.000deg) redraw=0.000mm
+vr-glance: t=78925671 pose=2349 history=32 frames=153657..153688 max-ms gpu=4.27 app=15.78 interval=16.12 submit=1.22 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78925687 pose=2350 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78925937 pose=2365 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78926156 pose=2378 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.026,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.212mm,0.000deg) redraw=0.000mm
+arm-glance: t=78926156 pose=2378 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.213mm,0.000deg) redraw=0.000mm
+vr-glance: t=78926171 pose=2379 history=32 frames=153687..153718 max-ms gpu=4.31 app=15.61 interval=16.25 submit=1.16 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78926187 pose=2380 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78926437 pose=2395 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: resolved body fit yaw=6.1 base=-15.1 offset=(-8.8,-20.6) pending=(0.000,0.081)m
+arm-glance: t=78926656 pose=2408 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.026,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.208mm,0.000deg) redraw=0.000mm
+arm-glance: t=78926656 pose=2408 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.023,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.208mm,0.000deg) redraw=0.000mm
+vr-glance: t=78926671 pose=2409 history=32 frames=153717..153748 max-ms gpu=4.10 app=15.57 interval=15.90 submit=0.98 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78926687 pose=2410 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+firstperson: pistol forearms source=body-IK joints=15 full-body=1 reference=model-bind roll-min=(0.9508,0.9824) roll-recovery=(0,0)
+fp-view: t=78926937 pose=2425 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+firstperson: Touch state [periodic] blocked=none game=1 gun=1 status=4 HD=1 scene=1 active=1 heading=1 poses=1/1 offsets=1/1 build=ok/ok head-fallbacks=0/0
+firstperson: Touch ready=1 arms L=894 R=894 shots L=0 R=0
+arm-glance: t=78927156 pose=2438 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.026,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.205mm,0.000deg) redraw=0.000mm
+arm-glance: t=78927156 pose=2438 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.205mm,0.000deg) redraw=0.000mm
+vr-glance: t=78927171 pose=2439 history=32 frames=153747..153778 max-ms gpu=4.30 app=15.86 interval=16.26 submit=0.89 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78927187 pose=2440 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78927437 pose=2453 shader=26 max-frame-ms=78 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78927656 pose=2466 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.027,0.014)mm arm-turn=(0.003,0.004)deg torso-relative-step=(0.219mm,0.000deg) redraw=0.000mm
+arm-glance: t=78927656 pose=2466 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=28 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.025,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.219mm,0.000deg) redraw=0.000mm
+vr-glance: t=78927671 pose=2467 history=32 frames=153775..153806 max-ms gpu=4.88 app=15.63 interval=16.41 submit=1.32 dropped=0 mispresented=36 motion-smoothed=0 flags=334
+fp-view: t=78927687 pose=2468 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78927937 pose=2483 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78928156 pose=2496 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.025,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.204mm,0.000deg) redraw=0.000mm
+arm-glance: t=78928156 pose=2496 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.023,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.204mm,0.000deg) redraw=0.000mm
+vr-glance: t=78928171 pose=2497 history=32 frames=153805..153836 max-ms gpu=4.24 app=28.50 interval=30.19 submit=1.74 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78928187 pose=2498 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78928437 pose=2513 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78928656 pose=2526 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.026,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.212mm,0.000deg) redraw=0.000mm
+arm-glance: t=78928656 pose=2526 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.212mm,0.000deg) redraw=0.000mm
+vr-glance: t=78928671 pose=2527 history=32 frames=153835..153866 max-ms gpu=4.04 app=15.70 interval=16.09 submit=1.21 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78928687 pose=2528 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78928937 pose=2543 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78929156 pose=2556 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.027,0.014)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.223mm,0.000deg) redraw=0.000mm
+arm-glance: t=78929156 pose=2556 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.223mm,0.000deg) redraw=0.000mm
+vr-glance: t=78929171 pose=2557 history=32 frames=153865..153896 max-ms gpu=3.97 app=15.55 interval=16.06 submit=1.16 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78929187 pose=2558 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78929437 pose=2573 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78929656 pose=2585 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=29 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.029,0.015)mm arm-turn=(0.004,0.004)deg torso-relative-step=(0.227mm,0.000deg) redraw=0.000mm
+arm-glance: t=78929656 pose=2585 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=29 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.026,0.014)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.226mm,0.000deg) redraw=0.000mm
+vr-glance: t=78929671 pose=2586 history=32 frames=153894..153925 max-ms gpu=3.97 app=37.43 interval=37.76 submit=2.08 dropped=0 mispresented=35 motion-smoothed=0 flags=334
+fp-view: t=78929687 pose=2588 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78929937 pose=2603 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78930156 pose=2616 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=31 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.026,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.212mm,0.000deg) redraw=0.000mm
+arm-glance: t=78930156 pose=2616 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=31 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.212mm,0.000deg) redraw=0.000mm
+vr-glance: t=78930171 pose=2617 history=32 frames=153925..153956 max-ms gpu=5.93 app=17.73 interval=37.76 submit=4.31 dropped=0 mispresented=32 motion-smoothed=0 flags=334
+fp-view: t=78930187 pose=2618 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78930437 pose=2633 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+firstperson: body stance state=2 posture=-0.029m idle=1 recovery=0 hands=0 planted=1 follow=0.00 gait=0.00 knee-bend=(3.3,0.2)deg
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78930656 pose=2646 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.023,0.012)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.193mm,0.000deg) redraw=0.000mm
+arm-glance: t=78930656 pose=2646 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.021,0.011)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.193mm,0.000deg) redraw=0.000mm
+vr-glance: t=78930671 pose=2647 history=32 frames=153955..153986 max-ms gpu=4.37 app=15.89 interval=16.40 submit=1.12 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78930687 pose=2648 shader=26 max-frame-ms=32 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78930937 pose=2663 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+locomotion: state=2 head=39.4 body=6.1 manual=(+0.00,+0.00) pending=(+0.000,+0.081)m drag=(+0.000,+0.000)m input=0000000000000020
+arm-glance: t=78931156 pose=2676 hand=0 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.027,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.215mm,0.000deg) redraw=0.000mm
+arm-glance: t=78931156 pose=2676 hand=1 pass=0 status=4 gun=1 joints=15 pivot=wrist frames=30 head-step=0.000deg controller-step=(0.000mm,0.000deg) arm-relative-step=(0.024,0.013)mm arm-turn=(0.003,0.003)deg torso-relative-step=(0.215mm,0.000deg) redraw=0.000mm
+vr-glance: t=78931171 pose=2677 history=32 frames=153985..154016 max-ms gpu=4.37 app=15.89 interval=17.10 submit=1.44 dropped=0 mispresented=32 motion-smoothed=0 flags=134
+fp-view: t=78931187 pose=2678 shader=26 max-frame-ms=31 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+fp-view: t=78931437 pose=2691 shader=26 max-frame-ms=78 max-rotation-deg hmd=0.00 native=0.74 draw=0.00 native-yaw=-15.12 draw-forward=(0.261,0.000,-0.965) hmd-forward=(-0.812,0.077,0.578)
+hook[InventoryWorldBackground]: removed
+hook[TR4 vidLoadTexture]: removed
+hook[TR4 ogl_texUpdate]: removed
+hook[InventoryAmmoHotkeys]: removed
+hook[VRPadUpdate]: removed
+hook[VRPadMessages]: removed
+pad: _XInputGetState restored
+hook[FlareTrackedHand]: removed
+hook[FlarePreviousWrist]: removed
+hook[FlareDynamicLight]: removed
+hook[VRWallSwitch]: removed
+hook[VRSwitchMovePosition]: removed
+hook[VRSwitchTestPosition]: removed
+hook[CrouchTrackedHandVisibility]: removed
+hook[CrouchMotionGuns]: removed
+hook[DrawActionIndicators]: removed
+hook[MotionInitialiseProjectile]: removed
+hook[MotionGunJoint]: removed
+hook[MotionFireCrossbow]: removed
+hook[MotionFireSpecial]: removed
+hook[MotionFireShotgun]: removed
+hook[MotionRifleHandler]: removed
+vr: third-person positional neutral captured; tracked rotation preserved
+hook[SetGunFlash]: removed
+hook[GetTargetOnLOS]: removed
+hook[PistolHandler]: removed
+hook[AnimatePistols]: removed
+hook[FireWeapon]: removed
+hook[FirstPersonDrawToShadow]: removed
+hook[GetJoints]: removed
+hook[DrawHair]: removed
+hook[DrawCreatureHD]: removed
+hook[phd_GenerateW2V]: removed
+hook[AimWeapon]: removed
+hook[LaraAboveWater]: removed
+hook[RoomscaleGetCollisionInfo]: removed
+hook[AnimateLara]: removed
+hook[DrawSkyHD]: removed
+hook[DrawLaraHD]: removed
+hook[shader_init]: removed
+hook[S_GetObjectBounds]: removed
+hook[PrintRoomsList]: removed
+hook[fmvShow]: removed
+hook[ogl_present]: removed
+hook[ogl_drawVB]: removed
+hook[ogl_draw]: removed
+hook[validate_draw]: removed
+hook[vid_setPass]: removed

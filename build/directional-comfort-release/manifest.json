@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-30T11:40:21.2433195-04:00",
+    "dll_sha256":  "27D093C654B28D488E5A30DC2373A2258EFBE2517AA987E27100E9CC6A1A5AAD",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-directional-comfort-20261030-114020",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_log":  "build\\directional-comfort-tests.log",
+    "native_verification":  "build\\directional-comfort-native.log",
+    "hardware_verified":  false,
+    "change":  "First-person armed back/side takeoff suppresses native armed standing analog turn-bit injection. Side jumps use the stable collision-root camera and hands-only body visibility; native third person and shadows remain. Release build, 4932571 regression checks and 240 native direction cases passed. Both reported direction and camera failures reproduced before correction."
+}
