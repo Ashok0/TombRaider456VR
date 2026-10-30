@@ -1,0 +1,11 @@
+{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-30T19:17:03.3118462-04:00",
+    "dll_sha256":  "A844430EAFAF2A82D8FC8621E1FCAEA9D1B7CF4AEFAAD407BA9FBDE5C5B2078C",
+    "previous_dll_sha256":  "27D093C654B28D488E5A30DC2373A2258EFBE2517AA987E27100E9CC6A1A5AAD",
+    "previous_ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "ini_sha256":  "FF8F10E3111D5C6B5B681C0AC947B6B09EDF0F66BB061432AD03EF01FFFF7CB4",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-physical-crouch-20261030-191703",
+    "setting_change":  "FirstPersonPhysicalCrouch=1 added; all other INI content preserved",
+    "validation":  "Release build passed; 102 standalone posture/input checks passed; native TR4/5 entry/exit code inspected; full self-test not run; headset unverified"
+}

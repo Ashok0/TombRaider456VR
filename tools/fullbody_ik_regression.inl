@@ -115,11 +115,11 @@ void TestFullBodyIK() {
     {
         const float height=VR().m_rawHeadPose.m[1][3];
         config.firstPersonPhysicalCrouch=true;
-        VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-.36f;
+        VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-.56f;
         Check(FirstPersonPhysicalCrouch(true),"calibrated HMD height can request native crouch");
         VRSystem::HandState hands[2]{};XState input{};bool shifted=false,action=false;
         BuildStateFromHands(hands,input,shifted,true,action);
-        Check((input.Gamepad.wButtons&XB_LEFT_SHOULDER)!=0,"physical crouch uses the game's existing Duck binding");
+        Check((input.Gamepad.wButtons&XB_LEFT_SHOULDER)==0,"physical crouch bypasses native button toggle/debounce");
         VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-.28f;
         Check(FirstPersonPhysicalCrouch(true),"head height inside hysteresis band keeps native crouch held");
         Check(!FirstPersonPhysicalCrouch(false),"menus release physical crouch input");

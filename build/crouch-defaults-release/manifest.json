@@ -1,0 +1,7 @@
+﻿{
+    "dll_sha256":  "EEC6E0B904108424450579C6CBEB77BFB4CB3149D619413354AEABF1AA9079E8",
+    "ini_sha256":  "FF8F10E3111D5C6B5B681C0AC947B6B09EDF0F66BB061432AD03EF01FFFF7CB4",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-crouch-defaults-20261030-192648",
+    "change":  "Physical crouch defaults on; full-body IK prerequisite on in generated INI; existing INI preserved",
+    "validation":  "Release build passed; self-test not run"
+}

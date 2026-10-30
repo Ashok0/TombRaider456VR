@@ -356,7 +356,7 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.firstPersonBodyScale=GetFloat(L"FirstPersonBodyScale",0,ini);
     if(!std::isfinite(g_cfg.firstPersonBodyScale) || g_cfg.firstPersonBodyScale<=0) g_cfg.firstPersonBodyScale=0;
     else g_cfg.firstPersonBodyScale=std::clamp(g_cfg.firstPersonBodyScale,.5f,1.5f);
-    g_cfg.firstPersonPhysicalCrouch=GetBool(L"FirstPersonPhysicalCrouch",false,ini);
+    g_cfg.firstPersonPhysicalCrouch=GetBool(L"FirstPersonPhysicalCrouch",g_cfg.firstPersonPhysicalCrouch,ini);
     g_cfg.firstPersonUnarmedIK = GetBool(
         L"FirstPersonUnarmedIK", g_cfg.firstPersonUnarmedIK, ini);
     g_cfg.firstPersonMotionGunGripForwardMetres = GetFloat(

@@ -1,0 +1,62 @@
+[
+  {
+    "path": "src/BodyFollower.h",
+    "old_sha256": "1be7f40ed6c84624eb501650fc70635e9e3f5ca090fff74b3ab4557ff325748e",
+    "new_sha256": "d7a108608df7297ca92272b00e1228df86e0a2ee592b4c0b4af9e413ad4db475"
+  },
+  {
+    "path": "src/FirstPerson.cpp",
+    "old_sha256": "0a420454e3ea5786e70c09c44ccd9c3524a18134e3e89542ad63c96ef9c225f0",
+    "new_sha256": "9baa41434cae9cc811dcd9166edea72de9c171dcd3330179a2895d474c9177c8"
+  },
+  {
+    "path": "src/FirstPerson.h",
+    "old_sha256": "80c96d774637b948be0395365837742304ffd00477a35a5934f4bc83d4fcf2cc",
+    "new_sha256": "af8e4e68dbab401f928b851aa217a5fc8ca50abb7851b3e11d11da1d98567a8c"
+  },
+  {
+    "path": "src/Gamepad.cpp",
+    "old_sha256": "b2cf2f8122ae5259ba0fd2d1aec046b858bb722db1e64ae4a9f000338bee6400",
+    "new_sha256": "54f7cf26d7ae28186a62f326eb7436a8902eb1e846cda087ce35cfe441212e3f"
+  },
+  {
+    "path": "src/Config.h",
+    "old_sha256": "e3b1831544d536a6bcdc8c91fa43a6f7ecad61ebc62cd907c378a25fd713c9c9",
+    "new_sha256": "a7a512172dc12b064cd15865a3f4eb766e449f0f1b3850c2d8909b2431885081"
+  },
+  {
+    "path": "src/DefaultIni.h",
+    "old_sha256": "bfa45081ce17176908d960c7f24bd651375cf2c821170865dabcbad6ec3e08fe",
+    "new_sha256": "edcdc4357c24816d9d2525cecb89fc1c5c1ff5a474ab00569d97f8a56e4b1a20"
+  },
+  {
+    "path": "TombRaiderVR.ini",
+    "old_sha256": "c4f9b05521931b29666b9129624fad967487f388b57618a07cb387b80142a322",
+    "new_sha256": "d85651657be43031ba3168b37b47d3712c266e3619c0f0cc924f6ec45686daef"
+  },
+  {
+    "path": "README.md",
+    "old_sha256": "b892cc24de2bba6471e242a5957ba878e366092df2cee923e9c49f641a57c243",
+    "new_sha256": "75c79d8ec7ad9675c7c8a24f880c1494f461adda26d4003769d8269104640f28"
+  },
+  {
+    "path": "tests/body_parity_selftest.cpp",
+    "old_sha256": "4ef9f2e2fffde94f9dfb820c6fa2f76c4261f89624a1cb7a03a920e8d3dedbc6",
+    "new_sha256": "15b69ec0a988ac784b0447952c951a4a393ca58cccc55604914ebe7fe24dde5b"
+  },
+  {
+    "path": "tests/collection_integration_selftest.h",
+    "old_sha256": "29bcb58acb67b899a14a6358bf460d1bee384bcb3d834abf9a063bce2955be59",
+    "new_sha256": "7d46b0277894ca9bf049ce2f807a86c23702ea2512ff5ee72d003e54cb288d9f"
+  },
+  {
+    "path": "tests/physical_crouch_tests.cpp",
+    "old_sha256": null,
+    "new_sha256": "b052f51d2c97bcf4bea22e74c0a19f7468bda7bdf67208de85fdc6ce4da13dec"
+  },
+  {
+    "path": "tools/verify_physical_crouch_binaries.py",
+    "old_sha256": null,
+    "new_sha256": "cb28d62e142fee695a6effa9ed430b407c89e1478fdd94171a7af669ed401bfd"
+  }
+]

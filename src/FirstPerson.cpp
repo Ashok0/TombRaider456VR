@@ -3674,6 +3674,15 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     } else g_ledgeGrab.Reset();
     const bool airborneBefore=item && (*reinterpret_cast<const uint32_t*>(item+0x1820)&8);
     {
+        // Keep hold semantics through the native crawl -> duck -> stand exit.
+        // Native collision still decides whether the ceiling permits standing.
+        const bool physicalDuck=Cfg().firstPersonPhysicalCrouch && g_physicalCrouchCamera &&
+            item && item==g_headingItem && !ControllerTrackingBlockedReason() &&
+            (CanTurnBody(item) || CanUseCrouchCamera(item));
+        auto* app=physicalDuck ? *Ptr<uint8_t*>(g_motionDll->app) : nullptr;
+        firstperson::PhysicalCrouchHoldScope physicalCrouch(
+            app ? Ptr<uint64_t>(g_boundDll->input) : nullptr,
+            app ? app+0x9f0+((app[0x9e4]>>1)&1) : nullptr,g_heightCrouch.active);
         IdleTrackedGunHeadingScope idleGunHeading(item);
         CrouchWeaponScope crouchWeapons(item);
         DirectionalJumpAxesScope jumpAxes(item);
@@ -5121,8 +5130,9 @@ bool FirstPersonActive() {
 bool FirstPersonPhysicalCrouch(bool allowed) {
     const auto* item=g_boundDll && g_boundBase ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
     const bool enabled=allowed && Cfg().firstPersonFullBodyIK && Cfg().firstPersonPhysicalCrouch &&
-        !ControllerTrackingBlockedReason() && item && (CanTurnBody(item) || CanSteerCrouch(item));
-    const bool crouched=g_heightCrouch.Update(enabled,VR().FirstPersonHeightDrop());
+        !ControllerTrackingBlockedReason() && item && (CanTurnBody(item) || CanUseCrouchCamera(item));
+    // Looking down alone is not a squat. Match the visible body's posture gate.
+    const bool crouched=g_heightCrouch.Update(enabled,VR().FirstPersonPostureDrop());
     if(crouched) g_physicalCrouchCamera=true;
     return crouched;
 }

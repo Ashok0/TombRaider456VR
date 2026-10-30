@@ -1472,10 +1472,25 @@ retain their existing controller targets, and holsters follow the solved hips.
 Ledges, climbing, swimming, vehicles, scripted interactions and native shadows
 retain their existing state-specific handling.
 
-`FirstPersonPhysicalCrouch=1` optionally sends native Duck after lowering 35 cm
-below calibration, releasing above the 23 cm threshold. Its camera path avoids
+`FirstPersonPhysicalCrouch=1` sends native Duck after lowering 55 cm
+below calibration (with neck pitch compensated), releasing above the 23 cm threshold.
+The visible legs bend through a partial squat before the native crouch hides the body.
+Physical crouch uses hold semantics during simulation, including the crawl-to-stand
+transition, even with toggle crouch selected. The normal button setting is restored
+after each tick; native ceiling clearance still controls whether Lara can stand.
+Its camera path avoids
 adding the game's crouch height drop on top of the physical HMD drop. This option
-defaults off; physical crouching still bends the rendered body with it disabled.
+defaults on, with full-body IK enabled in the stock INI. Set it to 0 to disable
+automatic native crouch; physical squatting still bends the rendered body.
+
+2026-10-30 physical-crouch correction (TR4/5): posture now enters the native
+Duck mask inside the above-water simulation tick, rather than synthesizing an LB
+button that the game's toggle/debounce path can latch. The temporary hold-mode
+override remains active until the native crouch/crawl exit finishes. Third person
+and the TR1-3 project are unchanged. The release build and 102 standalone
+posture/input checks passed (`tools/physical_crouch_tests.cpp`); the crashing full
+self-test was not run. Native TR4/5 crouch entry/exit branches were inspected;
+headset behavior still requires in-game confirmation.
 
 | Setting | Default |
 |---|---:|
@@ -1485,7 +1500,7 @@ defaults off; physical crouching still bends the rendered body with it disabled.
 | `FirstPersonBodyFollowSpeedMetres` | 0.9 |
 | `FirstPersonBodyHandYawWeight` | 0.15 (0 disables controller support and hint) |
 | `FirstPersonBodyScale` | 0 (automatic standing fit) |
-| `FirstPersonPhysicalCrouch` | 0 |
+| `FirstPersonPhysicalCrouch` | 1 |
 
 State advances once per tracked pose, shared by both eyes and all skin/weapon
 passes. Recenter, view/level changes and tracking gaps reset stale state.

@@ -134,10 +134,33 @@ struct HeightCrouch {
     bool active=false;
     bool Update(bool enabled,float drop) {
         if(!enabled || !std::isfinite(drop)) active=false;
-        else if(!active && drop>=.35f) active=true;
+        // Leave room for a visible IK squat before native Duck hides the body.
+        else if(!active && drop>=.55f) active=true;
         else if(active && drop<=.23f) active=false;
         return active;
     }
+};
+// Physical posture is a held request, even when the player's button binding is
+// configured as a toggle. Scope this override to native Lara simulation only.
+struct PhysicalCrouchHoldScope {
+    uint64_t* input=nullptr;
+    uint8_t* mode=nullptr;
+    uint64_t savedDuck=0;
+    uint8_t savedMode=0;
+    static constexpr uint64_t Duck=uint64_t(1)<<25;
+    PhysicalCrouchHoldScope(uint64_t* nativeInput,uint8_t* crouchMode,bool held)
+        : input(nativeInput),mode(crouchMode) {
+        if(!input || !mode) { input=nullptr;mode=nullptr;return; }
+        savedDuck=*input&Duck;savedMode=*mode;
+        *mode=0;
+        if(held) *input|=Duck;
+    }
+    ~PhysicalCrouchHoldScope() {
+        if(input) *input=(*input&~Duck)|savedDuck;
+        if(mode) *mode=savedMode;
+    }
+    PhysicalCrouchHoldScope(const PhysicalCrouchHoldScope&)=delete;
+    PhysicalCrouchHoldScope& operator=(const PhysicalCrouchHoldScope&)=delete;
 };
 // Side/back gaits swing the authored torso even with fixed tracking. Keep the
 // last ordinary ground upper-body reference in Lara's root/yaw frame, then

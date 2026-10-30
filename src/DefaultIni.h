@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 60029 bytes, 1194 lines.
+// Source: TombRaiderVR.ini, 60620 bytes, 1205 lines.
 #pragma once
 
 namespace tr {
@@ -648,12 +648,12 @@ MenuChordPressSeconds=0.15
 
 ; How far the left stick must travel before a shifted press registers, 0-1.
 ; Raise it if directions trigger too easily, lower it if they feel stiff.
-DpadShiftDeadzone=0.5
+)INI"
+           R"INI(DpadShiftDeadzone=0.5
 
 ; Which XInput button the left hand's LOWER face button sends.
 ;   1 = BACK  -- the System menu. Default.
-)INI"
-           R"INI(;   0 = START -- the pause/inventory menu.
+;   0 = START -- the pause/inventory menu.
 ; inputUpdate() decodes BACK to internal key 0x62 and START to 0x63; which one a
 ; given screen treats as System lives in the game DLLs, so this stays switchable.
 GamepadMenuUsesBack=1
@@ -809,11 +809,11 @@ TR4EffectStrength=1.0
 ; camera and first person, including when selected in a menu. Y + RT switches
 ; classic/remastered graphics. At 0, the old Y + LT hold chord is unchanged.
 ; Startup is always third person. Fixed/cinematic cameras
-; keep their authored framing. TR6 uses a different engine and is unsupported.
+)INI"
+           R"INI(; keep their authored framing. TR6 uses a different engine and is unsupported.
 FirstPerson=1
 
-)INI"
-           R"INI(; Animated head joint and eye offset in that joint's local coordinates.
+; Animated head joint and eye offset in that joint's local coordinates.
 ; Negative Y is up; positive Z moves the eye forward.
 FirstPersonJoint=14
 FirstPersonAnchorX=0
@@ -878,7 +878,11 @@ FirstPersonUnarmedIK=1
 ; Full-body inference from headset/controllers in TR4/5 HD first person.
 ; Torso/hips follow head movement; leg IK retains native animated foot targets.
 ; No waist/foot trackers required. Set 0 to restore the earlier arm-only mode.
-FirstPersonFullBodyIK=0
+FirstPersonFullBodyIK=1
+; Physical squats bend the legs, then enter native crouch at a 55 cm drop.
+; Stand within 23 cm of calibrated height to release (ceiling clearance applies).
+; Requires full-body IK above. Set 0 to keep native crouch button-only.
+FirstPersonPhysicalCrouch=1
 ; Mesh grip calibration: positive pulls the gun back along its barrel axis.
 ; This local grip point stays on the controller as the gun rotates.
 ; Known-good fit: 0.2032 = 8 inches back; raise -0.06985 = 2.75 inches down.
@@ -963,7 +967,8 @@ DynamicBonesTorsoJoint=7
 ;
 ; The palette holds skinning matrices (bone * inverse-bind), so a translation
 ; column is not a bone position: the measured body draw put forearm and hand
-; 2.0 units apart and hips and torso 0.5, impossible for real origins. Such a
+)INI"
+           R"INI(; 2.0 units apart and hips and torso 0.5, impossible for real origins. Such a
 ; matrix does correctly map a bind-pose point to its skinned world position,
 ; which is what the anchor is. Lara's model origin is at the hips with +Y
 ; DOWN, so the chest is ~170 units of negative Y, slightly forward in Z, and
@@ -976,8 +981,7 @@ DynamicBonesAnchorZ=45
 ; is a ratio near 0.12.
 ;
 ; Frequency is what makes it visible, not strength. The previous 1900/22 was
-)INI"
-           R"INI(; a 6.9 Hz flutter that died in 0.11 s -- over before the eye registers it,
+; a 6.9 Hz flutter that died in 0.11 s -- over before the eye registers it,
 ; and landing during Lara's own landing crouch, which hid the rest. Logs
 ; showed every jump detected and displaced ~14 units; it just could not be
 ; seen. At 4 Hz / 0.12 a running jump rings for about 0.8 s. Resting sag is
@@ -1126,7 +1130,8 @@ DynamicBonesChestWidth=0.34
 ; and the belly.
 DynamicBonesChestBand=0.65
 
-; Permanently push the selected region out of her front by this many units.
+)INI"
+           R"INI(; Permanently push the selected region out of her front by this many units.
 ; 0 = off. Calibration aid: set 30, stand still, and what bulges is exactly
 ; what will bounce.
 DynamicBonesRegionDebug=0
@@ -1138,8 +1143,7 @@ DynamicBonesRegionDebug=0
 ; when DynamicBonesShader=0, or when the shader path cannot start on this
 ; build; the log says which. Joint 7 is TORSO, so everything weighted to it
 ; moves and the whole upper body wobbles rather than just the chest: coarse,
-)INI"
-           R"INI(; but it also makes the solver visible by eye -- anchor position, direction
+; but it also makes the solver visible by eye -- anchor position, direction
 ; of motion and magnitude can all be judged from it.
 DynamicBonesApply=1
 
