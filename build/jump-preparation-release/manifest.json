@@ -1,0 +1,11 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-30T00:08:45.7888201-04:00",
+    "dll_sha256":  "BE0017F5452EFB12C876A5D1F69624F55CBE16D265812C3066E6C6D562F9C8DB",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-jump-preparation-20261030-000845",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_log":  "build\\jump-preparation-tests.log",
+    "hardware_verified":  false,
+    "change":  "TR4/5 first-person grounded jump compression retains the standing camera and upright VRIK torso/knees. Third person, airborne poses, native jump timing and collision unchanged. Release build and 4791977 first-person regression checks passed."
+}

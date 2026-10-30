@@ -144,6 +144,7 @@ struct GameDllLayout {
     const uint8_t* drawVCIHeadsetPrologue;
     const uint8_t* drawLabyrinthFishEyePrologue;
     uint32_t anims; // ANIM_STRUCT*; runtime records are 48 bytes in TR4/5.
+    uint32_t laraAsCompress; // Native jump direction/clearance selection before takeoff.
 };
 
 // TR6 is a different engine, so it has its own row type. One row per tomb6.dll

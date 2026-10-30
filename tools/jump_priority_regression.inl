@@ -71,6 +71,7 @@ void __cdecl NativeEdgeJumpConsumer(uint8_t* item,void* collision) {
         p.z_pos+=(int(std::cos(yaw)*16384.f)*47)>>14;
     }
 }
+#include "instant_jump_regression.inl"
 void TestGroundJumpPriority() {
     using namespace tr;
     const auto rva=[](const void* p) {return uint32_t(reinterpret_cast<uint64_t>(p)-g_boundBase);};
@@ -313,5 +314,6 @@ void TestGroundJumpPriority() {
     *reinterpret_cast<int32_t*>(cameraMemory+off::camera_type)=kCamFixed;
     UpdateGroundJumpCameraContext(itemMemory);
     Check(!g_groundJump.pending && g_groundJump.held,"camera takeover cancels tap without inventing a new press edge");
+    TestInstantJump(reset);
 }
 } // namespace

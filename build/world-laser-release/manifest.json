@@ -1,11 +1,11 @@
 ﻿{
     "status":  "deployed-and-hash-verified",
-    "deployed_at":  "2026-10-28T16:32:40.3611427-04:00",
-    "dll_sha256":  "9A9519AB6FAB5B8194E4EB96019E26D7EE348538C5B4ABDE28C8E28EF2A12F43",
+    "deployed_at":  "2026-10-28T20:29:18.9076434-04:00",
+    "dll_sha256":  "A81AA318AB43EDBE60A8BA6F314A828B892DCD71CA692F7BAC81CA15DBCE0A07",
     "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
-    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-world-laser-20261028-163240",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-jump-landing-20261028-202918",
     "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
-    "regression_log":  "build\\crate-camera-regression.log",
+    "regression_log":  "build\\jump-landing-regression.log",
     "hardware_verified":  false,
-    "change":  "Restore collision clearance for the base first-person eye anchor at crates and walls while preserving optional free physical head leaning. Body retraction remains aligned with the eye. Crate regression reproduced failure before correction; Release build and 4780070 first-person regression checks passed. Retains sidestep/backpedal VRIK stability changes."
+    "change":  "TR4/5 first-person ordinary ground-jump landings retain standing eye and torso height with upright knees. Falls, hard landings and third-person retain native presentation. Native simulation unchanged. Release build and 4788059 first-person regression checks passed; pose regression reproduced failure with correction disabled. Retains crate camera clearance and VRIK arm stability fixes."
 }

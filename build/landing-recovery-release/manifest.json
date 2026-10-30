@@ -1,0 +1,12 @@
+﻿{
+    "status":  "deployed-and-hash-verified",
+    "deployed_at":  "2026-10-30T00:57:35.4263190-04:00",
+    "dll_sha256":  "406DA9B24E3709C0CA37C4249EDED244DDC4A03754487835198F2249E613E9FF",
+    "ini_sha256":  "E8DFF2DDF241CFACB44819D60346C2D9B754C9F7FC460036D2C43E49BED9C686",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-landing-recovery-20261030-005735",
+    "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "regression_log":  "build\\landing-recovery-tests.log",
+    "animation_verification":  "build\\landing-recovery-tables.log",
+    "hardware_verified":  false,
+    "change":  "TR4/5 first-person soft landings immediately return to idle or run after native collision confirms contact. Removes recovery foot shuffle and permits a fresh jump tap immediately after touchdown. Preserves collision position, damage, hard impacts, interactions and third person. Release build, 4792933 regression checks and 55 installed landing animation tables passed."
+}

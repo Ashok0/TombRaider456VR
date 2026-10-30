@@ -1,5 +1,6 @@
 // Real render-hook fixtures plus independent physical constraints for full-body IK.
 #include "flare_regression.inl"
+#include "jump_landing_regression.inl"
 namespace {
 tr::motiongun::Vec bodyJointWorld[15]{};
 tr::motiongun::Basis bodyJointRotation{{{1,0,0},{0,1,0},{0,0,1}}};
@@ -76,11 +77,13 @@ void __cdecl ObserveFullBodyDraw(uint8_t* item,int32_t masked,int32_t) {
 }
 void TestFullBodyIK() {
     using namespace tr;using namespace tr::motiongun;
+    TestJumpLandingIntent();
     const auto settings=config;const auto savedDll=dll;const auto calibration=testCalibration;
     const auto savedPistolRoll=g_pistolRoll;g_pistolRoll={};
     const auto savedFollower=g_bodyFollower;const auto savedSerial=VR().m_poseSerial;
     const auto savedTorso=g_torsoPose;const auto savedMount=g_mountBodyTransition;
     const auto savedGait=g_groundGait;const auto savedGaitObject=g_groundGaitObject;
+    const auto savedJumpLanding=g_jumpLanding;const auto savedJumpBody=g_jumpBodyReference;const auto savedJumpBodyObject=g_jumpBodyObject;
     const bool savedLanding=g_bodyLanding;g_bodyLanding=false;
     const auto savedPistolAnimation=g_pistolAnimation;g_pistolAnimation.Reset();
     const auto savedVisibility=g_bodyVisibility;g_bodyVisibility={};
@@ -426,6 +429,99 @@ void TestFullBodyIK() {
             g_pistolBodyScope=oldPistolScope;
             g_haveManualInput=oldManual;g_manualLocal=oldLocal;g_manualWorld=oldWorld;
             g_groundGait.Reset();g_bodyFollower.Reset();g_torsoPose.Reset();
+        }
+        // A same-height jump uses a standing body/eye during the authored
+        // kneel; the very same native palette after a drop must still kneel.
+        {
+            const auto oldSettings=config;
+            const auto oldScene=g_scenePose;const auto oldGround=g_groundEye;
+            const auto oldVisual=g_bodyVisualOffset,oldWall=g_bodyWallOffset;
+            const bool oldCameraValid=worldCameraValid;
+            float oldCamera[3];std::memcpy(oldCamera,worldCameraPos,sizeof(oldCamera));
+            auto& animation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+            auto& current=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+            const auto oldPosition=current;const auto oldAnimation=animation;const auto oldFlags=flags;
+            const auto oldInput=actionInput;
+            config.firstPersonMovementStabilization=true;config.firstPersonBodyScale=1;
+            worldCameraValid=true;worldCameraPos[0]=camera.x;worldCameraPos[1]=camera.y;worldCameraPos[2]=camera.z;
+            g_scenePose.x_pos=int(bodyJointWorld[14].x);g_scenePose.y_pos=int(bodyJointWorld[14].y);g_scenePose.z_pos=int(bodyJointWorld[14].z);
+            g_bodyVisualOffset=g_bodyWallOffset={};g_groundEye.valid=true;
+            g_groundEye.local={0,-850,0};g_groundEye.bodyLocal={};
+            Frame kneel[15]{};
+            Check(firstperson::SolveBody(native,{0,210,0},identity,{0,0,1},1000,kneel),"landing fixture produces a bent native skeleton");
+            const auto bend=firstperson::RotationMatrix(firstperson::AxisRotation({1,0,0},.45f));
+            const Frame landingBend{bend,Sub(kneel[0].origin,Transform(bend,kneel[0].origin))};
+            for(int j=7;j<15;++j) kneel[j]=Multiply(landingBend,kneel[j]);
+            float kneelPalette[33*12]{};
+            for(int i=0;i<count;++i) {
+                auto frame=kneel[mapping[i]];frame.origin=Sub(Add(root,frame.origin),camera);
+                Frame inverse{};Inverse(bind[i],inverse);WriteRows(Multiply(frame,inverse),kneelPalette+i*12);
+            }
+            for(int which:{0,1}) for(bool armed:{false,true}) for(int clip:{31,82,92,99,24}) {
+                game=dll.game=which;gun=1;status=armed?4:0;state=2;animation=103;flags=0;current=oldPosition;
+                g_jumpLanding.Reset();g_jumpBodyReference.Reset();g_bodyFollower.Reset();g_torsoPose.Reset();g_pistolAnimation.Reset();
+                skinFixture=fixture;++VR().m_poseSerial;Detour_GetJoints(itemMemory,baseline,0);
+                Check(g_jumpBodyReference.valid,"ground body draw provides a pre-jump torso reference");
+                actionInput=0x10;ObserveJumpLanding(itemMemory);
+                state=15;actionInput=0;ObserveJumpLanding(itemMemory);
+                skinFixture=kneelPalette;
+                for(int frame=0;frame<4;++frame) {
+                    ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                    Frame prepared[15]{},stood[15]{};
+                    for(int i=0;i<count;++i) {
+                        prepared[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                        stood[mapping[i]]=Multiply(ReadRows(baseline+i*12),bind[i]);
+                    }
+                    Check(nearVec(prepared[7].origin,stood[7].origin),"jump preparation keeps the torso upright throughout compression");
+                    for(int leg:{1,4}) {
+                        Check(firstperson::KneeBendDegrees(prepared,leg)<5,"first-person takeoff preparation removes the knee squat");
+                        Check(nearVec(prepared[leg+2].origin,stood[leg+2].origin),"jump preparation preserves native foot contacts");
+                    }
+                }
+                for(int exclusion=0;exclusion<3;++exclusion) {
+                    if(exclusion==0) g_active=false;
+                    if(exclusion==1) config.firstPersonMovementStabilization=false;
+                    if(exclusion==2) flags=8;
+                    ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                    Frame untouched[15]{};
+                    for(int i=0;i<count;++i) untouched[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                    Check(firstperson::KneeBendDegrees(untouched,1)>20,"third person, opt-out and airborne compression retain native knee bend");
+                    g_active=true;config.firstPersonMovementStabilization=true;flags=0;
+                }
+                skinFixture=fixture;
+                state=3;flags=8;current.y_pos-=300;ObserveJumpLanding(itemMemory);
+                ++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                Check(g_jumpBodyReference.valid,"airborne native body preserves the pre-jump reference for landing");
+                state=clip==92?1:2;animation=int16_t(clip);flags=0;current=oldPosition;
+                ObserveJumpLanding(itemMemory);
+                Check(OrdinaryJumpLanding(itemMemory)==(clip!=24) && UseLandingCamera(itemMemory)==(clip==24),
+                      "production landing camera separates ordinary jumps from hard impacts");
+                skinFixture=kneelPalette;++VR().m_poseSerial;Detour_GetJoints(itemMemory,palette,0);
+                Frame landed[15]{},stood[15]{};
+                for(int i=0;i<count;++i) {
+                    landed[mapping[i]]=Multiply(ReadRows(palette+i*12),bind[i]);
+                    stood[mapping[i]]=Multiply(ReadRows(baseline+i*12),bind[i]);
+                }
+                if(clip!=24) {
+                    Check(nearVec(landed[7].origin,stood[7].origin),"ordinary landing keeps the torso at standing height instead of bringing it into view");
+                    for(int leg:{1,4}) {
+                        Check(firstperson::KneeBendDegrees(landed,leg)<5,
+                              "ordinary first-person jump landing removes deep native knee bend");
+                        Check(nearVec(landed[leg+2].origin,stood[leg+2].origin),"ordinary landing retains native floor contacts");
+                    }
+                }
+                else Check(firstperson::KneeBendDegrees(landed,1)>20,"hard fall retains native bent landing legs");
+                const bool active=g_active;g_active=false;
+                Check(!OrdinaryJumpLanding(itemMemory),"third person never suppresses the native landing");g_active=active;
+                current.y_pos=oldPosition.y_pos+512;state=3;flags=8;animation=0;
+                g_jumpLanding.Reset();ObserveJumpLanding(itemMemory);state=2;flags=0;animation=31;ObserveJumpLanding(itemMemory);
+                Check(!OrdinaryJumpLanding(itemMemory) && UseLandingCamera(itemMemory),"walking off a ledge retains fall landing camera");
+            }
+            config=oldSettings;g_scenePose=oldScene;g_groundEye=oldGround;g_bodyVisualOffset=oldVisual;g_bodyWallOffset=oldWall;
+            worldCameraValid=oldCameraValid;std::memcpy(worldCameraPos,oldCamera,sizeof(oldCamera));
+            current=oldPosition;animation=oldAnimation;flags=oldFlags;actionInput=oldInput;
+            skinFixture=fixture;g_jumpLanding.Reset();g_jumpBodyReference.Reset();g_bodyFollower.Reset();g_torsoPose.Reset();
         }
         // Weapon status must not switch the torso back to native placement.
         // Native draw/holster arms remain attached to that same fitted chest.
@@ -1302,6 +1398,7 @@ void TestFullBodyIK() {
     g_pistolRoll=savedPistolRoll;
     g_torsoPose=savedTorso;g_mountBodyTransition=savedMount;
     g_groundGait=savedGait;g_groundGaitObject=savedGaitObject;
+    g_jumpLanding=savedJumpLanding;g_jumpBodyReference=savedJumpBody;g_jumpBodyObject=savedJumpBodyObject;
     g_bodyLanding=savedLanding;
     g_pistolAnimation=savedPistolAnimation;
     g_bodyVisibility=savedVisibility;

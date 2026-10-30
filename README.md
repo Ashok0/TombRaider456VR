@@ -86,6 +86,7 @@ this overview and the October 26–28 updates describe the current behavior.
 |---|---|
 | Controller arms and full-body IK | Rigid arm reach, elbow roll, shared pistol/body arm poses and model-bind pistol references reduce stretching and mismatched attachments. Later fixes prevent idle head glances from requesting native armed turns and remove body jitter from integer head queries and torso deadzone crossings. |
 | Side/back VRIK arm stability | Sidestep/backpedal torso animation no longer rocks the tracked shoulders and elbows. Both empty hands and equipped weapons retain live tracking while stepping feet continue to animate. |
+| Ordinary jump landings | First-person ground jumps keep a standing eye and upright VRIK body during the recovery clip. Drops and hard falls retain the native landing dip; third person keeps its normal animation. |
 | Controls and flares | First person uses Modern Controls even when third person uses Tank Controls. VR controller polling survives desktop focus changes. Held flares and their lights follow the left controller; dropped flares cannot enter creature hit-testing and crash gun targeting. |
 | Jump input and presentation | Brief A presses take priority over ordinary gait transitions. Holding A while moving forward queues the running ledge-jump assist. Unarmed side/back takeoffs retain the intended direction; backjumps use the collision-root arc, and airborne legs use native animation. Only backpedal jumps hide the body/hair. |
 | Body transitions | Landing, drawing/holstering and the inventory background retain consistent first-person body placement. Button pistol equip uses a smooth arm blend; physical holster transfers keep hands controller-tracked. |
@@ -97,6 +98,73 @@ this overview and the October 26–28 updates describe the current behavior.
 The earlier October 13–25 arm, body, jump and flare changes already have detailed
 notes below. The following additions cover the subsequent work. Reverted color
 adjustments are not part of the current changes.
+
+### Immediate first-person landing recovery (2026-10-30)
+
+TR4/5 first person now leaves ordinary landing recovery as soon as native
+collision confirms ground contact. Stationary landings return directly to the
+idle loop, removing the sideways foot shuffle; running landings return to the
+normal run. A fresh jump press after touchdown no longer waits for the recovery
+animation. Cached recovery body poses are cleared without resetting headset or
+controller tracking.
+
+Collision position, fall damage and the native impact calculation are preserved.
+Hard-impact recovery, death, interactions and third person keep their existing
+timing. The shortcut also handles entering first person during a soft landing.
+Regression tests cover immediate re-jumping, stationary recovery, both games,
+third-person exclusion and protected states; all 55 installed landing animation
+tables were verified. In-headset confirmation remains pending.
+
+### Immediate first-person jump takeoff (2026-10-30)
+
+TR4/5 first-person jumps now skip the feet-together compression and grounded
+takeoff frames. An accepted jump reaches its existing airborne animation in the
+same simulation tick. Native direction selection, takeoff velocity, gravity and
+the following collision pass remain active. Low ceilings, missing support and
+unsettled floor height retain the native handling. Third person keeps its normal
+preparation animation and timing.
+
+Running jumps keep their original leading-leg airborne clip. The held-forward
+ledge assist now waits until the ledge is one running step away in first person,
+matching the removed run-up. Brief presses still use the manual jump path.
+
+Verified all 55 installed TR4/5 animation tables, 124 takeoff cases executing the
+native animation code, and the first-person regression suite. Headset testing
+remains pending.
+
+### Upright first-person jump preparation (2026-10-30)
+
+TR4/5 first person with movement stabilization enabled now keeps the calibrated
+standing camera and upright VRIK torso/legs during grounded jump compression.
+This presentation correction removes the knee squat and camera dip whenever
+grounded compression still runs. Native foot contacts and live headset/controller
+tracking remain active. The immediate-takeoff update above also removes the
+normal preparation delay. Entering first person without a standing calibration
+keeps the native pose until a standing reference is available.
+
+### Upright first-person jump landings (2026-10-28)
+
+In TR4/5 first person with movement stabilization enabled, an ordinary ground
+jump no longer ends in the deep camera dip and VRIK knee/torso crouch. Native
+simulation is observed before and after each tick to distinguish a jump from
+walking off a ledge, rather than treating every use of a landing clip alike.
+The camera retains its standing eye offset. Full-body IK uses the pre-jump
+upper-body reference and upright leg fitting while keeping native foot contacts,
+live headset/controller movement and authored weapon draw/holster arms.
+
+Hard landings and fast falls keep their native impact presentation. A jump
+landing more than 128 game units below its takeoff height also counts as a
+drop. Entering first person midair without a known jump, changing level/item,
+grabbing a ledge or suspending first person cannot reuse an old jump decision.
+Native animation timing, jump physics, collision, damage and third-person
+rendering remain unchanged. This update is limited to the IV–VI project.
+
+Regressions exercise the actual simulation observer and camera, both games,
+armed/unarmed native and HD palettes, knee/torso recovery, foot contacts,
+same-height and lower landings, hard impacts and third-person exclusion.
+Removing the body correction reproduces the forward torso intrusion during
+the crouched landing. Release build and 4,788,059 regression checks passed;
+in-headset confirmation remains pending.
 
 ### VRIK sidestep and backpedal arm stability (2026-10-28)
 

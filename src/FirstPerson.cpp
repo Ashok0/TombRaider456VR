@@ -17,6 +17,7 @@
 #include "FirstPersonIK.h"
 #include "FirstPersonBodyIK.h"
 #include "BodyFollower.h"
+#include "JumpLanding.h"
 #include "MotionGunInput.h"
 #include "PhysicalHolster.h"
 #include "PistolAnimationBlend.h"
@@ -266,6 +267,9 @@ firstperson::BodySizeCalibration g_bodySize;
 firstperson::TorsoPoseFilter g_torsoPose;
 firstperson::GroundGaitReference g_groundGait;
 int g_groundGaitObject=-1;
+firstperson::JumpLanding g_jumpLanding;
+firstperson::GroundGaitReference g_jumpBodyReference;
+int g_jumpBodyObject=-1;
 bool g_bodyLanding=false;
 firstperson::PistolAnimationBlend g_pistolAnimation;
 firstperson::BodyVisibilityRecovery g_bodyVisibility;
@@ -289,6 +293,7 @@ void ResetBodyFollower() {
     g_bodySize.Reset();g_bodySizeObject=-1;
     g_torsoPose.Reset();
     g_groundGait.Reset();g_groundGaitObject=-1;
+    g_jumpLanding.Reset();g_jumpBodyReference.Reset();g_jumpBodyObject=-1;
     g_bodyLanding=false;
     g_pistolAnimation.Reset();
     g_heightCrouch={};g_physicalCrouchCamera=false;
@@ -855,10 +860,19 @@ bool CanTurnBody(const uint8_t* item) {
     }
 }
 
+bool StandingJumpPreparation(const uint8_t* item) {
+    // Compression is still grounded. Suppress its visual squat only in the
+    // calibrated first-person view; native dispatch and clearance own takeoff.
+    return g_active && Cfg().firstPersonMovementStabilization && g_groundEye.valid &&
+        GroundBodyAvailable(item) &&
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_state)==15 &&
+        !(*reinterpret_cast<const uint32_t*>(item+0x1820)&8);
+}
+
 bool CanFitStandingBody(const uint8_t* item) {
     // Wall impacts retain the standing render frame. They must not drop the
     // torso offset for one animation, but native collision still owns steering.
-    return CanTurnBody(item) || (GroundBodyAvailable(item) && g_groundEye.valid &&
+    return CanTurnBody(item) || StandingJumpPreparation(item) || (GroundBodyAvailable(item) && g_groundEye.valid &&
         *reinterpret_cast<const int16_t*>(item + off::item_anim_state)==12);
 }
 
@@ -869,8 +883,16 @@ bool CanSteerMonkeyBars(const uint8_t* item) {
         (*Ptr<uint32_t>(g_boundDll->lara+off::lara_movement_flags)&0x40)!=0;
 }
 
+bool OrdinaryJumpLanding(const uint8_t* item) {
+    return g_active && Cfg().firstPersonMovementStabilization && g_groundEye.valid &&
+        g_jumpLanding.owner==item && g_jumpLanding.level==AppState(drva::app_off::level) &&
+        g_jumpLanding.ordinary && item && CanTurnBody(item) &&
+        locomotion::IsLandingAnimation(g_boundDll->game,
+            *reinterpret_cast<const int16_t*>(item+off::item_anim_state),
+            *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
+}
 bool UseLandingCamera(const uint8_t* item) {
-    return item && CanTurnBody(item) && locomotion::IsLandingAnimation(g_boundDll->game,
+    return item && CanTurnBody(item) && !OrdinaryJumpLanding(item) && locomotion::IsLandingAnimation(g_boundDll->game,
         *reinterpret_cast<const int16_t*>(item+off::item_anim_state),
         *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
 }
@@ -1602,7 +1624,8 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
     if(!FullBodyIKReady()) { g_groundGait.Reset();return false; }
     if(count<15 || count>33) return false;
-    if(IsNativeAirborneBodyState(item)) {
+    const bool preparingJump=StandingJumpPreparation(item);
+    if(IsNativeAirborneBodyState(item) && !preparingJump) {
         // Airborne feet must follow this frame's native animation. Standing
         // body fitting and mount-recovery filtering can otherwise pull them
         // toward a headset-relative pose or ease them out over several frames.
@@ -1648,7 +1671,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     if(mainBody && (g_groundGaitObject!=object || !g_bodyFollower.valid)) {
         g_groundGait.Reset();g_groundGaitObject=object;
     }
-    if(!CanFitStandingBody(item) || landing || !Cfg().firstPersonMovementStabilization) {
+    if(!CanFitStandingBody(item) || preparingJump || landing || !Cfg().firstPersonMovementStabilization) {
         if(mainBody) g_groundGait.Reset();
     } else {
         const Frame gaitRoot{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},nativeHeading)),
@@ -1656,6 +1679,22 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         const bool sideBack=state==5 || state==16 || state==21 || state==22;
         if(!g_groundGait.Apply(native,gaitRoot,sideBack,mainBody,MotionReady() || UnarmedIKReady(),
                               {std::sin(nativeHeading),0,std::cos(nativeHeading)})) return false;
+    }
+    const bool ordinaryLanding=OrdinaryJumpLanding(item);
+    const Frame landingRoot{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},nativeHeading)),
+                            Sub(simulationRoot,cameraOffset)};
+    const bool nativeLanding=locomotion::IsLandingAnimation(g_boundDll->game,state,
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
+    if(mainBody && !nativeLanding && !preparingJump && CanFitStandingBody(item)) {
+        if(g_jumpBodyObject!=object) g_jumpBodyReference.Reset();
+        g_jumpBodyObject=object;
+        if(!g_jumpBodyReference.Apply(native,landingRoot,false,true,true,
+                                      {std::sin(nativeHeading),0,std::cos(nativeHeading)})) return false;
+    } else if((ordinaryLanding || preparingJump) && g_jumpBodyObject==object && g_jumpBodyReference.valid) {
+        // Remove the takeoff/landing torso squat before live head/hand IK. Keep the
+        // native foot contacts and authored button draw/holster arm poses.
+        if(!g_jumpBodyReference.Apply(native,landingRoot,true,false,MotionReady() || UnarmedIKReady(),
+                                      {std::sin(nativeHeading),0,std::cos(nativeHeading)})) return false;
     }
     const int anchorJoint=Cfg().firstPersonJoint;
     if(anchorJoint<0 || anchorJoint>=15) return false;
@@ -1754,7 +1793,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
             const Vec sizedAnchor=Transform(sized[14],Transform(inverseHead,anchorInPalette));
             Vec rootOffset=Add(Sub(Scale(g_bodyFollower.root,scale),nativeRoot),wallShift);rootOffset.y=0;
             const bool grounded=CanFitStandingBody(item) || CanUseCrouchCamera(item);
-            const bool standing=(state==2 || state==12) && !UseLandingCamera(item);
+            const bool standing=preparingJump || ordinaryLanding || ((state==2 || state==12) && !UseLandingCamera(item));
             const float upright=standing ? firstperson::StandingPostureWeight(VR().FirstPersonPostureDrop()) : 0;
             if(!firstperson::SolveFollowingBody(sized,sizedAnchor,Add(anchorInPalette,headDelta),
                 Wrap(heading-nativeHeading),headRotation,forward,scale,rootOffset,
@@ -1774,7 +1813,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         Vec{g_bodyFollower.root.x*scale+wallShift.x,simulationRoot.y,g_bodyFollower.root.z*scale+wallShift.z} : simulationRoot;
     const Frame reference{stanceYaw,Scale(Sub(stanceRoot,cameraOffset),1/scale)};
     const Frame eyeReference{referenceYaw,Scale(Sub(eye,cameraOffset),1/scale)};
-    const bool quiet=(state==2 || state==12) && !UseLandingCamera(item);
+    const bool quiet=preparingJump || ordinaryLanding || ((state==2 || state==12) && !UseLandingCamera(item));
     const Vec animationRoot=Sub(simulationRoot,cameraOffset);
     const Vec contacts[2]={
         firstperson::YawVector(Scale(Sub(native[3].origin,animationRoot),1/scale),-nativeHeading),
@@ -2943,12 +2982,14 @@ locomotion::Vec DragBody(uint8_t* item) {
 // Catch the native turn180 animation command before input/body-follow can
 // pull Lara back toward the old VR heading. Native code already turns Lara;
 // rotate only the VR frame and pending movement, exactly once per half-turn.
+void SkipFirstPersonJumpPreparation(uint8_t* item);
 void AdvanceLaraAnimation(uint8_t* item) {
     const bool observe=item && item==g_headingItem && g_active && g_haveHeading &&
         Gate() && LaraWaterStatus()==0;
     const int beforeState=observe ? *reinterpret_cast<const int16_t*>(item+off::item_anim_state) : -1;
     const int beforeAnimation=observe ? *reinterpret_cast<const int16_t*>(item+off::item_anim_number) : -1;
     const int16_t beforeYaw=observe ? reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot : 0;
+    SkipFirstPersonJumpPreparation(item);
     g_hAnimateLara.Original<Fn_AnimateLara>()(item);
     if (!observe || !Gate() || LaraWaterStatus()!=0) return;
     const int afterState=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
@@ -3128,6 +3169,44 @@ bool EnterGroundIdle(uint8_t* item) {
     return true;
 }
 
+bool FinishFirstPersonLanding(uint8_t* item,bool landedThisTick=false) {
+    if(!item || !g_active || !g_haveHeading || item!=g_headingItem || !Gate() ||
+       !GroundBodyAvailable(item) || !g_boundDll->anims ||
+       (g_boundDll->game!=0 && g_boundDll->game!=1) ||
+       (*reinterpret_cast<const uint32_t*>(item+0x1820)&8) ||
+       *reinterpret_cast<const int16_t*>(item+22)!=0) return false;
+    auto& state=*reinterpret_cast<int16_t*>(item+off::item_anim_state);
+    auto& goal=*reinterpret_cast<int16_t*>(item+off::item_goal_state);
+    auto& clip=*reinterpret_cast<int16_t*>(item+off::item_anim_number);
+    // Native collision can clear gravity and request STOP/RUN while the
+    // current state still names the jump. Catch that contact before rendering
+    // or input polling; otherwise even the first post-landing A tap is lost.
+    const bool contact=landedThisTick && (state==3 || (state>=25 && state<=28));
+    const bool recovery=locomotion::IsLandingAnimation(g_boundDll->game,state,clip) &&
+        !locomotion::IsHardLanding(state,clip);
+    if((!contact && !recovery) || (goal!=1 && goal!=2) || clip<0) return false;
+    const auto* anims=*Ptr<const uint8_t*>(g_boundDll->anims);
+    if(!anims || *reinterpret_cast<const int16_t*>(anims+clip*48+10)!=state) return false;
+    // Running landings continue into the normal run. Stationary landings go
+    // straight to the stable idle loop, removing the recovery foot shuffle.
+    const int target=goal==1 ? 0 : 103;
+    const auto* next=anims+target*48;
+    const int16_t first=*reinterpret_cast<const int16_t*>(next+28);
+    const int16_t last=*reinterpret_cast<const int16_t*>(next+30);
+    if(*reinterpret_cast<const int16_t*>(next+10)!=goal || first<0 || last<=first ||
+       *reinterpret_cast<const int16_t*>(next+32)!=target ||
+       *reinterpret_cast<const int32_t*>(next+16)!=0 ||
+       *reinterpret_cast<const int32_t*>(next+12)!=(goal==1 ? 47<<16 : 0) ||
+       *reinterpret_cast<const int16_t*>(next+40)!=(goal==1 ? 6 : 0)) return false;
+    clip=int16_t(target);state=goal;
+    *reinterpret_cast<int16_t*>(item+off::item_anim_number+2)=first;
+    // Position, fall speed, damage and collision have already been resolved by
+    // the native tick. Do not advance another tick or reset tracked movement.
+    g_jumpLanding.Reset();g_rootMotion.Reset();g_groundGait.Reset();
+    g_torsoPose.Reset();g_mountBodyTransition.Reset();g_bodyLanding=false;
+    return true;
+}
+
 void PrepareGroundDirection(uint8_t* item,uint64_t action) {
     using namespace locomotion;
     // Shorten ordinary forward/side/back gait handoffs in both directions.
@@ -3159,15 +3238,23 @@ int RunningJumpLookahead() {
     const auto* anims=*Ptr<const uint8_t*>(g_boundDll->anims);
     if (!anims) return 0;
     int distance=0;
+    bool immediate=g_active && g_boundDll->laraAsCompress;
     for (int clip:{16,18}) {
         const auto* a=anims+clip*48;
         const int frames=*reinterpret_cast<const int16_t*>(a+30)-*reinterpret_cast<const int16_t*>(a+28)+1;
         const int speed=*reinterpret_cast<const int32_t*>(a+12)>>16;
         if (*reinterpret_cast<const int16_t*>(a+10)!=3 || frames!=7 || speed!=47 ||
             *reinterpret_cast<const int32_t*>(a+16)!=0) return 0;
+        const auto* airborne=anims+(clip+1)*48;
+        immediate=immediate && *reinterpret_cast<const int16_t*>(a+40)==5 &&
+            *reinterpret_cast<const int16_t*>(a+32)==clip+1 &&
+            *reinterpret_cast<const int16_t*>(a+34)==*reinterpret_cast<const int16_t*>(airborne+28) &&
+            *reinterpret_cast<const int16_t*>(airborne+10)==3;
         distance=(frames+1)*speed;
     }
-    return distance;
+    // First person skips the grounded run-up once native control accepts the
+    // jump. Wait until the ledge is one running step away, not eight steps.
+    return immediate ? 47 : distance;
 }
 
 bool RunningJumpEdgeAhead(const uint8_t* item,int distance) {
@@ -3289,7 +3376,9 @@ struct IdleTrackedGunHeadingScope {
     explicit IdleTrackedGunHeadingScope(uint8_t* item) {
         if(!item || item!=g_headingItem || !Cfg().firstPersonFullBodyIK ||
            !MotionReady() || !NewControls() || !CanModifyGroundMotion(item) ||
-           g_shifted || g_jumpPressed || UseLandingCamera(item) ||
+           g_shifted || g_jumpPressed || locomotion::IsLandingAnimation(g_boundDll->game,
+               *reinterpret_cast<const int16_t*>(item+off::item_anim_state),
+               *reinterpret_cast<const int16_t*>(item+off::item_anim_number)) ||
            (g_haveManualInput && locomotion::Length(g_manualLocal)>.0001f)) return;
         const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
         if(state!=2 && state!=6 && state!=7 && state!=20) return;
@@ -3327,8 +3416,101 @@ struct DirectionalJumpAxesScope {
     ~DirectionalJumpAxesScope() { if(axes) { axes[0]=saved[0];axes[1]=saved[1]; } }
 };
 
+void SkipFirstPersonJumpPreparation(uint8_t* item) {
+    if(!item || item!=g_headingItem || !g_active || !g_haveHeading || !Gate() ||
+       !Cfg().gamepadEnabled || g_shifted || !GroundBodyAvailable(item) ||
+       !g_boundDll->anims || !g_boundDll->laraAsCompress ||
+       (g_boundDll->game!=0 && g_boundDll->game!=1) ||
+       (*reinterpret_cast<const uint32_t*>(item+0x1820)&8) ||
+       *reinterpret_cast<const int16_t*>(item+22)!=0) return;
+    const auto* anims=*Ptr<const uint8_t*>(g_boundDll->anims);
+    if(!anims) return;
+    auto& state=*reinterpret_cast<int16_t*>(item+off::item_anim_state);
+    auto& goal=*reinterpret_cast<int16_t*>(item+off::item_goal_state);
+    auto& clip=*reinterpret_cast<int16_t*>(item+off::item_anim_number);
+    auto& frame=*reinterpret_cast<int16_t*>(item+off::item_anim_number+2);
+    // Only known takeoff clips: the native end command supplies velocity,
+    // gravity and the original airborne animation. Never tick physics twice.
+    const auto validTakeoff=[&](int animation,int expectedState,int next,int frames) {
+        const auto* a=anims+animation*48;
+        const auto* b=anims+next*48;
+        const int first=*reinterpret_cast<const int16_t*>(a+28);
+        return *reinterpret_cast<const int16_t*>(a+10)==expectedState && first>=0 &&
+            *reinterpret_cast<const int16_t*>(a+30)==first+frames-1 &&
+            *reinterpret_cast<const int16_t*>(a+32)==next &&
+            *reinterpret_cast<const int16_t*>(a+34)==*reinterpret_cast<const int16_t*>(b+28) &&
+            *reinterpret_cast<const int16_t*>(b+10)==expectedState &&
+            *reinterpret_cast<const int16_t*>(a+40)==(frames==7 ? 5 : 2);
+    };
+    const auto launch=[&](int animation) {
+        const auto* a=anims+animation*48;
+        clip=int16_t(animation);frame=*reinterpret_cast<const int16_t*>(a+30);
+        state=*reinterpret_cast<const int16_t*>(a+10);
+        g_groundMoveAction=0;g_stabilizeRoot=g_hardStopRoot=false;g_rootMotion.Reset();
+    };
+    // lara_as_run has already accepted this request (including stride and
+    // clearance). Preserve its left/right leading-leg airborne animation.
+    if(state==1 && goal==3 && clip==0 && frame>=0 && frame<=21) {
+        const int takeoff=frame+1<=11 ? 18 : 16;
+        if(validTakeoff(takeoff,3,takeoff+1,7)) launch(takeoff);
+        return;
+    }
+    const bool entering=state==2 && goal==15 && (clip==11 || clip==103);
+    const bool compressing=state==15 && clip==73;
+    if(!entering && !compressing) return;
+    const auto* compression=anims+73*48;
+    const int compressionCommands=*reinterpret_cast<const int16_t*>(compression+40);
+    if(*reinterpret_cast<const int16_t*>(compression+10)!=15 ||
+       *reinterpret_cast<const int16_t*>(compression+30)-*reinterpret_cast<const int16_t*>(compression+28)!=10 ||
+       *reinterpret_cast<const int16_t*>(compression+32)!=91 ||
+       (compressionCommands!=2 && compressionCommands!=4) ||
+       !validTakeoff(74,25,75,3) || !validTakeoff(76,3,77,3) ||
+       !validTakeoff(78,27,79,3) || !validTakeoff(80,26,81,3) ||
+       !validTakeoff(91,28,28,3)) return;
+    // Compression normally rejects low ceilings and unsupported ground before
+    // takeoff. Query the same standing hull before skipping those frames;
+    // uneven support stays native until its floor adjustment has settled.
+    if(!g_boundDll->getCollisionInfo) return;
+    const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    RoomCollision clearance{};
+    clearance.radius=100;clearance.badPos=32512;clearance.badNeg=-32512;clearance.badCeiling=0;
+    clearance.facing=*Ptr<int16_t>(g_boundDll->lara+off::lara_move_angle);
+    clearance.old[0]=pos.x_pos;clearance.old[1]=pos.y_pos;clearance.old[2]=pos.z_pos;
+    reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase+g_boundDll->getCollisionInfo)(
+        &clearance,pos.x_pos,pos.y_pos,pos.z_pos,*reinterpret_cast<const int16_t*>(item+off::item_room),762);
+    if(clearance.floorSamples[0]!=0 || clearance.floorSamples[1]>-100) return;
+    if(entering) {
+        // STOP approved Jump this tick. Run the usual compression controller
+        // immediately so its native direction/floor checks still select the
+        // jump. Both supported binaries leave the COLL_INFO argument unused.
+        state=15;clip=73;frame=*reinterpret_cast<const int16_t*>(compression+28);
+        DirectionalJumpAxesScope axes(item);
+        reinterpret_cast<Fn_LaraAboveWater>(g_boundBase+g_boundDll->laraAsCompress)(item,nullptr);
+    }
+    // A rejected direction keeps goal 15, whose native default is an up-jump.
+    // Death/fall/other requests retain native dispatch instead of forcing a jump.
+    const int takeoff=goal==3 ? 76 : goal==25 ? 74 : goal==27 ? 78 : goal==26 ? 80 : goal==15 ? 91 : -1;
+    if(takeoff>=0) launch(takeoff);
+}
+
+void ObserveJumpLanding(uint8_t* item) {
+    const bool eligible=item && g_active && Cfg().firstPersonMovementStabilization && Gate() &&
+        item==*Ptr<uint8_t*>(g_boundDll->laraItem) && LaraWaterStatus()==0 &&
+        *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0 &&
+        !(*Ptr<uint32_t>(g_boundDll->lara+off::lara_movement_flags)&0x20);
+    if(!eligible) { g_jumpLanding.Reset();return; }
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    const int animation=*reinterpret_cast<const int16_t*>(item+off::item_anim_number);
+    g_jumpLanding.Observe(item,AppState(drva::app_off::level),true,state,animation,
+        reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_pos,
+        (*reinterpret_cast<const uint32_t*>(item+0x1820)&8)!=0,CanTurnBody(item),
+        locomotion::IsLandingAnimation(g_boundDll->game,state,animation),
+        (*Ptr<uint64_t>(g_boundDll->input)&0x10u)!=0);
+}
+
 void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     using namespace locomotion;
+    FinishFirstPersonLanding(item);
     GroundJumpInputScope jumpInput(item,TurnTime());
     g_dragPrevious = g_dragCurrent;
     g_crouchDrive=false;
@@ -3446,6 +3628,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         }
     }
     jumpInput.Prepare();
+    ObserveJumpLanding(item);
     if (g_groundMoveAction) PrepareGroundDirection(item,g_groundMoveAction);
     const bool ledgePull=UpdateLedgePull(item,GetTickCount64());
     uint64_t savedLedgeInput=0;
@@ -3469,6 +3652,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
             (*reinterpret_cast<uint32_t*>(item+0x1820)&8)!=0,
             {float(position.x_pos),float(position.y_pos),float(position.z_pos)});
     } else g_ledgeGrab.Reset();
+    const bool airborneBefore=item && (*reinterpret_cast<const uint32_t*>(item+0x1820)&8);
     {
         IdleTrackedGunHeadingScope idleGunHeading(item);
         CrouchWeaponScope crouchWeapons(item);
@@ -3476,6 +3660,8 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         RoomscaleCollisionScope roomscaleCollision(item);
         g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
     }
+    ObserveJumpLanding(item);
+    FinishFirstPersonLanding(item,airborneBefore);
     if (grabFeedback && g_ledgeGrab.Finish(Gate() && LaraWaterStatus()==0,
             *reinterpret_cast<int16_t*>(item+off::item_anim_state),
             (*reinterpret_cast<uint32_t*>(item+0x1820)&8)!=0))
@@ -3879,7 +4065,7 @@ bool Anchor(PHD_3DPOS& pose) {
         const auto eye=g_groundEye.Apply({body[0],body[1],body[2]},g_headingBase,
             {float(head.x),float(head.y),float(head.z)},
             Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*t,
-            !CanTurnBody(item) && !(Cfg().firstPersonFullBodyIK && state==12));
+            !CanTurnBody(item) && !StandingJumpPreparation(item) && !(Cfg().firstPersonFullBodyIK && state==12));
         pose.x_pos=int32_t(std::lround(eye.x));
         pose.y_pos=int32_t(std::lround(eye.y));
         pose.z_pos=int32_t(std::lround(eye.z));

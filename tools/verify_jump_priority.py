@@ -53,6 +53,25 @@ def verify(path):
             commands = struct.unpack_from("<15h", tables["commands"], start * 2)
             assert commands[:3] == (2, -100, 75), (path, clip, "native end-of-animation takeoff")
             assert all(commands[i] in (5, 6) for i in (3, 6, 9, 12)), (path, clip, "remaining commands are sound/effects")
+    state, first, last, dest, df, count, start, nc, cmd = animation(73)
+    assert (state, last-first, dest) == (15, 10, 91) and nc in (2,4), (path, "compression metadata")
+    for index in range(nc):
+        opcode, _, _ = struct.unpack_from('<3h', tables['commands'], (cmd+index*3)*2)
+        assert opcode in (5,6), (path, "compression only has sound/footstep effects")
+    dispatch = {}
+    for index in range(start, start+count):
+        goal, nr, ri = struct.unpack_from("<3h", tables["changes"], index*6)
+        dispatch[goal] = [struct.unpack_from("<4h", tables["ranges"], k*8) for k in range(ri, ri+nr)]
+    for goal, clip, next_clip in ((3,76,77), (25,74,75), (27,78,79), (26,80,81), (28,91,28)):
+        state, base, end, next_id, next_frame, _, _, nc, cmd = animation(clip)
+        assert (state, end-base, next_id, nc) == (goal, 2, next_clip, 2), (path, clip, "takeoff metadata")
+        assert animation(next_clip)[0] == goal and animation(next_clip)[1] == next_frame
+        commands = struct.unpack_from("<6h", tables["commands"], cmd*2)
+        assert commands[:3] == ((2,-110,2) if goal==28 else (2,-100,50)) and commands[3]==5
+        if goal!=28:
+            assert dispatch[goal] == [(first+8,last+1,clip,base)], (path, goal, "native direction dispatch")
+        else:
+            assert df==base, (path, "default vertical jump")
     return True
 
 
@@ -64,4 +83,4 @@ if __name__ == "__main__":
         assert paths, (game, "missing PDP files")
         count = sum(verify(path) for path in paths)
         assert count, (game, "no Lara tables")
-        print(f"TR{game}: {count} tables verified: idle/run dispatch, seven-frame 47-unit run-up, native takeoff command")
+        print(f"TR{game}: {count} tables verified: idle/run dispatch, compression directions, takeoff commands and airborne clips")

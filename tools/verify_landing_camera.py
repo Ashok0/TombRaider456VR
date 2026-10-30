@@ -12,7 +12,7 @@ from pathlib import Path
 def verify(path, game):
     data = path.read_bytes()
     tables, cursor = {}, 0
-    for name, size in [("anims", 40), ("changes", 6), ("ranges", 8)]:
+    for name, size in [("anims", 40), ("changes", 6), ("ranges", 8), ("commands", 2)]:
         count, = struct.unpack_from("<I", data, cursor)
         cursor += 4
         end = cursor + count * size
@@ -34,6 +34,18 @@ def verify(path, game):
     assert anim(99)[3] == (82 if state99 == 2 else 99), (path, 99, "variant exit")
     for index, target in [(24, 11), (31, 11), (82, 11), (92, 0)]:
         assert anim(index)[3] == target, (path, index, "return to normal gait")
+    # First-person recovery can leave the soft landing clips after contact:
+    # all their commands are sound/footstep effects, never relocation, gravity
+    # or damage. Verify the stable idle/run loops used by the shortcut too.
+    for index in [31,82,92]+([99] if state99==2 else []):
+        *_, count, start = anim(index)
+        for offset in range(start,start+count*3,3):
+            opcode, _, _ = struct.unpack_from('<3h',tables['commands'],offset*2)
+            assert opcode in (5,6), (path,index,'soft landing has a simulation command')
+    for index,state,speed,commands in [(103,2,0,0),(0,1,47,6)]:
+        actual,first,last,next_id,_,_,_,count,_ = anim(index)
+        assert actual==state and last>first>=0 and next_id==index and count==commands
+        assert struct.unpack_from('<2i',tables['anims'],index*40+8)==(speed<<16,0)
 
     def destinations(source, goal_state):
         _, _, _, _, _, count, start, _, _ = anim(source)

@@ -5515,6 +5515,87 @@ int main() {
         }
         config=savedConfig;dll.getJointAbsPositionLerp=oldJoint;gaitSway={};
     }
+    // Grounded compression keeps the calibrated eye while native animation
+    // bends the knees. Gravity, opt-out and third person retain native poses.
+    {
+        const auto savedConfig=config;const auto oldJoint=dll.getJointAbsPositionLerp;
+        for(int which:{0,1}) for(bool stable:{false,true}) for(bool calibrated:{false,true})
+        for(bool airborne:{false,true}) {
+            game=dll.game=which;resetRoomscale();ResetMovementStabilization();
+            config.firstPersonMovementStabilization=stable;
+            config.firstPersonBodyFollowsHead=config.firstPersonRoomscaleMove=false;
+            collisionMode=0;gaitSway={};physicalPose(0);FirstPersonRecenter();
+            dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+            auto& animation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+            state=2;animation=103;pos.y_pos=prev.y_pos=0;fraction=256;Anchor(camera);
+            if(!calibrated) g_groundEye.Reset();
+            const auto reference=g_groundEye;
+            state=15;animation=26;flags=airborne?8:0;
+            const auto nativePosition=pos;const auto nativeInput=actionInput;
+            for(int dip:{0,80,200,120,0}) {
+                gaitSway={40,dip,-30};Anchor(camera);
+                PHD_VECTOR animated{config.firstPersonAnchorX,config.firstPersonAnchorY,config.firstPersonAnchorZ};
+                FakeGaitJoint(itemMemory,&animated,14,fraction);
+                if(stable && calibrated && !airborne) {
+                    Check(camera.y_pos==int(reference.local.y) && camera.x_pos==int(reference.local.x) &&
+                          camera.z_pos==int(reference.local.z),"grounded jump preparation removes camera dip and neck sway");
+                } else Check(camera.y_pos==animated.y && camera.x_pos==animated.x && camera.z_pos==animated.z,
+                             "uncalibrated, disabled and airborne compression preserve native camera");
+                Check(state==15 && animation==26 && flags==(airborne?8u:0u) && actionInput==nativeInput &&
+                      !std::memcmp(&pos,&nativePosition,sizeof(pos)),"takeoff presentation leaves animation, physics and jump input intact");
+                Check(reference.valid==g_groundEye.valid &&
+                      !std::memcmp(&reference.local,&g_groundEye.local,sizeof(reference.local)),
+                      "compression never replaces the standing calibration");
+            }
+            g_runtimeEnabled=false;
+            const PHD_3DPOS native{400,500,600,20,30,40,0};camera=native;UpdateSceneCamera(camera);
+            Check(!g_active && !StandingJumpPreparation(itemMemory) && !std::memcmp(&camera,&native,sizeof(native)),
+                  "third-person jump preparation camera stays native");
+        }
+        config=savedConfig;dll.getJointAbsPositionLerp=oldJoint;gaitSway={};ResetMovementStabilization();
+    }
+    // Observe the real simulation hook before rendering the landing. Sharing
+    // a landing clip does not mean a jump and a ledge drop share presentation.
+    {
+        const auto savedConfig=config;const auto oldJoint=dll.getJointAbsPositionLerp;
+        const auto oldSimulation=g_hLaraAboveWater.m_trampoline;const bool oldMoves=nativeMoves;
+        static int landingState,landingAnimation,landingY;static bool landingGravity;
+        g_hLaraAboveWater.m_trampoline=reinterpret_cast<void*>(+[](uint8_t* item,void* collision) {
+            FakeAboveWater(item,collision);
+            *reinterpret_cast<int16_t*>(item+off::item_anim_state)=int16_t(landingState);
+            *reinterpret_cast<int16_t*>(item+off::item_anim_number)=int16_t(landingAnimation);
+            reinterpret_cast<PHD_3DPOS*>(item+off::item_pos)->y_pos=landingY;
+            auto& flags=*reinterpret_cast<uint32_t*>(item+0x1820);flags=(flags&~8u)|(landingGravity?8u:0);
+        });
+        nativeMoves=false;
+        for(int which:{0,1}) for(bool deliberate:{false,true}) for(int drop:{0,512}) for(int clip:{24,31,82,92,99}) {
+            game=dll.game=which;resetRoomscale();ResetMovementStabilization();
+            config.firstPersonMovementStabilization=true;config.firstPersonBodyFollowsHead=config.firstPersonRoomscaleMove=false;
+            collisionMode=0;gaitSway={};physicalPose(0);FirstPersonRecenter();
+            dll.getJointAbsPositionLerp=rva(reinterpret_cast<void*>(&FakeGaitJoint));
+            auto& animation=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+            state=2;animation=103;pos.y_pos=prev.y_pos=0;fraction=256;Anchor(camera);
+            const int standingY=camera.y_pos;
+            g_haveManualInput=false;actionInput=deliberate?0x10:0;
+            landingState=deliberate?15:3;landingAnimation=26;landingY=0;landingGravity=!deliberate;
+            Detour_LaraAboveWater(itemMemory,nullptr);
+            actionInput=0;landingState=3;landingY=-300;landingGravity=true;Detour_LaraAboveWater(itemMemory,nullptr);
+            landingState=clip==92?1:2;landingAnimation=clip;landingY=drop;landingGravity=false;
+            const int before=simulationTicks;Detour_LaraAboveWater(itemMemory,nullptr);
+            Check(simulationTicks==before+1 && state==landingState && animation==clip && pos.y_pos==drop,
+                  "landing presentation leaves native simulation state timing and collision height untouched");
+            const bool ordinary=deliberate && drop==0 && clip!=24;
+            Check(OrdinaryJumpLanding(itemMemory)==ordinary,"simulation hook distinguishes deliberate level jumps from drops and hard impacts");
+            for(int dip:{80,200,120,0}) {
+                gaitSway={0,dip,0};Anchor(camera);
+                Check(camera.y_pos==standingY+drop+(ordinary?0:dip),
+                      "regular jumps retain standing eye height throughout recovery while falls retain their animated dip");
+            }
+        }
+        config=savedConfig;dll.getJointAbsPositionLerp=oldJoint;g_hLaraAboveWater.m_trampoline=oldSimulation;
+        nativeMoves=oldMoves;gaitSway={};ResetMovementStabilization();
+    }
     // Landing clips use STOP or RUN. Exercise the full
     // animated anchor, body fit, floor clearance and standing reference together.
     for (int which:{0,1}) for (bool stable:{false,true}) for (bool calibrated:{false,true})
