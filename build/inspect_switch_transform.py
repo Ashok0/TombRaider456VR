@@ -1,0 +1,29 @@
+"""Read-only snapshot of the loaded train lever's native matrix and bind."""
+from pathlib import Path
+exec(Path(__file__).with_name('inspect_floor_lever.py').read_text().split('try:\n')[0])
+try:
+    mod=int(sys.argv[3])
+    items=value(base+0x69abe0,'Q')
+    item=items+9416
+    obj=base+0x69ac00+318*3792
+    lara=value(base+0x4f3f40,'Q')
+    lara_obj=base+0x69ac00+value(lara+16,'h')*3792
+    result={
+        'item':hex(item),
+        'pose':struct.unpack('<iii4h',read(item+96,20)),
+        'animation':struct.unpack('<5h',read(item+18,10)),
+        'currentMatrices':struct.unpack('<24f',read(item+7832,96)),
+        'previousMatrices':struct.unpack('<24f',read(item+6248,96)),
+        'inverseBind':struct.unpack('<32f',read(obj+1676,128)),
+        'wristInverseBind':struct.unpack('<16f',read(lara_obj+1676+10*64,64)),
+        'geometry':read(obj+112,112).hex(),
+        'scene':struct.unpack('<iii4h',read(mod+0xf5a58,20)),
+        'heading':value(mod+0xf2a38,'f'),
+        'claimed':value(mod+0xf2088,'?'),
+        'grab':read(mod+0xefea8,32).hex(),
+        'preview':read(mod+0xf34c0,7848).hex(),
+    }
+    Path(__file__).with_name('switch-transform-live.json').write_text(json.dumps(result,indent=2))
+    result.pop('preview')
+    print(json.dumps(result,indent=2))
+finally:k.CloseHandle(h)

@@ -37,5 +37,6 @@ int main() {
         water=0;actionInput=0;Head(0);
     };
     TestPhysicalSwitch(reset,rva,pose);
+    TestPhysicalRailSwitch(reset,rva,pose);
     std::printf("PASS: %d physical-switch checks (TR4/5)\n",checks);
 }

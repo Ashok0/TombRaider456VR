@@ -1,0 +1,237 @@
+{
+  "laraPosition": [
+    19564,
+    -768,
+    52523
+  ],
+  "laraState": 71,
+  "laraAnimation": 222,
+  "nearby": [
+    {
+      "index": 7,
+      "object": 0,
+      "state": 71,
+      "type": 0,
+      "animation": 222,
+      "frame": 6677,
+      "room": 1,
+      "position": [
+        19564,
+        -768,
+        52523
+      ],
+      "yaw": 3099,
+      "distance": 0,
+      "collision": "-0x7ff919520000",
+      "control": "-0x7ff919520000",
+      "joints": 15,
+      "animationBase": 0
+    },
+    {
+      "index": 1,
+      "object": 318,
+      "state": 0,
+      "type": 0,
+      "animation": 602,
+      "frame": 0,
+      "room": 1,
+      "position": [
+        19968,
+        -768,
+        52736
+      ],
+      "yaw": 16384,
+      "distance": 457,
+      "collision": "0x8d4b0",
+      "control": "0x8c170",
+      "joints": 2,
+      "animationBase": 602
+    },
+    {
+      "index": 0,
+      "object": 320,
+      "state": 0,
+      "type": 0,
+      "animation": 606,
+      "frame": 0,
+      "room": 1,
+      "position": [
+        19968,
+        -768,
+        51712
+      ],
+      "yaw": 16384,
+      "distance": 906,
+      "collision": "0x8d8b0",
+      "control": "0x8c170",
+      "joints": 1,
+      "animationBase": 606
+    },
+    {
+      "index": 5,
+      "object": 324,
+      "state": 0,
+      "type": 0,
+      "animation": 617,
+      "frame": 0,
+      "room": 1,
+      "position": [
+        19968,
+        -768,
+        51712
+      ],
+      "yaw": 0,
+      "distance": 906,
+      "collision": "0x2c240",
+      "control": "0x2bfa0",
+      "joints": 1,
+      "animationBase": 617
+    },
+    {
+      "index": 4,
+      "object": 322,
+      "state": 0,
+      "type": 2,
+      "animation": 610,
+      "frame": 0,
+      "room": 1,
+      "position": [
+        18944,
+        -768,
+        53760
+      ],
+      "yaw": 16384,
+      "distance": 1384,
+      "collision": "0x2c240",
+      "control": "0x2bfa0",
+      "joints": 1,
+      "animationBase": 610
+    }
+  ],
+  "floorAnimations": [
+    {
+      "index": 602,
+      "fields": [
+        3073,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        602,
+        0,
+        1,
+        464,
+        0,
+        2848
+      ],
+      "changes": [
+        {
+          "fields": [
+            1,
+            1,
+            551
+          ],
+          "ranges": [
+            [
+              0,
+              1,
+              603,
+              1
+            ]
+          ]
+        }
+      ],
+      "commands": []
+    },
+    {
+      "index": 603,
+      "fields": [
+        3074,
+        2,
+        0,
+        0,
+        0,
+        0,
+        1,
+        95,
+        604,
+        96,
+        0,
+        465,
+        1,
+        2848
+      ],
+      "changes": [],
+      "commands": [
+        4,
+        4,
+        4
+      ]
+    },
+    {
+      "index": 604,
+      "fields": [
+        3073,
+        1,
+        0,
+        0,
+        0,
+        0,
+        96,
+        96,
+        604,
+        96,
+        1,
+        465,
+        0,
+        2849
+      ],
+      "changes": [
+        {
+          "fields": [
+            0,
+            1,
+            552
+          ],
+          "ranges": [
+            [
+              96,
+              97,
+              605,
+              97
+            ]
+          ]
+        }
+      ],
+      "commands": []
+    },
+    {
+      "index": 605,
+      "fields": [
+        3074,
+        2,
+        0,
+        0,
+        0,
+        0,
+        97,
+        191,
+        602,
+        0,
+        0,
+        466,
+        1,
+        2849
+      ],
+      "changes": [],
+      "commands": [
+        4,
+        4,
+        4
+      ]
+    }
+  ]
+}

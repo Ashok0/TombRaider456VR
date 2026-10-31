@@ -1,0 +1,12 @@
+﻿{
+    "dll":  "B38BE5515620F28228488B77381F167C778F2B0BB69E81BD053DFA0DB8175884",
+    "full_suite_run":  false,
+    "asset_paths":  60,
+    "headset_tested":  false,
+    "train_asset_paths":  2,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-floor-lever-20261031-095618",
+    "ini_unchanged":  "CE03C8C787F87BCFFD424DB195CE9B6D29337F38185B4DC08C531542DA8F8F55",
+    "focused_checks":  1381,
+    "deployed":  "2026-10-31T09:56:18.5714027-04:00",
+    "floor_asset_paths":  22
+}

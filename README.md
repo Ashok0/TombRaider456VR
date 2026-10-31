@@ -1294,7 +1294,7 @@ Logs: `build/landing-neck-before-tests.log`, `build/landing-neck-tests.log`,
 `build/landing-neck-native-tables.log`, and `build/landing-neck-build.log`.
 In-headset visual confirmation remains pending.
 
-### Physical wall switches in VR (2026-10-11)
+### Physical wall and floor levers in VR
 
 In TR4/5 first person, holster your weapons, stand within arm's reach,
 and bring the right controller near an ordinary wall lever. Press and
@@ -1306,23 +1306,41 @@ Right Grip keeps its Walk binding when no eligible switch is within reach.
 The controller selects the lever's pose directly; there is no timed lever
 playback or Lara switch-use animation on this path. The native poses define
 its mechanical travel, and the nearest pose to your hand is displayed. Releasing
-early restores its starting position without activating anything. At the end
+early leaves both wall and floor levers at their current position without
+activating anything. Move into reach and press Right Grip again to continue;
+repeated releases and regrabs retain progress without a jump on reattachment.
+Pulling off the arc, beginning to walk, or briefly losing tracking also releases
+the hand at the retained pose. A fresh Right Grip press resumes the pull.
+At the end
 stop, native activation and completion commands run once in the same tick,
 preserving level triggers and switch control without replaying the motion.
 This supports ordinary wall levers, including compatible TR5 type-4 levers.
+TR4 floor/rail levers, including the forward/backward lever in Desert Railroad,
+also support Right Grip at the end of the handle. Move your hand through the
+handle's arc to the opposite stop; either direction works. Standing, physical
+crouching and the stationary crawl posture are supported without forcing Lara
+to stand or play her native lever animation. The floor-mounted base itself is
+not a grab point. Acquisition and pulling use the visible calibrated palm;
+handle contact uses the same mesh inverse bind as the native renderer. The
+attached palm stays on that handle point. These floor levers do not require an
+Action icon either.
 Wheels, pulleys, underwater switches, independent HD animation skeletons and
 special animation-command variants retain their existing controls.
 Using Y also retains the existing native interaction and camera behavior.
 No held-camera switch logic is restored.
 
-The Action icon does not need to be visible or active. Grab detection uses a
-fresh nearby collision candidate and tracked hand proximity (18 cm to grab,
+The Action icon does not need to be visible or active. Squeezing Right Grip
+queries supported nearby levers directly using tracked hand proximity (18 cm to grab,
 40 cm while holding), independently of the native horizontal Action zone.
 Lara must remain within 90 cm horizontally of the lever's mesh, on its usable
 side and within native floor-height limits. Native Action controls and
-third-person behavior are unchanged. The grip point follows a moving lever joint;
+third-person behavior are unchanged. A clear line from the eye to the hand is
+required. The pull updates on Lara's simulation tick even without a native
+switch collision visit. The grip point follows a moving lever joint;
 the arm IK uses that same point. Moving over 25 cm away from its path, loss of
-eligibility, tracking jumps and stale samples cancel the pull.
+reach, tracking jumps and stale samples release the hand while retaining progress.
+Explicit resets and native Action takeover restore the native starting pose;
+cached previews never overwrite a lever changed by a script.
 The native handler retains activation, sounds and level-specific callbacks;
 only its Lara alignment and animation changes are suppressed during a physical
 commit. Native switch control runs once to retain code bits and timer handling;

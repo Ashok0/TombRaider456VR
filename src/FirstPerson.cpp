@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <vector>
 
 namespace tr {
 namespace {
@@ -1259,12 +1260,8 @@ GunVec JointPoint(uint8_t* item, int joint, int x, int y, int z) {
 
 void AttachPhysicalSwitchHand(int hand,motiongun::Frame& wrist,motiongun::Vec trackedGrip);
 
-bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller, GunVec* gripLocal=nullptr) {
+bool TrackedControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller, GunVec* gripLocal=nullptr) {
     if (hand < 0 || hand > 1) return false;
-    if (const auto* reason=ControllerTrackingBlockedReason()) {
-        g_gunPoseFailure[hand]=reason;
-        return false;
-    }
     auto rejected=[hand](const char* reason) {
         g_gunPoseFailure[hand]=reason; return false;
     };
@@ -1288,16 +1285,27 @@ bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller,
     // local gun space so that point, rather than a displaced wrist origin,
     // stays on the tracked controller through wrist and physical body turns.
     out.basis = motiongun::GunBasis(controller);
-    const auto trackedGrip=out.origin;
     out.origin = motiongun::GripFrame(out.basis, out.origin,
         calibration.gripForwardMetres*scale,
         calibration.raiseMetres*scale,calibration.rightMetres*scale).origin;
 
     if (gripLocal) *gripLocal=motiongun::GripPointLocal(calibration.gripForwardMetres*scale,
         calibration.raiseMetres*scale,calibration.rightMetres*scale);
-    AttachPhysicalSwitchHand(hand,out,trackedGrip);
     motiongun::Frame inverse{};
     return motiongun::Inverse(out,inverse); // Reject invalid tracked rotations too.
+}
+
+bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller, GunVec* gripLocal=nullptr) {
+    if (hand < 0 || hand > 1) return false;
+    if (const auto* reason=ControllerTrackingBlockedReason()) {
+        g_gunPoseFailure[hand]=reason;
+        return false;
+    }
+    GunVec local{};
+    if (!TrackedControllerWrist(hand,out,controller,&local)) return false;
+    if (gripLocal) *gripLocal=local;
+    AttachPhysicalSwitchHand(hand,out,motiongun::Transform(out,local));
+    return true;
 }
 
 // These are render-pose permissions, separate from gameplay body turning.
@@ -3753,6 +3761,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         RoomscaleCollisionScope roomscaleCollision(item);
         g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
     }
+    AdvancePhysicalSwitch(item,nativeCollision,GetTickCount64());
     ObserveJumpLanding(item);
     FinishFirstPersonLanding(item,airborneBefore);
     if (grabFeedback && g_ledgeGrab.Finish(Gate() && LaraWaterStatus()==0,

@@ -15,7 +15,7 @@ template<class T> T Read(const std::vector<char>& data,size_t at) {
 int main(int argc,char** argv) {
     if(argc!=2) return 2;
     using namespace tr::firstperson;
-    int passed=0,unsupported=0;
+    int passed=0,unsupported=0,floorPassed=0,trainPassed=0;
     for(int game:{4,5}) for(const auto& file:std::filesystem::directory_iterator(std::filesystem::path(argv[1])/std::to_string(game)/"DATA")) {
         if(file.path().extension()!=".PDP") continue;
         std::ifstream stream(file.path(),std::ios::binary);
@@ -40,7 +40,8 @@ int main(int argc,char** argv) {
         const auto* commands=reinterpret_cast<const int16_t*>(data.data()+offsets[3]);
         for(uint32_t o=0;o<counts[6];++o) {
             const auto p=offsets[6]+o*18;const auto slot=Read<uint32_t>(data,p);
-            if(slot!=(game==4 ? 306u : 266u)) continue;
+            const bool floor=game==4 && slot==318;
+            if(slot!=(game==4 ? 306u : 266u) && !floor) continue;
             const int base=Read<int16_t>(data,p+16);
             for(int state:{0,1}) {
                 int idle=-1;
@@ -52,9 +53,10 @@ int main(int argc,char** argv) {
                 if(!valid) { ++unsupported;std::cout<<"Native fallback: "<<file.path().filename()<<" state "<<state<<"\n";continue; }
                 if(path.count<3 || path.poses[path.count-1].state!=1-state) return 1;
                 ++passed;
+                if(floor) { ++floorPassed;if(file.path().filename()=="TRAIN.PDP") ++trainPassed; }
             }
         }
     }
-    std::cout<<"PASS: "<<passed<<" installed wall-lever paths; "<<unsupported<<" unsupported variants retain native controls\n";
-    return passed>0 ? 0 : 1;
+    std::cout<<"PASS: "<<passed<<" installed lever paths ("<<floorPassed<<" floor, "<<trainPassed<<" TRAIN); "<<unsupported<<" unsupported variants retain native controls\n";
+    return passed>0 && floorPassed>0 && trainPassed==2 ? 0 : 1;
 }
