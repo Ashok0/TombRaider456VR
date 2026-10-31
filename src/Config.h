@@ -389,7 +389,11 @@ struct Config {
 
     bool  verboseFirstFrame = true;
 
-    // Present the Oculus Touch controllers to the game as an Xbox pad.
+    // Opt-in Index actions separate face buttons from grip force. Restart required.
+    bool valveIndexControllers = false;
+    float valveIndexGripPress = .55f;
+    float valveIndexGripRelease = .35f;
+    // Present the VR controllers to the game as an Xbox pad.
     //
     // The game resolves XInput through GetProcAddress into a function-pointer
     // global, so there is no import to hook and no virtual-pad driver needed --

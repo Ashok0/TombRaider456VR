@@ -26,6 +26,52 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * Chest physics in TR1-5 ported from TR6's dynamic bones
 * Enhanced sunrays and smoke/fire/spray/splash FX
 
+## Valve Index controllers
+
+Set `ValveIndexControllers=1` under `[VR]` in the installed `TombRaiderVR.ini`,
+then restart the game. Keep the shipped `TombRaiderVRBindings` folder beside
+`TombRaiderVR.dll`; builds copy it to the output and deployment folders.
+The default is `0`, which retains the existing Touch controller input.
+
+Index mode separates the A/B buttons from grip squeeze using SteamVR Input
+actions. Thumbsticks, clicks, triggers and controller haptics are supported;
+trackpads are unbound. The existing game controls and physical gestures receive
+the same inputs as with Touch:
+
+| Index input | Default control |
+| --- | --- |
+| Left stick / click | Move / Sprint |
+| Right stick / click | Turn / D-pad shift with left stick |
+| Right A / B | Jump / Roll |
+| Left A / B | Inventory / Action, including existing view and graphics chords |
+| Left / right trigger | Existing equip and per-hand shooting controls |
+| Left / right squeeze | Crouch / Walk, or physical grabbing and holster gestures |
+| Both squeezes | Action when available during gameplay |
+| Both stick clicks | Photo Mode |
+
+Grip uses squeeze force rather than finger contact. These adjustable thresholds
+control when a squeeze engages and releases:
+
+```ini
+ValveIndexControllers=1
+ValveIndexGripPress=0.55
+ValveIndexGripRelease=0.35
+```
+
+Lower `ValveIndexGripPress` for a lighter squeeze; keep `ValveIndexGripRelease`
+below it to prevent repeated presses near the threshold. These are starting
+values and have not been calibrated on physical Index hardware.
+
+SteamVR's controller binding editor can customize the named actions. Select the
+default **Tomb Raider Index** binding if an older custom binding conflicts.
+`TombRaiderVR.log` reports `Index actions ready` after successful initialization.
+Missing bindings or input errors clear controller input and produce diagnostics.
+`GamepadLogButtons=1` logs mapped button masks in this mode.
+
+Validation: standalone `tools/index_input_test.cpp`, binding checks with
+`python tools/validate_index_bindings.py --steamvr "<SteamVR installation>"`, and
+a Release build. Physical Index hardware testing remains outstanding.
+
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
 

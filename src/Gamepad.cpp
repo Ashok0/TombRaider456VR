@@ -694,7 +694,7 @@ void GamepadUpdate() {
 
     if (!g_installed) {
         g_installed = true;
-        LogF("pad: Touch controllers presented as an Xbox pad "
+        LogF("pad: VR controllers presented as an Xbox pad "
              "(_XInputGetState %p -> %p, real %p)",
              (void*)g_slot, (void*)&Detour_XInputGetState, (void*)g_original);
     }

@@ -1,0 +1,13 @@
+﻿{
+    "standalone_checks":  306,
+    "deployed":  "2026-10-30T22:45:27.5483844-04:00",
+    "hashes":  {
+                   "TombRaiderVR.dll":  "5E690EE0C05E5CCD22429FA85BA1FD62965BAF700F26D11758A6E3A830CCD5AA",
+                   "TombRaiderVRBindings\\actions.json":  "2A85BDEA9D7B3E76580B17621E0DEC29721FAC8752AB09521F1D944509AC66E7",
+                   "TombRaiderVRBindings\\bindings_index.json":  "1C23C56951F393E4F933932625F20C03264F7F9971ACF54736F68405FC50189F",
+                   "TombRaiderVR.ini":  "CE03C8C787F87BCFFD424DB195CE9B6D29337F38185B4DC08C531542DA8F8F55"
+               },
+    "index_mode_enabled":  false,
+    "hardware_tested":  false,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\before-index-controllers-20261030-224526"
+}

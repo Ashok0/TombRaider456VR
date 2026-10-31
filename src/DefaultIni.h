@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 60620 bytes, 1205 lines.
+// Source: TombRaiderVR.ini, 61148 bytes, 1215 lines.
 #pragma once
 
 namespace tr {
@@ -453,6 +453,16 @@ AlternateEyeMinOffscreen=50
 ; also sending Duck or Walk; Photo Mode keeps its native L3+R3 chord.
 GamepadEnabled=1
 
+; Set to 1 for Valve Index controllers, then restart the game. Uses explicit
+; SteamVR Input bindings to separate A/B, thumbstick clicks and grip squeeze.
+; Keep the TombRaiderVRBindings folder beside TombRaiderVR.dll.
+; 0 retains the existing Touch-style legacy input for other controllers.
+ValveIndexControllers=0
+; Grip force thresholds (0..1). Lower Press for a lighter squeeze. Release must
+; be below Press; the gap prevents chatter. Resting fingers alone do not grip.
+ValveIndexGripPress=0.55
+ValveIndexGripRelease=0.35
+
 ; Log the raw OpenVR legacy button masks whenever they change. Touch's button
 ; ids differ between runtimes, so if a button lands in the wrong place this says
 ; which mask it actually set. Leave at 0 for normal play.
@@ -485,7 +495,8 @@ DecoupledPitch=1
 ; This only ever hands pitch back -- it never takes it away. With
 ; DecoupledPitch=0 the stick already pitches and the chord does nothing at all;
 ; with DecoupledPitch=1 you keep the comfortable head-only default and can still
-; reach for the stick for the one shot that wants it, then let go.
+)INI"
+           R"INI(; reach for the stick for the one shot that wants it, then let go.
 ;
 ; A momentary control has to mean ONE thing. An earlier version inverted the
 ; setting instead, which made the same chord decouple pitch or restore it
@@ -494,8 +505,7 @@ DecoupledPitch=1
 ; KNOW WHAT RB IS HERE. Touch has no physical shoulder buttons: the RIGHT GRIP
 ; synthesises XB_X for Walk. This pitch chord recognizes that Walk bit as the
 ; physical RB signal, so it is still right grip + right trigger and reads as
-)INI"
-           R"INI(; "walk and shoot". Set this to 0 if you would rather walk-and-shoot leave pitch
+; "walk and shoot". Set this to 0 if you would rather walk-and-shoot leave pitch
 ; alone.
 ;
 ; The chord only ever ADDS the suppression. Shoot and Walk still do their jobs
@@ -636,7 +646,8 @@ WorldInventory=1
 ; within reach of normal play -- raise this if it ever fires unintentionally.
 ;
 ; It sends a PRESS, not a latch -- Menu toggles the pause screen itself, and a
-; held START would never look like a clean press to the game. It fires once per
+)INI"
+           R"INI(; held START would never look like a clean press to the game. It fires once per
 ; hold; release and re-hold to send another. Y and LT are suppressed from the
 ; moment it fires until you let go, so it does not keep grabbing afterwards.
 ;
@@ -648,8 +659,7 @@ MenuChordPressSeconds=0.15
 
 ; How far the left stick must travel before a shifted press registers, 0-1.
 ; Raise it if directions trigger too easily, lower it if they feel stiff.
-)INI"
-           R"INI(DpadShiftDeadzone=0.5
+DpadShiftDeadzone=0.5
 
 ; Which XInput button the left hand's LOWER face button sends.
 ;   1 = BACK  -- the System menu. Default.
@@ -797,7 +807,8 @@ SkyAtInfinity=1
 ; TR4 HD sunrays and selected smoke/fire/spray/splash cells are enhanced in
 ; memory. No New Effects DDS installation is required; TR5/6 are unchanged.
 ; Restart the game after changing these load-time settings. Disable this if
-; stacking with replacement effect textures is too bright.
+)INI"
+           R"INI(; stacking with replacement effect textures is too bright.
 TR4Effects=1
 ; Strength 0 = original, 1 = tuned enhancement, 2 = stronger. Range: 0..2.
 TR4SunrayStrength=1.0
@@ -809,8 +820,7 @@ TR4EffectStrength=1.0
 ; camera and first person, including when selected in a menu. Y + RT switches
 ; classic/remastered graphics. At 0, the old Y + LT hold chord is unchanged.
 ; Startup is always third person. Fixed/cinematic cameras
-)INI"
-           R"INI(; keep their authored framing. TR6 uses a different engine and is unsupported.
+; keep their authored framing. TR6 uses a different engine and is unsupported.
 FirstPerson=1
 
 ; Animated head joint and eye offset in that joint's local coordinates.
@@ -955,7 +965,8 @@ DynamicBones=1
 ; Which joint carries the chest. CONFIRMED from the engine, not lore:
 ; tomb5.dll SkinUseMatrix is 14 byte-pairs of which only four are filled --
 ; (1,2) (4,5) (8,9) (11,12), the two knees and two elbows, where the skin
-; blends between rigid meshes. That pins the canonical order:
+)INI"
+           R"INI(; blends between rigid meshes. That pins the canonical order:
 ;
 ;   0 HIPS  1 THIGH_R  2 CALF_R  3 FOOT_R  4 THIGH_L  5 CALF_L  6 FOOT_L
 ;   7 TORSO  8 UARM_R  9 LARM_R  10 HAND_R  11 UARM_L  12 LARM_L
@@ -967,8 +978,7 @@ DynamicBonesTorsoJoint=7
 ;
 ; The palette holds skinning matrices (bone * inverse-bind), so a translation
 ; column is not a bone position: the measured body draw put forearm and hand
-)INI"
-           R"INI(; 2.0 units apart and hips and torso 0.5, impossible for real origins. Such a
+; 2.0 units apart and hips and torso 0.5, impossible for real origins. Such a
 ; matrix does correctly map a bind-pose point to its skinned world position,
 ; which is what the anchor is. Lara's model origin is at the hips with +Y
 ; DOWN, so the chest is ~170 units of negative Y, slightly forward in Z, and
@@ -1119,7 +1129,8 @@ DynamicBonesChestStrength=2.5
 DynamicBonesChestTop=0.18
 DynamicBonesChestBottom=0.52
 ; Depth: where the weight starts, as a fraction of torso depth behind the front
-; surface. Higher moves more of the breast, including its underside and sides;
+)INI"
+           R"INI(; surface. Higher moves more of the breast, including its underside and sides;
 ; the back and backpack stay out either way.
 DynamicBonesChestDepth=0.6
 ; Width: half-width fraction before the weight fades toward the armpits. Lower
@@ -1130,8 +1141,7 @@ DynamicBonesChestWidth=0.34
 ; and the belly.
 DynamicBonesChestBand=0.65
 
-)INI"
-           R"INI(; Permanently push the selected region out of her front by this many units.
+; Permanently push the selected region out of her front by this many units.
 ; 0 = off. Calibration aid: set 30, stand still, and what bulges is exactly
 ; what will bounce.
 DynamicBonesRegionDebug=0
