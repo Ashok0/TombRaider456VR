@@ -1296,8 +1296,8 @@ In-headset visual confirmation remains pending.
 
 ### Physical wall switches in VR (2026-10-11)
 
-In TR4/5 first person, holster your weapons, stand within normal switch-use
-range, and bring the right controller near an ordinary wall lever. Press and
+In TR4/5 first person, holster your weapons, stand within arm's reach,
+and bring the right controller near an ordinary wall lever. Press and
 hold **Right Grip**, then move your hand along the lever's arc to the opposite
 end stop. Lara's grip stays attached to the selected point on the lever.
 You can stop or reverse partway through the pull. Release Grip before grabbing again.
@@ -1315,8 +1315,12 @@ special animation-command variants retain their existing controls.
 Using Y also retains the existing native interaction and camera behavior.
 No held-camera switch logic is restored.
 
-Grab detection requires a fresh nearby collision candidate, native spatial
-reach, and tracked hand proximity. The grip point follows a moving lever joint;
+The Action icon does not need to be visible or active. Grab detection uses a
+fresh nearby collision candidate and tracked hand proximity (18 cm to grab,
+40 cm while holding), independently of the native horizontal Action zone.
+Lara must remain within 90 cm horizontally of the lever's mesh, on its usable
+side and within native floor-height limits. Native Action controls and
+third-person behavior are unchanged. The grip point follows a moving lever joint;
 the arm IK uses that same point. Moving over 25 cm away from its path, loss of
 eligibility, tracking jumps and stale samples cancel the pull.
 The native handler retains activation, sounds and level-specific callbacks;

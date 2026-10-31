@@ -1,0 +1,10 @@
+﻿{
+    "deployed":  "2026-10-31T01:07:21.3608921-04:00",
+    "focused_checks":  224,
+    "full_suite_run":  false,
+    "headset_tested":  false,
+    "dll":  "A370D5B92C406A03E9EE83043E4E720AB3A85A7D28DEADC0D89C44A246905B17",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\switch-hand-reach\\before-20261031-010721",
+    "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_unchanged":  "CE03C8C787F87BCFFD424DB195CE9B6D29337F38185B4DC08C531542DA8F8F55"
+}

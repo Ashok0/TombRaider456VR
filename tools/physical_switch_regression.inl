@@ -121,8 +121,29 @@ void TestPhysicalSwitch(Reset reset,Rva rva,Pose pose) {
         Check(!SwitchReach(switchMemory,itemMemory,hand,distance,false),"backside cannot grab through wall");
         body.z_pos=target.z_pos-100;
         body.x_pos+=1000;
-        Check(!SwitchReach(switchMemory,itemMemory,hand,distance,false),"native body reach is preserved");
+        Check(!SwitchReach(switchMemory,itemMemory,hand,distance,false),"remote body cannot grab");
         body.x_pos=target.x_pos;
+        const auto savedBody=body,savedTarget=target;
+        for(int yaw:{0,0x4000,0x8000,0xc000}) {
+            target.y_rot=int16_t(yaw);
+            const auto world=[&](float x,float z) {
+                return locomotion::Rotate({x,z},Radians(int16_t(yaw)));
+            };
+            const auto offset=world(450,-500),nearOffset=world(0,-32);
+            body.x_pos=target.x_pos+int32_t(std::round(offset.x));
+            body.z_pos=target.z_pos+int32_t(std::round(offset.z));
+            body.y_rot=target.y_rot;
+            const motiongun::Vec nearHand{target.x_pos+nearOffset.x,hand.y,target.z_pos+nearOffset.z};
+            int16_t nativeZone[12];std::memcpy(nativeZone,switchBounds,sizeof(nativeZone));
+            nativeZone[0]=-320;nativeZone[1]=320;nativeZone[4]=-232;nativeZone[5]=232;
+            Check(!FakeSwitchPosition(nativeZone,switchMemory,itemMemory),"native Action zone rejects offset body pose");
+            Check(SwitchReach(switchMemory,itemMemory,nearHand,distance,false),"hand reaches lever beyond Action-icon zone at each wall heading");
+            ++body.y_pos;
+            Check(!SwitchReach(switchMemory,itemMemory,nearHand,distance,false),"different floor height remains rejected");
+            --body.y_pos;
+        }
+        body=savedBody;target=savedTarget;
+        body.x_pos=target.x_pos+450;body.z_pos=target.z_pos-500;
         body.y_rot=Angle(1.2f);
         Check(SwitchReach(switchMemory,itemMemory,hand,distance,false)&&body.y_rot==Angle(1.2f),
               "tracked grab replaces facing without rotating Lara");
