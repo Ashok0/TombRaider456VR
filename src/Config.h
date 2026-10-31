@@ -389,6 +389,8 @@ struct Config {
 
     bool  verboseFirstFrame = true;
 
+    // Dark preserves the original VR presentation; Brighter enables native sRGB render targets.
+    bool vrBrighterColors = false;
     // Opt-in Index actions separate face buttons from grip force. Restart required.
     bool valveIndexControllers = false;
     float valveIndexGripPress = .55f;

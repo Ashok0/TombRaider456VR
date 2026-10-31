@@ -1,3 +1,4 @@
+#include "VRMenu.h"
 // Hooks.cpp -- the stereo injection layer.
 //
 //   vid_setPass     REQUIRED WORK. Classifies each pass as world-space or 2D by
@@ -2427,6 +2428,7 @@ void __cdecl Detour_ogl_present() {
     // The game DLLs load after we do, and the player can switch between TR4 and
     // TR5 without restarting, so both of these run every frame.
     GameDllUpdate();
+    VRMenuUpdate();
     InventorySceneUpdate();
     FirstPersonUpdate();
 

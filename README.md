@@ -1,6 +1,27 @@
 ## Tomb Raider IV-VI Remastered VR Mod
 Native stereo 6DOF VR mod for Tomb Raider IV-VI Remastered. Tomb Raider I-V can be toggled between third and first preson.  First person mode supports 6DOF motion controls, working scopes, and Roomscale movement.  Tomb Raider VI runs off an updated version of Core Engine and currently works in third person only.  
 
+
+## VR Options
+
+Open **Options > VR Options** from the title screen. This uses the game's native menu, with no popup.
+Use Up/Down to select a row, Left/Right or Select to change it, and Back to return.
+
+- **Controller Type:** Meta Touch or Valve Index. Changes apply after restarting.
+- **Color Scheme:** Dark (default) or Brighter. Changes apply immediately in the headset.
+  Dark retains the original VR presentation. Brighter restores the native sRGB eye and scratch render targets from the
+  October 26 color correction. This lets remastered rendering apply its normal
+  color conversion before submission. Classic rendering retains its native
+  conversion state. This changes neither game lighting nor saturation; final
+  headset appearance still depends on the display.
+
+Changes save automatically to `ValveIndexControllers` and `VRBrighterColors` in the
+installed INI. Existing INIs without a color setting keep Dark; new INIs include
+`VRBrighterColors=0`. Other settings stay unchanged, and the previous INI is backed
+up as `TombRaiderVR.ini.vr-options.bak`. Index mode uses the existing
+`TombRaiderVRBindings` files beside the DLL.
+
+
 ## AI Usage
 Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions. OpenAI Codex was used for adding VR support to Angel of Darkness which runs off a modified version of Core Engine. 
 

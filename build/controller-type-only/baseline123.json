@@ -1,0 +1,15 @@
+{
+  "README.md": "0442c60a2fd2abecfb479d3e128913f5fd8f10e1d1ecb9ffe2e1e65c987022bf",
+  "TombRaiderVR.vcxproj": "75b04de3d6310d06ad5bc9370b27b30d10f5b89f5c7946c2fc7a142252a946ac",
+  "src/VRMenu.cpp": "87f28d8f0fecbfc22677c6699717f97049f312b75ba89f37ed2513753751f43d",
+  "src/VRMenu.h": "4f43e1626843a6319dc79258b5c5c30c1eb7a3f411d024e75b85af31dd18c2ee",
+  "src/VRMenuModel.h": "4d5f32f64fb3156a34188065eb92186809314301287fb4c73954c4cefb4328dd",
+  "src/VRMenuSettings.h": "cfbd528c7a5e02243099347b99be777225201491183fddb73a83d7da3fe7d5ca",
+  "src/VRMenuSettings.inl": "98606188279ac7d043d368334a7c8d783651c786d23315db42a1b631a791e120",
+  "src/VRNativeMenu.cpp": "707dbae45f44101e838af8f80809fa81b1f2797f40db5bf9cade1a8f0fb8127d",
+  "src/VRNativeMenuModel.h": "18e427735be6d9554dec2b81a578fcb0713d89f3655c9e83b9e07b35f90c50b3",
+  "src/Gamepad.cpp": "47dd20aa5e6bf757e6cf5ea65632c99710c9690d1162dd30b7c0d0d49c78204d",
+  "tools/vr_menu_tests.cpp": "140f3dbccf6671f08fb0c37eb34855daabc842eb64fda51c221858802f90691a",
+  "tools/vr_native_menu_tests.cpp": "d7c9f502d69d513c621206730e8f910e1caf279ca908a45927d517758ab6cf61",
+  "build/test_vr_options.cmd": "324dc176235329918b6a67a03f285b2c9e8c5e6dc1aae1d40c12d85484e2c4d2"
+}

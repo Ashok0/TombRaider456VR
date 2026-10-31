@@ -1,0 +1,10 @@
+﻿{
+    "deployed":  "2026-10-31T17:09:01.5805389-04:00",
+    "full_suite_run":  false,
+    "headset_tested":  false,
+    "dll":  "e9d71f4a120d6b0bb7c6be3307b228e329cf43502b5cf8f862fd5d029938042b",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-srgb-option-20261031-170901",
+    "color_scheme":  "optional native sRGB targets; Dark unchanged",
+    "stereo_color_gpu_checks":  872,
+    "ini_unchanged":  "7735E2DEFCBC93ADD075D1D849EB9FF5CF65D1E777036255B846AB4DD305CBA0"
+}

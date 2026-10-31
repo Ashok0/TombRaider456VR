@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 61148 bytes, 1215 lines.
+// Source: TombRaiderVR.ini, 61372 bytes, 1220 lines.
 #pragma once
 
 namespace tr {
@@ -178,6 +178,11 @@ SwapEyes=0
 ;   upside down in BOTH ......................... change FlipProjectionY instead
 FlipSubmitV=0
 
+; VR Options > Color Scheme: 0=Dark (original VR look), 1=Brighter.
+; Brighter restores native sRGB rendering, as in the October 26 color fix.
+; Takes effect on the next frame when changed in VR Options.
+VRBrighterColors=0
+
 ; --- per-eye rendering ------------------------------------------------------
 
 ; Where the per-eye TRANSLATION is applied. Leave this at 3.
@@ -185,11 +190,11 @@ FlipSubmitV=0
 ;   0 = uViewMatrix translation column. BROKEN: 38 of the engine's 125 vertex
 ;       shaders transform position as dot(uViewMatrix[i].xyz, p.xyz) -- rotation
 ;       ONLY, never reading the translation column. Invisible to them, so: no
-;       parallax, no depth, everything at infinity (reads oversized), and dead
+)INI"
+           R"INI(;       parallax, no depth, everything at infinity (reads oversized), and dead
 ;       IpdScale / WorldUnitsPerMetre keys.
 ;   1 = uModelMatrix translation column. ALSO BROKEN: skinned geometry goes
-)INI"
-           R"INI(;       through uJoints[72*3], not uModelMatrix, so characters do not move with
+;       through uJoints[72*3], not uModelMatrix, so characters do not move with
 ;       the world and float outside the map.
 ;   2 = uProjMatrix + translate(d). Depth and scale work, but the world swims
 ;       when you rotate your head: d = (R_e - I)*t_g + t_e, and t_g is ~82000
@@ -335,13 +340,13 @@ Ortho3DDepthMetres=2.0
 ;     overlays and wrong for these -- they are meshes with real depth, and
 ;     flattening them makes every item z-fight with itself.
 ; 0 = world-locked panel, same construction as the HUD's but with the z column
-;     filled in so ortho depth lands in a slab instead of on one plane.
+)INI"
+           R"INI(;     filled in so ortho depth lands in a slab instead of on one plane.
 Ortho3DLockToHead=1
 
 ; Horizontal angular width of the world-locked panel, in degrees. Ignored when
 ; Ortho3DLockToHead=1.
-)INI"
-           R"INI(Ortho3DSizeDegrees=55.0
+Ortho3DSizeDegrees=55.0
 
 ; Thickness of the world-locked panel's depth slab, in metres: ortho depth maps
 ; onto Ortho3DDepthMetres plus or minus half of this. Too thin and the item
@@ -492,11 +497,11 @@ DecoupledPitch=1
 ; Hold RT + RB to get stick pitch BACK for as long as both are held. 1 = on,
 ; and it costs nothing when unused.
 ;
-; This only ever hands pitch back -- it never takes it away. With
+)INI"
+           R"INI(; This only ever hands pitch back -- it never takes it away. With
 ; DecoupledPitch=0 the stick already pitches and the chord does nothing at all;
 ; with DecoupledPitch=1 you keep the comfortable head-only default and can still
-)INI"
-           R"INI(; reach for the stick for the one shot that wants it, then let go.
+; reach for the stick for the one shot that wants it, then let go.
 ;
 ; A momentary control has to mean ONE thing. An earlier version inverted the
 ; setting instead, which made the same chord decouple pitch or restore it
@@ -642,12 +647,12 @@ WorldInventory=1
 ; GamepadMenuUsesBack); this chord reaches the other without spending a button.
 ;
 ; The hold is what separates the chord from real play: Y is Action and LT is
-; Equip, so the pair does occur naturally. One second is comfortable but IS
+)INI"
+           R"INI(; Equip, so the pair does occur naturally. One second is comfortable but IS
 ; within reach of normal play -- raise this if it ever fires unintentionally.
 ;
 ; It sends a PRESS, not a latch -- Menu toggles the pause screen itself, and a
-)INI"
-           R"INI(; held START would never look like a clean press to the game. It fires once per
+; held START would never look like a clean press to the game. It fires once per
 ; hold; release and re-hold to send another. Y and LT are suppressed from the
 ; moment it fires until you let go, so it does not keep grabbing afterwards.
 ;
@@ -804,11 +809,11 @@ CullDumpKey=0x77
 ; stereo, for A/B.
 SkyAtInfinity=1
 
-; TR4 HD sunrays and selected smoke/fire/spray/splash cells are enhanced in
+)INI"
+           R"INI(; TR4 HD sunrays and selected smoke/fire/spray/splash cells are enhanced in
 ; memory. No New Effects DDS installation is required; TR5/6 are unchanged.
 ; Restart the game after changing these load-time settings. Disable this if
-)INI"
-           R"INI(; stacking with replacement effect textures is too bright.
+; stacking with replacement effect textures is too bright.
 TR4Effects=1
 ; Strength 0 = original, 1 = tuned enhancement, 2 = stronger. Range: 0..2.
 TR4SunrayStrength=1.0
@@ -962,11 +967,11 @@ FirstPersonTurnDeadzone=0.25
 ; off it will buzz rather than swing.
 DynamicBones=1
 
-; Which joint carries the chest. CONFIRMED from the engine, not lore:
+)INI"
+           R"INI(; Which joint carries the chest. CONFIRMED from the engine, not lore:
 ; tomb5.dll SkinUseMatrix is 14 byte-pairs of which only four are filled --
 ; (1,2) (4,5) (8,9) (11,12), the two knees and two elbows, where the skin
-)INI"
-           R"INI(; blends between rigid meshes. That pins the canonical order:
+; blends between rigid meshes. That pins the canonical order:
 ;
 ;   0 HIPS  1 THIGH_R  2 CALF_R  3 FOOT_R  4 THIGH_L  5 CALF_L  6 FOOT_L
 ;   7 TORSO  8 UARM_R  9 LARM_R  10 HAND_R  11 UARM_L  12 LARM_L
@@ -1125,12 +1130,12 @@ DynamicBonesChestStrength=2.5
 ;
 ; Height is normally MEASURED: the band is fitted to the bump the bust makes in
 ; the mesh's front profile. Top/Bottom are only the fallback for an outfit with
-; no distinct bump, as fractions of torso height from the neck end down.
+)INI"
+           R"INI(; no distinct bump, as fractions of torso height from the neck end down.
 DynamicBonesChestTop=0.18
 DynamicBonesChestBottom=0.52
 ; Depth: where the weight starts, as a fraction of torso depth behind the front
-)INI"
-           R"INI(; surface. Higher moves more of the breast, including its underside and sides;
+; surface. Higher moves more of the breast, including its underside and sides;
 ; the back and backpack stay out either way.
 DynamicBonesChestDepth=0.6
 ; Width: half-width fraction before the weight fades toward the armpits. Lower

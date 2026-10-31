@@ -1,0 +1,191 @@
+[
+  {
+    "game": 1,
+    "flavor": "retail",
+    "stamp": 1783331880,
+    "options": 631824,
+    "subpage": 1530868,
+    "selection": 1179064,
+    "nativeTexts": 1268560,
+    "firstVisible": 1268472,
+    "textPool": 1229888,
+    "textBuffers": 1235520,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 567712,
+    "textCount": 1202396
+  },
+  {
+    "game": 1,
+    "flavor": "egs",
+    "stamp": 1788958334,
+    "options": 634704,
+    "subpage": 1538440,
+    "selection": 1183164,
+    "nativeTexts": 1276128,
+    "firstVisible": 1271928,
+    "textPool": 1233344,
+    "textBuffers": 1238976,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 570448,
+    "textCount": 1205836
+  },
+  {
+    "game": 2,
+    "flavor": "retail",
+    "stamp": 1783331903,
+    "options": 803152,
+    "subpage": 1523980,
+    "selection": 1434336,
+    "nativeTexts": 1523984,
+    "firstVisible": 1523896,
+    "textPool": 1485344,
+    "textBuffers": 1490976,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 777632,
+    "textCount": 1459148
+  },
+  {
+    "game": 2,
+    "flavor": "egs",
+    "stamp": 1788958358,
+    "options": 803072,
+    "subpage": 1793836,
+    "selection": 1438408,
+    "nativeTexts": 1531520,
+    "firstVisible": 1793824,
+    "textPool": 1488768,
+    "textBuffers": 1494400,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 777376,
+    "textCount": 1462572
+  },
+  {
+    "game": 3,
+    "flavor": "retail",
+    "stamp": 1783331895,
+    "options": 1165440,
+    "subpage": 2187392,
+    "selection": 1800448,
+    "nativeTexts": 1891232,
+    "firstVisible": 1891068,
+    "textPool": 1852592,
+    "textBuffers": 1858224,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 1103488,
+    "textCount": 1825676
+  },
+  {
+    "game": 3,
+    "flavor": "egs",
+    "stamp": 1788958349,
+    "options": 1169088,
+    "subpage": 2194976,
+    "selection": 1804544,
+    "nativeTexts": 1898800,
+    "firstVisible": 1898964,
+    "textPool": 1856048,
+    "textBuffers": 1861680,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 1106976,
+    "textCount": 1829132
+  },
+  {
+    "game": 1,
+    "flavor": "pdb",
+    "stamp": 1783318783,
+    "options": 631472,
+    "subpage": 1526964,
+    "selection": 1175160,
+    "nativeTexts": 1264656,
+    "firstVisible": 1264568,
+    "textPool": 1225984,
+    "textBuffers": 1231616,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 567616,
+    "textCount": 1198492
+  },
+  {
+    "game": 2,
+    "flavor": "pdb",
+    "stamp": 1783318805,
+    "options": 804512,
+    "subpage": 1524172,
+    "selection": 1434528,
+    "nativeTexts": 1524176,
+    "firstVisible": 1524088,
+    "textPool": 1485536,
+    "textBuffers": 1491168,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 778880,
+    "textCount": 1459340
+  },
+  {
+    "game": 3,
+    "flavor": "pdb",
+    "stamp": 1783318797,
+    "options": 1158624,
+    "subpage": 2175296,
+    "selection": 1788352,
+    "nativeTexts": 1879136,
+    "firstVisible": 1878972,
+    "textPool": 1840496,
+    "textBuffers": 1846128,
+    "bytes": [
+      72,
+      137,
+      92,
+      36,
+      8
+    ],
+    "text": 1096848,
+    "textCount": 1813580
+  }
+]

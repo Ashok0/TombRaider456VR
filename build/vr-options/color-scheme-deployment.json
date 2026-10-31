@@ -1,0 +1,11 @@
+﻿{
+    "dll":  "cba067413585f0463bab864b79122a7f386985312f9ff40c3ad1c7f90d7f1c33",
+    "full_suite_run":  false,
+    "verified_layouts":  15,
+    "headset_tested":  false,
+    "native_structure_checks":  27,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-color-scheme-20261031-165319",
+    "ini_unchanged":  "6134C20BB4276EB208661D29B42C3F42FEF8D8682B45FE6F55F3754ECABC32CF",
+    "vr_settings_checks":  55,
+    "deployed":  "2026-10-31T16:53:20.3810407-04:00"
+}

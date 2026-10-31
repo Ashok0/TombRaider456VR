@@ -1,0 +1,11 @@
+{
+  "README.md": "38cd1e0138ecfad2d6f3a08e190cf173b997cf72ba8a54ff9c3b7efea92a2797",
+  "TombRaiderVR.vcxproj": "f790f922f4ddb265e2e72fbcdc4ecf36593c0182ed0a14330c5de1394717d161",
+  "src/VRMenu.cpp": "820499102045618d23977b38a4c02cba5b14fbed4a139aeb410d0dac9556f122",
+  "src/VRMenu.h": "239347960703140ba8d714024b4e72cd44b5839f8171632422c689d7a06b330b",
+  "src/VRMenuModel.h": "b1e3098c15a225d737231f8b668a66f67a3e71aa2a252215263a5e94c3d76a8b",
+  "src/InlineHook.cpp": "96f89df7ff314af6ea0d666c12be5a71dfdd254c93c8e81bd1d71781dbf66c7b",
+  "src/InlineHook.h": "d3d113881f90a0fd19c0290e1d75b906cb6202793c8f7294cb8848fdadf35844",
+  "tools/vr_menu_tests.cpp": "e30e8e0b1c89521b5440b2f5e398fb30edfcd30369a171d058a13764d8119b76",
+  "build/test_vr_options.cmd": "8bfd213289e1a1d491257a60ca7ea56f2a77749643b1de6fc985c68fe34ceb4d"
+}

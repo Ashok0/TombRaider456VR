@@ -1,0 +1,11 @@
+﻿{
+    "dll":  "bed2ad811e7b388b4ec453eab7cf02dbb1c8b5af3c9e3b3cefc772732cbb40f9",
+    "full_suite_run":  false,
+    "controller_menu_checks":  43,
+    "verified_layouts":  15,
+    "headset_tested":  false,
+    "native_structure_checks":  21,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-controller-type-20261031-164048",
+    "ini_unchanged":  "6134C20BB4276EB208661D29B42C3F42FEF8D8682B45FE6F55F3754ECABC32CF",
+    "deployed":  "2026-10-31T16:40:48.6510411-04:00"
+}

@@ -1,0 +1,257 @@
+[
+  {
+    "game": 1,
+    "stamp": "0x6a4b48ff",
+    "path": "C:\\dev\\TombRaider123VR\\PDB\\tomb1.dll",
+    "fields": [
+      "0x1fea0",
+      "0x34230",
+      "0x106908",
+      "0x11ee08",
+      "0x4f87e0",
+      "0x41dd94",
+      "0x41d6a0",
+      "0x119f90"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "40534883ec20"
+  },
+  {
+    "game": 1,
+    "stamp": "0x6a4b7c28",
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-retail-verify\\tomb1.dll",
+    "fields": [
+      "0x1ffe0",
+      "0x34410",
+      "0x107908",
+      "0x11fd48",
+      "0x4f9720",
+      "0x41ecd4",
+      "0x41e5e0",
+      "0x11af90"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "40534883ec20"
+  },
+  {
+    "game": 1,
+    "stamp": "0x6aa1567e",
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-egs-verify\\tomb1.dll",
+    "fields": [
+      "0x20250",
+      "0x346a0",
+      "0x108908",
+      "0x120d48",
+      "0x4fb4c0",
+      "0x420a74",
+      "0x420380",
+      "0x11bf90"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "40534883ec20"
+  },
+  {
+    "game": 2,
+    "stamp": "0x6a4b4915",
+    "path": "C:\\dev\\TombRaider123VR\\PDB\\tomb2.dll",
+    "fields": [
+      "0x3b890",
+      "0x625b0",
+      "0x141da8",
+      "0x15e334",
+      "0x537940",
+      "0x4331e0",
+      "0x432790",
+      "0x159870"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "40534883ec20"
+  },
+  {
+    "game": 2,
+    "stamp": "0x6a4b7c3f",
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-retail-verify\\tomb2.dll",
+    "fields": [
+      "0x3b810",
+      "0x61ea0",
+      "0x141da8",
+      "0x15e274",
+      "0x537880",
+      "0x433120",
+      "0x4326d0",
+      "0x159870"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "40534883ec20"
+  },
+  {
+    "game": 2,
+    "stamp": "0x6aa15696",
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-egs-verify\\tomb2.dll",
+    "fields": [
+      "0x3b330",
+      "0x61c20",
+      "0x142da8",
+      "0x15f258",
+      "0x539600",
+      "0x434ea0",
+      "0x434450",
+      "0x15a870"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "40534883ec20"
+  },
+  {
+    "game": 3,
+    "stamp": "0x6a4b490d",
+    "path": "C:\\dev\\TombRaider123VR\\PDB\\tomb3.dll",
+    "fields": [
+      "0x4fe70",
+      "0x95ed0",
+      "0x192738",
+      "0x1b4950",
+      "0x596a40",
+      "0x491f74",
+      "0x4907d0",
+      "0x1afbb0"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "48895c2410"
+  },
+  {
+    "game": 3,
+    "stamp": "0x6a4b7c37",
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-retail-verify\\tomb3.dll",
+    "fields": [
+      "0x50000",
+      "0x97620",
+      "0x195738",
+      "0x1b7890",
+      "0x599980",
+      "0x494eb4",
+      "0x493710",
+      "0x1b2bb0"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "48895c2410"
+  },
+  {
+    "game": 3,
+    "stamp": "0x6aa1568d",
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-egs-verify\\tomb3.dll",
+    "fields": [
+      "0x50140",
+      "0x97ca0",
+      "0x196738",
+      "0x1b8890",
+      "0x59b720",
+      "0x496c54",
+      "0x4954b0",
+      "0x1b3bb0"
+    ],
+    "title_prologue": "440fbf542428",
+    "draw_prologue": "48895c2410"
+  },
+  {
+    "game": 4,
+    "stamp": "0x696b4999",
+    "path": "C:\\dev\\TombRaider456VR\\PDB\\tomb4.dll",
+    "fields": [
+      "0x37f70",
+      "0xed310",
+      "0x1bb1fc",
+      "0x1b7e38",
+      "0x1bb504",
+      "0x663f00",
+      "0x6600e0",
+      "0x1bb1b8"
+    ],
+    "title_prologue": "4053574156",
+    "draw_prologue": "48895c2408"
+  },
+  {
+    "game": 4,
+    "stamp": "0x68c12fda",
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\4\\tomb4.dll",
+    "fields": [
+      "0x37e80",
+      "0xedbf0",
+      "0x1bc13c",
+      "0x1b8e38",
+      "0x1bc444",
+      "0x664e40",
+      "0x661020",
+      "0x1bc0f8"
+    ],
+    "title_prologue": "4053574156",
+    "draw_prologue": "48895c2408"
+  },
+  {
+    "game": 5,
+    "stamp": "0x696b499c",
+    "path": "C:\\dev\\TombRaider456VR\\PDB\\tomb5.dll",
+    "fields": [
+      "0x38c30",
+      "0xe46d0",
+      "0x1b6c40",
+      "0x1b3ce8",
+      "0x1b6f74",
+      "0x65ac40",
+      "0x65abf0",
+      "0x1b6bf8"
+    ],
+    "title_prologue": "4053574157",
+    "draw_prologue": "48895c2408"
+  },
+  {
+    "game": 5,
+    "stamp": "0x68c12fe9",
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\5\\tomb5.dll",
+    "fields": [
+      "0x39100",
+      "0xe4720",
+      "0x1b6b80",
+      "0x1b3ce8",
+      "0x1b6eb4",
+      "0x65ab80",
+      "0x65ab30",
+      "0x1b6b38"
+    ],
+    "title_prologue": "4053574157",
+    "draw_prologue": "48895c2408"
+  },
+  {
+    "game": 6,
+    "stamp": "0x696b49a4",
+    "path": "C:\\dev\\PDB\\tomb6.dll",
+    "fields": [
+      "0xc9e80",
+      "0x0",
+      "0x3de540",
+      "0x3e1a28",
+      "0x2fe018",
+      "0x0",
+      "0x43d5a0",
+      "0x0"
+    ],
+    "title_prologue": "48895c2408",
+    "draw_prologue": ""
+  },
+  {
+    "game": 6,
+    "stamp": "0x68c12fe6",
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\6\\tomb6.dll",
+    "fields": [
+      "0xc9930",
+      "0x0",
+      "0x3dd4a0",
+      "0x3e0988",
+      "0x2fcf78",
+      "0x0",
+      "0x43c500",
+      "0x0"
+    ],
+    "title_prologue": "48895c2408",
+    "draw_prologue": ""
+  }
+]

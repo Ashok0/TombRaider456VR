@@ -50,7 +50,7 @@ constexpr uint32_t ogl_drawVB         = 0x00012CF0;
 
 // void ogl_present(void)
 // 83 bytes. wglSwapIntervalEXT(app.dbg_vsync); SwapBuffers(hDC); clears the
-// vb/ib cache; toggles GL_FRAMEBUFFER_SRGB (0x8F9D) on game == 2.
+// vb/ib cache; toggles GL_PRIMITIVE_RESTART (0x8F9D) on game == 2.
 // The engine's own frame boundary -- a better hook than wglSwapBuffers.
 constexpr uint32_t ogl_present        = 0x00012600;
 
