@@ -86,5 +86,6 @@ bool BoneSkinActive();
 // before glDrawElements. Uploads the chest offset for Lara's body draws and
 // clears it for every other draw sharing a patched program.
 void BoneSkinAfterValidate();
+void BoneSkinDrawWristCap(void* mesh,unsigned firstIndex,unsigned count);
 
 } // namespace tr

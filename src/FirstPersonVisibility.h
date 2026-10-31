@@ -1,11 +1,17 @@
 #pragma once
 #include <cstdint>
 #include <cmath>
+#include "LocomotionMath.h"
 
 namespace tr::firstperson {
 constexpr uint32_t HeadMeshBit = 1u << 14;
 constexpr uint32_t ArmMeshBits = 0x3f00u;
 constexpr uint32_t HandMeshBits = 0x2400u;
+
+inline bool TraversalTransitionHandsOnly(int state,uint32_t recoveryMask) {
+    return locomotion::IsLedgeMountState(state) ||
+        (!locomotion::IsTraversalGripState(state) && recoveryMask==ArmMeshBits);
+}
 
 // Hold the draw restriction through the first standing palettes after a
 // mount/landing. Rendering and simulation can change state within one pose.

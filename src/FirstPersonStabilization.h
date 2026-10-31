@@ -57,6 +57,52 @@ struct RootMotion {
 };
 
 struct Point { float x=0,y=0,z=0; };
+// Smooth only the change from a mounting animation to the standing camera.
+// This is a decaying offset on the live camera target, not a camera low-pass:
+// subsequent locomotion passes through, and physical HMD motion is added later.
+struct MountEyeTransition {
+    bool pending=false,active=false,haveLast=false,haveTime=false;
+    bool lastMount=false,lastGround=false;
+    uint64_t serial=0;
+    double time=0,start=0;
+    Point last{},offset{}; // offset is in artificial-yaw space, in game units.
+    void Reset() { *this={}; }
+    Point Apply(Point target,bool mounting,bool grounded,uint64_t frame,double now,
+                float heading,float maxCorrection) {
+        if(!std::isfinite(target.x+target.y+target.z+heading+maxCorrection) ||
+           !std::isfinite(now) || maxCorrection<=0) { Reset();return target; }
+        if(haveTime && (now<time || now-time>.25)) Reset();
+        // All eye/attachment draws of a tracking sample use one blend weight.
+        // A native state change within that sample still starts/cancels it.
+        if(!haveTime || serial!=frame || lastMount!=mounting || lastGround!=grounded) {
+            time=now;serial=frame;haveTime=true;lastMount=mounting;lastGround=grounded;
+        }
+        if(mounting) { pending=true;active=false;return target; }
+        if(!grounded) { Reset();return target; }
+        if(pending) {
+            pending=false;
+            if(!haveLast) return target;
+            const Point delta{last.x-target.x,last.y-target.y,last.z-target.z};
+            const float distance=std::sqrt(delta.x*delta.x+delta.y*delta.y+delta.z*delta.z);
+            if(!std::isfinite(distance) || distance>maxCorrection) { Reset();return target; }
+            const auto local=locomotion::Rotate({delta.x,delta.z},-heading);
+            offset={local.x,delta.y,local.z};start=time;active=distance>.001f;
+        }
+        if(!active) return target;
+        const float t=float(std::clamp((time-start)/.18,0.0,1.0));
+        // Zero slope and acceleration at both ends avoid a second stop jerk.
+        const float weight=1-t*t*t*(t*(t*6-15)+10);
+        if(t>=1) { active=false;offset={};return target; }
+        const auto flat=locomotion::Rotate({offset.x,offset.z},heading);
+        return {target.x+flat.x*weight,target.y+offset.y*weight,target.z+flat.z*weight};
+    }
+    // Capture the final collision-cleared base, never the physical HMD offset.
+    // Clearance is authoritative and must not feed back into a running blend.
+    void Observe(Point rendered) {
+        if(!std::isfinite(rendered.x+rendered.y+rendered.z)) { Reset();return; }
+        last=rendered;haveLast=true;
+    }
+};
 // A grounded state can precede the last interpolated climbing skeleton.
 // Correct that temporary body translation without changing the camera's saved
 // standing fit. Once the skeleton is standing-height, release the correction

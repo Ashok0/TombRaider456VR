@@ -26,6 +26,8 @@ const float* FirstPersonBodyPalette(uint64_t& mask,int& count);
 const float* FirstPersonRenderBodyPalette(uint64_t& mask,int& count);
 // Hidden wrist palette slots whose mixed costume/forearm surfaces remain visible.
 uint64_t FirstPersonBodyWristSeamMask();
+// Render-scoped rigid floating-hand palette and anatomical cap centre.
+const float* FirstPersonSealedHandSkin(int& joint,float centre[3]);
 // Render-only HK optic pose; no native zoom, weapon or camera state mutations.
 bool FirstPersonHKScopePose(motiongun::Frame& lens, motiongun::Frame& camera,float* radiusMetres=nullptr);
 bool FirstPersonDrawingTrackedHands();

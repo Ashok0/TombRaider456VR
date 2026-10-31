@@ -175,6 +175,8 @@
     <ClInclude Include="src\FirstPerson.h" />
     <ClInclude Include="src\FirstPersonIK.h" />
     <ClInclude Include="src\FirstPersonBodyIK.h" />
+    <ClInclude Include="src\TraversalArmIK.h" />
+    <ClInclude Include="src\WristCap.h" />
     <ClInclude Include="src\FirstPersonClearance.h" />
     <ClInclude Include="src\FirstPersonVisibility.h" />
     <ClInclude Include="src\FirstPersonStabilization.h" />

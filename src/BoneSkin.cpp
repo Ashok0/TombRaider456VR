@@ -7,6 +7,8 @@
 #include "Log.h"
 #include "FirstPerson.h"
 #include "MotionHandSkin.h"
+#include "WristCap.h"
+#include "GameDll.h"
 
 #include <windows.h>
 #include <cmath>
@@ -363,6 +365,150 @@ float Component(const uint8_t* p, const Attr& a, int i) {
     }
 }
 
+struct WristRim {
+    GLuint vao=0,vertices=0,indices=0;
+    unsigned first=0,count=0,indexBytes=0;
+    int hand=-1;
+    std::vector<wristcap::Loop> loops;
+};
+std::vector<WristRim> g_wristRims;
+GLuint g_capProgram=0,g_capVao=0,g_capBuffer=0;
+GLint g_capProjection=-1,g_capView=-1;
+HGLRC g_capContext=nullptr;
+int g_capLevel=-1;
+uint64_t g_capGame=0;
+unsigned g_capWarnings=0;
+
+void WristCapSkipped(unsigned flag,const char* reason) {
+    if (g_capWarnings&flag) return;
+    g_capWarnings|=flag;
+    LogF("handskin: wrist cap skipped (%s)",reason);
+}
+
+void ResetWristCaps() {
+    g_wristRims.clear();
+    if (g_capContext && wglGetCurrentContext()==g_capContext && gl::LoadedShaderApi()) {
+        if (g_capProgram) gl::DeleteProgram(g_capProgram);
+        if (g_capVao) gl::DeleteVertexArrays(1,&g_capVao);
+        if (g_capBuffer) gl::DeleteBuffers(1,&g_capBuffer);
+    }
+    g_capProgram=g_capVao=g_capBuffer=0;
+    g_capContext=nullptr;
+    g_capLevel=-1;
+    g_capGame=0;
+}
+
+bool CreateWristCapProgram() {
+    if (g_capContext && g_capContext!=wglGetCurrentContext()) ResetWristCaps();
+    if (g_capProgram) return true;
+    const char* vertex=R"GLSL(#version 150
+in vec3 aPosition;
+uniform mat4 uProjection;
+uniform vec4 uView[3];
+void main() {
+    gl_Position=uProjection*vec4(dot(uView[0].xyz,aPosition),
+        dot(uView[1].xyz,aPosition),dot(uView[2].xyz,aPosition),1.0);
+})GLSL";
+    const char* fragment=R"GLSL(#version 150
+out vec4 color;
+void main() { color=vec4(0.0,0.0,0.0,1.0); }
+)GLSL";
+    const GLuint vs=gl::CreateShader(GL_VERTEX_SHADER),fs=gl::CreateShader(GL_FRAGMENT_SHADER);
+    const GLuint program=gl::CreateProgram();
+    gl::ShaderSource(vs,1,&vertex,nullptr); gl::CompileShader(vs);
+    gl::ShaderSource(fs,1,&fragment,nullptr); gl::CompileShader(fs);
+    gl::AttachShader(program,vs); gl::AttachShader(program,fs); gl::LinkProgram(program);
+    GLint linked=0; gl::GetProgramiv(program,GL_LINK_STATUS,&linked);
+    gl::DeleteShader(vs); gl::DeleteShader(fs);
+    if (!linked) { gl::DeleteProgram(program); return false; }
+    g_capProgram=program;
+    g_capContext=wglGetCurrentContext();
+    g_capProjection=gl::GetUniformLocation(program,"uProjection");
+    g_capView=gl::GetUniformLocation(program,"uView[0]");
+    gl::GenVertexArrays(1,&g_capVao); gl::GenBuffers(1,&g_capBuffer);
+    gl::BindVertexArray(g_capVao); gl::BindBuffer(GL_ARRAY_BUFFER,g_capBuffer);
+    const GLint pos=gl::GetAttribLocation(program,"aPosition");
+    gl::VertexAttribPointer(pos,3,GL_FLOAT,GL_FALSE,sizeof(motiongun::Vec),nullptr);
+    gl::EnableVertexAttribArray(pos);
+    return true;
+}
+
+const WristRim* MeasureWristRim(void* mesh,GLuint program,unsigned first,unsigned count,int hand) {
+    if (!mesh || count<3 || count%3) {
+        WristCapSkipped(1,"missing indexed mesh or incomplete triangles"); return nullptr;
+    }
+    // ogl_draw reads the native mesh index width at +16 (2 or 4 bytes).
+    const unsigned indexBytes=*reinterpret_cast<const uint32_t*>(static_cast<uint8_t*>(mesh)+16);
+    if (indexBytes!=2 && indexBytes!=4) {
+        WristCapSkipped(2,"unsupported mesh index width"); return nullptr;
+    }
+    Attr coord,joints,weights;
+    if (!QueryAttr(program,"aCoord",coord) || !QueryAttr(program,"aLight",joints) ||
+        !QueryAttr(program,"aColor",weights) || coord.size<3 || joints.size<3 || weights.size<3 ||
+        coord.buf!=joints.buf || coord.buf!=weights.buf) {
+        WristCapSkipped(4,"skin vertex attributes unavailable"); return nullptr;
+    }
+    GLint vao=0,ibo=0;
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING,&vao);
+    glGetIntegerv(0x8895 /* GL_ELEMENT_ARRAY_BUFFER_BINDING */,&ibo);
+    if (!ibo) { WristCapSkipped(8,"index buffer unavailable"); return nullptr; }
+    for (const auto& rim:g_wristRims)
+        if (rim.vao==GLuint(vao) && rim.vertices==coord.buf && rim.indices==GLuint(ibo) &&
+            rim.hand==hand && rim.indexBytes==indexBytes)
+            return &rim;
+    GLint oldBuffer=0,vertexBytes=0,elementBytes=0;
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING,&oldBuffer);
+    gl::BindBuffer(GL_ARRAY_BUFFER,coord.buf);
+    gl::GetBufferParameteriv(GL_ARRAY_BUFFER,GL_BUFFER_SIZE,&vertexBytes);
+    gl::GetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER,GL_BUFFER_SIZE,&elementBytes);
+    if (vertexBytes<=0 || vertexBytes>64*1024*1024 || elementBytes<=0 || elementBytes>64*1024*1024 ||
+        (uint64_t(first)+count)*indexBytes>uint64_t(elementBytes)) {
+        gl::BindBuffer(GL_ARRAY_BUFFER,oldBuffer);
+        WristCapSkipped(16,"mesh range exceeds buffer"); return nullptr;
+    }
+    // Material draw ranges share one surface. Reading only the current range
+    // would invent holes along every material border and miss split wrist rims.
+    std::vector<uint8_t> vertices(vertexBytes),indices(elementBytes);
+    gl::GetBufferSubData(GL_ARRAY_BUFFER,0,vertexBytes,vertices.data());
+    gl::GetBufferSubData(GL_ELEMENT_ARRAY_BUFFER,0,indices.size(),indices.data());
+    gl::BindBuffer(GL_ARRAY_BUFFER,oldBuffer);
+    WristRim rim{GLuint(vao),coord.buf,GLuint(ibo),first,count,indexBytes,hand,{}};
+    wristcap::Boundary boundary;
+    unsigned validTriangles=0,handTriangles=0,crossings=0;
+    for (unsigned i=0;i+2<unsigned(elementBytes)/indexBytes;i+=3) {
+        wristcap::Vertex triangle[3]{};
+        bool valid=true;
+        for (unsigned v=0;v<3 && valid;++v) {
+            uint32_t index=0;
+            std::memcpy(&index,indices.data()+size_t(i+v)*indexBytes,indexBytes);
+            for (const Attr* a:{&coord,&joints,&weights})
+                if (a->offset+uint64_t(index)*a->stride+a->elemBytes>vertices.size()) valid=false;
+            if (!valid) break;
+            const uint8_t* cp=vertices.data()+coord.offset+size_t(index)*coord.stride;
+            triangle[v].position={Component(cp,coord,0),Component(cp,coord,1),Component(cp,coord,2)};
+            for (int k=0;k<3;++k) {
+                triangle[v].joint[k]=int(Component(vertices.data()+joints.offset+size_t(index)*joints.stride,joints,k));
+                triangle[v].weight[k]=Component(vertices.data()+weights.offset+size_t(index)*weights.stride,weights,k);
+            }
+        }
+        if (valid) {
+            ++validTriangles;
+            if (wristcap::HandWeight(triangle[0],hand)>=wristcap::CutWeight ||
+                wristcap::HandWeight(triangle[1],hand)>=wristcap::CutWeight ||
+                wristcap::HandWeight(triangle[2],hand)>=wristcap::CutWeight) ++handTriangles;
+            wristcap::Edge edge[2];
+            if (wristcap::CutTriangle(triangle,hand,edge)) ++crossings;
+            boundary.Add(triangle,hand);
+        }
+    }
+    rim.loops=boundary.Loops();
+    LogF("handskin: surface boundary joint=%d vao=%u triangles=%u hand=%u crossings=%u closed-loops=%zu",
+         hand,unsigned(vao),validTriangles,handTriangles,crossings,rim.loops.size());
+    if (g_wristRims.size()>=128) g_wristRims.clear();
+    g_wristRims.push_back(std::move(rim));
+    return &g_wristRims.back();
+}
+
 // Read one body buffer and add its TORSO vertices to g_torso. Runs once per
 // distinct buffer, so an outfit change measures the new mesh as it appears.
 void MeasureBuffer(GLuint prog) {
@@ -689,6 +835,92 @@ bool EnsureRegion(GLuint prog) {
 
 // ---------------------------------------------------------------------------
 
+void BoneSkinDrawWristCap(void* mesh,unsigned firstIndex,unsigned count) {
+    int hand=-1;
+    float centre[3]{};
+    const float* palette=FirstPersonSealedHandSkin(hand,centre);
+    if (!palette) return;
+    if (!gl::LoadedSkinApi()) {
+        WristCapSkipped(32,"wrist centre or skin API unavailable"); return;
+    }
+    if (!IsWorldPass()) { WristCapSkipped(64,"non-world hand pass"); return; }
+    GLint program=0;
+    glGetIntegerv(GL_CURRENT_PROGRAM,&program);
+    if (program<=0 || program>=int(kMaxProgram) || g_prog[program].handJoint!=hand) {
+        WristCapSkipped(128,"tracked hand shader inactive"); return;
+    }
+    // Hand rendering also runs with body physics disabled. Invalidate its
+    // mesh cache here so level/game changes cannot reuse an old buffer's rim.
+    const auto* app=*reinterpret_cast<const uint8_t* const*>(Base()+L().app);
+    const int level=app ? *reinterpret_cast<const int*>(app+drva::app_off::level) : -1;
+    const uint64_t game=GameDllBase();
+    if (g_capLevel!=level || g_capGame!=game ||
+        (g_capContext && g_capContext!=wglGetCurrentContext())) {
+        ResetWristCaps();
+        g_capLevel=level;
+        g_capGame=game;
+    }
+    const auto* rim=MeasureWristRim(mesh,program,firstIndex,count,hand);
+    if (!rim || rim->loops.empty()) return;
+    const GLint projectionLoc=gl::GetUniformLocation(program,"uProjMatrix");
+    if (projectionLoc<0) { WristCapSkipped(256,"projection uniform unavailable"); return; }
+    float projection[16]{},view[12]{};
+    gl::GetUniformfv(program,projectionLoc,projection);
+    for (int row=0;row<3;++row) {
+        const char* names[]={"uViewMatrix[0]","uViewMatrix[1]","uViewMatrix[2]"};
+        const GLint loc=gl::GetUniformLocation(program,names[row]);
+        if (loc<0) { WristCapSkipped(512,"view uniform unavailable"); return; }
+        gl::GetUniformfv(program,loc,view+row*4);
+    }
+    std::vector<motiongun::Vec> triangles;
+    const auto wrist=motiongun::ReadRows(palette+hand*12);
+    // The hand/gun can contain other open loops (e.g. the muzzle). Seal the
+    // loop closest to the recovered anatomical wrist, independent of aim.
+    const wristcap::Loop* chosen=nullptr;
+    motiongun::Vec capCentre{};
+    float nearest=INFINITY;
+    for (const auto& loop:rim->loops) {
+        motiongun::Vec mid{};
+        for (auto p:loop) mid=motiongun::Add(mid,p);
+        mid=motiongun::Transform(wrist,motiongun::Scale(mid,1.f/float(loop.size())));
+        const auto delta=motiongun::Sub(mid,{centre[0],centre[1],centre[2]});
+        const float distance=motiongun::Dot(delta,delta);
+        if (distance<nearest) { nearest=distance; chosen=&loop; capCentre=mid; }
+    }
+    if (!chosen) return;
+    triangles.reserve(chosen->size()*3);
+    for (size_t i=0;i<chosen->size();++i) {
+        triangles.push_back(capCentre);
+        triangles.push_back(motiongun::Transform(wrist,(*chosen)[i]));
+        triangles.push_back(motiongun::Transform(wrist,(*chosen)[(i+1)%chosen->size()]));
+    }
+    GLint vao=0,array=0;
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING,&vao); glGetIntegerv(GL_ARRAY_BUFFER_BINDING,&array);
+    const GLboolean blend=glIsEnabled(GL_BLEND),cull=glIsEnabled(GL_CULL_FACE);
+    GLboolean depthWrite=GL_FALSE; glGetBooleanv(GL_DEPTH_WRITEMASK,&depthWrite);
+    if (CreateWristCapProgram()) {
+        gl::UseProgram(g_capProgram); gl::BindVertexArray(g_capVao);
+        gl::BindBuffer(GL_ARRAY_BUFFER,g_capBuffer);
+        gl::BufferData(GL_ARRAY_BUFFER,triangles.size()*sizeof(motiongun::Vec),triangles.data(),GL_STATIC_DRAW);
+        gl::UniformMatrix4fv(g_capProjection,1,GL_FALSE,projection);
+        gl::Uniform4fv(g_capView,3,view);
+        glDisable(GL_BLEND); glDisable(GL_CULL_FACE); glDepthMask(GL_TRUE);
+        glDrawArrays(GL_TRIANGLES,0,GLsizei(triangles.size()));
+        static unsigned loggedHands=0;
+        if (!(loggedHands&(1u<<hand))) {
+            LogF("handskin: opaque wrist cap draw active joint=%d boundary-vertices=%zu wrist-distance=%.2f",
+                 hand,chosen->size(),std::sqrt(nearest));
+            loggedHands|=1u<<hand;
+        }
+    } else {
+        WristCapSkipped(1024,"cap shader could not link");
+    }
+    if (blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (cull) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    glDepthMask(depthWrite);
+    gl::UseProgram(program); gl::BindVertexArray(vao); gl::BindBuffer(GL_ARRAY_BUFFER,array);
+}
+
 void BoneSkinInstall() {
     const Layout& lay = L();
     if (lay.shader_init == 0) {
@@ -706,6 +938,7 @@ void BoneSkinInstall() {
 }
 
 void BoneSkinShutdown() {
+    ResetWristCaps();
     g_hShaderInit.Remove();
 }
 

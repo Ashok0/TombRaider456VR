@@ -91,6 +91,11 @@ inline bool IsLedgeMountState(int state) {
     // hands busy and water_status=0 before animations 111/191/193 finish.
     return state==19 || state==54 || state==55; // vault, gymnast, water exit
 }
+// Render-pose ownership only. Do not broaden gameplay hang/mount predicates:
+// traversing monkey bars must not become eligible for a ledge pull-up.
+inline bool IsTraversalGripState(int state) {
+    return IsLedgeHangState(state) || IsLedgeMountState(state) || IsMonkeyBarState(state);
+}
 inline bool IsLadderState(int state) {
     return state>=56 && state<=61; // stance, up, left, end, right, down
 }

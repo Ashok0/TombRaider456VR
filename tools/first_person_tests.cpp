@@ -3486,8 +3486,8 @@ int main() {
                 *reinterpret_cast<int16_t*>(laraMemory+2)=1;
                 const auto nativeRoot=pos;
                 UpdateSceneCamera(camera);
-                Check(g_active && g_ledgeArmsOnly && g_mountBodyTransition.active &&
-                      bits==(baseBits&kArmMeshBits),
+                Check(g_active && FirstPersonBodyMask(itemMemory)==firstperson::HandMeshBits && g_mountBodyTransition.active &&
+                      bits==(baseBits&firstperson::HandMeshBits),
                       "surface-to-dry transition keeps water-exit climb framing until the animation finishes");
                 Check(FullBodyGripState(itemMemory) && !UnarmedIKReady(),
                       "water exit keeps authored ledge grips instead of following motion-controller hands");
@@ -4782,16 +4782,22 @@ int main() {
         // matrices still contain a high, laterally shifted pull-up frame.
         state=int16_t(mountState); Anchor(camera);
         Check(g_mountBodyTransition.active,"pull-up arms-only interval arms body handoff correction");
+        const auto mountEye=camera;
+        PHD_3DPOS firstStandingEye{};
         prev=pos; pos.x_pos+=96; pos.z_pos+=128; pos.y_pos-=768;
         state=2; gaitSway={240,-1200,300};
         for (int f:{0,32,64,128,192,256}) {
             fraction=f; Check(Anchor(camera),"first standing frame after vault remains valid");
             const float t=f/256.f;
-            const auto offset=locomotion::Rotate({standingReference.x,standingReference.z},heading);
-            Check(std::fabs(camera.x_pos-(prev.x_pos+96*t+offset.x))<1.1f &&
-                  std::fabs(camera.z_pos-(prev.z_pos+128*t+offset.z))<1.1f &&
-                  std::fabs(camera.y_pos-(prev.y_pos-768*t+standingReference.y))<1.1f,
-                  "post-pull-up camera remains at original root-relative height/centre instead of capturing stale climb offsets");
+            if(f==0) {
+                firstStandingEye=camera;
+                Check(std::abs(camera.x_pos-mountEye.x_pos)<=1 && std::abs(camera.y_pos-mountEye.y_pos)<=1 &&
+                      std::abs(camera.z_pos-mountEye.z_pos)<=1,"mount completion starts at the last rendered climbing eye");
+            }
+            Check(std::fabs(camera.x_pos-(firstStandingEye.x_pos+96*t))<1.1f &&
+                  std::fabs(camera.z_pos-(firstStandingEye.z_pos+128*t))<1.1f &&
+                  std::fabs(camera.y_pos-(firstStandingEye.y_pos-768*t))<1.1f,
+                  "same-tracking-sample handoff preserves subsequent root motion in all axes");
             PHD_VECTOR animated{config.firstPersonAnchorX,config.firstPersonAnchorY,config.firstPersonAnchorZ};
             FakeGaitJoint(itemMemory,&animated,14,f);
             locomotion::Vec view{},floor{};VR().FirstPersonViewOffset(view.x,view.z);VR().HeadFloorOffset(floor.x,floor.z);
@@ -4805,7 +4811,13 @@ int main() {
                   "temporary body correction never becomes a permanent camera offset");
 
         }
+        g_mountEyeTransition.start-=.18; ++VR().m_poseSerial;
         prev=pos; gaitSway={}; fraction=256; Anchor(camera);
+        const auto settledOffset=locomotion::Rotate({standingReference.x,standingReference.z},heading);
+        Check(!g_mountEyeTransition.active && std::fabs(camera.x_pos-pos.x_pos-settledOffset.x)<1.1f &&
+              std::fabs(camera.z_pos-pos.z_pos-settledOffset.z)<1.1f &&
+              std::fabs(camera.y_pos-pos.y_pos-standingReference.y)<1.1f,
+              "mount handoff ends at the unchanged standing calibration");
         Check(Near(g_groundEye.local.y,standingReference.y),"settled standing frame retains the same camera height");
         g_runtimeEnabled=false; UpdateSceneCamera(camera);
         Check(!g_groundEye.valid,"FP exit still discards the saved standing reference");

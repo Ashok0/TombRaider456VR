@@ -9,6 +9,9 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * Native stereo with 6DOF
 * First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming, cutscenes, switch-use animations, and TR5 X-ray sequences temporarily use third person.
 * Full-body VRIK in TR4/5 HD first person using headset and controllers: inferred torso/hips, leg IK on animated foot targets, and arms sharing the gun wrist calibration.
+* Ledge and monkey-bar arms retain animated hand contacts throughout traversal. Torso movement respects both arms' reach, elbows remain stable near full extension, and released hands blend back to controller tracking over 180 ms. Native climbing grips remain available if controller tracking briefly drops out.
+* With first-person movement stabilization enabled, finishing a crate vault or ledge pull-up eases the camera back to its saved standing position over 180 ms. Headset tracking stays immediate, collision clearance remains active, and jumping or starting another climb cancels the handoff.
+* During a mount and the following recovery, only the hands remain visible, with opaque black wrist caps. Arms return once recovery finishes; the original shoulder/elbow recovery timing and 180 ms wrist handoff are retained.
 * TR4/5 spatial inventory at eye height, with level text and a freshly rendered stereo world behind it (gameplay remains paused).
 * World-space laser sights for the revolver, Desert Eagle and crossbow with an attached sight; the HK uses its scope without a projected laser.
 * Smooth first-person pistol draw/holster animations for LT/Y, with live controller tracking when using physical holster zones.

@@ -1556,6 +1556,11 @@ struct ScopedSkyDepth {
     }
 };
 
+inline void AfterNativeHandDraw(void* mesh,unsigned first,unsigned count,int strip) {
+    if(!strip) BoneSkinDrawWristCap(mesh,first,count);
+}
+template<typename... Args> void AfterNativeHandDraw(Args...) {}
+
 template <typename Fn, typename... Args>
 void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
     const ScopedSkyDepth skyDepth(SkyInfinity() && VrLive());
@@ -1565,12 +1570,14 @@ void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
     // well would produce four scene passes and overwrite both eye results.
     if (g_inNativeTr6Scene) {
         h.Original<Fn>()(args...);
+        AfterNativeHandDraw(args...);
         return;
     }
 
     if (!VrLive() || g_inDuplicate || Cfg().monoTracking
         || !Cfg().duplicateDraws || !TargetIsBackbuffer()) {
         h.Original<Fn>()(args...);
+        AfterNativeHandDraw(args...);
         return;
     }
 
@@ -1582,6 +1589,7 @@ void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
         // target at the engine's own size, and present blits it into one half.
         g_currentEye = g_frameEye;
         h.Original<Fn>()(args...);
+        AfterNativeHandDraw(args...);
         return;
     }
 
@@ -1624,6 +1632,7 @@ void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
         g_currentEye = eye;
         Stereo().SetEyeViewport(eye);
         h.Original<Fn>()(args...);
+        AfterNativeHandDraw(args...);
     }
     g_currentEye = 0;
     g_inDuplicate = false;

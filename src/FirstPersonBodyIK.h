@@ -36,9 +36,47 @@ inline Basis LimitRotation(Basis rotation,float radians) {
     return angle>radians && Unit(q.v,axis) ? RotationMatrix(AxisRotation(axis,radians)) : rotation;
 }
 
+inline Basis BlendRotation(const Basis& from,const Basis& to,float t) {
+    auto a=RotationOf(from),b=RotationOf(to);
+    if(a.w*b.w+Dot(a.v,b.v)<0) { b.w=-b.w;b.v=Scale(b.v,-1); }
+    return RotationMatrix({a.w+(b.w-a.w)*t,Add(Scale(a.v,1-t),Scale(b.v,t))});
+}
+
+// Move the coherent chest/pelvis only along the reachable part of the HMD
+// correction. Both animated hand contacts remain feasible; no arm scaling or
+// detached shoulder translation is needed. Native animation is the t=0 pose.
+inline float GripBodyFraction(const Frame (&native)[15],Vec shift,const Basis& torso) {
+    const Vec pivot=native[7].origin;
+    const auto reachable=[&](float t) {
+        const Basis rotation=BlendRotation(IdentityBasis(),torso,t);
+        for(int first:{8,11}) {
+            const float a=Length(Sub(native[first+1].origin,native[first].origin));
+            const float b=Length(Sub(native[first+2].origin,native[first+1].origin));
+            const Vec shoulder=Add(Add(pivot,Scale(shift,t)),Transform(rotation,Sub(native[first].origin,pivot)));
+            const float d=Length(Sub(native[first+2].origin,shoulder));
+            if(!std::isfinite(d) || a<.001f || b<.001f ||
+               d>a+b || d<std::fabs(a-b)) return false;
+        }
+        return true;
+    };
+    float valid=0;
+    // Stop at the first invalid interval, including the folded-arm inner limit.
+    for(int step=1;step<=32;++step) {
+        const float next=step/32.f;
+        if(reachable(next)) { valid=next;continue; }
+        float hi=next;
+        for(int i=0;i<18;++i) {
+            const float mid=(valid+hi)*.5f;
+            if(reachable(mid)) valid=mid;else hi=mid;
+        }
+        break;
+    }
+    return valid;
+}
+
 inline bool SolveBody(const Frame (&native)[15],Vec headDelta,
                       const Basis& headRotation,Vec forward,float scale,
-                      Frame (&posed)[15]) {
+                      Frame (&posed)[15],bool fixedHands=false) {
     if (!std::isfinite(scale) || scale<=1 || !Finite({headRotation,headDelta})) return false;
     for (const auto& joint:native) { Frame inverse{};if(!Finite(joint) || !Inverse(joint,inverse)) return false; }
     float upper[2]{},lower[2]{};
@@ -84,7 +122,13 @@ inline bool SolveBody(const Frame (&native)[15],Vec headDelta,
     // remains with locomotion so looking sideways does not rotate planted feet.
     const Vec facing=Transform(headRotation,forward);
     const float yaw=std::clamp(std::atan2(Cross(forward,facing).y,Dot(forward,facing))*.35f,-20*radians,20*radians);
-    const Basis torso=Multiply(RotationMatrix(AxisRotation({0,1,0},yaw)),lean);
+    Basis torso=Multiply(RotationMatrix(AxisRotation({0,1,0},yaw)),lean);
+    if(fixedHands) {
+        const float fraction=GripBodyFraction(native,shift,torso);
+        shift=Scale(shift,fraction);
+        torso=BlendRotation(IdentityBasis(),torso,fraction);
+        posed[0].origin=Add(native[0].origin,shift);
+    }
     const Vec pivot=native[7].origin;
     const Frame chest{torso,Sub(Add(pivot,shift),Transform(torso,pivot))};
     for(int i=7;i<15;++i) posed[i]=Multiply(chest,native[i]);
