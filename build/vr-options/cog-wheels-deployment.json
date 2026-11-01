@@ -1,0 +1,14 @@
+﻿{
+    "dll":  "548E9F95C5630EB6B2AFEF65DA20959B0646ABB4F7B016CE4A0AFCEC9B8BBFDA",
+    "installed_animation_paths":  5,
+    "release_build_passed":  true,
+    "binary_layouts_verified":  4,
+    "change":  "TR4/5 physical cog-wheel pegs, working-side pushback relief, parked release/regrab, native timed-door pulses",
+    "headset_tested":  false,
+    "focused_cog_checks":  2508,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-cog-wheels-20261101-000405",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "peg_meshes_verified":  4,
+    "deployed":  "2026-11-01T00:04:06.1120363-04:00",
+    "full_suite_run":  false
+}

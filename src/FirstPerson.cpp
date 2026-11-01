@@ -25,6 +25,7 @@
 #include "PistolAnimationBlend.h"
 #include "LedgePullGesture.h"
 #include "SwitchPosePath.h"
+#include "CogWheelMotion.h"
 #include "LedgeGrabFeedback.h"
 
 #include <windows.h>
@@ -1270,6 +1271,7 @@ GunVec JointPoint(uint8_t* item, int joint, int x, int y, int z) {
 }
 
 void AttachPhysicalSwitchHand(int hand,motiongun::Frame& wrist,motiongun::Vec trackedGrip);
+void AttachPhysicalCogHand(int hand,motiongun::Frame& wrist,motiongun::Vec trackedGrip);
 
 bool TrackedControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller, GunVec* gripLocal=nullptr) {
     if (hand < 0 || hand > 1) return false;
@@ -1316,6 +1318,7 @@ bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller,
     if (!TrackedControllerWrist(hand,out,controller,&local)) return false;
     if (gripLocal) *gripLocal=local;
     AttachPhysicalSwitchHand(hand,out,motiongun::Transform(out,local));
+    AttachPhysicalCogHand(hand,out,motiongun::Transform(out,local));
     return true;
 }
 
@@ -3482,6 +3485,7 @@ struct GroundJumpInputScope {
 };
 
 #include "PhysicalSwitch.inl"
+#include "PhysicalCogWheel.inl"
 
 bool UpdateLedgePull(uint8_t* item, uint64_t now) {
     // IsLedgeHangState is a visibility group which also includes monkey bars.
@@ -3816,6 +3820,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
     }
     AdvancePhysicalSwitch(item,nativeCollision,GetTickCount64());
+    AdvancePhysicalCog(item,nativeCollision,GetTickCount64());
     ObserveJumpLanding(item);
     FinishFirstPersonLanding(item,airborneBefore);
     if (grabFeedback && g_ledgeGrab.Finish(Gate() && LaraWaterStatus()==0,
@@ -4904,6 +4909,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
     }
     if(!InstallClassicBody(d,base)) return false;
     InstallPhysicalSwitches(d,base);
+    InstallPhysicalCogs(d,base);
     return true;
 }
 
@@ -4913,6 +4919,7 @@ void Remove() {
     g_hFlareInHand.Remove();g_hFlarePreviousJoint.Remove();g_hFlareDynamic.Remove();
     UpdateControlMode(false);
     ResetPhysicalHolsters();
+    RemovePhysicalCogs();
     RemovePhysicalSwitches();
     g_hClassicItemMatrix.Remove();g_classicBodyDll=nullptr;
     g_hCrouchDraw.Remove();
@@ -5202,6 +5209,7 @@ void FirstPersonRecenter() {
     ResetBodyFollower();
     CancelHolsterTracking();
     ResetPhysicalSwitch();
+    ResetPhysicalCogs();
     g_groundJump.Reset();
     g_ledgePull.Reset(); g_ledgeGrab.Reset();
     g_renderTurn.Reset();
@@ -5226,6 +5234,7 @@ void FirstPersonToggle() {
     UpdateControlMode(false);
     ResetPhysicalHolsters();
     ResetPhysicalSwitch();
+    ResetPhysicalCogs();
     g_unarmedArmVisibility={};
     g_unarmedTwist[0]=g_unarmedTwist[1]={};
     ResetMovementStabilization();
@@ -5290,7 +5299,10 @@ uint64_t FirstPersonBodyWristSeamMask() {
 }
 
 bool FirstPersonSwitchGrip(bool down, bool allowed) {
-    return UpdatePhysicalSwitchGrip(down,allowed,GetTickCount64());
+    const auto now=GetTickCount64();
+    const bool cog=UpdatePhysicalCogGrip(down,allowed && !g_switchGripClaimed,now);
+    const bool lever=UpdatePhysicalSwitchGrip(down,allowed && !cog,now);
+    return cog || lever;
 }
 
 unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightValid,bool allowed) {

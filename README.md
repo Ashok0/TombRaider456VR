@@ -1345,9 +1345,41 @@ not a grab point. Acquisition and pulling use the visible calibrated palm;
 handle contact uses the same mesh inverse bind as the native renderer. The
 attached palm stays on that handle point. These floor levers do not require an
 Action icon either.
-Wheels, pulleys, underwater switches, independent HD animation skeletons and
+Turn switches, pulleys, underwater switches, independent HD animation skeletons and
 special animation-command variants retain their existing controls.
 Using Y also retains the existing native interaction and camera behavior.
+
+### Physical cog wheels in VR
+
+TR4/5 cog switches now support **Right Grip** in first person, including the
+large pegged wheel in Guardian of Semerkhet. Holster weapons, approach the
+working side, put the right hand around a peg and hold Grip while pulling it
+around the wheel. Release and grab another peg to continue. The Action icon
+does not have to be visible. This is enabled with the existing first-person
+tracked-hand controls; no new INI setting is needed.
+
+The wheel's own body pushback is relaxed on its working side before grabbing,
+so roomscale movement can bring the pegs into reach. Room, wall and platform
+collision still apply. Contact follows the visible palm and the wheel's native
+joint, including full-wheel and half-wheel models in Classic and Remastered
+graphics. The wheel ratchets in its native pulling direction. Releasing,
+pulling off its arc or losing tracking detaches the hand and retains its
+current pose; a fresh Grip press resumes from there.
+
+Physical rotation advances the authored wheel animation and native cog control.
+Each peg advance supplies the normal timed door pulse; holding still, regrabbing
+or reversing over the same movement does not repeatedly activate the door.
+The linked door continues its original timing after release. Native Action,
+recentring or leaving first person hands the wheel back to native control.
+Third-person use is unchanged. Horizontal turn switches and other wheel-like
+mechanisms with different handlers retain native controls.
+
+Validation uses the installed TR4 ANG_RACE, CITNEW, CORTYARD and SEMER2 and TR5
+ANDY3 animation tables, four peg meshes, and all four supported TR4/5 binary
+layouts. `tools/verify_cog_wheels.py` performs read-only asset/address checks;
+`tools/build_cog_wheel_tests.cmd` exercises grab, wraparound, native pulse
+sequencing, release, tracking loss and cleanup against a native-engine stand-in.
+These checks do not load game DLLs. In-headset confirmation remains pending.
 No held-camera switch logic is restored.
 
 The Action icon does not need to be visible or active. Squeezing Right Grip
