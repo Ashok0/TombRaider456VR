@@ -818,13 +818,20 @@ bool CanUseCrouchCamera(const uint8_t* item) {
 }
 
 bool CanSteerCrouch(const uint8_t* item) {
-    if(!CanUseCrouchCamera(item) || *reinterpret_cast<const int16_t*>(item+22)!=0) return false;
-    // Required interactions and crawl-to-hang/roll transitions stay native.
-    switch(*reinterpret_cast<const int16_t*>(item+off::item_goal_state)) {
-    case 2: case 71: case 80: case 81: case 84: case 85: case 86:
-    case 105: case 106: return true;
-    default:return false;
-    }
+    if(!CanUseCrouchCamera(item)) return false;
+    const auto posture=[](int state) {
+        switch(state) {
+        case 2: case 71: case 80: case 81: case 84: case 85: case 86:
+        case 105: case 106: return true;
+        default:return false;
+        }
+    };
+    // Native crawl can retain a queued DUCK (71) while waiting for clearance.
+    // It is still player locomotion. Keep the queue intact, but don't let it
+    // disable VR steering. Required interactions, hangs and rolls stay native.
+    const int required=*reinterpret_cast<const int16_t*>(item+22);
+    return (!required || posture(required)) &&
+        posture(*reinterpret_cast<const int16_t*>(item+off::item_goal_state));
 }
 
 void ApplyCrouchTravelHeading(uint8_t* item) {
@@ -1360,9 +1367,12 @@ bool FullBodyIKReady() {
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool nativeGrip=status==1 && FullBodyGripState(item); // Hands-busy during pull-ups.
+    // ALL4S marks hands busy even when no interaction owns them. Track the
+    // hidden-body crawl hands without changing the native weapon status.
+    const bool crouchHands=status==1 && CanSteerCrouch(item);
     const bool weaponTransition=(status==2 || status==3) && MotionWeaponSupported(CurrentMotionWeapon());
-    if(!FullBodyState(item) || (status!=0 && !nativeGrip && !weaponTransition && !MotionReady()) ||
-       (status==0 && !FullBodyGripState(item) && !FlareIKReady() && (!Cfg().firstPersonUnarmedIK || CurrentMotionWeapon()<0 || CurrentMotionWeapon()>6))) return false;
+    if(!FullBodyState(item) || (status!=0 && !nativeGrip && !crouchHands && !weaponTransition && !MotionReady()) ||
+       ((status==0 || crouchHands) && !FullBodyGripState(item) && !FlareIKReady() && (!Cfg().firstPersonUnarmedIK || CurrentMotionWeapon()<0 || CurrentMotionWeapon()>6))) return false;
     motiongun::Frame wrist{};GunBasis controller{};vr::HmdMatrix34_t head{};
     return VR().HeadPose(head) && (FullBodyGripState(item) ||
         (BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller)));
@@ -1372,9 +1382,11 @@ bool UnarmedIKReady() {
     if(FlareIKReady()) return true;
     if (!Cfg().firstPersonUnarmedIK || ControllerTrackingBlockedReason()) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    const int status=*Ptr<int16_t>(g_boundDll->lara+2);
+    const bool crouchHands=status==1 && CanSteerCrouch(item);
     // Full-body free jumps retain controller hands; ledges retain authored grips.
     if (!item || !(CanTurnBody(item) || (Cfg().firstPersonFullBodyIK &&
-        FullBodyState(item) && !FullBodyGripState(item))) || *Ptr<int16_t>(g_boundDll->lara+2)!=0 ||
+        FullBodyState(item) && !FullBodyGripState(item))) || (status!=0 && !crouchHands) ||
         CurrentMotionWeapon()<0 || CurrentMotionWeapon()>6) return false;
     motiongun::Frame wrist{}; GunBasis controller{};
     return BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller);

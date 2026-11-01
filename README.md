@@ -1725,6 +1725,15 @@ posture/input checks passed (`tools/physical_crouch_tests.cpp`); the crashing fu
 self-test was not run. Native TR4/5 crouch entry/exit branches were inspected;
 headset behavior still requires in-game confirmation.
 
+2026-11-01 crouch-transition correction (TR4/5): ordinary queued crouch/crawl
+postures no longer disable headset-relative steering. Native crawling marks
+Lara's hands busy even without a weapon; tracked hands now remain available in
+these normal grounded crouch states. The queued posture and native hands-busy
+flag are preserved, as are ceiling clearance and interaction/climbing guards.
+This covers the observed elevator state (crawl with a pending return to duck).
+The focused regression passed 3,226 checks (`tools/crouch_transition_test.cpp`),
+without running the full self-test. Headset behavior still needs confirmation.
+
 | Setting | Default |
 |---|---:|
 | `FirstPersonBodyYawSlackDegrees` | 45 |

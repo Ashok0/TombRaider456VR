@@ -1,0 +1,12 @@
+﻿{
+    "dll":  "73AE605DC8AF0445BC3EE4B99133929577E41A2581499B2DE139B23D2311BBEE",
+    "full_suite_run":  false,
+    "previous_dll":  "FF08FAC8004D3B84824B62B8902CC8B6917ED1CF18E392F7DF9479E791EBEEBE",
+    "release_build_passed":  true,
+    "change":  "TR4/5 first-person crawl keeps tracked hands and headset-relative steering during ordinary queued crouch transitions; native posture queue, hands-busy status, ceiling clearance and interaction guards preserved",
+    "headset_tested":  false,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-crouch-transition-20261101-093816",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "deployed":  "2026-11-01T09:38:17.0945346-05:00",
+    "focused_crouch_transition_checks":  3226
+}
