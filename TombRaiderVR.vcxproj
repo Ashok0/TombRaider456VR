@@ -204,6 +204,8 @@
     <ClInclude Include="src\PhysicalContainer.inl" />
     <ClInclude Include="src\PhysicalMonitor.inl" />
     <ClInclude Include="src\MonitorTouch.h" />
+    <ClInclude Include="src\ButtonTouch.h" />
+    <ClInclude Include="src\PhysicalButton.inl" />
     <ClInclude Include="src\LedgePullGesture.h" />
     <ClInclude Include="src\LedgeGrabFeedback.h" />
     <ClInclude Include="src\MotionHandSkin.h" />

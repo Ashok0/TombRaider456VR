@@ -1,0 +1,15 @@
+﻿{
+    "full_suite_run":  false,
+    "installed_button_poses_verified":  18,
+    "previous_dll_present":  false,
+    "deployed":  "2026-11-01T08:53:19.3485346-05:00",
+    "headset_tested":  false,
+    "dll":  "FF08FAC8004D3B84824B62B8902CC8B6917ED1CF18E392F7DF9479E791EBEEBE",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-button-touch-20261101-085319",
+    "native_layouts_verified":  4,
+    "physical_interaction_checks":  10296,
+    "change":  "TR4/5 wall, elevator and sequence buttons: either controller touches the button face to activate native button control, preserving timers, puzzle ordering and used-state restrictions",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "button_profiles_verified":  21,
+    "release_build_passed":  true
+}

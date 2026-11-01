@@ -1,0 +1,237 @@
+[
+  {
+    "index": 46,
+    "slot": 312,
+    "position": [
+      41472,
+      -24064,
+      70144
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "states": [
+      0,
+      0,
+      0,
+      652,
+      0
+    ],
+    "type": 0,
+    "joints": 1,
+    "animationBase": 652,
+    "collision": "-0x7ff927280000",
+    "control": "0x2e130",
+    "geomName": "LIFT_DOORS1_RICH3_RICH2_RICH1",
+    "bind": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      -0.0,
+      -0.0,
+      -0.0,
+      1.0
+    ]
+  },
+  {
+    "index": 49,
+    "slot": 268,
+    "position": [
+      41472,
+      -24064,
+      71168
+    ],
+    "rotation": [
+      0,
+      16384,
+      0
+    ],
+    "states": [
+      0,
+      0,
+      0,
+      622,
+      1
+    ],
+    "type": 5,
+    "joints": 21,
+    "animationBase": 621,
+    "collision": "0x8aca0",
+    "control": "0x8aa80",
+    "geomName": "SWITCH_TYPE3_RICH2_RICH1",
+    "bind": []
+  },
+  {
+    "index": 52,
+    "slot": 314,
+    "position": [
+      43520,
+      -24064,
+      70144
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "states": [
+      0,
+      0,
+      0,
+      654,
+      0
+    ],
+    "type": 0,
+    "joints": 1,
+    "animationBase": 654,
+    "collision": "-0x7ff927280000",
+    "control": "0x2e130",
+    "geomName": "LIFT_DOORS1_RICH3_RICH2_RICH1_R",
+    "bind": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      -0.0,
+      -0.0,
+      -0.0,
+      1.0
+    ]
+  },
+  {
+    "index": 110,
+    "slot": 270,
+    "position": [
+      42496,
+      -24064,
+      69120
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "states": [
+      0,
+      0,
+      0,
+      630,
+      1
+    ],
+    "type": 5,
+    "joints": 2,
+    "animationBase": 629,
+    "collision": "0x8aca0",
+    "control": "0x8aa80",
+    "geomName": "SWITCH_TYPE5_RICH2_RICH1",
+    "bind": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      -0.0,
+      -0.0,
+      -0.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      -0.0,
+      -0.0,
+      23.0,
+      1.0
+    ]
+  },
+  {
+    "index": 112,
+    "slot": 161,
+    "position": [
+      42496,
+      -24576,
+      68096
+    ],
+    "rotation": [
+      0,
+      16384,
+      0
+    ],
+    "states": [
+      0,
+      0,
+      0,
+      596,
+      0
+    ],
+    "type": 131,
+    "joints": 11,
+    "animationBase": 596,
+    "collision": "0x72db0",
+    "control": "0x717f0",
+    "geomName": "DUMMY",
+    "bind": []
+  },
+  {
+    "index": 187,
+    "slot": 0,
+    "position": [
+      42496,
+      -24064,
+      69403
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "states": [
+      2,
+      2,
+      71,
+      103,
+      2222
+    ],
+    "type": 0,
+    "joints": 15,
+    "animationBase": 0,
+    "collision": "-0x7ff927280000",
+    "control": "-0x7ff927280000",
+    "geomName": "LARA_HEAD",
+    "bind": []
+  }
+]

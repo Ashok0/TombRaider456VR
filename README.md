@@ -1381,6 +1381,38 @@ layouts. `tools/verify_cog_wheels.py` performs read-only asset/address checks;
 sequencing, release, tracking loss and cleanup against a native-engine stand-in.
 These checks do not load game DLLs. In-headset confirmation remains pending.
 
+### Touching wall and elevator buttons in VR
+
+Supported TR4/5 push buttons can be pressed by touching their visible face
+with either tracked controller in first person, with weapons holstered.
+No Grip, trigger button or Action icon is required. Pull your hand away before
+pressing a resettable button again; resting hands and small tracking jitter
+cannot keep toggling it. Tracking loss, recentering and third-person mode do
+not count as touches. Occluded buttons cannot be pressed through walls.
+
+Coverage includes TR4's ordinary round and large wall buttons, its three
+sequence-puzzle buttons, TR5's ordinary wall buttons, and the small VCI
+push-button panels used for elevators and doors. Contact uses measured press
+faces and each item's native joint/inverse-bind transforms in both graphics
+modes. The matching TR5 sequence meshes/handler are supported as well, although
+the installed TR5 levels do not load those objects.
+
+The original collision handler activates each button and the game's normal
+control loop advances its animation, timers, linked mechanisms and sequence
+puzzle bookkeeping. Lara stays in her actual first-person pose. Used, disabled
+or currently animating buttons obey their native availability rules; touch
+does not force an elevator call or bypass a puzzle. Numeric keypads and OCB 6
+controls retain their native code-entry interaction. Wall holes, levers,
+valves, jump switches and tool-operated mechanisms are not touch buttons.
+Existing physical grip interactions remain available. No INI change is needed.
+
+`tools/build_button_tests.cmd` checks 21 mesh profiles, 18 installed animation
+pivots and four native binary layouts, then runs focused interaction tests
+using actual mod code with native/VR stand-ins. These cover both hands and
+four orientations, native activation, used-button/sequence guards, tracking
+loss, occlusion, re-arming and timer preservation. The full first-person
+self-test is not run. In-headset confirmation remains pending.
+
 ### Touching TV/monitor screens in VR
 
 TR5's interactive MONITOR_SCREEN televisions in RICH1/RICH2 can be activated

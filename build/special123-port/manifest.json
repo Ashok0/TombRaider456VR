@@ -1,0 +1,47 @@
+[
+  {
+    "path": "README.md",
+    "old": "209d7073b4778de46e6282206426959166a91a8860b32123325a6745c2650467",
+    "new": "82194bba3acb2e7229212dfd376f6435ae9ae7aa2000daa786080f8c3281c009"
+  },
+  {
+    "path": "TombRaiderVR.vcxproj",
+    "old": "153109856124d0c0595363213ab08f27d0068b2bb8e1afac25b365460fd1f4df",
+    "new": "413376b55c67cc977519ca0144f29d77f566b2f96eddb3be908fa1965014d28b"
+  },
+  {
+    "path": "src/FirstPerson.cpp",
+    "old": "e8eaa16b3c1e0b308cab7036424122e09b777847681a7ec581ce80414f346909",
+    "new": "0c73d71071a361feebcd5816e102520a8badc87058876e2b0628a20a8ba6301c"
+  },
+  {
+    "path": "src/PhysicalSwitch.inl",
+    "old": "d051593a2d70679d237e698f53d0b2f53531964b00b957e8fd7449589ab43148",
+    "new": "5020819dc3369ebafae578effb887a6d3be4b1a5c0de89be3235fc9cd731fe27"
+  },
+  {
+    "path": "src/SpecialSwitch.inl",
+    "old": null,
+    "new": "501ede0953c9ff5d0352b0b1b772465b5cc0575d52a06e048c1b735e41c2c84e"
+  },
+  {
+    "path": "src/ValveTurn.h",
+    "old": null,
+    "new": "7c6d94012d832553185f9d50f889336e33d0a8c97b00e564c042467724e6c193"
+  },
+  {
+    "path": "tests/build_special_switch.cmd",
+    "old": null,
+    "new": "3d7105a7171ad89231eedc5e35354a587c9f07a6081fd345244773ab24729d6b"
+  },
+  {
+    "path": "tests/button_touch_selftest.cpp",
+    "old": "fc81630c13ddec766dd959bd41eae6f61c03ff2a1b5b3883c1e95d2e953f4320",
+    "new": "b2ab9f2655f6ce58257788370c280b85a788e2c13c002514bfa85da98757928e"
+  },
+  {
+    "path": "tests/special_switch_selftest.cpp",
+    "old": null,
+    "new": "5d30c6e1473949c8197f23b84516714a2b8e70de20eb8f5748416a0f0e22b588"
+  }
+]

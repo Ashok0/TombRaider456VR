@@ -1,0 +1,47 @@
+[
+  {
+    "path": "README.md",
+    "old": "9bebecf7e05f4bafafdb41a4edce570f387ff85c6f3b12e5e6d2c96152e1cfb8",
+    "new": "209d7073b4778de46e6282206426959166a91a8860b32123325a6745c2650467"
+  },
+  {
+    "path": "TombRaiderVR.vcxproj",
+    "old": "d7f5ab80c1573b6371affd0e49bf657bb8ab6da39f7fc11c79b9b15ac5c05725",
+    "new": "153109856124d0c0595363213ab08f27d0068b2bb8e1afac25b365460fd1f4df"
+  },
+  {
+    "path": "src/ButtonTouch.h",
+    "old": null,
+    "new": "d32d8e2c62a0e0509f01a1e0decdf46b2a7e3fd627fdd4c1c4acc69e62037302"
+  },
+  {
+    "path": "src/FirstPerson.cpp",
+    "old": "44b4966fd961c9fa61ddc9a8b18b4c86e907247ed0734ae940c23b1591d0b49a",
+    "new": "e8eaa16b3c1e0b308cab7036424122e09b777847681a7ec581ce80414f346909"
+  },
+  {
+    "path": "src/PhysicalButton.inl",
+    "old": null,
+    "new": "f7f139e8d6efb523fd091846a611a8c006759e0a1f1a6bb779ad221da62fd3ea"
+  },
+  {
+    "path": "src/PhysicalSwitch.inl",
+    "old": "3c71857f87798154595556d14b41ab0fd5962146955d8e1f1d53bad930eb0075",
+    "new": "d051593a2d70679d237e698f53d0b2f53531964b00b957e8fd7449589ab43148"
+  },
+  {
+    "path": "tests/build_button_touch.cmd",
+    "old": null,
+    "new": "5c4d365eac457aa990b3b601fe57577fbf5315bbf9130b32ac23e398a55caa4c"
+  },
+  {
+    "path": "tests/button_touch_selftest.cpp",
+    "old": null,
+    "new": "02b58f3002837cfa89c3419bf42c25ccb41195a2dc20dbcd199801b9fc0b0155"
+  },
+  {
+    "path": "tools/verify_button_touch.py",
+    "old": null,
+    "new": "e330d6f8703bc6ce5564dd2fc0e9897aa054fae493857adf87d1b8da92de12cf"
+  }
+]

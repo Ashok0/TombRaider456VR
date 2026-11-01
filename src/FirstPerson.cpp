@@ -28,6 +28,7 @@
 #include "CogWheelMotion.h"
 #include "ValveTurn.h"
 #include "MonitorTouch.h"
+#include "ButtonTouch.h"
 #include "LedgeGrabFeedback.h"
 
 #include <windows.h>
@@ -3492,6 +3493,7 @@ struct GroundJumpInputScope {
 #include "PhysicalCogWheel.inl"
 #include "PhysicalContainer.inl"
 #include "PhysicalMonitor.inl"
+#include "PhysicalButton.inl"
 
 bool UpdateLedgePull(uint8_t* item, uint64_t now) {
     // IsLedgeHangState is a visibility group which also includes monkey bars.
@@ -3847,6 +3849,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     g_hardStopRoot=false;
     // A monitor can start a level script. Finish all temporary movement/input
     // cleanup before dispatching it, and do not access Lara afterward.
+    AdvancePhysicalButton(item,nativeCollision,GetTickCount64());
     AdvancePhysicalMonitor(item,nativeCollision,GetTickCount64());
 }
 
@@ -4922,6 +4925,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
     InstallPhysicalCogs(d,base);
     InstallPhysicalContainers(d,base);
     InstallPhysicalMonitors(d,base);
+    InstallPhysicalButtons(d,base);
     return true;
 }
 
@@ -4932,6 +4936,7 @@ void Remove() {
     UpdateControlMode(false);
     ResetPhysicalHolsters();
     ResetPhysicalMonitors();g_monitorDll=nullptr;
+    ResetPhysicalButtons();g_buttonDll=nullptr;
     RemovePhysicalContainers();
     RemovePhysicalCogs();
     RemovePhysicalSwitches();
@@ -5226,6 +5231,7 @@ void FirstPersonRecenter() {
     ResetPhysicalCogs();
     ResetPhysicalContainers();
     ResetPhysicalMonitors();
+    ResetPhysicalButtons();
     g_groundJump.Reset();
     g_ledgePull.Reset(); g_ledgeGrab.Reset();
     g_renderTurn.Reset();
@@ -5253,6 +5259,7 @@ void FirstPersonToggle() {
     ResetPhysicalCogs();
     ResetPhysicalContainers();
     ResetPhysicalMonitors();
+    ResetPhysicalButtons();
     g_unarmedArmVisibility={};
     g_unarmedTwist[0]=g_unarmedTwist[1]={};
     ResetMovementStabilization();
