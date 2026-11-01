@@ -1,0 +1,8 @@
+{
+  "failure_reproduced": "Natural shoulder-centered underhand arcs failed the old increasing head-hand distance gate.",
+  "correction": "Detect forward/sideways swing velocity with a 10 cm coherent stroke; no radial-distance requirement.",
+  "native_release": "User confirmed a visible throw during the read-only live TR5 investigation.",
+  "new_detector_headset_tested": false,
+  "validation": "Both Release builds; 11,264 focused flare checks and 73 actual controller integration checks passed.",
+  "full_self_test_run": false
+}

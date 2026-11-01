@@ -1,5 +1,10 @@
 // FirstPerson.h -- first-person camera and controls for Tomb Raider IV/V.
 #pragma once
+
+namespace tr {
+// A deliberate left-controller swing releases a held flare. No button binding.
+void FirstPersonFlareMotion(bool allowed);
+}
 #include <cstdint>
 #include "MotionGunMath.h"
 

@@ -1,0 +1,26 @@
+﻿{
+    "full_self_test_run":  false,
+    "behavior":  "TR2-5 first-person Remastered tracked flare: natural curved underhand/overhand/sidearm swings accepted; reduced stroke/speed threshold; left grip stays crouch; native release diagnostics added; native release/cleanup unchanged",
+    "release_builds_passed":  true,
+    "controller_integration_checks":  73,
+    "offline_verified_dlls":  10,
+    "headset_tested":  false,
+    "flare_checks":  11264,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\physical-flare\\before-arc-install-20261101-161312",
+    "native_release_unchanged":  true,
+    "prior_native_release_confirmed_in_headset":  true,
+    "deployed":  "2026-11-01T16:13:12.7663664-05:00",
+    "builds":  [
+                   {
+                       "id":  "456",
+                       "old":  "71A3352488B819ED3D74A057F6ED4971E414EB093AC55121D00256C9AD097153",
+                       "process":  "tomb456",
+                       "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+                       "source":  "C:\\dev\\TombRaider456VR\\build\\vr-options-release\\TombRaiderVR.dll",
+                       "iniHash":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+                       "new":  "EFCA14BF7B85708ED1597AAAD3D4FA28E1353A41A8BC54828406FD846DCD7664",
+                       "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.ini",
+                       "folder":  "Tomb Raider IV-VI Remastered"
+                   }
+               ]
+}

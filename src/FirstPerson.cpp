@@ -13,6 +13,7 @@
 #include "FirstPersonVisibility.h"
 #include "FirstPersonStabilization.h"
 #include "MotionGunMath.h"
+#include "FlareThrowMotion.h"
 #include "WeaponLaserMesh.h"
 #include "FirstPersonIK.h"
 #include "FirstPersonBodyIK.h"
@@ -1136,8 +1137,11 @@ struct CrouchWeaponScope {
     ~CrouchWeaponScope() { Finish(); }
 };
 
+void CommitPhysicalFlareThrow();
+
 void __cdecl Detour_CrouchGun() {
     if(g_crouchWeaponScope) g_crouchWeaponScope->Finish();
+    CommitPhysicalFlareThrow();
     auto original=g_hCrouchGun.Original<void (__cdecl*)()>();
     auto* item=g_boundDll && g_boundBase ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
     if(!CrouchWeaponsEligible(item)) { original();return; }
@@ -1370,6 +1374,11 @@ bool FlareIKReady() {
     motiongun::Frame wrist{};GunBasis controller{};
     return BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller);
 }
+int FlareLevel() {return AppState(drva::app_off::level);}
+float FlareHeading() {return g_headingBase;}
+uint32_t FlareLOS() {return g_motionDll ? g_motionDll->lineOfSight : 0;}
+#include "PhysicalFlareThrow.inl"
+
 bool FullBodyIKReady() {
     if(!Cfg().firstPersonFullBodyIK || ControllerTrackingBlockedReason()) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
@@ -2761,6 +2770,7 @@ void __cdecl Detour_FlareInHand(int32_t age) {
 }
 
 void __cdecl Detour_GunJoint(uint8_t* item, PHD_VECTOR* point, int32_t joint) {
+    if(PhysicalFlareSpawnPoint(item,point ? &point->x : nullptr,joint)) return;
     if(FlareJointPoint(item,point,joint,false)) return;
     if (g_longShot && item==g_headingItem && point && joint==10) {
         const auto& gun=g_longShot->gun;
@@ -3939,7 +3949,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         g_haveManualInput = false;
         g_dragPrevious = g_dragCurrent = g_dragShown = {};
         g_bodyTime = {};
-        VR().RecenterFirstPersonHead();
+        ResetPhysicalFlareThrow(); VR().RecenterFirstPersonHead();
     }
     g_previousBody = body;
     // One shared heading for this rendered camera, body following, culling,
@@ -4611,7 +4621,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
     if(Cfg().firstPersonFullBodyIK && g_boundDll && g_boundBase &&
        g_autoBodyCalibration.Observe(AppState(drva::app_off::level),LaraWaterStatus())) {
         ResetBodyFollower();g_groundEye.Reset();g_stanceEye.Reset();
-        VR().RecenterFirstPersonHead();
+        ResetPhysicalFlareThrow(); VR().RecenterFirstPersonHead();
     }
     const bool wasActive = g_active;
     if (Gate() && Anchor(pose)) {
@@ -4965,6 +4975,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             "firstperson: crouched tracked weapons unavailable; native restrictions retained");
     }
     if(!InstallClassicBody(d,base)) return false;
+    InstallPhysicalFlareThrow(d.timestamp,g_flareHooksReady && g_hGunJoint.installed() && g_hCrouchGun.installed());
     InstallPhysicalSwitches(d,base);
     InstallPhysicalCogs(d,base);
     InstallPhysicalPulleys(d,base);
@@ -4976,6 +4987,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
 }
 
 void Remove() {
+    ResetPhysicalFlareThrow();g_flareThrowDll=nullptr;
     g_flareHooksReady=false;g_flareHandFrames=nullptr;g_flareHandHistory={};
     g_flareLights={};g_captureFlareLights=g_loggedFlareLight=false;
     g_hFlareInHand.Remove();g_hFlarePreviousJoint.Remove();g_hFlareDynamic.Remove();
@@ -5272,6 +5284,7 @@ void FirstPersonUpdate() {
 }
 
 void FirstPersonRecenter() {
+    ResetPhysicalFlareThrow();
     ResetPhysicalCrowbar();
     g_autoBodyCalibration.pending=g_autoBodyCalibration.waiting=false;
     ResetBodyFollower();
@@ -5303,6 +5316,7 @@ void FirstPersonTrackingOriginChanged(float yawCorrection) {
 }
 
 void FirstPersonToggle() {
+    ResetPhysicalFlareThrow();
     ResetPhysicalCrowbar();
     UpdateControlMode(false);
     ResetPhysicalHolsters();
@@ -5336,6 +5350,8 @@ void FirstPersonToggle() {
     LogF("firstperson: switched to %s",
          g_runtimeEnabled ? "FIRST PERSON" : "third person");
 }
+
+void FirstPersonFlareMotion(bool allowed) {PhysicalFlareMotion(allowed);}
 
 void FirstPersonShutdown() {
     UpdateControlMode(false);

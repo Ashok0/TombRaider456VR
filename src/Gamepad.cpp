@@ -343,6 +343,9 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
     touchGripAction = gameplay && !holsterGrips && L.grip > 0.5f && R.grip > 0.5f;
     const bool switchGrip = FirstPersonSwitchGrip(R.grip > 0.5f,
         gameplay && R.valid && !(holsterGrips&2) && !touchGripAction && !L.btnUpper);
+    FirstPersonFlareMotion(gameplay && L.valid && !holsterGrips && !switchGrip && !touchGripAction &&
+        !L.btnUpper && !L.btnLower && !(L.stickClick && R.stickClick) &&
+        L.trigger<=.12f && R.trigger<=.12f);
 
     // Set once the Menu chord fires, and honoured where the triggers are
     // written further down. Declared here because that assignment happens after

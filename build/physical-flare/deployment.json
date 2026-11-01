@@ -1,0 +1,37 @@
+﻿{
+    "interaction_checks_123":  56804,
+    "full_self_test_run":  false,
+    "behavior":  "TR2-5 first-person Remastered tracked flare: hold left grip, move hand, release; native release and cleanup, controller launch velocity; TR1 unchanged",
+    "release_builds_passed":  true,
+    "controller_integration_checks":  69,
+    "offline_verified_dlls":  10,
+    "headset_tested":  false,
+    "flare_checks":  4238,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\physical-flare\\before-install-20261101-153623",
+    "interaction_checks_456":  23563,
+    "deployed":  "2026-11-01T15:36:23.9838685-05:00",
+    "builds":  [
+                   {
+                       "id":  "123",
+                       "old":  "663760C0B16FB11257D6CAD3502C12B55843A44F5F529D1924EC7B1FBE1A6097",
+                       "process":  "tomb123",
+                       "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+                       "source":  "C:\\dev\\TombRaider123VR\\build\\physical-flare\\bin\\TombRaiderVR.dll",
+                       "iniHash":  "C363724E2E97AD0D30A0E6BF16C980C4CA1C736851D78C1EEF4633EB88DE9A99",
+                       "new":  "028C0F8D96C52057B9C0E5A7D9D252B17B3B7734B0D6AF37BDF4F4942D437552",
+                       "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.ini",
+                       "folder":  "Tomb Raider I-III Remastered"
+                   },
+                   {
+                       "id":  "456",
+                       "old":  "339BDDF85C90D6AC71E41FF989D8346DF4E44E11E389E89CEA4FAA01EE7E38BF",
+                       "process":  "tomb456",
+                       "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+                       "source":  "C:\\dev\\TombRaider456VR\\build\\vr-options-release\\TombRaiderVR.dll",
+                       "iniHash":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+                       "new":  "346A7E034A11EC8668DAA07E1C6AB253749253D11E2BA2E909EBC3608C4CA55B",
+                       "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.ini",
+                       "folder":  "Tomb Raider IV-VI Remastered"
+                   }
+               ]
+}
