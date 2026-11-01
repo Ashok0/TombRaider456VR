@@ -8497,3 +8497,25 @@ Small movements, a backwards windup behind the head, and moving the hand and HMD
 together while crouching or walking do not trigger a throw. Tracking loss,
 recentring, menu/equip/Action chords and view/level changes cancel the gesture.
 Third person and Classic graphics retain their normal flare controls.
+
+### Physical code-entry keypads (TR5)
+
+In first person with Remastered graphics and tracked unarmed hands, touch the
+individual keys on the VCI keypad with Lara's fingertips. Either controller
+works. Enter the code, then touch the bottom-right Enter key; the bottom-left
+key clears the entry, and the bottom-middle key is zero. Withdraw your finger
+slightly between presses. No Action icon, Y press, grip, or inventory screen is
+needed. The keys light up on the world panel and use the native keypad sounds.
+
+The native digit restrictions and result sequence remain intact. Incorrect
+codes clear for another attempt; correct codes use the keypad's own level
+trigger. The optional native keypad bonus also remains available. Menu/view
+changes, tracking loss, recentering, moving away, or changing items cancel the
+physical entry. Y still opens the original keypad screen. Third person and
+Classic graphics retain their normal controls. Enabled automatically with the
+existing tracked-hand settings; no additional INI setting.
+
+Validation uses `tools/build_keypad_tests.cmd`: offline PE/mesh/pose checks and
+a focused mocked-engine fixture. It never executes the full first-person
+self-test or loads a native game DLL into the test process. Headset confirmation
+of touch alignment and readability is still needed.

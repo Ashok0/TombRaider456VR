@@ -1,0 +1,13 @@
+﻿{
+    "fullSelfTestRun":  false,
+    "iniUnchanged":  true,
+    "keypadChecks":  10304,
+    "new":  "14F01BB1F12D7145AEDA3653C84B9A322540C8CBC60A82AA8755F5C483F6E20A",
+    "existingInteractionChecks":  23563,
+    "behavior":  "TR5 VCI physical individual keypad keys in first-person Remastered with unarmed tracked hands; clear/zero/enter, native sounds and result sequence, world key lights; original Y menu retained",
+    "releaseBuildPassed":  true,
+    "headsetTested":  false,
+    "old":  "EFCA14BF7B85708ED1597AAAD3D4FA28E1353A41A8BC54828406FD846DCD7664",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\keypad\\before-install-20261101-170246",
+    "deployed":  "2026-11-01T17:02:46.5973682-05:00"
+}

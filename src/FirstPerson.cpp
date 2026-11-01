@@ -30,6 +30,7 @@
 #include "ValveTurn.h"
 #include "MonitorTouch.h"
 #include "ButtonTouch.h"
+#include "KeypadTouch.h"
 #include "LedgeGrabFeedback.h"
 
 #include <windows.h>
@@ -3546,6 +3547,7 @@ struct GroundJumpInputScope {
 #include "PhysicalCrowbar.inl"
 #include "PhysicalMonitor.inl"
 #include "PhysicalButton.inl"
+#include "PhysicalKeypad.inl"
 
 bool UpdateLedgePull(uint8_t* item, uint64_t now) {
     // IsLedgeHangState is a visibility group which also includes monkey bars.
@@ -3902,6 +3904,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     g_hardStopRoot=false;
     // A monitor can start a level script. Finish all temporary movement/input
     // cleanup before dispatching it, and do not access Lara afterward.
+    if(AdvancePhysicalKeypad(item,GetTickCount64())) return;
     AdvancePhysicalButton(item,nativeCollision,GetTickCount64());
     AdvancePhysicalMonitor(item,nativeCollision,GetTickCount64());
 }
@@ -4446,6 +4449,7 @@ void __cdecl Detour_CrouchDraw(uint8_t* item,int32_t drawType) {
 
 void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
                                    int32_t renderPass) {
+    const KeypadMeshScope keypadMesh(item,useMeshBits);
     if (DrawingNativeShadow()) {
         // First-person clipping/hand splitting belongs only to the eye view.
         // The light must see the intact native body, head and weapon meshes.
@@ -4983,6 +4987,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
     InstallPhysicalCrowbar(d,base);
     InstallPhysicalMonitors(d,base);
     InstallPhysicalButtons(d,base);
+    InstallPhysicalKeypad(d,base);
     return true;
 }
 
@@ -4995,6 +5000,7 @@ void Remove() {
     ResetPhysicalHolsters();
     ResetPhysicalMonitors();g_monitorDll=nullptr;
     ResetPhysicalButtons();g_buttonDll=nullptr;
+    g_hKeypadMask.Remove();ResetPhysicalKeypad();g_keypadDll=nullptr;
     RemovePhysicalCrowbar();
     RemovePhysicalContainers();
     RemovePhysicalPulleys();
@@ -5237,6 +5243,7 @@ void FirstPersonControlModeUpdate() {
 
 void FirstPersonUpdate() {
     FirstPersonControlModeUpdate();
+    if(g_keypad.index>=0 && (!g_active || !Gate())) ResetPhysicalKeypad();
     if (!MotionReady() || CurrentMotionWeapon()!=5) g_hkScopeBindItem=nullptr;
     if (!MotionReady() || g_weaponLaser.weapon!=CurrentMotionWeapon()) g_weaponLaser.item=nullptr;
     if (!MotionReady() || g_weaponAimBinding.weapon!=CurrentMotionWeapon()) g_weaponAimBinding.item=nullptr;
@@ -5295,6 +5302,7 @@ void FirstPersonRecenter() {
     ResetPhysicalContainers();
     ResetPhysicalMonitors();
     ResetPhysicalButtons();
+    ResetPhysicalKeypad();
     g_groundJump.Reset();
     g_ledgePull.Reset(); g_ledgeGrab.Reset();
     g_renderTurn.Reset();
@@ -5326,6 +5334,7 @@ void FirstPersonToggle() {
     ResetPhysicalContainers();
     ResetPhysicalMonitors();
     ResetPhysicalButtons();
+    ResetPhysicalKeypad();
     g_unarmedArmVisibility={};
     g_unarmedTwist[0]=g_unarmedTwist[1]={};
     ResetMovementStabilization();
