@@ -1380,6 +1380,29 @@ layouts. `tools/verify_cog_wheels.py` performs read-only asset/address checks;
 `tools/build_cog_wheel_tests.cmd` exercises grab, wraparound, native pulse
 sequencing, release, tracking loss and cleanup against a native-engine stand-in.
 These checks do not load game DLLs. In-headset confirmation remains pending.
+
+### Physical wall valves in VR
+
+The TR5 airlock-style wall valve in Trajan's Markets (ANDREA2), and the matching
+JOBY3/JOBY5 variants, support **Right Grip** in first person. Holster weapons,
+grab anywhere on the circular rim, and move your hand around the valve's axle.
+The Action icon is not required. The native turn is approximately 300 degrees;
+you can release and re-grab another point on the rim to continue, or reverse
+your hand to unwind a partial turn. The visible palm stays attached to the rim.
+
+Partial rotation is retained without activating the mechanism. At the end of
+the turn, the native valve handler activates its linked items exactly once and
+retains any authored post-use movement (including the falling-valve variants).
+The hand detaches at completion. Conventional Action and third-person use keep
+their original behavior. No new INI setting is needed. This valve object exists
+in TR5; the installed TR4 assets have no corresponding airlock-valve object.
+TR4 wall/floor levers and TR4/5 cog wheels retain their physical interactions.
+
+Validation: `tools/build_valve_turn_tests.cmd` reads all three installed valve
+animation tables; the focused `tools/build_switch_reach_test.cmd` also exercises
+the actual physical-switch code with native calls and VR tracking stubbed.
+Neither test executes a game DLL or runs the full first-person test suite.
+In-headset confirmation remains pending.
 No held-camera switch logic is restored.
 
 The Action icon does not need to be visible or active. Squeezing Right Grip

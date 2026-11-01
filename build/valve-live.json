@@ -1,0 +1,120 @@
+[
+  {
+    "index": 35,
+    "slot": 0,
+    "position": [
+      55737,
+      7168,
+      45656
+    ],
+    "rotation": [
+      0,
+      4531,
+      0
+    ],
+    "states": [
+      2,
+      2,
+      0,
+      103,
+      2225
+    ],
+    "type": 0,
+    "joints": 15,
+    "animationBase": 0,
+    "collision": "-0x7ff927280000",
+    "control": "-0x7ff927280000",
+    "geomName": "LARA_HEAD",
+    "bind": []
+  },
+  {
+    "index": 124,
+    "slot": 121,
+    "position": [
+      56832,
+      6048,
+      44400
+    ],
+    "rotation": [
+      0,
+      -32768,
+      0
+    ],
+    "states": [
+      0,
+      0,
+      0,
+      569,
+      0
+    ],
+    "type": 33,
+    "joints": 1,
+    "animationBase": 569,
+    "collision": "0x38210",
+    "control": "0x93d60",
+    "geomName": "FLAME_EMITTER",
+    "bind": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      -0.0,
+      -0.0,
+      -0.0,
+      1.0
+    ]
+  },
+  {
+    "index": 125,
+    "slot": 274,
+    "position": [
+      55808,
+      7168,
+      45568
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "states": [
+      0,
+      0,
+      0,
+      593,
+      0
+    ],
+    "type": 10,
+    "joints": 1,
+    "animationBase": 593,
+    "collision": "0x8aca0",
+    "control": "0x8aa80",
+    "geomName": "AIRLOCK_SWITCH_ANDREA2",
+    "bind": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      -0.0,
+      -0.0,
+      -0.0,
+      1.0
+    ]
+  }
+]

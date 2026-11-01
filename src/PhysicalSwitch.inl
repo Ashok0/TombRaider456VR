@@ -22,6 +22,16 @@ bool IsPhysicalRailSwitch(const uint8_t* item) {
     return g_railSwitchCollision && g_boundDll->game==0 &&
         *reinterpret_cast<const int16_t*>(item+16)==318;
 }
+bool IsPhysicalValve(const uint8_t* item) {
+    if(!g_boundDll || g_boundDll->game!=1 || !g_boundDll->objects ||
+       *reinterpret_cast<const int16_t*>(item+16)!=274) return false;
+    const int type=*reinterpret_cast<const int16_t*>(item+48);
+    const auto* object=Ptr<uint8_t>(g_boundDll->objects)+274*off::object_stride;
+    const auto* name=*reinterpret_cast<const char* const*>(object+off::object_geom);
+    return type>=8 && type<=10 && *reinterpret_cast<const int16_t*>(object)==1 &&
+        !*reinterpret_cast<const int32_t*>(object+off::object_geom+28) && name &&
+        (!std::strcmp(name,"AIRLOCK_SWITCH_ANDREA2") || !std::strcmp(name,"AIRLOCK_SWITCH_JOBY3_JOBY5"));
+}
 struct SwitchCandidate {
     int16_t index=-1,state=-1;
     int level=-1;
@@ -95,6 +105,10 @@ struct SwitchPreview {
     int16_t animation=0,frame=0;
     int32_t interpolation=0;
     float savedMatrices[792]{};
+    bool valve=false;
+    firstperson::ValveTurn valveTurn{};
+    motiongun::Frame valveFrame{};
+    motiongun::Vec valveLocal{};
 } g_switchPreview;
 struct ParkedSwitch {
     SwitchCandidate candidate; SwitchPreview preview;
@@ -104,6 +118,7 @@ struct ParkedSwitch {
 std::vector<ParkedSwitch> g_parkedSwitches;
 using Fn_SwitchItem=void (__cdecl*)(uint8_t*);
 using Fn_SwitchControl=void (__cdecl*)(int16_t);
+bool RegripValvePreview(uint8_t* item,motiongun::Vec hand);
 
 void RestoreSwitchPreview() {
     if(g_switchPreview.active) if(auto* item=SwitchItem(g_switchGrab)) {
@@ -169,6 +184,9 @@ bool ResumeSwitchPreview(uint8_t* target,motiongun::Vec hand,uint64_t now) {
         if (!ParkedSwitchUnchanged(*it,item)) { it=g_parkedSwitches.erase(it);continue; }
         if (item!=target) { ++it;continue; }
         g_switchPreview=it->preview;
+        if(g_switchPreview.valve && !RegripValvePreview(item,hand)) {
+            g_switchPreview.active=g_switchPreview.attached=false;return false;
+        }
         g_switchPreview.active=g_switchPreview.attached=true;
         g_switchPreview.lastTime=now;g_switchPreview.lastHand=hand;
         g_switchPreview.handOffset=Sub(g_switchPreview.grip,hand);
@@ -231,6 +249,60 @@ bool RailSwitchGripPoint(uint8_t* item,motiongun::Vec& grip) {
     return firstperson::Finite(frame);
 }
 
+bool ValveGripPoint(uint8_t* item,motiongun::Vec hand,motiongun::Vec& local,motiongun::Vec& grip) {
+    if(!IsPhysicalValve(item)) return false;
+    const auto* object=Ptr<uint8_t>(g_boundDll->objects)+274*off::object_stride;
+    const auto* name=*reinterpret_cast<const char* const*>(object+off::object_geom);
+    alignas(16) uint8_t probe[off::item_stride];std::memcpy(probe,item,sizeof(probe));
+    SwitchPoseMatrices(probe,{*reinterpret_cast<int16_t*>(item+24),*reinterpret_cast<int16_t*>(item+26),0});
+    auto frame=motiongun::ReadRows(reinterpret_cast<float*>(probe+7832));
+    const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    frame.origin=Add(frame.origin,{float(pos.x_pos),float(pos.y_pos),float(pos.z_pos)});
+    motiongun::Frame inverse{},bind{},inverseBind{};
+    if(!firstperson::Finite(frame) || !motiongun::Inverse(frame,inverse) ||
+       !ReadIKBind(object,1,0,nullptr,nullptr,0,bind) || !motiongun::Inverse(bind,inverseBind)) return false;
+    const auto meshHand=motiongun::Transform(bind,motiongun::Transform(inverse,hand));
+    const auto contact=firstperson::ValveRimContact(meshHand,!std::strcmp(name,"AIRLOCK_SWITCH_ANDREA2"));
+    local=motiongun::Transform(inverseBind,contact);grip=motiongun::Transform(frame,local);
+    return true;
+}
+
+bool BuildValveTrajectory(uint8_t* item,motiongun::Vec local) {
+    auto& p=g_switchPreview;
+    alignas(16) uint8_t probe[off::item_stride];std::memcpy(probe,item,sizeof(probe));
+    const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const motiongun::Vec origin{float(pos.x_pos),float(pos.y_pos),float(pos.z_pos)};
+    motiongun::Frame referenceInverse{};float samples[256]{};
+    for(int i=0;i<p.path.count;++i) {
+        // The last path entry is for native completion only. In JOBY3/5 it
+        // begins the falling-valve clip, not another hand-driven rotation.
+        if(i==p.path.count-1) { p.points[i]=p.points[i-1];samples[i]=samples[i-1];break; }
+        SwitchPoseMatrices(probe,p.path.poses[i]);
+        auto frame=motiongun::ReadRows(reinterpret_cast<float*>(probe+7832));
+        frame.origin=Add(origin,frame.origin);
+        if(!firstperson::Finite(frame)) return false;
+        if(i==0) {
+            p.valveFrame=frame;
+            if(!motiongun::Inverse(frame,referenceInverse)) return false;
+        }
+        if(firstperson::Length(Sub(frame.origin,p.valveFrame.origin))>8) return false;
+        p.points[i]=motiongun::Transform(frame,local);
+        const auto v=motiongun::Transform(referenceInverse,p.points[i]);
+        samples[i]=std::atan2(v.y,v.x);
+    }
+    p.valveLocal=local;
+    return p.valveTurn.Build(samples,p.path.count);
+}
+bool RegripValvePreview(uint8_t* item,motiongun::Vec hand) {
+    auto& p=g_switchPreview;motiongun::Vec local{},grip{};
+    const float progress=p.valveTurn.progress;
+    if(!ValveGripPoint(item,hand,local,grip) || !BuildValveTrajectory(item,local)) return false;
+    p.valveTurn.progress=progress;p.selected=p.valveTurn.Pose();p.grip=p.points[p.selected];
+    motiongun::Frame inverse{};if(!motiongun::Inverse(p.valveFrame,inverse)) return false;
+    const auto v=motiongun::Transform(inverse,p.grip);
+    p.valveTurn.Grab(std::atan2(v.y,v.x));return true;
+}
+
 bool BeginSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
     using namespace motiongun;
     if(!g_boundDll->anims || !g_switchDll->calcMatrices || !g_switchDll->animate ||
@@ -238,6 +310,7 @@ bool BeginSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
     if (ResumeSwitchPreview(item,hand,now)) return true;
     auto& p=g_switchPreview;
     const bool rail=IsPhysicalRailSwitch(item);
+    p.valve=IsPhysicalValve(item);
     const int object=*reinterpret_cast<int16_t*>(item+16);
     if(object<0) return false;
     const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
@@ -248,7 +321,10 @@ bool BeginSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
     if(joints<1 || joints>33) return false;
     const int state=*reinterpret_cast<int16_t*>(item+18);
     p.animation=*reinterpret_cast<int16_t*>(item+24);p.frame=*reinterpret_cast<int16_t*>(item+26);
-    if(!p.path.Build(*Ptr<firstperson::SwitchAnim*>(g_boundDll->anims),
+    if(p.valve) {
+        if(!firstperson::BuildValvePath(p.path,*Ptr<firstperson::SwitchAnim*>(g_boundDll->anims),
+            *reinterpret_cast<const int16_t*>(obj+66),{p.animation,p.frame,int16_t(state)})) return false;
+    } else if(!p.path.Build(*Ptr<firstperson::SwitchAnim*>(g_boundDll->anims),
         *Ptr<firstperson::SwitchChange*>(g_switchDll->changes),*Ptr<firstperson::SwitchRange*>(g_switchDll->ranges),
         *Ptr<int16_t*>(g_switchDll->commands),{p.animation,p.frame,int16_t(state)},1-state)) return false;
     alignas(16) uint8_t probe[off::item_stride];std::memcpy(probe,item,sizeof(probe));
@@ -260,11 +336,17 @@ bool BeginSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
     SwitchPoseMatrices(probe,p.path.poses[p.path.count-1]);
     float best=0;Vec local{};p.joint=-1;
     const float scale=LiveWorldUnitsPerMetre();
+    if(p.valve) {
+        motiongun::Vec grip{};
+        if(!ValveGripPoint(item,hand,local,grip) || !BuildValveTrajectory(item,local)) return false;
+        p.joint=0;
+        const auto v=local;p.valveTurn.Grab(std::atan2(v.y,v.x));
+    }
     if (rail) {
         if (joints!=2 || !RailHandleJointLocal(obj,local)) return false;
         p.joint=1;
     }
-    for(int j=0;!rail && j<joints;++j) {
+    for(int j=0;!rail && !p.valve && j<joints;++j) {
         Frame inverse{};if(!Inverse(start[j],inverse)) continue;
         const auto end=ReadRows(reinterpret_cast<float*>(probe+7832)+j*12);
         const Vec at=Add(inverse.origin,Transform(inverse.basis,Sub(hand,origin)));
@@ -276,7 +358,7 @@ bool BeginSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
         if(score>best) { best=score;p.joint=j;local=at; }
     }
     if(p.joint<0) return false;
-    for(int i=0;i<p.path.count;++i) {
+    for(int i=0;!p.valve && i<p.path.count;++i) {
         SwitchPoseMatrices(probe,p.path.poses[i]);
         const auto frame=ReadRows(reinterpret_cast<float*>(probe+7832)+p.joint*12);
         p.points[i]=Add(origin,Add(frame.origin,Transform(frame.basis,local)));
@@ -310,6 +392,27 @@ bool UpdateSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
     }
     p.lastTime=now;p.lastHand=hand;
     const auto contact=Add(hand,p.handOffset);
+    if(p.valve) {
+        motiongun::Frame inverse{};
+        if(!motiongun::Inverse(p.valveFrame,inverse)) { ParkSwitchPreview();g_switchGripClaimed=false;return false; }
+        const auto v=motiongun::Transform(inverse,contact);
+        const float r=std::hypot(v.x,v.y),radius=std::hypot(p.valveLocal.x,p.valveLocal.y);
+        const int previousSelected=p.selected;const float previousProgress=p.valveTurn.progress;
+        if(r<radius*.5f || std::fabs(r-radius)>scale*.16f || std::fabs(v.z-p.valveLocal.z)>scale*.16f ||
+           !p.valveTurn.Track(std::atan2(v.y,v.x))) {
+            ParkSwitchPreview();g_switchGripClaimed=false;return false;
+        }
+        p.selected=p.valveTurn.Pose();p.grip=p.points[p.selected];
+        if(firstperson::Length(Sub(contact,p.grip))>scale*.16f) {
+            // Retain the last displayed pose if the hand pulls off the rim.
+            // Do not park a newly selected frame that was never displayed.
+            p.selected=previousSelected;p.grip=p.points[p.selected];p.valveTurn.progress=previousProgress;
+            ParkSwitchPreview();g_switchGripClaimed=false;return false;
+        }
+        SwitchPoseMatrices(item,p.path.poses[p.selected]);
+        std::memcpy(item+6248,item+7832,1584);*reinterpret_cast<int32_t*>(item+6244)=0;
+        return p.valveTurn.Complete();
+    }
     float nearest=1.e30f;int selected=p.selected;
     for(int i=0;i<p.path.count;++i) {
         const auto delta=Sub(contact,p.points[i]);const float distance=motiongun::Dot(delta,delta);
@@ -333,13 +436,15 @@ bool UpdateSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
 // additionally require the usable side. Floor levers work from either end.
 bool SwitchReach(uint8_t* target,uint8_t* lara,motiongun::Vec hand,float& distance,bool grabbed) {
     const bool rail=IsPhysicalRailSwitch(target);
+    const bool valve=IsPhysicalValve(target);
     const int type=*reinterpret_cast<const int16_t*>(target+48);
     const int state=*reinterpret_cast<const int16_t*>(target+off::item_anim_state);
     const int laraState=*reinterpret_cast<const int16_t*>(lara+off::item_anim_state);
     const bool standing=laraState==2 && *reinterpret_cast<const int16_t*>(lara+off::item_anim_number)==103;
     // Physical crouching while reaching for a floor handle must not disable it.
-    const bool crouching=rail && (laraState==71 || laraState==80) && CanUseCrouchCamera(lara);
-    if ((!rail && type!=0 && !(g_boundDll->game==1 && type==4)) || (state!=0 && state!=1) ||
+    const bool crouching=(rail || valve) && (laraState==71 || laraState==80) && CanUseCrouchCamera(lara);
+    if ((!rail && !valve && type!=0 && !(g_boundDll->game==1 && type==4)) || (state!=0 && state!=1) ||
+        (valve && state!=0) ||
         (*reinterpret_cast<const uint32_t*>(target+0x1820)&6) ||
         (*reinterpret_cast<const uint16_t*>(target+44)&0x100) ||
         (!standing && !crouching) || (*reinterpret_cast<const uint32_t*>(lara+0x1820)&8)) return false;
@@ -369,9 +474,10 @@ bool SwitchReach(uint8_t* target,uint8_t* lara,motiongun::Vec hand,float& distan
     const float dz=bodyLocal.z-std::clamp(bodyLocal.z,float(nativeBounds[4]),float(nativeBounds[5]));
     if (!std::isfinite(scale) || scale<=1 || dx*dx+dz*dz>scale*scale*.9f*.9f) return false;
     const float p[3]={local.x,hand.y-pos.y_pos,local.z};distance=0;
-    if (rail) {
+    if (rail || valve) {
         motiongun::Vec grip{};
         if (grabbed && g_switchPreview.active) grip=g_switchPreview.grip;
+        else if(valve) { motiongun::Vec localGrip{};if(!ValveGripPoint(target,hand,localGrip,grip)) return false; }
         else if (!RailSwitchGripPoint(target,grip)) return false;
         const auto delta=Sub(hand,grip);distance=motiongun::Dot(delta,delta);
     } else {
@@ -434,6 +540,7 @@ void CommitPhysicalSwitch(int16_t index,uint8_t* target,uint8_t* lara,void* coll
     // special level callbacks. Only its temporary Lara animation/auto-align
     // changes are suppressed; do not emulate door flags or trigger timing.
     const int steps=g_switchPreview.path.count-1;
+    const bool valve=g_switchPreview.valve;
     const auto grip=g_switchPreview.grip;
     RestoreSwitchPreview();
     uint8_t animation[10],angles[12];
@@ -444,12 +551,13 @@ void CommitPhysicalSwitch(int16_t index,uint8_t* target,uint8_t* lara,void* coll
     auto& input=*Ptr<uint64_t>(g_boundDll->input);
     const auto savedInput=input;
     g_switchCommit=target;input|=0x40;
-    if (IsPhysicalRailSwitch(target)) {
+    if (IsPhysicalRailSwitch(target) || valve) {
         // Satisfy only the native activation precondition; restore the actual
         // standing/crouched pose below without playing Lara's canned animation.
         *reinterpret_cast<int16_t*>(lara+18)=2;
         *reinterpret_cast<int16_t*>(lara+24)=103;
-        g_hRailSwitchCollision.Original<Fn_SwitchCollision>()(index,lara,collision);
+        if(valve) g_hSwitchCollision.Original<Fn_SwitchCollision>()(index,lara,collision);
+        else g_hRailSwitchCollision.Original<Fn_SwitchCollision>()(index,lara,collision);
     } else g_hSwitchCollision.Original<Fn_SwitchCollision>()(index,lara,collision);
     g_switchCommit=nullptr;input=savedInput;
     std::memcpy(lara+18,animation,sizeof(animation));
@@ -459,9 +567,11 @@ void CommitPhysicalSwitch(int16_t index,uint8_t* target,uint8_t* lara,void* coll
     // The hand has already traversed every visible pose. Execute the native
     // completion commands once in this tick, without timed visual playback.
     for(int i=1;i<steps && (*reinterpret_cast<uint32_t*>(target+0x1820)&6)==2;++i) {
-        if(i==1) {
+        if(i==1 || valve) {
             // Initialize native switch code bits/timer handling once. Repeating
             // control would incorrectly consume the timer for every pose.
+            // Airlock valves have their own branch: control must visit each
+            // frame so its last-1 linked-item trigger executes exactly once.
             const int object=*reinterpret_cast<int16_t*>(target+16);
             const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
             (*reinterpret_cast<Fn_SwitchControl const*>(obj+24))(index);
@@ -471,7 +581,7 @@ void CommitPhysicalSwitch(int16_t index,uint8_t* target,uint8_t* lara,void* coll
         *reinterpret_cast<int16_t*>(target+18)});
     std::memcpy(target+6248,target+7832,1584);
     *reinterpret_cast<int32_t*>(target+6244)=0;
-    g_switchPreview.grip=grip;g_switchPreview.attached=true;
+    g_switchPreview.grip=grip;g_switchPreview.attached=!valve;
     LogF("vr-switch: pull committed item=%d state=%d goal=%d status=%u; native activation, FP retained",
         index,*reinterpret_cast<int16_t*>(target+18),*reinterpret_cast<int16_t*>(target+20),
         (*reinterpret_cast<uint32_t*>(target+0x1820)>>1)&3);

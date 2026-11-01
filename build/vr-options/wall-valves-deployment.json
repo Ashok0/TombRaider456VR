@@ -1,0 +1,15 @@
+﻿{
+    "full_suite_run":  false,
+    "deployed":  "2026-11-01T00:45:51.0115360-04:00",
+    "headset_tested":  false,
+    "dll":  "4E1E0CE4C26AEC723208DF8C9FD74422DD2FD7A538DA367B0F9D199D31B784E9",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-wall-valves-20261101-004550",
+    "valve_checks":  3173,
+    "physical_switch_checks":  2377,
+    "native_control_layouts_verified":  2,
+    "change":  "TR5 airlock wall valves: Right Grip rim contact, circular rotation, release/regrab, native linked-item activation and post-use motion",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "installed_valve_paths":  3,
+    "rim_meshes_verified":  2,
+    "release_build_passed":  true
+}

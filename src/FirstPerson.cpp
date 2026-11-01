@@ -26,6 +26,7 @@
 #include "LedgePullGesture.h"
 #include "SwitchPosePath.h"
 #include "CogWheelMotion.h"
+#include "ValveTurn.h"
 #include "LedgeGrabFeedback.h"
 
 #include <windows.h>

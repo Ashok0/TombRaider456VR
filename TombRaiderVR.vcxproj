@@ -199,6 +199,7 @@
     <ClInclude Include="src\JumpLanding.h" />
     <ClInclude Include="src\PhysicalHolster.inl" />
     <ClInclude Include="src\CogWheelMotion.h" />
+    <ClInclude Include="src\ValveTurn.h" />
     <ClInclude Include="src\PhysicalCogWheel.inl" />
     <ClInclude Include="src\LedgePullGesture.h" />
     <ClInclude Include="src\LedgeGrabFeedback.h" />

@@ -2,6 +2,8 @@
 #define main UnusedFullFirstPersonSuite
 #include "first_person_tests.cpp"
 #undef main
+#include "valve_switch_regression.inl"
+namespace tr { void VRMenuShutdown() {} } // No menu/UI runtime in this fixture.
 int main() {
     using namespace tr;
     g_boundBase=reinterpret_cast<uint64_t>(GetModuleHandleW(nullptr));
@@ -38,5 +40,6 @@ int main() {
     };
     TestPhysicalSwitch(reset,rva,pose);
     TestPhysicalRailSwitch(reset,rva,pose);
+    TestPhysicalValve(reset,rva,pose);
     std::printf("PASS: %d physical-switch checks (TR4/5)\n",checks);
 }
