@@ -4,6 +4,7 @@
 #undef main
 #include "valve_switch_regression.inl"
 #include "container_regression.inl"
+#include "monitor_regression.inl"
 namespace tr { void VRMenuShutdown() {} } // No menu/UI runtime in this fixture.
 int main() {
     using namespace tr;
@@ -43,5 +44,6 @@ int main() {
     TestPhysicalRailSwitch(reset,rva,pose);
     TestPhysicalValve(reset,rva,pose);
     TestPhysicalContainer(reset,rva,pose);
+    TestPhysicalMonitor(reset,rva,pose);
     std::printf("PASS: %d physical-switch checks (TR4/5)\n",checks);
 }

@@ -1,0 +1,14 @@
+﻿{
+    "dll":  "A0B31A9B60CE710E59085A70F13190C2A9CB08E98E72006DB5582E86DBC91F34",
+    "previous_dll_present":  false,
+    "release_build_passed":  true,
+    "physical_interaction_checks":  4965,
+    "change":  "TR5 interactive monitors: either controller touches screen glass to activate the native one-shot level interaction without Action or scripted body alignment",
+    "headset_tested":  false,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-monitor-touch-20261101-065831",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "native_layouts_verified":  2,
+    "monitor_levels_verified":  2,
+    "deployed":  "2026-11-01T06:58:31.7275343-05:00",
+    "full_suite_run":  false
+}

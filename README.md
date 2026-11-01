@@ -1381,6 +1381,29 @@ layouts. `tools/verify_cog_wheels.py` performs read-only asset/address checks;
 sequencing, release, tracking loss and cleanup against a native-engine stand-in.
 These checks do not load game DLLs. In-headset confirmation remains pending.
 
+### Touching TV/monitor screens in VR
+
+TR5's interactive MONITOR_SCREEN televisions in RICH1/RICH2 can be activated
+by touching the glass with either tracked controller in first person. Holster
+weapons, bring the visible hand to the screen from the front, and touch it.
+No Grip, trigger button or Action icon is required. The touch uses the screen
+surface, not its stand or casing, and respects line of sight.
+
+Touching runs the television's existing one-shot interaction immediately,
+including its native level trigger or cutscene. Lara does not first slide into
+place or play the scripted button-press animation. A hand resting on the
+screen does not repeat the action; losing/reacquiring tracking or recentering
+also cannot count as a touch. Classic and remastered graphics share the native
+screen location, including the HD version whose TV mesh is part of the room.
+Native Action remains available. No INI change is needed.
+
+This supports the game's interactive monitors, not every decorative screen.
+`tools/build_monitor_tests.cmd` verifies installed screen geometry and both
+native layouts, then exercises either hand, rotated screens, touch direction,
+tracking loss, occlusion and native script effects using engine/VR stand-ins.
+It does not load a game DLL or run the full first-person self-test. Headset
+confirmation remains pending.
+
 ### Physical drawers and cabinet doors in VR
 
 TR5's searchable drawers and hinged cabinets support **Right Grip** in first

@@ -27,6 +27,7 @@
 #include "SwitchPosePath.h"
 #include "CogWheelMotion.h"
 #include "ValveTurn.h"
+#include "MonitorTouch.h"
 #include "LedgeGrabFeedback.h"
 
 #include <windows.h>
@@ -3490,6 +3491,7 @@ struct GroundJumpInputScope {
 #include "PhysicalSwitch.inl"
 #include "PhysicalCogWheel.inl"
 #include "PhysicalContainer.inl"
+#include "PhysicalMonitor.inl"
 
 bool UpdateLedgePull(uint8_t* item, uint64_t now) {
     // IsLedgeHangState is a visibility group which also includes monkey bars.
@@ -3843,6 +3845,9 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     g_groundMoveAction = 0;
     g_stabilizeRoot=false;
     g_hardStopRoot=false;
+    // A monitor can start a level script. Finish all temporary movement/input
+    // cleanup before dispatching it, and do not access Lara afterward.
+    AdvancePhysicalMonitor(item,nativeCollision,GetTickCount64());
 }
 
 void UpdateLocomotion(PHD_3DPOS& pose) {
@@ -4916,6 +4921,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
     InstallPhysicalSwitches(d,base);
     InstallPhysicalCogs(d,base);
     InstallPhysicalContainers(d,base);
+    InstallPhysicalMonitors(d,base);
     return true;
 }
 
@@ -4925,6 +4931,7 @@ void Remove() {
     g_hFlareInHand.Remove();g_hFlarePreviousJoint.Remove();g_hFlareDynamic.Remove();
     UpdateControlMode(false);
     ResetPhysicalHolsters();
+    ResetPhysicalMonitors();g_monitorDll=nullptr;
     RemovePhysicalContainers();
     RemovePhysicalCogs();
     RemovePhysicalSwitches();
@@ -5218,6 +5225,7 @@ void FirstPersonRecenter() {
     ResetPhysicalSwitch();
     ResetPhysicalCogs();
     ResetPhysicalContainers();
+    ResetPhysicalMonitors();
     g_groundJump.Reset();
     g_ledgePull.Reset(); g_ledgeGrab.Reset();
     g_renderTurn.Reset();
@@ -5244,6 +5252,7 @@ void FirstPersonToggle() {
     ResetPhysicalSwitch();
     ResetPhysicalCogs();
     ResetPhysicalContainers();
+    ResetPhysicalMonitors();
     g_unarmedArmVisibility={};
     g_unarmedTwist[0]=g_unarmedTwist[1]={};
     ResetMovementStabilization();
