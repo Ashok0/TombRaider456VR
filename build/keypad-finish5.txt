@@ -1,0 +1,156 @@
+// FinishInventory  rva=0x00069270  size=703
+  00069270  push     rbx                                     
+  00069272  sub      rsp, 0x20                               
+  00069276  mov      r8, qword ptr [rip + 0x603f23]             ; app  [rva 0x0066D1A0]
+  0006927D  mov      eax, 0xffffffff                         
+  00069282  mov      rdx, qword ptr [rip + 0x5a7557]            ; rings  [rva 0x006107E0]
+  00069289  xor      ebx, ebx                                
+  0006928B  mov      dword ptr [rip + 0x448eeb], 0x43000000     ; PickupOldX  [rva 0x004B2180]
+  00069295  mov      dword ptr [rip + 0x44e3b9], 0x43000000     ; PickupX  [rva 0x004B7658]
+  0006929F  mov      qword ptr [r8 + 0x858], rbx             
+  000692A6  mov      dword ptr [r8 + 0x864], ebx             
+  000692AD  mov      word ptr [rip + 0x48540c], ax              ; pickups  [rva 0x004EE6C0]
+  000692B4  mov      word ptr [rip + 0x48540d], ax              ; pickups+0x8  [rva 0x004EE6C8]
+  000692BB  mov      word ptr [rip + 0x48540e], ax              ; pickups+0x10  [rva 0x004EE6D0]
+  000692C2  mov      word ptr [rip + 0x48540f], ax              ; pickups+0x18  [rva 0x004EE6D8]
+  000692C9  mov      word ptr [rip + 0x485410], ax              ; pickups+0x20  [rva 0x004EE6E0]
+  000692D0  mov      word ptr [rip + 0x485411], ax              ; pickups+0x28  [rva 0x004EE6E8]
+  000692D7  mov      word ptr [rip + 0x485412], ax              ; pickups+0x30  [rva 0x004EE6F0]
+  000692DE  mov      word ptr [rip + 0x485413], ax              ; pickups+0x38  [rva 0x004EE6F8]
+  000692E5  movsxd   rax, dword ptr [rdx + 0x5b2cc]          
+  000692EC  imul     rcx, rax, 0xc28                         
+  000692F3  mov      dword ptr [rip + 0x44c9df], ebx            ; PickupVel  [rva 0x004B5CD8]
+  000692F9  mov      word ptr [rip + 0x44e360], bx              ; CurrentPickup  [rva 0x004B7660]
+  00069300  movsx    eax, word ptr [rcx + rdx]               
+  00069304  mov      dword ptr [rip + 0x148dbe], eax            ; GLOBAL_lastinvitem  [rva 0x001B20C8]
+  0006930A  movzx    eax, byte ptr [rip + 0x485591]             ; lara+0x162  [rva 0x004EE8A2]
+  00069311  test     al, 1                                   
+  00069313  je       0x18006932b                             
+  00069315  and      al, 0xc7                                
+  00069317  cmp      byte ptr [rip + 0x14da4e], bl              ; CurrentShotGunAmmoType  [rva 0x001B6D6B]
+  0006931D  jne      0x180069323                             
+  0006931F  or       al, 8                                   
+  00069321  jmp      0x180069325                                ; -> FinishInventory+0xB5
+  00069323  or       al, 0x10                                
+  00069325  mov      byte ptr [rip + 0x485577], al              ; lara+0x162  [rva 0x004EE8A2]
+  0006932B  movzx    eax, byte ptr [rip + 0x485572]             ; lara+0x164  [rva 0x004EE8A4]
+  00069332  test     al, 1                                   
+  00069334  je       0x180069358                             
+  00069336  movzx    ecx, byte ptr [rip + 0x14dc41]             ; CurrentGrenadeGunAmmoType  [rva 0x001B6F7E]
+  0006933D  and      al, 0xc7                                
+  0006933F  test     cl, cl                                  
+  00069341  jne      0x180069347                             
+  00069343  or       al, 8                                   
+  00069345  jmp      0x180069352                                ; -> FinishInventory+0xE2
+  00069347  cmp      cl, 1                                   
+  0006934A  jne      0x180069350                             
+  0006934C  or       al, 0x10                                
+  0006934E  jmp      0x180069352                                ; -> FinishInventory+0xE2
+  00069350  or       al, 0x20                                
+  00069352  mov      byte ptr [rip + 0x48554c], al              ; lara+0x164  [rva 0x004EE8A4]
+  00069358  movzx    eax, byte ptr [rip + 0x485544]             ; lara+0x163  [rva 0x004EE8A3]
+  0006935F  test     al, 1                                   
+  00069361  je       0x180069379                             
+  00069363  and      al, 0xc7                                
+  00069365  cmp      byte ptr [rip + 0x14da01], bl              ; CurrentCrossBowAmmoType  [rva 0x001B6D6C]
+  0006936B  jne      0x180069371                             
+  0006936D  or       al, 8                                   
+  0006936F  jmp      0x180069373                                ; -> FinishInventory+0x103
+  00069371  or       al, 0x10                                
+  00069373  mov      byte ptr [rip + 0x48552a], al              ; lara+0x163  [rva 0x004EE8A3]
+  00069379  cmp      byte ptr [rip + 0x7dcd2e], bl              ; use_the_bitch  [rva 0x008460AD]
+  0006937F  je       0x180069395                             
+  00069381  cmp      dword ptr [rip + 0x14d809], ebx            ; GLOBAL_invkeypadmode  [rva 0x001B6B90]
+  00069387  jne      0x180069395                             
+  00069389  call     0x18006d6e0                                ; -> use_current_item
+  0006938E  mov      r8, qword ptr [rip + 0x603e0b]             ; app  [rva 0x0066D1A0]
+  00069395  mov      eax, dword ptr [rip + 0x4853e9]            ; lara+0x44  [rva 0x004EE784]
+  0006939B  movsx    ecx, byte ptr [rip + 0x5a7450]             ; oldLaraBusy  [rva 0x006107F2]
+  000693A2  btr      eax, 0x11                               
+  000693A6  and      ecx, 1                                  
+  000693A9  shl      ecx, 0x11                               
+  000693AC  or       ecx, eax                                
+  000693AE  mov      dword ptr [rip + 0x4853d0], ecx            ; lara+0x44  [rva 0x004EE784]
+  000693B4  xor      ecx, ecx                                
+  000693B6  call     qword ptr [r8 + 0x450]                  
+  000693BD  cmp      dword ptr [rip + 0x14d7cd], ebx            ; GLOBAL_invkeypadmode  [rva 0x001B6B90]
+  000693C3  je       0x180069529                             
+  000693C9  cmp      byte ptr [rip + 0x5f5870], 0xc             ; gfCurrentLevel  [rva 0x0065EC40]
+  000693D0  mov      qword ptr [rsp + 0x38], rbp             
+  000693D5  mov      ebp, 1                                  
+  000693DA  mov      dword ptr [rip + 0x14d7b0], ebx            ; GLOBAL_invkeypadmode  [rva 0x001B6B90]
+  000693E0  jne      0x180069466                             
+  000693E6  cmp      byte ptr [rip + 0x14d681], 3               ; keypadnuminputs  [rva 0x001B6A6E]
+  000693ED  jne      0x18006940a                             
+  000693EF  cmp      byte ptr [rip + 0x7dccc6], bpl             ; keypadinputs  [rva 0x008460BC]
+  000693F6  jne      0x180069466                             
+  000693F8  cmp      byte ptr [rip + 0x7dccbe], 4               ; keypadinputs+0x1  [rva 0x008460BD]
+  000693FF  jne      0x180069466                             
+  00069401  cmp      byte ptr [rip + 0x7dccb6], 2               ; keypadinputs+0x2  [rva 0x008460BE]
+  00069408  jmp      0x180069438                                ; -> FinishInventory+0x1C8
+  0006940A  cmp      byte ptr [rip + 0x14d65d], 4               ; keypadnuminputs  [rva 0x001B6A6E]
+  00069411  jne      0x18006949d                             
+  00069417  cmp      byte ptr [rip + 0x7dcc9e], bpl             ; keypadinputs  [rva 0x008460BC]
+  0006941E  jne      0x180069466                             
+  00069420  cmp      byte ptr [rip + 0x7dcc96], 4               ; keypadinputs+0x1  [rva 0x008460BD]
+  00069427  jne      0x180069466                             
+  00069429  cmp      byte ptr [rip + 0x7dcc8f], bl              ; keypadinputs+0x2  [rva 0x008460BE]
+  0006942F  jne      0x180069466                             
+  00069431  cmp      byte ptr [rip + 0x7dcc87], 2               ; keypadinputs+0x3  [rva 0x008460BF]
+  00069438  jne      0x180069466                             
+  0006943A  mov      rax, qword ptr [rip + 0x603d5f]            ; app  [rva 0x0066D1A0]
+  00069441  mov      edx, 0x64                               
+  00069446  lea      ecx, [rdx + 0xa]                        
+  00069449  call     qword ptr [rax + 0x4b0]                 
+  0006944F  cmp      word ptr [rip + 0x14d602], bx              ; BirthdayDisplay  [rva 0x001B6A58]
+  00069456  jne      0x180069466                             
+  00069458  mov      word ptr [rip + 0x14d5fd], bx              ; BirthdayTimer  [rva 0x001B6A5C]
+  0006945F  mov      word ptr [rip + 0x14d5f2], bp              ; BirthdayDisplay  [rva 0x001B6A58]
+  00069466  cmp      byte ptr [rip + 0x14d601], 4               ; keypadnuminputs  [rva 0x001B6A6E]
+  0006946D  jne      0x18006949d                             
+  0006946F  movzx    eax, byte ptr [rip + 0x7dcc46]             ; keypadinputs  [rva 0x008460BC]
+  00069476  lea      ecx, [rax + rax*4]                      
+  00069479  movzx    eax, byte ptr [rip + 0x7dcc3d]             ; keypadinputs+0x1  [rva 0x008460BD]
+  00069480  lea      ecx, [rax + rcx*2]                      
+  00069483  movzx    eax, byte ptr [rip + 0x7dcc34]             ; keypadinputs+0x2  [rva 0x008460BE]
+  0006948A  lea      edx, [rcx + rcx*4]                      
+  0006948D  lea      ecx, [rax + rdx*2]                      
+  00069490  movzx    eax, byte ptr [rip + 0x7dcc28]             ; keypadinputs+0x3  [rva 0x008460BF]
+  00069497  lea      edx, [rcx + rcx*4]                      
+  0006949A  lea      ebx, [rax + rdx*2]                      
+  0006949D  cmp      dword ptr [rip + 0x14d6f5], ebx            ; GLOBAL_invkeypadcombination  [rva 0x001B6B98]
+  000694A3  jne      0x180069524                             
+  000694A5  mov      rcx, qword ptr [rip + 0x485454]            ; lara_item  [rva 0x004EE900]
+  000694AC  lea      r9, [rsp + 0x30]                        
+  000694B1  mov      qword ptr [rsp + 0x40], rsi             
+  000694B6  mov      qword ptr [rsp + 0x48], rdi             
+  000694BB  movzx    eax, word ptr [rcx + 0x1c]              
+  000694BF  mov      ebx, dword ptr [rcx + 0x68]             
+  000694C2  mov      r8d, ebx                                
+  000694C5  mov      edi, dword ptr [rcx + 0x64]             
+  000694C8  mov      edx, edi                                
+  000694CA  mov      esi, dword ptr [rcx + 0x60]             
+  000694CD  mov      ecx, esi                                
+  000694CF  mov      word ptr [rsp + 0x30], ax               
+  000694D4  call     0x1800101f0                                ; -> GetFloor
+  000694D9  mov      r9d, ebx                                
+  000694DC  mov      r8d, edi                                
+  000694DF  mov      edx, esi                                
+  000694E1  mov      rcx, rax                                
+  000694E4  call     0x1800106d0                                ; -> GetHeight
+  000694E9  mov      rcx, qword ptr [rip + 0x5f5708]            ; trigger_index  [rva 0x0065EBF8]
+  000694F0  xor      r8d, r8d                                
+  000694F3  mov      edx, ebp                                
+  000694F5  mov      byte ptr [rip + 0x7df3e0], 0               ; globoncuttrig  [rva 0x008488DC]
+  000694FC  call     0x180010bf0                                ; -> _TestTriggers
+  00069501  cmp      byte ptr [rip + 0x7df3d4], 0               ; globoncuttrig  [rva 0x008488DC]
+  00069508  mov      rdi, qword ptr [rsp + 0x48]             
+  0006950D  mov      rsi, qword ptr [rsp + 0x40]             
+  00069512  jne      0x180069524                             
+  00069514  cmp      byte ptr [rip + 0x14d539], 0               ; richcutfrigflag  [rva 0x001B6A54]
+  0006951B  je       0x180069524                             
+  0006951D  mov      byte ptr [rip + 0x14d530], 0               ; richcutfrigflag  [rva 0x001B6A54]
+  00069524  mov      rbp, qword ptr [rsp + 0x38]             
+  00069529  add      rsp, 0x20                               
+  0006952D  pop      rbx                                     
+  0006952E  ret                                              

@@ -1,8 +1,8 @@
 // Included after PhysicalMonitor.inl; shares calibrated left/right palm poses.
-struct ButtonDll { uint32_t timestamp,sequenceCollision,sequenceCount; };
+struct ButtonDll { uint32_t timestamp,sequenceCollision,sequenceCount,switchTrigger; };
 constexpr ButtonDll kButtonDlls[]={
-    {0x696B4999,0x8D500,0x63EC06}, {0x696B499C,0x8C3F0,0x63D8DB},
-    {0x68C12FDA,0x8DF10,0x63FB46}, {0x68C12FE9,0x8C700,0x63D81B},
+    {0x696B4999,0x8D500,0x63EC06,0}, {0x696B499C,0x8C3F0,0x63D8DB,0x8A5C0},
+    {0x68C12FDA,0x8DF10,0x63FB46,0}, {0x68C12FE9,0x8C700,0x63D81B,0x8A8E0},
 };
 const ButtonDll* g_buttonDll=nullptr;
 struct ButtonHand {
@@ -30,8 +30,11 @@ const firstperson::ButtonProfile* ButtonObject(uint8_t* target,const uint8_t*& o
     const auto handler=*reinterpret_cast<const uint64_t*>(object+56);
     if(handler!=g_boundBase+(profile->sequence ? g_buttonDll->sequenceCollision : g_switchDll->collision)) return nullptr;
     const int type=*reinterpret_cast<int16_t*>(target+48);
-    // OCB 0/4 are levers, >=8 are valves, 6 owns the keypad UI/control lock.
-    // Keep code-entry panels and special tools on their native paths.
+    // The same keypad mesh has ordinary OCB 5/7 and preset-trip OCB 6
+    // instances. Only OCB 6 owns the lift's route query and travel lock.
+    // All three use SwitchCollision, not the inventory code-entry handler.
+    if(profile->elevator) return game==1 && slot==268 && type>=5 && type<=7 ? profile : nullptr;
+    // OCB 0/4 are levers, >=8 are valves. Unknown OCB 6 meshes stay native.
     if(!profile->sequence && !(type==1 || type==2 || type==3 || (game==1 && (type==5 || type==7)))) return nullptr;
     return profile;
 }
@@ -39,6 +42,8 @@ bool ButtonReady(uint8_t* target,const firstperson::ButtonProfile& profile) {
     if((*reinterpret_cast<uint32_t*>(target+0x1820)&6) || (*reinterpret_cast<uint16_t*>(target+44)&0x100)) return false;
     const int state=*reinterpret_cast<int16_t*>(target+18),type=*reinterpret_cast<int16_t*>(target+48);
     if(state!=0 && state!=1) return false;
+    if(profile.elevator) return state==1 && g_boundDll->disableLaraControl &&
+        !*Ptr<int32_t>(g_boundDll->disableLaraControl);
     if(profile.sequence) return state==1 && *Ptr<uint8_t>(g_buttonDll->sequenceCount)<3;
     if(type==3) return state==0;
     if(g_boundDll->game==1 && (type==5 || type==7)) return state==1;
@@ -55,8 +60,32 @@ bool ButtonFrame(uint8_t* target,const uint8_t* object,const firstperson::Button
     world.origin=Add(world.origin,{float(pos.x_pos),float(pos.y_pos),float(pos.z_pos)});
     return firstperson::Finite(world) && motiongun::Inverse(world,inverse);
 }
+bool ElevatorPanelAtLara(int16_t index,uint8_t* lara) {
+    if(!g_buttonDll->switchTrigger) return false;
+    // ControlLiftTeleporter resolves the panel from Lara's current floor.
+    // Require that same route before locking controls, even when a controller
+    // can reach the panel across a doorway. Do not invent a destination.
+    alignas(16) uint8_t probe[off::item_stride];std::memcpy(probe,lara,sizeof(probe));
+    int16_t links[1024]{};
+    using Query=int32_t (__cdecl*)(uint8_t*,int16_t*);
+    const int count=reinterpret_cast<Query>(g_boundBase+g_buttonDll->switchTrigger)(probe,links);
+    if(count<1 || count>1024) return false;
+    auto* items=*Ptr<uint8_t*>(g_switchDll->items);
+    const int itemCount=*Ptr<int32_t>(g_switchDll->count);
+    if(!items || itemCount<1 || itemCount>32768) return false;
+    // Match the native lift's reverse scan of ordinary switch slots.
+    for(int i=count-1;i>=0;--i) {
+        if(links[i]<0 || links[i]>=itemCount) return false;
+        const auto* target=items+links[i]*off::item_stride;
+        const int slot=*reinterpret_cast<const int16_t*>(target+16);
+        if(slot>=266 && slot<=271 && *reinterpret_cast<const int16_t*>(target+48)==6)
+            return links[i]==index;
+    }
+    return false;
+}
 bool ActivatePhysicalButton(int16_t index,uint8_t* target,uint8_t* lara,void* collision,const firstperson::ButtonProfile& profile) {
-    if(!ButtonReady(target,profile)) return false;
+    const bool presetTrip=profile.elevator && *reinterpret_cast<int16_t*>(target+48)==6;
+    if(!ButtonReady(target,profile) || (presetTrip && !ElevatorPanelAtLara(index,lara))) return false;
     {
         CogLaraScope saved(lara);
         *reinterpret_cast<int16_t*>(lara+18)=2;*reinterpret_cast<int16_t*>(lara+24)=103;
@@ -67,7 +96,8 @@ bool ActivatePhysicalButton(int16_t index,uint8_t* target,uint8_t* lara,void* co
     }
     const bool activated=(*reinterpret_cast<uint32_t*>(target+0x1820)&6)==2;
     // Native control now advances the button, timer, sound and sequence state
-    // once per tick. Never fast-forward timers or manufacture puzzle triggers.
+    // once per tick. Lift control retains its travel lock and releases it at
+    // arrival. Never fast-forward timers or manufacture puzzle triggers.
     if(activated) LogF("vr-button: touched item=%d sequence=%d; native button control continues",index,profile.sequence);
     return activated;
 }
@@ -123,6 +153,10 @@ void InstallPhysicalButtons(const GameDllLayout& d,uint64_t base) {
     const uint8_t bytes[]={0x48,0x89,0x5C,0x24,uint8_t(d.game==0 ? 0x10 : 0x08)};
     if(std::memcmp(reinterpret_cast<void*>(base+g_buttonDll->sequenceCollision),bytes,sizeof(bytes))) {
         g_buttonDll=nullptr;Log("vr-button: native function check failed; touch disabled");return;
+    }
+    const uint8_t triggerBytes[]={0x48,0x89,0x5C,0x24,0x10};
+    if(g_buttonDll->switchTrigger && std::memcmp(reinterpret_cast<void*>(base+g_buttonDll->switchTrigger),triggerBytes,sizeof(triggerBytes))) {
+        g_buttonDll=nullptr;Log("vr-button: lift trigger query check failed; touch disabled");return;
     }
     Log("vr-button: touch activation enabled for verified wall/elevator and sequence buttons");
 }

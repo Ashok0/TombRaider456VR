@@ -1,0 +1,16 @@
+﻿{
+    "installed_button_poses":  20,
+    "native_button_layouts":  4,
+    "previous_dll":  "9559822C69A3D27703D7244D3DAF15216AA0B41170C872828FF744F5407631B7",
+    "deployed":  "2026-11-01T13:10:22.3108680-05:00",
+    "focused_interaction_checks":  11730,
+    "dll":  "02D6761D3AE4EB14C57B100C8D6B144A0B94430B536785F3D11F8615EEE39998",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-elevator-variants-20261101-131022",
+    "native_lift_layouts":  2,
+    "headset_tested":  false,
+    "change":  "Accept TR5 keypad panels OCB 5/6/7; only OCB 6 requires the preset-trip route and native travel lock; reproduced live OCB 5 rejection before correction",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "full_suite_run":  false,
+    "button_profiles":  22,
+    "release_build_passed":  true
+}

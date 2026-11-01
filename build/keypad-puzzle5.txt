@@ -1,0 +1,415 @@
+// PuzzleHoleCollision  rva=0x000744A0  size=1812
+  000744A0  mov      qword ptr [rsp + 0x10], rbx             
+  000744A5  push     rbp                                     
+  000744A6  push     rsi                                     
+  000744A7  push     rdi                                     
+  000744A8  push     r12                                     
+  000744AA  push     r13                                     
+  000744AC  push     r14                                     
+  000744AE  push     r15                                     
+  000744B0  sub      rsp, 0x30                               
+  000744B4  xor      r13d, r13d                              
+  000744B7  movsx    rbp, cx                                 
+  000744BB  imul     rdi, rbp, 0x24c8                        
+  000744C2  mov      r12, r8                                 
+  000744C5  mov      rbx, rdx                                
+  000744C8  add      rdi, qword ptr [rip + 0x5f8cd9]            ; items  [rva 0x0066D1A8]
+  000744CF  mov      r14d, r13d                              
+  000744D2  cmp      byte ptr [rip + 0x5ea767], 2               ; gfCurrentLevel  [rva 0x0065EC40]
+  000744D9  movsx    eax, word ptr [rdi + 0x10]              
+  000744DD  lea      r15d, [rax - 0xf2]                      
+  000744E4  mov      dword ptr [rsp + 0x88], r15d            
+  000744EC  jne      0x18007450a                             
+  000744EE  mov      ecx, 0xf5                               
+  000744F3  sub      ax, cx                                  
+  000744F6  cmp      ax, 1                                   
+  000744FA  ja       0x18007450a                             
+  000744FC  cmp      word ptr [rip + 0x47a24c], 3               ; lara+0x10  [rva 0x004EE750]
+  00074504  jl       0x180074b91                             
+  0007450A  mov      rcx, rdi                                
+  0007450D  call     0x1800d2ef0                                ; -> PuzzleHoleIndicator
+  00074512  movzx    eax, word ptr [rdi + 0x30]              
+  00074516  mov      ecx, 1                                  
+  0007451B  lea      edx, [rcx + 1]                          
+  0007451E  test     ax, ax                                  
+  00074521  jns      0x180074528                             
+  00074523  mov      r14d, ecx                               
+  00074526  jmp      0x180074551                                ; -> PuzzleHoleCollision+0xB1
+  00074528  mov      ecx, 0x400                              
+  0007452D  cmp      ax, cx                                  
+  00074530  jle      0x180074537                             
+  00074532  mov      r14d, edx                               
+  00074535  jmp      0x180074551                                ; -> PuzzleHoleCollision+0xB1
+  00074537  test     ax, ax                                  
+  0007453A  je       0x180074551                             
+  0007453C  mov      ecx, 0x3e6                              
+  00074541  sub      ax, cx                                  
+  00074544  mov      ecx, 3                                  
+  00074549  cmp      ax, 1                                   
+  0007454D  cmova    r14d, ecx                               
+  00074551  test     byte ptr [rip + 0x5e66e8], 0x40            ; input  [rva 0x0065AC40]
+  00074558  jne      0x180074567                             
+  0007455A  cmp      dword ptr [rip + 0x13d483], -1             ; GLOBAL_inventoryitemchosen  [rva 0x001B19E4]
+  00074561  je       0x18007465d                             
+  00074567  cmp      dword ptr [rip + 0x14272a], r13d           ; BinocularRange  [rva 0x001B6C98]
+  0007456E  jne      0x18007465d                             
+  00074574  cmp      word ptr [rip + 0x47a1c6], r13w            ; lara+0x2  [rva 0x004EE742]
+  0007457C  jne      0x18007465d                             
+  00074582  cmp      word ptr [rbx + 0x12], dx               
+  00074586  jne      0x18007465d                             
+  0007458C  cmp      word ptr [rbx + 0x18], 0x67             
+  00074591  jne      0x18007465d                             
+  00074597  mov      eax, 0xf9                               
+  0007459C  cmp      word ptr [rdi + 0x10], ax               
+  000745A0  jne      0x1800745b3                             
+  000745A2  movzx    esi, byte ptr [rip + 0x5ea697]             ; gfCurrentLevel  [rva 0x0065EC40]
+  000745A9  cmp      sil, 0xc                                
+  000745AD  je       0x18007467e                             
+  000745B3  mov      r8d, dword ptr [rdi + 0x68]             
+  000745B7  lea      r9, [rdi + 0x1c]                        
+  000745BB  mov      edx, dword ptr [rdi + 0x64]             
+  000745BE  mov      ecx, dword ptr [rdi + 0x60]             
+  000745C1  call     0x1800101f0                                ; -> GetFloor
+  000745C6  mov      r9d, dword ptr [rdi + 0x68]             
+  000745CA  mov      rcx, rax                                
+  000745CD  mov      r8d, dword ptr [rdi + 0x64]             
+  000745D1  mov      edx, dword ptr [rdi + 0x60]             
+  000745D4  call     0x1800106d0                                ; -> GetHeight
+  000745D9  mov      rdx, qword ptr [rip + 0x5ea618]            ; trigger_index  [rva 0x0065EBF8]
+  000745E0  test     rdx, rdx                                
+  000745E3  je       0x18007465d                             
+  000745E5  movzx    r8d, word ptr [rdx]                     
+  000745E9  movzx    eax, r8b                                
+  000745ED  and      al, 0x1f                                
+  000745EF  cmp      al, 4                                   
+  000745F1  je       0x180074615                             
+  000745F3  movzx    ecx, r8w                                
+  000745F7  movzx    r8d, cx                                 
+  000745FB  test     cx, cx                                  
+  000745FE  js       0x180074615                             
+  00074600  movzx    ecx, word ptr [rdx + 2]                 
+  00074604  add      rdx, 2                                  
+  00074608  movzx    eax, cl                                 
+  0007460B  movzx    r8d, cx                                 
+  0007460F  and      al, 0x1f                                
+  00074611  cmp      al, 4                                   
+  00074613  jne      0x1800745f7                             
+  00074615  test     r8b, 4                                  
+  00074619  je       0x18007465d                             
+  0007461B  mov      r9, qword ptr [rip + 0x5f8b86]             ; items  [rva 0x0066D1A8]
+  00074622  add      rdx, 4                                  
+  00074626  mov      r10d, 0x3c00                            
+  0007462C  nop      dword ptr [rax]                         
+  00074630  movzx    r8d, word ptr [rdx]                     
+  00074634  test     r10w, r8w                               
+  00074638  jne      0x180074651                             
+  0007463A  mov      eax, r8d                                
+  0007463D  and      eax, 0x3ff                              
+  00074642  imul     rcx, rax, 0x24c8                        
+  00074649  add      rcx, r9                                 
+  0007464C  cmp      rdi, rcx                                
+  0007464F  je       0x180074677                             
+  00074651  test     r8w, r8w                                
+  00074655  js       0x18007465d                             
+  00074657  add      rdx, 2                                  
+  0007465B  jmp      0x180074630                                ; -> PuzzleHoleCollision+0x190
+  0007465D  test     byte ptr [rip + 0x47a120], 0x20            ; lara+0x44  [rva 0x004EE784]
+  00074664  je       0x180074aee                             
+  0007466A  cmp      word ptr [rip + 0x47a22b], bp              ; lara+0x15C  [rva 0x004EE89C]
+  00074671  jne      0x180074b84                             
+  00074677  movzx    esi, byte ptr [rip + 0x5ea5c2]             ; gfCurrentLevel  [rva 0x0065EC40]
+  0007467E  movzx    eax, word ptr [rdi + 0x6e]              
+  00074682  mov      rcx, rdi                                
+  00074685  mov      word ptr [rsp + 0x70], ax               
+  0007468A  call     0x18009c3e0                                ; -> GetBoundsAccurate
+  0007468F  mov      ecx, 0x100                              
+  00074694  mov      r12, rax                                
+  00074697  mov      r8d, ecx                                
+  0007469A  mov      r15d, 0x422                             
+  000746A0  movzx    edx, word ptr [rax]                     
+  000746A3  sub      dx, cx                                  
+  000746A6  mov      word ptr [rip + 0x13f84b], dx              ; PuzzleBounds  [rva 0x001B3EF8]
+  000746AD  movzx    r9d, dx                                 
+  000746B1  add      r8w, word ptr [rax + 2]                 
+  000746B6  mov      word ptr [rip + 0x13f83c], r8w             ; PuzzleBounds+0x2  [rva 0x001B3EFA]
+  000746BE  movzx    r10d, r8w                               
+  000746C2  movzx    eax, word ptr [rax + 8]                 
+  000746C6  sub      ax, cx                                  
+  000746C9  mov      word ptr [rip + 0x13f830], ax              ; PuzzleBounds+0x8  [rva 0x001B3F00]
+  000746D0  movzx    r11d, ax                                
+  000746D4  add      cx, word ptr [r12 + 0xa]                
+  000746DA  mov      word ptr [rip + 0x13f821], cx              ; PuzzleBounds+0xA  [rva 0x001B3F02]
+  000746E1  movzx    r13d, cx                                
+  000746E5  cmp      word ptr [rdi + 0x30], r15w             
+  000746EA  mov      r15d, dword ptr [rsp + 0x88]            
+  000746F2  jne      0x18007474e                             
+  000746F4  mov      eax, 0x12c                              
+  000746F9  sub      r9w, ax                                 
+  000746FD  add      r10w, ax                                
+  00074701  sub      r11w, ax                                
+  00074705  mov      word ptr [rip + 0x13f7eb], r9w             ; PuzzleBounds  [rva 0x001B3EF8]
+  0007470D  add      r13w, ax                                
+  00074711  mov      word ptr [rip + 0x13f7e1], r10w            ; PuzzleBounds+0x2  [rva 0x001B3EFA]
+  00074719  mov      word ptr [rip + 0x13f7e1], r13w            ; PuzzleBounds+0xA  [rva 0x001B3F02]
+  00074721  mov      word ptr [rip + 0x13f7d7], r11w            ; PuzzleBounds+0x8  [rva 0x001B3F00]
+  00074729  movzx    eax, word ptr [rbx + 0x6e]              
+  0007472D  mov      word ptr [rdi + 0x6e], ax               
+  00074731  movzx    ecx, word ptr [rip + 0x13f7ca]             ; PuzzleBounds+0xA  [rva 0x001B3F02]
+  00074738  movzx    eax, word ptr [rip + 0x13f7c1]             ; PuzzleBounds+0x8  [rva 0x001B3F00]
+  0007473F  movzx    r8d, word ptr [rip + 0x13f7b3]             ; PuzzleBounds+0x2  [rva 0x001B3EFA]
+  00074747  movzx    edx, word ptr [rip + 0x13f7aa]             ; PuzzleBounds  [rva 0x001B3EF8]
+  0007474E  cmp      r15d, 7                                 
+  00074752  jne      0x180074797                             
+  00074754  sub      sil, 0xb                                
+  00074758  cmp      sil, 1                                  
+  0007475C  ja       0x180074797                             
+  0007475E  add      dx, -0x80                               
+  00074762  add      ax, -0x80                               
+  00074766  mov      word ptr [rip + 0x13f78b], dx              ; PuzzleBounds  [rva 0x001B3EF8]
+  0007476D  mov      edx, 0x80                               
+  00074772  add      r8w, dx                                 
+  00074776  mov      word ptr [rip + 0x13f783], ax              ; PuzzleBounds+0x8  [rva 0x001B3F00]
+  0007477D  add      cx, dx                                  
+  00074780  mov      word ptr [rip + 0x13f772], r8w             ; PuzzleBounds+0x2  [rva 0x001B3EFA]
+  00074788  xor      r13d, r13d                              
+  0007478B  mov      word ptr [rip + 0x13f770], cx              ; PuzzleBounds+0xA  [rva 0x001B3F02]
+  00074792  mov      r14d, r13d                              
+  00074795  jmp      0x18007479a                                ; -> PuzzleHoleCollision+0x2FA
+  00074797  xor      r13d, r13d                              
+  0007479A  mov      r8, rbx                                 
+  0007479D  lea      rcx, [rip + 0x13f754]                      ; PuzzleBounds  [rva 0x001B3EF8]
+  000747A4  mov      rdx, rdi                                
+  000747A7  call     0x18000b480                                ; -> TestLaraPosition
+  000747AC  test     eax, eax                                
+  000747AE  je       0x180074abc                             
+  000747B4  mov      ecx, dword ptr [rip + 0x13d22a]            ; GLOBAL_inventoryitemchosen  [rva 0x001B19E4]
+  000747BA  mov      eax, 0x422                              
+  000747BF  movzx    edx, word ptr [rdi + 0x30]              
+  000747C3  mov      qword ptr [rsp + 0x20], 0               
+  000747CC  lea      r8d, [rcx - 0xac]                       
+  000747D3  cmp      dx, ax                                  
+  000747D6  jne      0x180074871                             
+  000747DC  cmp      dword ptr [rip + 0x142431], 0              ; cutseq_trig  [rva 0x001B6C14]
+  000747E3  jne      0x180074ae0                             
+  000747E9  test     dword ptr [rip + 0x7d40ed], 4              ; _CutSceneTriggered2  [rva 0x008488E0]
+  000747F3  jne      0x180074ae0                             
+  000747F9  xor      r8d, r8d                                
+  000747FC  mov      qword ptr [rsp + 0x20], 0               
+  00074805  lea      rdx, [rsp + 0x20]                       
+  0007480A  mov      dword ptr [rsp + 0x28], r13d            
+  0007480F  mov      rcx, rdi                                
+  00074812  call     0x18009c9c0                                ; -> GetJointAbsPosition
+  00074817  mov      rbx, qword ptr [rip + 0x47a0e2]            ; lara_item  [rva 0x004EE900]
+  0007481E  mov      edx, dword ptr [rsp + 0x28]             
+  00074822  mov      ecx, dword ptr [rsp + 0x20]             
+  00074826  mov      r9d, dword ptr [rbx + 0x68]             
+  0007482A  mov      r8d, dword ptr [rbx + 0x60]             
+  0007482E  call     0x1800a2bd0                                ; -> mGetAngle
+  00074833  movsx    ecx, word ptr [rbx + 0x6e]              
+  00074837  sub      eax, ecx                                
+  00074839  movzx    eax, ax                                 
+  0007483C  sub      eax, 0x2301                             
+  00074841  cmp      eax, 0x39ff                             
+  00074846  ja       0x180074ae0                             
+  0007484C  movzx    eax, word ptr [rsp + 0x70]              
+  00074851  inc      dword ptr [rip + 0x5ea645]                 ; savegame+0x23C  [rva 0x0065EE9C]
+  00074857  mov      word ptr [rdi + 0x6e], ax               
+  0007485B  mov      dword ptr [rip + 0x142377], 0x22           ; cutseq_num  [rva 0x001B6BDC]
+  00074865  mov      dword ptr [rip + 0x1421fc], r13d           ; cutrot  [rva 0x001B6A68]
+  0007486C  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  00074871  cmp      r15d, 7                                 
+  00074875  jne      0x1800748fd                             
+  0007487B  movzx    eax, byte ptr [rip + 0x5ea3be]             ; gfCurrentLevel  [rva 0x0065EC40]
+  00074882  sub      al, 0xb                                 
+  00074884  cmp      al, 1                                   
+  00074886  ja       0x1800748fd                             
+  00074888  movsx    eax, word ptr [r12 + 8]                 
+  0007488E  lea      rcx, [rsp + 0x20]                       
+  00074893  sub      eax, 0x64                               
+  00074896  mov      r8, rbx                                 
+  00074899  mov      rdx, rdi                                
+  0007489C  mov      dword ptr [rsp + 0x28], eax             
+  000748A0  call     0x18000bae0                                ; -> MoveLaraPosition
+  000748A5  test     eax, eax                                
+  000748A7  je       0x1800748e7                             
+  000748A9  and      dword ptr [rip + 0x479ed4], 0xffffffdf     ; lara+0x44  [rva 0x004EE784]
+  000748B0  mov      rax, qword ptr [rip + 0x5f88f9]            ; anims  [rva 0x0066D1B0]
+  000748B7  mov      word ptr [rbx + 0x18], 0x67             
+  000748BD  mov      word ptr [rbx + 0x12], 2                
+  000748C3  mov      dword ptr [rip + 0x13cf47], 0xdeadbeef     ; GLOBAL_enterinventory  [rva 0x001B1814]
+  000748CD  movzx    ecx, word ptr [rax + 0x136c]            
+  000748D4  mov      word ptr [rbx + 0x1a], cx               
+  000748D8  movsx    eax, word ptr [rdi + 0x30]              
+  000748DC  mov      dword ptr [rip + 0x1422b6], eax            ; GLOBAL_invkeypadcombination  [rva 0x001B6B98]
+  000748E2  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  000748E7  mov      word ptr [rip + 0x479fae], bp              ; lara+0x15C  [rva 0x004EE89C]
+  000748EE  mov      dword ptr [rip + 0x13d0ec], 0xffffffff     ; GLOBAL_inventoryitemchosen  [rva 0x001B19E4]
+  000748F8  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  000748FD  test     byte ptr [rip + 0x479e80], 0x20            ; lara+0x44  [rva 0x004EE784]
+  00074904  jne      0x1800749ab                             
+  0007490A  cmp      ecx, -1                                 
+  0007490D  jne      0x1800749a2                             
+  00074913  mov      ecx, 0xac                               
+  00074918  add      ecx, r15d                               
+  0007491B  call     0x18006e500                                ; -> have_i_got_object
+  00074920  test     eax, eax                                
+  00074922  je       0x18007493f                             
+  00074924  lea      eax, [r15 + 0xac]                       
+  0007492B  mov      dword ptr [rip + 0x13cee3], eax            ; GLOBAL_enterinventory  [rva 0x001B1814]
+  00074931  movzx    eax, word ptr [rsp + 0x70]              
+  00074936  mov      word ptr [rdi + 0x6e], ax               
+  0007493A  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  0007493F  mov      ecx, dword ptr [rbx + 0x60]             
+  00074942  cmp      dword ptr [rip + 0x7d1758], ecx            ; OldPickupPos  [rva 0x008460A0]
+  00074948  jne      0x180074964                             
+  0007494A  mov      eax, dword ptr [rbx + 0x64]             
+  0007494D  cmp      dword ptr [rip + 0x7d1751], eax            ; OldPickupPos+0x4  [rva 0x008460A4]
+  00074953  jne      0x180074964                             
+  00074955  mov      eax, dword ptr [rbx + 0x68]             
+  00074958  cmp      dword ptr [rip + 0x7d174a], eax            ; OldPickupPos+0x8  [rva 0x008460A8]
+  0007495E  je       0x180074ae0                             
+  00074964  mov      eax, dword ptr [rbx + 0x64]             
+  00074967  mov      esi, 2                                  
+  0007496C  mov      dword ptr [rip + 0x7d1732], eax            ; OldPickupPos+0x4  [rva 0x008460A4]
+  00074972  mov      eax, dword ptr [rbx + 0x68]             
+  00074975  mov      dword ptr [rip + 0x7d1725], ecx            ; OldPickupPos  [rva 0x008460A0]
+  0007497B  mov      ecx, esi                                
+  0007497D  mov      dword ptr [rip + 0x7d1725], eax            ; OldPickupPos+0x8  [rva 0x008460A8]
+  00074983  call     0x1800a3fb0                                ; -> GetLaraNo
+  00074988  mov      ecx, eax                                
+  0007498A  mov      r8d, esi                                
+  0007498D  xor      edx, edx                                
+  0007498F  call     0x1800a40a0                                ; -> SoundEffect
+  00074994  movzx    eax, word ptr [rsp + 0x70]              
+  00074999  mov      word ptr [rdi + 0x6e], ax               
+  0007499D  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  000749A2  cmp      r8d, r15d                               
+  000749A5  jne      0x180074ae0                             
+  000749AB  movsx    eax, word ptr [r12 + 8]                 
+  000749B1  sub      eax, 0x64                               
+  000749B4  mov      dword ptr [rsp + 0x28], eax             
+  000749B8  cmp      r14d, 2                                 
+  000749BC  jne      0x1800749c8                             
+  000749BE  mov      eax, 0x40c                              
+  000749C3  cmp      dx, ax                                  
+  000749C6  jne      0x1800749e0                             
+  000749C8  mov      r8, rbx                                 
+  000749CB  lea      rcx, [rsp + 0x20]                       
+  000749D0  mov      rdx, rdi                                
+  000749D3  call     0x18000bae0                                ; -> MoveLaraPosition
+  000749D8  test     eax, eax                                
+  000749DA  je       0x180074a9d                             
+  000749E0  mov      ecx, 0xac                               
+  000749E5  add      ecx, r15d                               
+  000749E8  call     0x18006e5f0                                ; -> remove_inventory_item
+  000749ED  lea      rsi, [rbx + 0x18]                       
+  000749F1  mov      rdx, rsi                                
+  000749F4  cmp      r14d, 1                                 
+  000749F8  jne      0x180074a2b                             
+  000749FA  movzx    eax, word ptr [rdi + 0x30]              
+  000749FE  mov      ecx, 0x1a7                              
+  00074A03  neg      ax                                      
+  00074A06  mov      word ptr [rbx + 0x12], 0x59             
+  00074A0C  mov      word ptr [rsi], ax                      
+  00074A0F  cmp      ax, cx                                  
+  00074A12  je       0x180074a23                             
+  00074A14  movzx    edx, bp                                 
+  00074A17  mov      rcx, rdi                                
+  00074A1A  call     0x180072cb0                                ; -> PuzzleDone
+  00074A1F  lea      rdx, [rbx + 0x18]                       
+  00074A23  mov      r8d, 1                                  
+  00074A29  jmp      0x180074a41                                ; -> PuzzleHoleCollision+0x5A1
+  00074A2B  mov      r8d, 1                                  
+  00074A31  mov      word ptr [rsi], 0x86                    
+  00074A36  mov      word ptr [rbx + 0x12], 0x2b             
+  00074A3C  mov      word ptr [rdi + 0x38], r8w              
+  00074A41  cmp      r15d, 1                                 
+  00074A45  jne      0x180074a5a                             
+  00074A47  cmp      byte ptr [rip + 0x5ea1f2], 0xc             ; gfCurrentLevel  [rva 0x0065EC40]
+  00074A4E  jne      0x180074a5a                             
+  00074A50  mov      dword ptr [rip + 0x142189], r8d            ; bDisableLaraControl  [rva 0x001B6BE0]
+  00074A57  mov      rsi, rdx                                
+  00074A5A  movsx    rax, word ptr [rsi]                     
+  00074A5E  lea      rcx, [rax + rax*2]                      
+  00074A62  mov      rax, qword ptr [rip + 0x5f8747]            ; anims  [rva 0x0066D1B0]
+  00074A69  add      rcx, rcx                                
+  00074A6C  movzx    ecx, word ptr [rax + rcx*8 + 0x1c]      
+  00074A71  mov      word ptr [rbx + 0x1a], cx               
+  00074A75  and      dword ptr [rip + 0x479d08], 0xffffffdf     ; lara+0x44  [rva 0x004EE784]
+  00074A7C  mov      dword ptr [rip + 0x479d9a], 0              ; lara+0xE0  [rva 0x004EE820]
+  00074A86  mov      dword ptr [rip + 0x479d96], 0              ; lara+0xE6  [rva 0x004EE826]
+  00074A90  mov      word ptr [rip + 0x479caa], r8w             ; lara+0x2  [rva 0x004EE742]
+  00074A98  or       word ptr [rdi + 0x2c], 0x20             
+  00074A9D  movzx    eax, word ptr [rsp + 0x70]              
+  00074AA2  mov      word ptr [rip + 0x479df3], bp              ; lara+0x15C  [rva 0x004EE89C]
+  00074AA9  mov      word ptr [rdi + 0x6e], ax               
+  00074AAD  mov      dword ptr [rip + 0x13cf2d], 0xffffffff     ; GLOBAL_inventoryitemchosen  [rva 0x001B19E4]
+  00074AB7  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  00074ABC  mov      eax, dword ptr [rip + 0x479cc2]            ; lara+0x44  [rva 0x004EE784]
+  00074AC2  test     al, 0x20                                
+  00074AC4  je       0x180074ae0                             
+  00074AC6  cmp      word ptr [rip + 0x479dcf], bp              ; lara+0x15C  [rva 0x004EE89C]
+  00074ACD  jne      0x180074ae0                             
+  00074ACF  and      eax, 0xffffffdf                         
+  00074AD2  mov      word ptr [rip + 0x479c68], r13w            ; lara+0x2  [rva 0x004EE742]
+  00074ADA  mov      dword ptr [rip + 0x479ca4], eax            ; lara+0x44  [rva 0x004EE784]
+  00074AE0  movzx    eax, word ptr [rsp + 0x70]              
+  00074AE5  mov      word ptr [rdi + 0x6e], ax               
+  00074AE9  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  00074AEE  cmp      word ptr [rip + 0x479da7], bp              ; lara+0x15C  [rva 0x004EE89C]
+  00074AF5  jne      0x180074b84                             
+  00074AFB  movzx    eax, word ptr [rbx + 0x12]              
+  00074AFF  cmp      ax, 0x2b                                
+  00074B03  jne      0x180074b4a                             
+  00074B05  mov      rax, qword ptr [rip + 0x5f86a4]            ; anims  [rva 0x0066D1B0]
+  00074B0C  movsx    ecx, word ptr [rax + 0x193c]            
+  00074B13  movsx    eax, word ptr [rbx + 0x1a]              
+  00074B17  add      ecx, 0x50                               
+  00074B1A  cmp      eax, ecx                                
+  00074B1C  jne      0x180074b84                             
+  00074B1E  cmp      word ptr [rdi + 0x38], r13w             
+  00074B23  je       0x180074b84                             
+  00074B25  cmp      r14d, 3                                 
+  00074B29  jne      0x180074b31                             
+  00074B2B  movzx    eax, word ptr [rdi + 0x30]              
+  00074B2F  jmp      0x180074b34                                ; -> PuzzleHoleCollision+0x694
+  00074B31  mov      eax, r13d                               
+  00074B34  movzx    edx, bp                                 
+  00074B37  mov      word ptr [rbx + 0x38], ax               
+  00074B3B  mov      rcx, rdi                                
+  00074B3E  call     0x180072cb0                                ; -> PuzzleDone
+  00074B43  mov      word ptr [rdi + 0x38], r13w             
+  00074B48  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  00074B4A  cmp      ax, 0x59                                
+  00074B4E  jne      0x180074b84                             
+  00074B50  mov      ecx, 0x1a7                              
+  00074B55  cmp      word ptr [rbx + 0x18], cx               
+  00074B59  jne      0x180074b84                             
+  00074B5B  mov      rax, qword ptr [rip + 0x5f864e]            ; anims  [rva 0x0066D1B0]
+  00074B62  movsx    ecx, word ptr [rax + 0x4f6c]            
+  00074B69  movsx    eax, word ptr [rbx + 0x1a]              
+  00074B6D  add      ecx, 0xb4                               
+  00074B73  cmp      eax, ecx                                
+  00074B75  jne      0x180074b84                             
+  00074B77  movzx    edx, bp                                 
+  00074B7A  mov      rcx, rdi                                
+  00074B7D  call     0x180072cb0                                ; -> PuzzleDone
+  00074B82  jmp      0x180074b9f                                ; -> PuzzleHoleCollision+0x6FF
+  00074B84  cmp      word ptr [rbx + 0x12], 0x59             
+  00074B89  je       0x180074b9f                             
+  00074B8B  cmp      r14d, 2                                 
+  00074B8F  je       0x180074b9f                             
+  00074B91  mov      r8, r12                                 
+  00074B94  mov      rdx, rbx                                
+  00074B97  movzx    ecx, bp                                 
+  00074B9A  call     0x18000a990                                ; -> ObjectCollision
+  00074B9F  mov      rbx, qword ptr [rsp + 0x78]             
+  00074BA4  add      rsp, 0x30                               
+  00074BA8  pop      r15                                     
+  00074BAA  pop      r14                                     
+  00074BAC  pop      r13                                     
+  00074BAE  pop      r12                                     
+  00074BB0  pop      rdi                                     
+  00074BB1  pop      rsi                                     
+  00074BB2  pop      rbp                                     
+  00074BB3  ret                                              

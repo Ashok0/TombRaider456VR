@@ -4,6 +4,16 @@ uint8_t buttonSequence=0;
 int buttonActivations=0,buttonSequenceActivations=0;
 float buttonRoot[3]{},buttonBone[3]{};
 bool buttonReject=false;
+int buttonControlLock=0,buttonLiftQueries=0;
+bool buttonLiftFloorMissing=false;
+int32_t __cdecl FakeLiftTrigger(uint8_t* lara,int16_t* links) {
+    using namespace tr;
+    ++buttonLiftQueries;
+    Check(lara!=itemMemory && !std::memcmp(lara+96,itemMemory+96,18),"lift query uses Lara's actual position in a temporary item");
+    *reinterpret_cast<int16_t*>(lara+28)=123; // GetFloor may change query room.
+    links[0]=0;
+    return buttonLiftFloorMissing ? 0 : 1;
+}
 void __cdecl FakeButtonMatrices(uint8_t* item) {
     using namespace tr;
     const float angle=Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
@@ -26,25 +36,34 @@ void FakeButtonActivate(uint8_t* lara,bool sequence) {
     *reinterpret_cast<uint32_t*>(switchMemory+0x1820)|=3;
     *reinterpret_cast<int16_t*>(lara+18)=40;*reinterpret_cast<int16_t*>(lara+24)=197;
     *reinterpret_cast<int16_t*>(laraMemory+2)=1;*reinterpret_cast<int32_t*>(laraMemory+224)=42;
+    if(*reinterpret_cast<int16_t*>(switchMemory+48)==6) buttonControlLock=1;
 }
 void __cdecl FakeButtonCollision(int16_t,uint8_t* lara,void*) { FakeButtonActivate(lara,false); }
 void __cdecl FakeSequenceCollision(int16_t,uint8_t* lara,void*) { FakeButtonActivate(lara,true); }
 template<class Reset,class Rva,class Pose>
 void TestPhysicalButton(Reset reset,Rva rva,Pose pose) {
     using namespace tr;
+    Check(firstperson::FindButtonProfile(1,"SWITCH_TYPE3_RICH2_RICH1",21)!=nullptr,
+        "interior elevator panel has a physical touch profile");
     FILE* file=nullptr;fopen_s(&file,"build/button-poses.txt","r");Check(file!=nullptr,"installed button pose fixtures available");
-    struct Asset {int game,slot,joints,state;float root[3],bone[3];} assets[21]{};
-    for(int i=0;i<18;++i) {
-        auto& a=assets[i];Check(fscanf_s(file,"%d%d%d%d%f%f%f%f%f%f",&a.game,&a.slot,&a.joints,&a.state,&a.root[0],&a.root[1],&a.root[2],&a.bone[0],&a.bone[1],&a.bone[2])==10,"read actual root/joint offsets");
+    struct Asset {int game,slot,joints,state;float root[3],bone[3];} assets[22]{};
+    for(int i=0;i<19;++i) {
+        auto& a=assets[i==18 ? 21 : i];Check(fscanf_s(file,"%d%d%d%d%f%f%f%f%f%f",&a.game,&a.slot,&a.joints,&a.state,&a.root[0],&a.root[1],&a.root[2],&a.bone[0],&a.bone[1],&a.bone[2])==10,"read actual root/joint offsets");
     }
     std::fclose(file);
     for(int i=18;i<21;++i) { assets[i]=assets[6+i-18];assets[i].game=5;assets[i].slot=329+i-18; }
-    for(int p=0;p<21;++p) for(int hand=0;hand<2;++hand) for(int yaw=0;yaw<4;++yaw) {
+    // RICH2's identical keypad mesh is loaded as OCB 5 (live item 49) and
+    // OCB 6 (items 50/63/143). Native SwitchCollision also accepts OCB 7.
+    // The mesh alone must not select the lift-only floor/control-lock route.
+    for(int p=0;p<22;++p) for(int variant=0;variant<(firstperson::ButtonProfiles[p].elevator ? 3 : 1);++variant)
+    for(int hand=0;hand<2;++hand) for(int yaw=0;yaw<4;++yaw) {
         const auto& profile=firstperson::ButtonProfiles[p];const auto& asset=assets[p];
         game=dll.game=profile.game;reset();pose(0,0,0,0);FirstPersonRecenter();
         SwitchDll table{};table.items=rva(&switchItems);table.count=rva(&switchCount);
         table.calcMatrices=rva(reinterpret_cast<void*>(&FakeButtonMatrices));table.collision=rva(reinterpret_cast<void*>(&FakeButtonCollision));
         ButtonDll buttons{};buttons.sequenceCollision=rva(reinterpret_cast<void*>(&FakeSequenceCollision));buttons.sequenceCount=rva(&buttonSequence);
+        buttons.switchTrigger=rva(reinterpret_cast<void*>(&FakeLiftTrigger));
+        dll.disableLaraControl=rva(&buttonControlLock);
         g_buttonDll=&buttons;g_switchDll=&table;
         MotionDll motion{};motion.lineOfSight=rva(reinterpret_cast<void*>(&FakeSwitchSight));g_motionDll=&motion;
         dll.getFloor=rva(reinterpret_cast<void*>(&FakeSwitchFloor));dll.objects=rva(buttonObjects);
@@ -62,10 +81,12 @@ void TestPhysicalButton(Reset reset,Rva rva,Pose pose) {
         std::memcpy(buttonRoot,asset.root,sizeof(buttonRoot));std::memcpy(buttonBone,asset.bone,sizeof(buttonBone));
         *reinterpret_cast<int16_t*>(switchMemory+16)=int16_t(asset.slot);
         *reinterpret_cast<int16_t*>(switchMemory+18)=int16_t(asset.state);
-        const int type=profile.sequence ? p%3 : profile.joints==2 ? 5 : profile.face.right>300 ? 3 : 1;
+        const int type=profile.elevator ? 5+variant : profile.sequence ? p%3 : profile.joints==2 ? 5 : profile.face.right>300 ? 3 : 1;
+        const bool presetTrip=profile.elevator && type==6;
         *reinterpret_cast<int16_t*>(switchMemory+48)=int16_t(type);
         *reinterpret_cast<int16_t*>(switchMemory+42)=900;
         buttonActivations=buttonSequenceActivations=0;buttonSequence=0;buttonReject=false;
+        buttonControlLock=buttonLiftQueries=0;buttonLiftFloorMissing=false;
         *reinterpret_cast<int16_t*>(itemMemory+24)=103;
         g_scenePose={0,-700,-100,0,0,0,0};g_scenePoseValid=true;
         VR().m_controllerPoseValid[hand]=true;VR().m_controllerPoseValid[1-hand]=false;
@@ -101,21 +122,41 @@ void TestPhysicalButton(Reset reset,Rva rva,Pose pose) {
         VR().m_controllerPoseValid[hand]=true;tick({x,y,touch});Check(!buttonActivations,"tracking regain does not press");
         tick({x,y,outside});now+=300;tick({x,y,touch});Check(!buttonActivations,"stale tracking does not press");
         if(profile.sequence) {buttonSequence=3;tick({x,y,outside});tick({x,y,touch});Check(!buttonActivations,"full puzzle sequence cannot accept extra button");buttonSequence=0;}
-        if(profile.joints==2) {*reinterpret_cast<int16_t*>(switchMemory+18)=0;tick({x,y,outside});tick({x,y,touch});Check(!buttonActivations,"used elevator button remains unavailable");*reinterpret_cast<int16_t*>(switchMemory+18)=1;}
+        if(profile.joints==2 || profile.elevator) {*reinterpret_cast<int16_t*>(switchMemory+18)=0;tick({x,y,outside});tick({x,y,touch});Check(!buttonActivations,"used elevator button remains unavailable");*reinterpret_cast<int16_t*>(switchMemory+18)=1;}
+        if(profile.elevator) {
+            buttonControlLock=1;tick({x,y,outside});tick({x,y,touch});
+            Check(!buttonActivations,"elevator cannot be pressed during native travel lock");buttonControlLock=0;
+        }
+        if(presetTrip) {
+            buttonLiftFloorMissing=true;tick({x,y,outside});tick({x,y,touch});
+            Check(!buttonActivations && !buttonControlLock,"reaching panel outside its floor trigger cannot lock controls or choose another route");
+            buttonLiftFloorMissing=false;
+            Check(*reinterpret_cast<int16_t*>(itemMemory+28)==0,"lift reach query cannot change Lara room");
+        }
+        // OCB 5/7 use ordinary floor triggers, with no preset lift link.
+        if(profile.elevator && !presetTrip) buttonLiftFloorMissing=true;
         tick({x,y,outside});tick({x,y,touch});
         Check(buttonActivations==1 && buttonSequenceActivations==(profile.sequence ? 1 : 0),"either hand activates correct native button handler");
         Check(*reinterpret_cast<int16_t*>(itemMemory+18)==2 && *reinterpret_cast<int16_t*>(itemMemory+24)==103 &&
             *reinterpret_cast<int16_t*>(laraMemory+2)==0 && *reinterpret_cast<int32_t*>(laraMemory+224)==0 && actionInput==0 && !g_switchCommit,
             "button preserves camera/body/input ownership");
         Check(*reinterpret_cast<int16_t*>(switchMemory+42)==900 && buttonSequence==0,"touch does not consume native timer or alter sequence bookkeeping");
+        if(presetTrip) Check(buttonControlLock==1 && buttonLiftQueries==2,"native elevator activation retains its travel lock and uses the checked floor route");
+        else Check(!buttonControlLock && !buttonLiftQueries,"ordinary panels do not require a preset lift route or lock Lara controls");
         // Even a native/script reset cannot make a resting hand retrigger.
         *reinterpret_cast<uint32_t*>(switchMemory+0x1820)=0;
+        buttonControlLock=0; // Native lift releases this at arrival.
         for(int j=0;j<6;++j)tick({x,y,touch-scale*(j%2 ? .03f : 0.f)});
         Check(buttonActivations==1,"threshold jitter and resting hand cannot repeat after native reset");
         tick({x,y,outside});tick({x,y,touch});Check(buttonActivations==2,"withdrawal permits deliberate second press after native reset");
         *reinterpret_cast<uint32_t*>(switchMemory+0x1820)=0;
-        *reinterpret_cast<int16_t*>(switchMemory+48)=6;Check(profile.sequence || !ButtonObject(switchMemory,definition),"keypad OCB retains native UI");
+        *reinterpret_cast<int16_t*>(switchMemory+48)=6;Check(profile.sequence || profile.elevator || !ButtonObject(switchMemory,definition),"unknown OCB 6 meshes retain native controls");
         *reinterpret_cast<int16_t*>(switchMemory+48)=0;Check(profile.sequence || !ButtonObject(switchMemory,definition),"lever OCB retains physical grip interaction");
+        if(profile.elevator) {
+            *reinterpret_cast<int16_t*>(switchMemory+48)=6;*reinterpret_cast<int16_t*>(switchMemory+16)=267;
+            Check(!ButtonObject(switchMemory,definition),"elevator panel slot must match verified native registration");
+        }
+        buttonControlLock=0;dll.disableLaraControl=0;
         ResetPhysicalButtons();g_buttonDll=nullptr;g_switchDll=nullptr;g_motionDll=nullptr;
     }
     const firstperson::ButtonSurface face{-20,20,-40,40,-34};
@@ -125,7 +166,7 @@ void TestPhysicalButton(Reset reset,Rva rva,Pose pose) {
     Check(!firstperson::ButtonTouch(face,{0,100,-200},{0,100,-34},1024),"above button rejected");
     Check(!firstperson::ButtonTouch(face,{0,0,-1000},{0,0,-34},1024),"large tracking jump rejected");
     Check(!firstperson::ButtonTouch(face,{NAN,0,-200},{0,0,-34},1024),"invalid tracking rejected");
-    Check(!firstperson::FindButtonProfile(1,"SWITCH_TYPE3_RICH2_RICH1",21),"numeric keypad excluded");
+    Check(!firstperson::FindButtonProfile(1,"PUZZLE_HOLE8",21),"inventory code-entry puzzle is not an elevator panel");
     Check(!firstperson::FindButtonProfile(0,"SWITCH_TYPE1_KARNAK1",1),"wall hole excluded");
 }
 }

@@ -1,0 +1,16 @@
+﻿{
+    "installed_button_poses":  20,
+    "native_button_layouts":  4,
+    "previous_dll":  "73AE605DC8AF0445BC3EE4B99133929577E41A2581499B2DE139B23D2311BBEE",
+    "deployed":  "2026-11-01T12:52:10.4525337-05:00",
+    "focused_interaction_checks":  10970,
+    "dll":  "9559822C69A3D27703D7244D3DAF15216AA0B41170C872828FF744F5407631B7",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-elevator-panel-20261101-125210",
+    "native_lift_layouts":  2,
+    "headset_tested":  false,
+    "change":  "TR5 interior elevator panel touch starts the native preset trip; measured full-panel face, native floor-route check, travel lock and arrival unlock retained",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "full_suite_run":  false,
+    "button_profiles":  22,
+    "release_build_passed":  true
+}

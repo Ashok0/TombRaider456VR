@@ -1,0 +1,329 @@
+// draw_keypad  rva=0x0006E9E0  size=1436
+  0006E9E0  mov      qword ptr [rsp + 8], rbx                
+  0006E9E5  mov      qword ptr [rsp + 0x10], rsi             
+  0006E9EA  mov      qword ptr [rsp + 0x18], rdi             
+  0006E9EF  push     rbp                                     
+  0006E9F0  push     r12                                     
+  0006E9F2  push     r13                                     
+  0006E9F4  push     r14                                     
+  0006E9F6  push     r15                                     
+  0006E9F8  lea      rbp, [rsp - 0xb80]                      
+  0006EA00  sub      rsp, 0xc80                              
+  0006EA07  mov      rax, qword ptr [rip + 0x13f5f2]            ; __security_cookie  [rva 0x001AE000]
+  0006EA0E  xor      rax, rsp                                
+  0006EA11  mov      qword ptr [rbp + 0xb70], rax            
+  0006EA18  movsx    esi, word ptr [rip + 0x143e29]             ; inventry_objects_list+0x778  [rva 0x001B2848]
+  0006EA1F  xor      r13d, r13d                              
+  0006EA22  mov      r15, qword ptr [rip + 0x1440a7]            ; phd_mxptr  [rva 0x001B2AD0]
+  0006EA29  mov      eax, 0x5f                               
+  0006EA2E  mov      r14, qword ptr [rip + 0x144093]            ; phd_fmxptr  [rva 0x001B2AC8]
+  0006EA35  add      r15, 0x30                               
+  0006EA39  mov      word ptr [rsp + 0x40], ax               
+  0006EA3E  add      r14, 0x30                               
+  0006EA42  movsx    rax, word ptr [rip + 0x143df2]             ; inventry_objects_list+0x76C  [rva 0x001B283C]
+  0006EA4A  mov      edx, 0x4000                             
+  0006EA4F  add      dx, word ptr [rip + 0x143dec]              ; inventry_objects_list+0x772  [rva 0x001B2842]
+  0006EA56  mov      edi, 0xffff8000                         
+  0006EA5B  add      di, word ptr [rip + 0x143de2]              ; inventry_objects_list+0x774  [rva 0x001B2844]
+  0006EA62  mov      ebx, 0x4000                             
+  0006EA67  add      bx, word ptr [rip + 0x143dd8]              ; inventry_objects_list+0x776  [rva 0x001B2846]
+  0006EA6E  imul     r8, rax, 0xed0                          
+  0006EA75  mov      word ptr [rsp + 0x62], ax               
+  0006EA7A  lea      rax, [rip + 0x62873f]                      ; objects  [rva 0x006971C0]
+  0006EA81  add      r8, rax                                 
+  0006EA84  mov      word ptr [rsp + 0x58], di               
+  0006EA89  mov      eax, dword ptr [rip + 0x143dbd]            ; inventry_objects_list+0x77C  [rva 0x001B284C]
+  0006EA8F  mov      dword ptr [rsp + 0x64], eax             
+  0006EA93  movsx    eax, word ptr [rip + 0x143da6]             ; inventry_objects_list+0x770  [rva 0x001B2840]
+  0006EA9A  movsx    rcx, word ptr [r8 + 0x42]               
+  0006EA9F  mov      dword ptr [rsp + 0x54], eax             
+  0006EAA3  movsx    eax, word ptr [rip + 0x143d94]             ; inventry_objects_list+0x76E  [rva 0x001B283E]
+  0006EAAA  add      eax, 0x78                               
+  0006EAAD  mov      word ptr [rsp + 0x60], cx               
+  0006EAB2  lea      rcx, [rcx + rcx*2]                      
+  0006EAB6  mov      qword ptr [rsp + 0x20], r8              
+  0006EABB  add      rcx, rcx                                
+  0006EABE  mov      word ptr [rsp + 0x5c], dx               
+  0006EAC3  mov      word ptr [rsp + 0x5e], dx               
+  0006EAC8  movd     xmm0, eax                               
+  0006EACC  movsxd   rax, dword ptr [r8 + 4]                 
+  0006EAD0  mov      qword ptr [rsp + 0x38], rax             
+  0006EAD5  mov      rax, qword ptr [rip + 0x5fe6d4]            ; anims  [rva 0x0066D1B0]
+  0006EADC  cvtdq2ps xmm0, xmm0                              
+  0006EADF  mov      word ptr [rsp + 0x5a], bx               
+  0006EAE4  mov      dword ptr [rsp + 0x4c], 0x43200000      
+  0006EAEC  mov      r12, qword ptr [rax + rcx*8]            
+  0006EAF0  movzx    ecx, dx                                 
+  0006EAF3  mov      dword ptr [r15 + 0x28], 0x4000          
+  0006EAFB  mov      qword ptr [r15 + 0x14], 0x4000          
+  0006EB03  mov      qword ptr [r15], 0x4000                 
+  0006EB0A  mov      dword ptr [r15 + 8], r13d               
+  0006EB0E  mov      dword ptr [r15 + 0x10], r13d            
+  0006EB12  mov      qword ptr [r15 + 0x20], r13             
+  0006EB16  mov      dword ptr [r14 + 0x28], 0x3f800000      
+  0006EB1E  mov      qword ptr [r14 + 0x14], 0x3f800000      
+  0006EB26  mov      qword ptr [r14], 0x3f800000             
+  0006EB2D  mov      dword ptr [r14 + 8], r13d               
+  0006EB31  mov      dword ptr [r14 + 0x10], r13d            
+  0006EB35  mov      qword ptr [r14 + 0x20], r13             
+  0006EB39  mov      dword ptr [r15 + 0xc], r13d             
+  0006EB3D  mov      dword ptr [r15 + 0x1c], r13d            
+  0006EB41  mov      dword ptr [r15 + 0x2c], r13d            
+  0006EB45  mov      dword ptr [r14 + 0xc], r13d             
+  0006EB49  mov      dword ptr [r14 + 0x1c], r13d            
+  0006EB4D  mov      dword ptr [r14 + 0x2c], r13d            
+  0006EB51  movss    dword ptr [rsp + 0x50], xmm0            
+  0006EB57  mov      dword ptr [rsp + 0x48], 0x43200000      
+  0006EB5F  mov      qword ptr [rip + 0x143f6a], r15            ; phd_mxptr  [rva 0x001B2AD0]
+  0006EB66  mov      qword ptr [rip + 0x143f5b], r14            ; phd_fmxptr  [rva 0x001B2AC8]
+  0006EB6D  call     0x1800a21b0                                ; -> phd_RotY
+  0006EB72  movzx    ecx, di                                 
+  0006EB75  call     0x1800a1fc0                                ; -> phd_RotX
+  0006EB7A  movzx    ecx, bx                                 
+  0006EB7D  call     0x1800a23a0                                ; -> phd_RotZ
+  0006EB82  mov      eax, dword ptr [r15]                    
+  0006EB85  mov      dword ptr [rsp + 0x28], 0x4800          
+  0006EB8D  mov      dword ptr [rsp + 0x2c], 0x4000          
+  0006EB95  mov      dword ptr [rsp + 0x30], 0x4000          
+  0006EB9D  lea      ecx, [rax + rax*8]                      
+  0006EBA0  mov      eax, dword ptr [r15 + 0x10]             
+  0006EBA4  shl      ecx, 0xb                                
+  0006EBA7  sar      ecx, 0xe                                
+  0006EBAA  mov      dword ptr [r15], ecx                    
+  0006EBAD  lea      ecx, [rax + rax*8]                      
+  0006EBB0  shl      ecx, 0xb                                
+  0006EBB3  sar      ecx, 0xe                                
+  0006EBB6  mov      eax, dword ptr [r15 + 0x20]             
+  0006EBBA  mov      dword ptr [r15 + 0x10], ecx             
+  0006EBBE  lea      ecx, [rax + rax*8]                      
+  0006EBC1  mov      eax, dword ptr [r15 + 4]                
+  0006EBC5  shl      eax, 0xe                                
+  0006EBC8  sar      eax, 0xe                                
+  0006EBCB  mov      dword ptr [r15 + 4], eax                
+  0006EBCF  mov      eax, dword ptr [r15 + 0x14]             
+  0006EBD3  shl      eax, 0xe                                
+  0006EBD6  sar      eax, 0xe                                
+  0006EBD9  mov      dword ptr [r15 + 0x14], eax             
+  0006EBDD  mov      eax, dword ptr [r15 + 0x24]             
+  0006EBE1  shl      eax, 0xe                                
+  0006EBE4  sar      eax, 0xe                                
+  0006EBE7  mov      dword ptr [r15 + 0x24], eax             
+  0006EBEB  mov      eax, dword ptr [r15 + 8]                
+  0006EBEF  shl      eax, 0xe                                
+  0006EBF2  sar      eax, 0xe                                
+  0006EBF5  mov      dword ptr [r15 + 8], eax                
+  0006EBF9  mov      eax, dword ptr [r15 + 0x18]             
+  0006EBFD  shl      eax, 0xe                                
+  0006EC00  sar      eax, 0xe                                
+  0006EC03  mov      dword ptr [r15 + 0x18], eax             
+  0006EC07  mov      eax, dword ptr [r15 + 0x28]             
+  0006EC0B  shl      ecx, 0xb                                
+  0006EC0E  shl      eax, 0xe                                
+  0006EC11  sar      ecx, 0xe                                
+  0006EC14  sar      eax, 0xe                                
+  0006EC17  mov      dword ptr [r15 + 0x20], ecx             
+  0006EC1B  lea      rcx, [rsp + 0x28]                       
+  0006EC20  mov      dword ptr [r15 + 0x28], eax             
+  0006EC24  call     0x1800a1f20                                ; -> phd_ScaleFloatMatrix
+  0006EC29  test     sil, 8                                  
+  0006EC2D  jne      0x18006ec46                             
+  0006EC2F  movsx    r8d, word ptr [r12 + 0x10]              
+  0006EC35  movsx    edx, word ptr [r12 + 0xe]               
+  0006EC3B  movsx    ecx, word ptr [r12 + 0xc]               
+  0006EC41  call     0x1800a2840                                ; -> phd_TranslateRel
+  0006EC46  movzx    ecx, word ptr [r12 + 0x12]              
+  0006EC4C  mov      edx, ecx                                
+  0006EC4E  shr      edx, 0xe                                
+  0006EC51  test     edx, edx                                
+  0006EC53  je       0x18006ec8b                             
+  0006EC55  sub      edx, 1                                  
+  0006EC58  je       0x18006ec7b                             
+  0006EC5A  shl      cx, 4                                   
+  0006EC5E  cmp      edx, 1                                  
+  0006EC61  je       0x18006ec6f                             
+  0006EC63  call     0x1800a23a0                                ; -> phd_RotZ
+  0006EC68  mov      eax, 2                                  
+  0006EC6D  jmp      0x18006ecc3                                ; -> draw_keypad+0x2E3
+  0006EC6F  call     0x1800a21b0                                ; -> phd_RotY
+  0006EC74  mov      eax, 2                                  
+  0006EC79  jmp      0x18006ecc3                                ; -> draw_keypad+0x2E3
+  0006EC7B  shl      cx, 4                                   
+  0006EC7F  call     0x1800a1fc0                                ; -> phd_RotX
+  0006EC84  mov      eax, 2                                  
+  0006EC89  jmp      0x18006ecc3                                ; -> draw_keypad+0x2E3
+  0006EC8B  movzx    ebx, word ptr [r12 + 0x14]              
+  0006EC91  shl      ecx, 0x10                               
+  0006EC94  add      ebx, ecx                                
+  0006EC96  mov      ecx, ebx                                
+  0006EC98  sar      ecx, 4                                  
+  0006EC9B  and      cx, 0xffc0                              
+  0006EC9F  call     0x1800a21b0                                ; -> phd_RotY
+  0006ECA4  mov      ecx, ebx                                
+  0006ECA6  sar      ecx, 0xe                                
+  0006ECA9  and      cx, 0xffc0                              
+  0006ECAD  call     0x1800a1fc0                                ; -> phd_RotX
+  0006ECB2  shl      bx, 6                                   
+  0006ECB6  movzx    ecx, bx                                 
+  0006ECB9  call     0x1800a23a0                                ; -> phd_RotZ
+  0006ECBE  mov      eax, 4                                  
+  0006ECC3  movups   xmm0, xmmword ptr [r14]                 
+  0006ECC7  add      r12, 0x12                               
+  0006ECCB  lea      rsi, [rbp + 0x598]                      
+  0006ECD2  movups   xmm1, xmmword ptr [r14 + 0x10]          
+  0006ECD7  add      r12, rax                                
+  0006ECDA  mov      rax, qword ptr [rsp + 0x20]             
+  0006ECDF  movups   xmmword ptr [rbp + 0x568], xmm0         
+  0006ECE6  movups   xmm0, xmmword ptr [r14 + 0x20]          
+  0006ECEB  movsx    eax, word ptr [rax]                     
+  0006ECEE  dec      eax                                     
+  0006ECF0  movups   xmmword ptr [rbp + 0x578], xmm1         
+  0006ECF7  movups   xmmword ptr [rbp + 0x588], xmm0         
+  0006ECFE  test     eax, eax                                
+  0006ED00  jle      0x18006ee71                             
+  0006ED06  mov      rdi, qword ptr [rsp + 0x38]             
+  0006ED0B  mov      rcx, qword ptr [rip + 0x5e681e]            ; bones  [rva 0x00655530]
+  0006ED12  add      rdi, 2                                  
+  0006ED16  lea      rdi, [rcx + rdi*4]                      
+  0006ED1A  nop      word ptr [rax + rax]                    
+  0006ED20  mov      eax, dword ptr [rdi - 8]                
+  0006ED23  test     al, 1                                   
+  0006ED25  je       0x18006ed3d                             
+  0006ED27  sub      r15, 0x30                               
+  0006ED2B  sub      r14, 0x30                               
+  0006ED2F  mov      qword ptr [rip + 0x143d9a], r15            ; phd_mxptr  [rva 0x001B2AD0]
+  0006ED36  mov      qword ptr [rip + 0x143d8b], r14            ; phd_fmxptr  [rva 0x001B2AC8]
+  0006ED3D  test     al, 2                                   
+  0006ED3F  je       0x18006eda7                             
+  0006ED41  mov      rax, r15                                
+  0006ED44  lea      rcx, [r14 + 0x30]                       
+  0006ED48  add      r15, 0x30                               
+  0006ED4C  mov      qword ptr [rip + 0x143d75], rcx            ; phd_fmxptr  [rva 0x001B2AC8]
+  0006ED53  mov      qword ptr [rip + 0x143d76], r15            ; phd_mxptr  [rva 0x001B2AD0]
+  0006ED5A  movups   xmm0, xmmword ptr [rax]                 
+  0006ED5D  movups   xmmword ptr [r15], xmm0                 
+  0006ED61  movups   xmm1, xmmword ptr [rax + 0x10]          
+  0006ED65  movups   xmmword ptr [r15 + 0x10], xmm1          
+  0006ED6A  movups   xmm0, xmmword ptr [rax + 0x20]          
+  0006ED6E  movups   xmmword ptr [r15 + 0x20], xmm0          
+  0006ED73  mov      eax, dword ptr [r14]                    
+  0006ED76  movups   xmm0, xmmword ptr [r14 + 4]             
+  0006ED7B  mov      dword ptr [rcx], eax                    
+  0006ED7D  mov      eax, dword ptr [r14 + 0x24]             
+  0006ED81  movups   xmm1, xmmword ptr [r14 + 0x14]          
+  0006ED86  mov      dword ptr [r14 + 0x54], eax             
+  0006ED8A  mov      eax, dword ptr [r14 + 0x28]             
+  0006ED8E  mov      dword ptr [r14 + 0x58], eax             
+  0006ED92  mov      eax, dword ptr [r14 + 0x2c]             
+  0006ED96  mov      dword ptr [r14 + 0x5c], eax             
+  0006ED9A  movups   xmmword ptr [r14 + 0x34], xmm0          
+  0006ED9F  movups   xmmword ptr [r14 + 0x44], xmm1          
+  0006EDA4  mov      r14, rcx                                
+  0006EDA7  mov      ecx, dword ptr [rdi - 4]                
+  0006EDAA  mov      r8d, dword ptr [rdi + 4]                
+  0006EDAE  mov      edx, dword ptr [rdi]                    
+  0006EDB0  call     0x1800a2840                                ; -> phd_TranslateRel
+  0006EDB5  movzx    edx, word ptr [r12]                     
+  0006EDBA  mov      ecx, edx                                
+  0006EDBC  shr      ecx, 0xe                                
+  0006EDBF  test     ecx, ecx                                
+  0006EDC1  je       0x18006edff                             
+  0006EDC3  sub      ecx, 1                                  
+  0006EDC6  je       0x18006edec                             
+  0006EDC8  shl      dx, 4                                   
+  0006EDCC  cmp      ecx, 1                                  
+  0006EDCF  movzx    ecx, dx                                 
+  0006EDD2  je       0x18006ede0                             
+  0006EDD4  call     0x1800a23a0                                ; -> phd_RotZ
+  0006EDD9  mov      eax, 2                                  
+  0006EDDE  jmp      0x18006ee37                                ; -> draw_keypad+0x457
+  0006EDE0  call     0x1800a21b0                                ; -> phd_RotY
+  0006EDE5  mov      eax, 2                                  
+  0006EDEA  jmp      0x18006ee37                                ; -> draw_keypad+0x457
+  0006EDEC  shl      dx, 4                                   
+  0006EDF0  movzx    ecx, dx                                 
+  0006EDF3  call     0x1800a1fc0                                ; -> phd_RotX
+  0006EDF8  mov      eax, 2                                  
+  0006EDFD  jmp      0x18006ee37                                ; -> draw_keypad+0x457
+  0006EDFF  movzx    ebx, word ptr [r12 + 2]                 
+  0006EE05  shl      edx, 0x10                               
+  0006EE08  add      ebx, edx                                
+  0006EE0A  mov      ecx, ebx                                
+  0006EE0C  sar      ecx, 4                                  
+  0006EE0F  and      cx, 0xffc0                              
+  0006EE13  call     0x1800a21b0                                ; -> phd_RotY
+  0006EE18  mov      ecx, ebx                                
+  0006EE1A  sar      ecx, 0xe                                
+  0006EE1D  and      cx, 0xffc0                              
+  0006EE21  call     0x1800a1fc0                                ; -> phd_RotX
+  0006EE26  shl      bx, 6                                   
+  0006EE2A  movzx    ecx, bx                                 
+  0006EE2D  call     0x1800a23a0                                ; -> phd_RotZ
+  0006EE32  mov      eax, 4                                  
+  0006EE37  movups   xmm0, xmmword ptr [r14]                 
+  0006EE3B  add      r12, rax                                
+  0006EE3E  mov      rax, qword ptr [rsp + 0x20]             
+  0006EE43  movups   xmm1, xmmword ptr [r14 + 0x10]          
+  0006EE48  inc      r13d                                    
+  0006EE4B  add      rdi, 0x10                               
+  0006EE4F  movups   xmmword ptr [rsi], xmm0                 
+  0006EE52  movsx    eax, word ptr [rax]                     
+  0006EE55  movups   xmm0, xmmword ptr [r14 + 0x20]          
+  0006EE5A  dec      eax                                     
+  0006EE5C  movups   xmmword ptr [rsi + 0x10], xmm1          
+  0006EE60  movups   xmmword ptr [rsi + 0x20], xmm0          
+  0006EE64  add      rsi, 0x30                               
+  0006EE68  cmp      r13d, eax                               
+  0006EE6B  jl       0x18006ed20                             
+  0006EE71  sub      r15, 0x30                               
+  0006EE75  lea      rcx, [rsp + 0x68]                       
+  0006EE7A  sub      r14, 0x30                               
+  0006EE7E  mov      qword ptr [rip + 0x143c4b], r15            ; phd_mxptr  [rva 0x001B2AD0]
+  0006EE85  lea      rdx, [rbp + 0x568]                      
+  0006EE8C  mov      qword ptr [rip + 0x143c35], r14            ; phd_fmxptr  [rva 0x001B2AC8]
+  0006EE93  mov      r8d, 0x600                              
+  0006EE99  call     0x18011d7f0                                ; -> memcpy
+  0006EE9E  movss    xmm0, dword ptr [rsp + 0x48]            
+  0006EEA4  mov      edx, 0x100                              
+  0006EEA9  subss    xmm0, dword ptr [rsp + 0x4c]            
+  0006EEAF  mov      rcx, qword ptr [rip + 0x5fe2ea]            ; app  [rva 0x0066D1A0]
+  0006EEB6  movss    xmm4, dword ptr [rsp + 0x50]            
+  0006EEBC  divss    xmm4, dword ptr [rip + 0x12d36c]           ; _real  [rva 0x0019C230]
+  0006EEC4  mov      eax, dword ptr [rip + 0x480abe]            ; frame_frac  [rva 0x004EF988]
+  0006EECA  cmp      dword ptr [rcx + 0x51c], 0              
+  0006EED1  mov      dword ptr [rip + 0x143be1], 0x7f7f7f       ; pcbright  [rva 0x001B2ABC]
+  0006EEDB  cmovne   eax, edx                                
+  0006EEDE  movd     xmm3, eax                               
+  0006EEE2  cvtdq2ps xmm3, xmm3                              
+  0006EEE5  addss    xmm4, xmm4                              
+  0006EEE9  mulss    xmm3, xmm0                              
+  0006EEED  mulss    xmm3, dword ptr [rip + 0x12d0bb]           ; _real  [rva 0x0019BFB0]
+  0006EEF5  subss    xmm4, dword ptr [rip + 0x12d14b]           ; _real  [rva 0x0019C048]
+  0006EEFD  addss    xmm3, dword ptr [rsp + 0x4c]            
+  0006EF03  movaps   xmm1, xmm4                              
+  0006EF06  divss    xmm3, dword ptr [rip + 0x12d332]           ; _real  [rva 0x0019C240]
+  0006EF0E  addss    xmm3, xmm3                              
+  0006EF12  subss    xmm3, dword ptr [rip + 0x12d12e]           ; _real  [rva 0x0019C048]
+  0006EF1A  xorps    xmm3, xmmword ptr [rip + 0x12d4ff]         ; _xmm  [rva 0x0019C420]
+  0006EF21  movaps   xmm0, xmm3                              
+  0006EF24  call     qword ptr [rcx + 0x2a8]                 
+  0006EF2A  lea      rcx, [rsp + 0x40]                       
+  0006EF2F  call     0x180067d80                                ; -> DrawInvDrawItem
+  0006EF34  call     0x1800a5460                                ; -> S_CmdFlush
+  0006EF39  mov      rax, qword ptr [rip + 0x5fe260]            ; app  [rva 0x0066D1A0]
+  0006EF40  xorps    xmm1, xmm1                              
+  0006EF43  xorps    xmm0, xmm0                              
+  0006EF46  call     qword ptr [rax + 0x2a8]                 
+  0006EF4C  mov      rcx, qword ptr [rbp + 0xb70]            
+  0006EF53  xor      rcx, rsp                                
+  0006EF56  call     0x180101940                                ; -> __security_check_cookie
+  0006EF5B  lea      r11, [rsp + 0xc80]                      
+  0006EF63  mov      rbx, qword ptr [r11 + 0x30]             
+  0006EF67  mov      rsi, qword ptr [r11 + 0x38]             
+  0006EF6B  mov      rdi, qword ptr [r11 + 0x40]             
+  0006EF6F  mov      rsp, r11                                
+  0006EF72  pop      r15                                     
+  0006EF74  pop      r14                                     
+  0006EF76  pop      r13                                     
+  0006EF78  pop      r12                                     
+  0006EF7A  pop      rbp                                     
+  0006EF7B  ret                                              

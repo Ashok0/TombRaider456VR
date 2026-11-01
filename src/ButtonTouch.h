@@ -9,6 +9,7 @@ struct ButtonProfile {
     bool sequence;
     const char* name;
     ButtonSurface face;
+    bool elevator=false;
 };
 // Press faces, not whole-object bounds. Canonical mesh space, before the
 // native joint and inverse-bind transforms. Z decreases toward the user.
@@ -34,6 +35,9 @@ constexpr ButtonProfile ButtonProfiles[]={
     {1,1,0,true,"SEQUENCE_SWITCH1",{-340,340,-340,340,0}},
     {1,1,0,true,"SEQUENCE_SWITCH2",{-340,340,-340,340,0}},
     {1,1,0,true,"SEQUENCE_SWITCH3",{-340,340,-340,340,0}},
+    // This keypad-shaped panel has ordinary and preset-trip switch variants;
+    // it is not the inventory code-entry puzzle. Touch anywhere on its front.
+    {1,21,0,false,"SWITCH_TYPE3_RICH2_RICH1",{-62,62,-85,85,-44.28f},true},
 };
 inline const ButtonProfile* FindButtonProfile(int game,const char* name,int joints) {
     if(!name) return nullptr;

@@ -1,0 +1,225 @@
+// draw_keypad_mode  rva=0x0006EF80  size=1253
+  0006EF80  mov      qword ptr [rsp + 8], rbx                
+  0006EF85  push     rdi                                     
+  0006EF86  sub      rsp, 0x40                               
+  0006EF8A  mov      rax, qword ptr [rip + 0x13f06f]            ; __security_cookie  [rva 0x001AE000]
+  0006EF91  xor      rax, rsp                                
+  0006EF94  mov      qword ptr [rsp + 0x38], rax             
+  0006EF99  lea      rcx, [rip - 0x5c0]                         ; draw_keypad  [rva 0x0006E9E0]
+  0006EFA0  call     0x1800f1cf0                                ; -> DrawThisInvItemSpecifically
+  0006EFA5  mov      r9, qword ptr [rip + 0x41edf4]             ; Strings+0x880  [rva 0x0048DDA0]
+  0006EFAC  mov      edi, 0x18                               
+  0006EFB1  movss    xmm1, dword ptr [rip + 0x12d327]           ; _realc2800000  [rva 0x0019C2E0]
+  0006EFB9  mov      r8b, 6                                  
+  0006EFBC  xorps    xmm0, xmm0                              
+  0006EFBF  mov      word ptr [rsp + 0x20], di               
+  0006EFC4  call     0x1800e46d0                                ; -> AddString
+  0006EFC9  movzx    r8d, byte ptr [rip + 0x147a9d]             ; keypadnuminputs  [rva 0x001B6A6E]
+  0006EFD1  lea      r9, [rip + 0x7d70e4]                       ; keypadinputs  [rva 0x008460BC]
+  0006EFD8  xor      ebx, ebx                                
+  0006EFDA  mov      dword ptr [rsp + 0x30], 0x2d2d2d2d      
+  0006EFE2  mov      byte ptr [rsp + 0x34], 0                
+  0006EFE7  mov      ecx, ebx                                
+  0006EFE9  test     r8d, r8d                                
+  0006EFEC  je       0x18006f05f                             
+  0006EFEE  cmp      r8d, 0x40                               
+  0006EFF2  jb       0x18006f05f                             
+  0006EFF4  movdqa   xmm1, xmmword ptr [rip + 0x12d3d4]         ; _xmm  [rva 0x0019C3D0]
+  0006EFFC  mov      eax, 0xffffffc0                         
+  0006F001  mov      edx, r8d                                
+  0006F004  and      rdx, rax                                
+  0006F007  mov      eax, ebx                                
+  0006F009  nop      dword ptr [rax]                         
+  0006F010  movdqu   xmm0, xmmword ptr [rax + r9]            
+  0006F016  add      ecx, 0x40                               
+  0006F019  paddb    xmm0, xmm1                              
+  0006F01D  movdqu   xmmword ptr [rsp + rax + 0x30], xmm0    
+  0006F023  movdqu   xmm0, xmmword ptr [rax + r9 + 0x10]     
+  0006F02A  paddb    xmm0, xmm1                              
+  0006F02E  movdqu   xmmword ptr [rsp + rax + 0x40], xmm0    
+  0006F034  movdqu   xmm0, xmmword ptr [rax + r9 + 0x20]     
+  0006F03B  paddb    xmm0, xmm1                              
+  0006F03F  movdqu   xmmword ptr [rsp + rax + 0x50], xmm0    
+  0006F045  movdqu   xmm0, xmmword ptr [rax + r9 + 0x30]     
+  0006F04C  paddb    xmm0, xmm1                              
+  0006F050  movdqu   xmmword ptr [rsp + rax + 0x60], xmm0    
+  0006F056  add      rax, 0x40                               
+  0006F05A  cmp      rax, rdx                                
+  0006F05D  jl       0x18006f010                             
+  0006F05F  movsxd   rcx, ecx                                
+  0006F062  cmp      rcx, r8                                 
+  0006F065  jge      0x18006f083                             
+  0006F067  nop      word ptr [rax + rax]                    
+  0006F070  movzx    eax, byte ptr [rcx + r9]                
+  0006F075  add      al, 0x30                                
+  0006F077  mov      byte ptr [rsp + rcx + 0x30], al         
+  0006F07B  inc      rcx                                     
+  0006F07E  cmp      rcx, r8                                 
+  0006F081  jl       0x18006f070                             
+  0006F083  movss    xmm1, dword ptr [rip + 0x12d0e9]           ; _real  [rva 0x0019C174]
+  0006F08B  lea      r9, [rsp + 0x30]                        
+  0006F090  mov      r8b, 1                                  
+  0006F093  mov      word ptr [rsp + 0x20], di               
+  0006F098  xorps    xmm0, xmm0                              
+  0006F09B  call     0x1800e46d0                                ; -> AddString
+  0006F0A0  mov      rax, qword ptr [rip + 0x5fe0f9]            ; app  [rva 0x0066D1A0]
+  0006F0A7  test     byte ptr [rax + 0x9e4], 1               
+  0006F0AE  jne      0x18006f44d                             
+  0006F0B4  xor      edx, edx                                
+  0006F0B6  lea      ecx, [rdx + 0x41]                       
+  0006F0B9  call     0x1800a51d0                                ; -> S_CmdBegin
+  0006F0BE  xor      r8d, r8d                                
+  0006F0C1  cmp      byte ptr [rip + 0x147ab3], bl              ; keypadpause  [rva 0x001B6B7A]
+  0006F0C7  jne      0x18006f165                             
+  0006F0CD  lea      edx, [r8 + 5]                           
+  0006F0D1  xor      ecx, ecx                                
+  0006F0D3  call     0x1800a5720                                ; -> S_AddQuad
+  0006F0D8  mov      dword ptr [rax], 0x43450000             
+  0006F0DE  mov      dword ptr [rax + 4], 0x430c0000         
+  0006F0E5  mov      dword ptr [rax + 0x28], 0x43450000      
+  0006F0EC  mov      dword ptr [rax + 0x2c], 0x43120000      
+  0006F0F3  mov      dword ptr [rax + 0x50], 0x433a0000      
+  0006F0FA  mov      dword ptr [rax + 0x54], 0x43120000      
+  0006F101  mov      dword ptr [rax + 0x78], 0x433a0000      
+  0006F108  mov      dword ptr [rax + 0x7c], 0x430c0000      
+  0006F10F  mov      qword ptr [rax + 0x18], rbx             
+  0006F113  mov      qword ptr [rax + 0x40], rbx             
+  0006F117  mov      qword ptr [rax + 0x68], rbx             
+  0006F11B  mov      qword ptr [rax + 0x90], rbx             
+  0006F122  mov      dword ptr [rax + 0x98], 0x80            
+  0006F12C  mov      dword ptr [rax + 0x70], 0x80            
+  0006F133  mov      dword ptr [rax + 0x48], 0x80            
+  0006F13A  mov      dword ptr [rax + 0x20], 0x80            
+  0006F141  mov      dword ptr [rax + 0x4c], 0xff000020      
+  0006F148  mov      dword ptr [rax + 0x24], 0xff000020      
+  0006F14F  mov      dword ptr [rax + 0x9c], 0xff000020      
+  0006F159  mov      dword ptr [rax + 0x74], 0xff000020      
+  0006F160  jmp      0x18006f3b4                                ; -> draw_keypad_mode+0x434
+  0006F165  movzx    eax, byte ptr [rip + 0x7d6f50]             ; keypadinputs  [rva 0x008460BC]
+  0006F16C  lea      ecx, [rax + rax*4]                      
+  0006F16F  movzx    eax, byte ptr [rip + 0x7d6f47]             ; keypadinputs+0x1  [rva 0x008460BD]
+  0006F176  lea      ecx, [rax + rcx*2]                      
+  0006F179  movzx    eax, byte ptr [rip + 0x7d6f3e]             ; keypadinputs+0x2  [rva 0x008460BE]
+  0006F180  lea      edx, [rcx + rcx*4]                      
+  0006F183  lea      ecx, [rax + rdx*2]                      
+  0006F186  movzx    eax, byte ptr [rip + 0x7d6f32]             ; keypadinputs+0x3  [rva 0x008460BF]
+  0006F18D  lea      edx, [rcx + rcx*4]                      
+  0006F190  lea      ecx, [rax + rdx*2]                      
+  0006F193  mov      edx, 5                                  
+  0006F198  cmp      dword ptr [rip + 0x1479fa], ecx            ; GLOBAL_invkeypadcombination  [rva 0x001B6B98]
+  0006F19E  jne      0x18006f2f8                             
+  0006F1A4  xor      ecx, ecx                                
+  0006F1A6  call     0x1800a5720                                ; -> S_AddQuad
+  0006F1AB  test     byte ptr [rip + 0x5eba26], 2               ; GameTimer  [rva 0x0065ABD8]
+  0006F1B2  mov      dword ptr [rax], 0x43460000             
+  0006F1B8  mov      dword ptr [rax + 4], 0x43130000         
+  0006F1BF  mov      dword ptr [rax + 0x28], 0x43460000      
+  0006F1C6  mov      dword ptr [rax + 0x2c], 0x43190000      
+  0006F1CD  mov      dword ptr [rax + 0x50], 0x43390000      
+  0006F1D4  mov      dword ptr [rax + 0x54], 0x43190000      
+  0006F1DB  mov      dword ptr [rax + 0x78], 0x43390000      
+  0006F1E2  mov      dword ptr [rax + 0x7c], 0x43130000      
+  0006F1E9  mov      qword ptr [rax + 0x18], rbx             
+  0006F1ED  mov      qword ptr [rax + 0x40], rbx             
+  0006F1F1  mov      qword ptr [rax + 0x68], rbx             
+  0006F1F5  mov      qword ptr [rax + 0x90], rbx             
+  0006F1FC  mov      dword ptr [rax + 0x98], 0x80            
+  0006F206  mov      dword ptr [rax + 0x70], 0x80            
+  0006F20D  mov      dword ptr [rax + 0x48], 0x80            
+  0006F214  mov      dword ptr [rax + 0x20], 0x80            
+  0006F21B  je       0x18006f23e                             
+  0006F21D  mov      dword ptr [rax + 0x4c], 0xff00ff00      
+  0006F224  mov      dword ptr [rax + 0x24], 0xff00ff00      
+  0006F22B  mov      dword ptr [rax + 0x9c], 0xff00ff00      
+  0006F235  mov      dword ptr [rax + 0x74], 0xff00ff00      
+  0006F23C  jmp      0x18006f25d                                ; -> draw_keypad_mode+0x2DD
+  0006F23E  mov      dword ptr [rax + 0x4c], 0xff002000      
+  0006F245  mov      dword ptr [rax + 0x24], 0xff002000      
+  0006F24C  mov      dword ptr [rax + 0x9c], 0xff002000      
+  0006F256  mov      dword ptr [rax + 0x74], 0xff002000      
+  0006F25D  xor      r8d, r8d                                
+  0006F260  xor      ecx, ecx                                
+  0006F262  lea      edx, [r8 + 5]                           
+  0006F266  call     0x1800a5720                                ; -> S_AddQuad
+  0006F26B  mov      dword ptr [rax], 0x43450000             
+  0006F271  mov      dword ptr [rax + 4], 0x430c0000         
+  0006F278  mov      dword ptr [rax + 0x28], 0x43450000      
+  0006F27F  mov      dword ptr [rax + 0x2c], 0x43120000      
+  0006F286  mov      dword ptr [rax + 0x50], 0x433a0000      
+  0006F28D  mov      dword ptr [rax + 0x54], 0x43120000      
+  0006F294  mov      dword ptr [rax + 0x78], 0x433a0000      
+  0006F29B  mov      dword ptr [rax + 0x7c], 0x430c0000      
+  0006F2A2  mov      qword ptr [rax + 0x18], rbx             
+  0006F2A6  mov      qword ptr [rax + 0x40], rbx             
+  0006F2AA  mov      qword ptr [rax + 0x68], rbx             
+  0006F2AE  mov      qword ptr [rax + 0x90], rbx             
+  0006F2B5  mov      dword ptr [rax + 0x98], 0x80            
+  0006F2BF  mov      dword ptr [rax + 0x70], 0x80            
+  0006F2C6  mov      dword ptr [rax + 0x48], 0x80            
+  0006F2CD  mov      dword ptr [rax + 0x20], 0x80            
+  0006F2D4  mov      dword ptr [rax + 0x4c], 0xff000020      
+  0006F2DB  mov      dword ptr [rax + 0x24], 0xff000020      
+  0006F2E2  mov      dword ptr [rax + 0x9c], 0xff000020      
+  0006F2EC  mov      dword ptr [rax + 0x74], 0xff000020      
+  0006F2F3  jmp      0x18006f448                                ; -> draw_keypad_mode+0x4C8
+  0006F2F8  xor      ecx, ecx                                
+  0006F2FA  call     0x1800a5720                                ; -> S_AddQuad
+  0006F2FF  test     byte ptr [rip + 0x5eb8d2], 2               ; GameTimer  [rva 0x0065ABD8]
+  0006F306  mov      dword ptr [rax], 0x43450000             
+  0006F30C  mov      dword ptr [rax + 4], 0x430c0000         
+  0006F313  mov      dword ptr [rax + 0x28], 0x43450000      
+  0006F31A  mov      dword ptr [rax + 0x2c], 0x43120000      
+  0006F321  mov      dword ptr [rax + 0x50], 0x433a0000      
+  0006F328  mov      dword ptr [rax + 0x54], 0x43120000      
+  0006F32F  mov      dword ptr [rax + 0x78], 0x433a0000      
+  0006F336  mov      dword ptr [rax + 0x7c], 0x430c0000      
+  0006F33D  mov      qword ptr [rax + 0x18], rbx             
+  0006F341  mov      qword ptr [rax + 0x40], rbx             
+  0006F345  mov      qword ptr [rax + 0x68], rbx             
+  0006F349  mov      qword ptr [rax + 0x90], rbx             
+  0006F350  mov      dword ptr [rax + 0x98], 0x80            
+  0006F35A  mov      dword ptr [rax + 0x70], 0x80            
+  0006F361  mov      dword ptr [rax + 0x48], 0x80            
+  0006F368  mov      dword ptr [rax + 0x20], 0x80            
+  0006F36F  je       0x18006f392                             
+  0006F371  mov      dword ptr [rax + 0x4c], 0xff0000ff      
+  0006F378  mov      dword ptr [rax + 0x24], 0xff0000ff      
+  0006F37F  mov      dword ptr [rax + 0x9c], 0xff0000ff      
+  0006F389  mov      dword ptr [rax + 0x74], 0xff0000ff      
+  0006F390  jmp      0x18006f3b1                                ; -> draw_keypad_mode+0x431
+  0006F392  mov      dword ptr [rax + 0x4c], 0xff000020      
+  0006F399  mov      dword ptr [rax + 0x24], 0xff000020      
+  0006F3A0  mov      dword ptr [rax + 0x9c], 0xff000020      
+  0006F3AA  mov      dword ptr [rax + 0x74], 0xff000020      
+  0006F3B1  xor      r8d, r8d                                
+  0006F3B4  mov      edx, 5                                  
+  0006F3B9  xor      ecx, ecx                                
+  0006F3BB  call     0x1800a5720                                ; -> S_AddQuad
+  0006F3C0  mov      dword ptr [rax + 0x74], 0xff002000      
+  0006F3C7  mov      dword ptr [rax + 0x9c], 0xff002000      
+  0006F3D1  mov      dword ptr [rax + 0x24], 0xff002000      
+  0006F3D8  mov      dword ptr [rax + 0x4c], 0xff002000      
+  0006F3DF  mov      dword ptr [rax + 0x20], 0x80            
+  0006F3E6  mov      dword ptr [rax + 0x48], 0x80            
+  0006F3ED  mov      dword ptr [rax + 0x70], 0x80            
+  0006F3F4  mov      dword ptr [rax + 0x98], 0x80            
+  0006F3FE  mov      qword ptr [rax + 0x90], rbx             
+  0006F405  mov      qword ptr [rax + 0x68], rbx             
+  0006F409  mov      qword ptr [rax + 0x40], rbx             
+  0006F40D  mov      qword ptr [rax + 0x18], rbx             
+  0006F411  mov      dword ptr [rax + 0x7c], 0x43130000      
+  0006F418  mov      dword ptr [rax + 0x78], 0x43390000      
+  0006F41F  mov      dword ptr [rax + 0x54], 0x43190000      
+  0006F426  mov      dword ptr [rax + 0x50], 0x43390000      
+  0006F42D  mov      dword ptr [rax + 0x2c], 0x43190000      
+  0006F434  mov      dword ptr [rax + 0x28], 0x43460000      
+  0006F43B  mov      dword ptr [rax + 4], 0x43130000         
+  0006F442  mov      dword ptr [rax], 0x43460000             
+  0006F448  call     0x1800a5460                                ; -> S_CmdFlush
+  0006F44D  mov      rcx, qword ptr [rsp + 0x38]             
+  0006F452  xor      rcx, rsp                                
+  0006F455  call     0x180101940                                ; -> __security_check_cookie
+  0006F45A  mov      rbx, qword ptr [rsp + 0x50]             
+  0006F45F  add      rsp, 0x40                               
+  0006F463  pop      rdi                                     
+  0006F464  ret                                              

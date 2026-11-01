@@ -1401,17 +1401,30 @@ The original collision handler activates each button and the game's normal
 control loop advances its animation, timers, linked mechanisms and sequence
 puzzle bookkeeping. Lara stays in her actual first-person pose. Used, disabled
 or currently animating buttons obey their native availability rules; touch
-does not force an elevator call or bypass a puzzle. Numeric keypads and OCB 6
-controls retain their native code-entry interaction. Wall holes, levers,
-valves, jump switches and tool-operated mechanisms are not touch buttons.
+does not force an elevator call or bypass a puzzle. TR5's keypad-shaped interior
+elevator panel (`SWITCH_TYPE3_RICH2_RICH1`, OCB 5/6/7) now accepts a touch anywhere
+on its front with either controller, without code entry or an Action icon.
+OCB 5/7 use their normal switch triggers. Only OCB 6 starts a preset lift trip:
+Lara must be inside that panel's native floor-trigger area, and the original
+lift controller chooses the destination, runs the doors and releases its
+travel control lock at arrival. Used panels and an ongoing trip
+cannot be retriggered. Actual inventory code-entry puzzles retain native controls.
+Wall holes, levers, valves, jump switches and tool-operated mechanisms are not
+touch buttons.
 Existing physical grip interactions remain available. No INI change is needed.
 
-`tools/build_button_tests.cmd` checks 21 mesh profiles, 18 installed animation
+`tools/build_button_tests.cmd` checks 22 mesh profiles, 20 installed animation
 pivots and four native binary layouts, then runs focused interaction tests
 using actual mod code with native/VR stand-ins. These cover both hands and
 four orientations, native activation, used-button/sequence guards, tracking
-loss, occlusion, re-arming and timer preservation. The full first-person
-self-test is not run. In-headset confirmation remains pending.
+loss, occlusion, re-arming and timer preservation. A live RICH2 capture found
+OCB 5 and OCB 6 instances sharing the same keypad mesh; the original OCB-6-only
+filter rejected the user's OCB 5 panel. The regression now exercises all three
+variants and proves ordinary panels do not require a preset lift link or lock
+Lara's controls. The corrected update passed 11,730 focused checks and a Release
+build; native lift routing and arrival unlock were also checked in both
+supported TR5 binaries. The full
+first-person self-test is not run. In-headset confirmation remains pending.
 
 ### Touching TV/monitor screens in VR
 

@@ -1,0 +1,323 @@
+// ControlLiftTeleporter  rva=0x000622C0  size=1350
+  000622C0  push     rbp                                     
+  000622C2  push     r12                                     
+  000622C4  push     r13                                     
+  000622C6  sub      rsp, 0x50                               
+  000622CA  mov      rax, qword ptr [rip + 0x14bd2f]            ; __security_cookie  [rva 0x001AE000]
+  000622D1  xor      rax, rsp                                
+  000622D4  mov      qword ptr [rsp + 0x38], rax             
+  000622D9  movsx    r13, cx                                 
+  000622DD  mov      edx, 0x3e00                             
+  000622E2  imul     rbp, r13, 0x24c8                        
+  000622E9  mov      rax, r13                                
+  000622EC  mov      word ptr [rsp + 0x20], r13w             
+  000622F2  add      rbp, qword ptr [rip + 0x60aeaf]            ; items  [rva 0x0066D1A8]
+  000622F9  xor      r12d, r12d                              
+  000622FC  movzx    eax, word ptr [rbp + 0x2c]              
+  00062300  mov      ecx, eax                                
+  00062302  and      ax, dx                                  
+  00062305  shr      ecx, 0xe                                
+  00062308  not      ecx                                     
+  0006230A  and      ecx, 1                                  
+  0006230D  cmp      ax, dx                                  
+  00062310  jne      0x18006233a                             
+  00062312  movzx    edx, word ptr [rbp + 0x2a]              
+  00062316  test     dx, dx                                  
+  00062319  je       0x18006233d                             
+  0006231B  jle      0x1800623c9                             
+  00062321  sub      dx, 1                                   
+  00062325  mov      word ptr [rbp + 0x2a], dx               
+  00062329  jne      0x180062334                             
+  0006232B  mov      edx, 0xffffffff                         
+  00062330  mov      word ptr [rbp + 0x2a], dx               
+  00062334  cmp      dx, -1                                  
+  00062338  jg       0x18006233d                             
+  0006233A  xor      ecx, 1                                  
+  0006233D  test     ecx, ecx                                
+  0006233F  je       0x1800627ef                             
+  00062345  movzx    eax, word ptr [rbp + 0x3a]              
+  00062349  mov      qword ptr [rsp + 0x78], rbx             
+  0006234E  mov      qword ptr [rsp + 0x48], r14             
+  00062353  test     ax, ax                                  
+  00062356  jne      0x180062477                             
+  0006235C  cmp      word ptr [rbp + 0x38], r12w             
+  00062361  jne      0x18006244f                             
+  00062367  mov      rcx, qword ptr [rip + 0x48c592]            ; lara_item  [rva 0x004EE900]
+  0006236E  lea      rdx, [rsp + 0x28]                       
+  00062373  call     0x18008a5c0                                ; -> GetSwitchTrigger
+  00062378  mov      r8d, eax                                
+  0006237B  test     ax, ax                                  
+  0006237E  jle      0x18006244f                             
+  00062384  mov      r9, qword ptr [rip + 0x60ae1d]             ; items  [rva 0x0066D1A8]
+  0006238B  mov      ebx, 0x10a                              
+  00062390  movzx    ecx, r8w                                
+  00062394  movsx    rdx, word ptr [rsp + rcx*2 + 0x26]      
+  0006239A  imul     r10, rdx, 0x24c8                        
+  000623A1  add      r10, r9                                 
+  000623A4  movzx    eax, word ptr [r10 + 0x10]              
+  000623A9  sub      ax, bx                                  
+  000623AC  cmp      ax, 5                                   
+  000623B0  ja       0x1800623ba                             
+  000623B2  cmp      word ptr [r10 + 0x30], 6                
+  000623B8  je       0x1800623ee                             
+  000623BA  dec      r8w                                     
+  000623BE  test     r8w, r8w                                
+  000623C2  jg       0x180062390                             
+  000623C4  jmp      0x18006244f                                ; -> ControlLiftTeleporter+0x18F
+  000623C9  cmp      dx, -1                                  
+  000623CD  jge      0x180062338                             
+  000623D3  inc      dx                                      
+  000623D6  mov      word ptr [rbp + 0x2a], dx               
+  000623DA  cmp      dx, -1                                  
+  000623DE  jne      0x180062338                             
+  000623E4  mov      word ptr [rbp + 0x2a], r12w             
+  000623E9  jmp      0x18006233d                                ; -> ControlLiftTeleporter+0x7D
+  000623EE  movsx    r9d, word ptr [r10 + 0x3e]              
+  000623F3  mov      ebx, 0x12                               
+  000623F8  mov      r8d, ebx                                
+  000623FB  mov      r11d, 2                                 
+  00062401  mov      edx, r11d                               
+  00062404  mov      ecx, r9d                                
+  00062407  sar      ecx, 3                                  
+  0006240A  mov      eax, r9d                                
+  0006240D  and      ecx, 0x1e                               
+  00062410  and      eax, 0xf                                
+  00062413  sub      ebx, ecx                                
+  00062415  add      eax, eax                                
+  00062417  sub      r8d, eax                                
+  0006241A  mov      ecx, ebx                                
+  0006241C  shl      edx, cl                                 
+  0006241E  mov      ecx, r8d                                
+  00062421  shl      r11d, cl                                
+  00062424  not      edx                                     
+  00062426  mov      ecx, ebx                                
+  00062428  not      r11d                                    
+  0006242B  mov      ebx, 4                                  
+  00062430  and      edx, r11d                               
+  00062433  mov      eax, ebx                                
+  00062435  and      edx, 0xaaaab                            
+  0006243B  shl      eax, cl                                 
+  0006243D  mov      ecx, r8d                                
+  00062440  shl      ebx, cl                                 
+  00062442  or       eax, ebx                                
+  00062444  or       edx, eax                                
+  00062446  mov      dword ptr [r10 + 0xc], edx              
+  0006244A  mov      word ptr [rbp + 0x3e], r9w              
+  0006244F  movzx    eax, word ptr [rbp + 0x38]              
+  00062453  cmp      ax, 0x1e                                
+  00062457  jge      0x180062465                             
+  00062459  inc      ax                                      
+  0006245C  mov      word ptr [rbp + 0x38], ax               
+  00062460  jmp      0x1800627e5                                ; -> ControlLiftTeleporter+0x525
+  00062465  mov      eax, r12d                               
+  00062468  mov      word ptr [rbp + 0x3a], 1                
+  0006246E  mov      word ptr [rbp + 0x38], ax               
+  00062472  jmp      0x1800627e5                                ; -> ControlLiftTeleporter+0x525
+  00062477  mov      qword ptr [rsp + 0x80], rsi             
+  0006247F  mov      qword ptr [rsp + 0x88], rdi             
+  00062487  mov      qword ptr [rsp + 0x40], r15             
+  0006248C  cmp      ax, 1                                   
+  00062490  jne      0x180062672                             
+  00062496  mov      rdx, qword ptr [rip + 0x48c463]            ; lara_item  [rva 0x004EE900]
+  0006249D  lea      r9, [rsp + 0x20]                        
+  000624A2  mov      dword ptr [rip + 0x60ac64], 0xffffffe0     ; camera+0x30  [rva 0x0066D110]
+  000624AC  mov      r14d, 1                                 
+  000624B2  mov      dword ptr [rip + 0x60ac4f], r14d           ; camera+0x28  [rva 0x0066D108]
+  000624B9  mov      dword ptr [rip + 0x60ac44], r14d           ; camera+0x24  [rva 0x0066D104]
+  000624C0  movsx    ecx, word ptr [rdx + 0x60]              
+  000624C4  mov      eax, ecx                                
+  000624C6  xor      eax, dword ptr [rbp + 0x60]             
+  000624C9  and      eax, 0xfffffc00                         
+  000624CE  xor      eax, ecx                                
+  000624D0  movsx    ecx, word ptr [rdx + 0x68]              
+  000624D4  mov      dword ptr [rdx + 0x60], eax             
+  000624D7  mov      eax, ecx                                
+  000624D9  xor      eax, dword ptr [rbp + 0x68]             
+  000624DC  and      eax, 0xfffffc00                         
+  000624E1  xor      eax, ecx                                
+  000624E3  mov      dword ptr [rdx + 0x68], eax             
+  000624E6  mov      eax, 0xffff8000                         
+  000624EB  add      ax, word ptr [rbp + 0x6e]               
+  000624EF  mov      word ptr [rdx + 0x6e], ax               
+  000624F3  movzx    eax, word ptr [rbp + 0x1c]              
+  000624F7  mov      r8d, dword ptr [rbp + 0x68]             
+  000624FB  mov      edx, dword ptr [rbp + 0x64]             
+  000624FE  mov      ecx, dword ptr [rbp + 0x60]             
+  00062501  mov      word ptr [rsp + 0x20], ax               
+  00062506  call     0x1800101f0                                ; -> GetFloor
+  0006250B  mov      r9d, dword ptr [rbp + 0x68]             
+  0006250F  mov      rcx, rax                                
+  00062512  mov      r8d, dword ptr [rbp + 0x64]             
+  00062516  mov      edx, dword ptr [rbp + 0x60]             
+  00062519  call     0x1800106d0                                ; -> GetHeight
+  0006251E  mov      rcx, qword ptr [rip + 0x48c3db]            ; lara_item  [rva 0x004EE900]
+  00062525  movzx    edx, word ptr [rsp + 0x20]              
+  0006252A  mov      dword ptr [rcx + 0x64], eax             
+  0006252D  cmp      word ptr [rcx + 0x1c], dx               
+  00062531  je       0x18006253f                             
+  00062533  movzx    ecx, word ptr [rip + 0x48c206]             ; lara  [rva 0x004EE740]
+  0006253A  call     0x180045c00                                ; -> ItemNewRoom
+  0006253F  call     0x1800ed410                                ; -> InitialiseHair
+  00062544  lea      rdx, [rsp + 0x28]                       
+  00062549  mov      rcx, rbp                                
+  0006254C  call     0x18008a5c0                                ; -> GetSwitchTrigger
+  00062551  cmp      byte ptr [rip + 0x5fc6e8], 0xe             ; gfCurrentLevel  [rva 0x0065EC40]
+  00062558  mov      edx, eax                                
+  0006255A  mov      r11d, 2                                 
+  00062560  jne      0x18006257d                             
+  00062562  mov      eax, 0xaf                               
+  00062567  cmp      r13w, ax                                
+  0006256B  jne      0x18006257d                             
+  0006256D  mov      eax, 0xae                               
+  00062572  movzx    edx, r14w                               
+  00062576  mov      word ptr [rsp + 0x28], ax               
+  0006257B  jmp      0x180062586                                ; -> ControlLiftTeleporter+0x2C6
+  0006257D  test     dx, dx                                  
+  00062580  jle      0x180062661                             
+  00062586  mov      r8, qword ptr [rip + 0x60ac1b]             ; items  [rva 0x0066D1A8]
+  0006258D  mov      ebx, 0x10a                              
+  00062592  movsx    rax, dx                                 
+  00062596  movsx    rcx, word ptr [rsp + rax*2 + 0x26]      
+  0006259C  imul     r9, rcx, 0x24c8                         
+  000625A3  add      r9, r8                                  
+  000625A6  movsx    rcx, word ptr [r9 + 0x10]               
+  000625AB  movzx    eax, cx                                 
+  000625AE  sub      ax, bx                                  
+  000625B1  cmp      ax, 5                                   
+  000625B5  ja       0x1800625bf                             
+  000625B7  cmp      word ptr [r9 + 0x30], 6                 
+  000625BD  je       0x1800625d8                             
+  000625BF  dec      dx                                      
+  000625C2  test     dx, dx                                  
+  000625C5  jg       0x180062592                             
+  000625C7  mov      word ptr [rbp + 0x3a], r11w             
+  000625CC  mov      dword ptr [rip + 0x15460d], r12d           ; bDisableLaraControl  [rva 0x001B6BE0]
+  000625D3  jmp      0x1800627d0                                ; -> ControlLiftTeleporter+0x510
+  000625D8  imul     rcx, rcx, 0xed0                         
+  000625DF  mov      dword ptr [r9 + 0x12], r12d             
+  000625E3  lea      r15, [rip + 0x634bd6]                      ; objects  [rva 0x006971C0]
+  000625EA  mov      ebx, 0x12                               
+  000625EF  mov      r8d, ebx                                
+  000625F2  movsx    rdx, word ptr [rcx + r15 + 0x42]        
+  000625F8  lea      eax, [rdx + 1]                          
+  000625FB  mov      word ptr [r9 + 0x18], ax                
+  00062600  lea      rcx, [rdx + rdx*2]                      
+  00062604  mov      rax, qword ptr [rip + 0x60aba5]            ; anims  [rva 0x0066D1B0]
+  0006260B  add      rcx, rcx                                
+  0006260E  mov      edx, r11d                               
+  00062611  movzx    ecx, word ptr [rax + rcx*8 + 0x4c]      
+  00062616  mov      word ptr [r9 + 0x1a], cx                
+  0006261B  movsx    ecx, word ptr [rbp + 0x3e]              
+  0006261F  mov      eax, ecx                                
+  00062621  sar      ecx, 3                                  
+  00062624  and      eax, 0xf                                
+  00062627  and      ecx, 0x1e                               
+  0006262A  add      eax, eax                                
+  0006262C  sub      ebx, ecx                                
+  0006262E  sub      r8d, eax                                
+  00062631  mov      ecx, ebx                                
+  00062633  shl      edx, cl                                 
+  00062635  mov      eax, r11d                               
+  00062638  not      edx                                     
+  0006263A  mov      ecx, r8d                                
+  0006263D  shl      eax, cl                                 
+  0006263F  mov      ecx, ebx                                
+  00062641  not      eax                                     
+  00062643  mov      ebx, 4                                  
+  00062648  and      edx, eax                                
+  0006264A  mov      eax, ebx                                
+  0006264C  shl      eax, cl                                 
+  0006264E  and      edx, 0xaaaab                            
+  00062654  mov      ecx, r8d                                
+  00062657  shl      ebx, cl                                 
+  00062659  or       eax, ebx                                
+  0006265B  or       edx, eax                                
+  0006265D  mov      dword ptr [r9 + 0xc], edx               
+  00062661  mov      word ptr [rbp + 0x3a], r11w             
+  00062666  mov      dword ptr [rip + 0x154573], r12d           ; bDisableLaraControl  [rva 0x001B6BE0]
+  0006266D  jmp      0x1800627d0                                ; -> ControlLiftTeleporter+0x510
+  00062672  cmp      ax, 2                                   
+  00062676  jne      0x1800627d0                             
+  0006267C  movzx    eax, word ptr [rbp + 0x38]              
+  00062680  cmp      ax, 0x78                                
+  00062684  jge      0x1800626ae                             
+  00062686  test     ax, ax                                  
+  00062689  jne      0x18006269b                             
+  0006268B  xor      edx, edx                                
+  0006268D  mov      ecx, 0x10f                              
+  00062692  lea      r8d, [rdx + 2]                          
+  00062696  call     0x1800a40a0                                ; -> SoundEffect
+  0006269B  mov      dword ptr [rip + 0x60aa6b], 0xfffffff8     ; camera+0x30  [rva 0x0066D110]
+  000626A5  inc      word ptr [rbp + 0x38]                   
+  000626A9  jmp      0x1800627d0                                ; -> ControlLiftTeleporter+0x510
+  000626AE  lea      rdx, [rsp + 0x28]                       
+  000626B3  mov      rcx, rbp                                
+  000626B6  call     0x18008a5c0                                ; -> GetSwitchTrigger
+  000626BB  movsxd   r11, eax                                
+  000626BE  test     r11w, r11w                              
+  000626C2  jle      0x1800627a6                             
+  000626C8  mov      rsi, qword ptr [rip + 0x60aad9]            ; items  [rva 0x0066D1A8]
+  000626CF  lea      r15, [rip + 0x634aea]                      ; objects  [rva 0x006971C0]
+  000626D6  mov      r12, qword ptr [rip + 0x60aad3]            ; anims  [rva 0x0066D1B0]
+  000626DD  mov      ebx, 0x10a                              
+  000626E2  movsx    rcx, r11w                               
+  000626E6  mov      r13d, 0x3e00                            
+  000626EC  lea      r8d, [rbx + 0x2e]                       
+  000626F0  lea      rdi, [rsp + rcx*2 + 0x26]               
+  000626F5  nop      word ptr [rax + rax]                    
+  00062700  movsx    rdx, word ptr [rdi]                     
+  00062704  imul     r10, rdx, 0x24c8                        
+  0006270B  add      r10, rsi                                
+  0006270E  movsx    rcx, word ptr [r10 + 0x10]              
+  00062713  movzx    eax, cx                                 
+  00062716  sub      ax, bx                                  
+  00062719  cmp      ax, 5                                   
+  0006271D  ja       0x18006275d                             
+  0006271F  cmp      word ptr [r10 + 0x30], 6                
+  00062725  jne      0x18006275d                             
+  00062727  imul     rax, rcx, 0xed0                         
+  0006272E  mov      dword ptr [r10 + 0x12], 0x10001         
+  00062736  movsx    rax, word ptr [rax + r15 + 0x42]        
+  0006273C  mov      word ptr [r10 + 0x18], ax               
+  00062741  lea      rax, [rax + rax*2]                      
+  00062745  add      rax, rax                                
+  00062748  movzx    eax, word ptr [r12 + rax*8 + 0x1c]      
+  0006274E  and      dword ptr [r10 + 0x1820], 0xfffffff9    
+  00062756  mov      word ptr [r10 + 0x1a], ax               
+  0006275B  jmp      0x18006278e                                ; -> ControlLiftTeleporter+0x4CE
+  0006275D  sub      cx, r8w                                 
+  00062761  cmp      cx, 2                                   
+  00062765  ja       0x18006278e                             
+  00062767  movzx    ecx, dx                                 
+  0006276A  call     0x180045b90                                ; -> AddActiveItem
+  0006276F  mov      eax, dword ptr [r10 + 0x1820]           
+  00062776  mov      r8d, 0x138                              
+  0006277C  and      eax, 0xfffffffb                         
+  0006277F  or       eax, 2                                  
+  00062782  or       word ptr [r10 + 0x2c], r13w             
+  00062787  mov      dword ptr [r10 + 0x1820], eax           
+  0006278E  dec      r11w                                    
+  00062792  sub      rdi, 2                                  
+  00062796  test     r11w, r11w                              
+  0006279A  jg       0x180062700                             
+  000627A0  movzx    r13d, word ptr [rsp + 0x20]             
+  000627A6  movzx    ecx, r13w                               
+  000627AA  mov      dword ptr [rip + 0x60a95c], 0xffffffe0     ; camera+0x30  [rva 0x0066D110]
+  000627B4  call     0x180045a80                                ; -> RemoveActiveItem
+  000627B9  and      dword ptr [rbp + 0x1820], 0xfffffff9    
+  000627C0  mov      eax, 0xffffc1ff                         
+  000627C5  and      word ptr [rbp + 0x2c], ax               
+  000627C9  mov      dword ptr [rbp + 0x38], 0               
+  000627D0  mov      rsi, qword ptr [rsp + 0x80]             
+  000627D8  mov      rdi, qword ptr [rsp + 0x88]             
+  000627E0  mov      r15, qword ptr [rsp + 0x40]             
+  000627E5  mov      rbx, qword ptr [rsp + 0x78]             
+  000627EA  mov      r14, qword ptr [rsp + 0x48]             
+  000627EF  mov      rcx, qword ptr [rsp + 0x38]             
+  000627F4  xor      rcx, rsp                                
+  000627F7  call     0x180101940                                ; -> __security_check_cookie
+  000627FC  add      rsp, 0x50                               
+  00062800  pop      r13                                     
+  00062802  pop      r12                                     
+  00062804  pop      rbp                                     
+  00062805  ret                                              
