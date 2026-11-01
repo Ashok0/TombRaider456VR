@@ -3157,6 +3157,20 @@ void AdvanceLaraAnimation(uint8_t* item) {
          beforeState,afterState,beforeAnimation,afterAnimation);
 }
 
+bool GroundGaitQueueAvailable(const uint8_t* item) {
+    const int required=*reinterpret_cast<const int16_t*>(item+22);
+    if(!required) return true;
+    // Native crawl can leave required DUCK queued even after Lara has stood
+    // up (captured in VCI: STOP, idle 103, goal STOP, required 71). Treating
+    // that residue as an interaction disables instant gait handoffs and makes
+    // each stick press wait for the long idle/stop animation to finish.
+    // Preserve the queue. Native standing control still checks clearance and
+    // chooses the gait; active crouch requests and other required states yield.
+    return g_active && required==71 && CanModifyGroundMotion(item) &&
+        !g_heightCrouch.active &&
+        !(*Ptr<uint64_t>(g_boundDll->input)&firstperson::PhysicalCrouchHoldScope::Duck);
+}
+
 void AccelerateBackpedalStart(uint8_t* item,uint64_t action) {
     // Animation 41 holds a slow 2-unit step for 16 frames before the normal
     // 10-unit backward loop. Shorten that command-free startup, rather than
@@ -3165,7 +3179,7 @@ void AccelerateBackpedalStart(uint8_t* item,uint64_t action) {
         *reinterpret_cast<const int16_t*>(item+off::item_anim_state)!=16 ||
         *reinterpret_cast<const int16_t*>(item+off::item_goal_state)!=16 ||
         *reinterpret_cast<const int16_t*>(item+off::item_anim_number)!=41 ||
-        *reinterpret_cast<const int16_t*>(item+22)!=0) return;
+        !GroundGaitQueueAvailable(item)) return;
     const auto* anims=*Ptr<const uint8_t*>(g_boundDll->anims);
     if (!anims) return;
     const auto* start=anims+41*48;
@@ -3376,7 +3390,7 @@ void PrepareGroundDirection(uint8_t* item,uint64_t action) {
     // Never splice a landing, step-up/down, jump or interaction animation.
     if (!g_boundDll->anims || !CanModifyGroundMotion(item) ||
         (*Ptr<uint64_t>(g_boundDll->input)&(0x10|0x40|0x100|0x1000)) ||
-        *reinterpret_cast<const int16_t*>(item+22)!=0) return; // required state
+        !GroundGaitQueueAvailable(item)) return;
     const auto direction=action&Directions;
     if (direction!=Forward && direction!=StepLeft && direction!=StepRight && direction!=Back) return;
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);

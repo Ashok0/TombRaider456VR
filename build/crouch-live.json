@@ -7,7 +7,908 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2223
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2226
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2229
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2232
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2191
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2194
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2197
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2200
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2203
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2206
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2209
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2212
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2215
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2218
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2221
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2224
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2227
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -22,14 +923,14 @@
       2230
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -47,8 +948,8 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
     ],
     "input": "0x0"
   },
@@ -60,7 +961,7 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -75,14 +976,14 @@
       2233
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -100,8 +1001,8 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
     ],
     "input": "0x0"
   },
@@ -113,7 +1014,7 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -128,14 +1029,14 @@
       2192
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -153,8 +1054,8 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
     ],
     "input": "0x0"
   },
@@ -166,7 +1067,7 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -181,14 +1082,14 @@
       2195
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -206,8 +1107,8 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
     ],
     "input": "0x0"
   },
@@ -219,7 +1120,7 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -234,14 +1135,14 @@
       2198
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -259,8 +1160,8 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
     ],
     "input": "0x0"
   },
@@ -272,7 +1173,2339 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2201
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2204
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2207
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2210
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2213
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2216
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2219
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2222
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2225
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2228
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2232
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2191
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2194
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2197
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2200
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2203
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2206
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2209
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2212
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2215
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2218
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2221
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2224
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2227
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2230
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2233
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2192
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2195
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2198
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2201
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2204
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2207
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2210
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2213
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2216
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2219
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2222
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2225
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2228
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2231
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2190
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2193
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2196
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2199
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -287,14 +3520,14 @@
       2202
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -312,8 +3545,8 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
     ],
     "input": "0x0"
   },
@@ -325,7 +3558,7 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -340,14 +3573,14 @@
       2205
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -365,8 +3598,8 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
     ],
     "input": "0x0"
   },
@@ -378,7 +3611,7 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -393,14 +3626,14 @@
       2208
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -418,8 +3651,8 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
     ],
     "input": "0x0"
   },
@@ -431,7 +3664,7 @@
     "g_physicalCrouchCamera": 0,
     "g_heightCrouch": 0,
     "g_runtimeEnabled": 1,
-    "g_headingBase": 1.2459099292755127,
+    "g_headingBase": -1.3469491004943848,
     "g_headingItem": 140698166269576,
     "g_haveManualInput": 1,
     "g_manualLocal": [
@@ -446,14 +3679,14 @@
       2211
     ],
     "position": [
-      41631,
+      44614,
       -24064,
-      71172,
+      68772,
       0,
-      12332,
+      -16365,
       0
     ],
-    "room": 31,
+    "room": 57,
     "camera": 0,
     "gun": [
       0,
@@ -471,8 +3704,5838 @@
     "analog": [
       0,
       0,
-      4304,
-      4304
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2214
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2217
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2220
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2223
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2226
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2229
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2232
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2191
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2194
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2197
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2200
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2203
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2206
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2210
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2213
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2215
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2218
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2221
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2225
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2228
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2231
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2190
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2193
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2196
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2199
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2202
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2205
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2208
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2211
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2214
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2217
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2220
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2223
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2226
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2229
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2232
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2191
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2194
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2197
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2200
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2203
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2206
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2209
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2212
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2215
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2218
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2221
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2224
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2227
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2230
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2233
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2192
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2195
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2198
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2201
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2204
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2207
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2210
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2213
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2216
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2219
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2222
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2225
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2228
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2231
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2190
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2193
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2196
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2199
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2202
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2205
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2208
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2211
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2215
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2218
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x16",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2221
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2224
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2227
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2230
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2233
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2192
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2195
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2198
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2201
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2204
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2207
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2210
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2213
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2216
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2219
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2222
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2225
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2228
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2231
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2190
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2193
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2196
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2199
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2202
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2205
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2208
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2211
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2214
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2217
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2220
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2223
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2226
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2229
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2232
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
+    ],
+    "input": "0x0"
+  },
+  {
+    "g_active": 1,
+    "g_haveHeading": 1,
+    "g_scenePoseValid": 1,
+    "g_crouchDrive": 0,
+    "g_physicalCrouchCamera": 0,
+    "g_heightCrouch": 0,
+    "g_runtimeEnabled": 1,
+    "g_headingBase": -1.3469491004943848,
+    "g_headingItem": 140698166269576,
+    "g_haveManualInput": 1,
+    "g_manualLocal": [
+      0.0,
+      0.0
+    ],
+    "state": [
+      2,
+      2,
+      71,
+      103,
+      2191
+    ],
+    "position": [
+      44614,
+      -24064,
+      68772,
+      0,
+      -16365,
+      0
+    ],
+    "room": 57,
+    "camera": 0,
+    "gun": [
+      0,
+      0,
+      0
+    ],
+    "flags": "0x816",
+    "script": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "analog": [
+      0,
+      0,
+      -13690,
+      -13690
     ],
     "input": "0x0"
   }

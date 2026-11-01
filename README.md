@@ -2550,7 +2550,7 @@ active gait does not restart it. The [October 5 zigzag fix](#continuous-forwards
 extends this to forward entry as well.
 
 The shortcut is restricted to known ordinary gait/idle animations. Landings,
-step-up/down poses, jumps, interactions, gravity and pending required states
+step-up/down poses, jumps, interactions, gravity and pending required actions
 retain native timing. Missing/invalid animation data uses the previous safe
 handoff. Runtime animation-table addresses were checked against AnimateLara
 in all four supported TR4/5 binaries; idle frame bounds are read from that table.
@@ -2560,6 +2560,22 @@ passed. `tools/verify_ground_gait_entry.py` verified first-tick side/back entry
 and bounded native speed in all **40 TR4 + 15 TR5** installed animation tables.
 Headset confirmation of responsiveness is pending. Deployment and backup:
 `build/responsive-sidestep-deploy/manifest.json`.
+
+November 1 correction: a live TR5 VCI capture showed Lara standing in idle 103
+with required state 71 (DUCK) still queued after crouching. The blanket required-
+state guard disabled immediate gait entry and fast backpedal startup. First person
+now permits those ordinary standing gait changes with a queued DUCK when neither
+the input nor the physical posture requests crouching. The queue is preserved;
+native standing control and collision still decide whether movement is possible.
+Actual crouch goals, other required actions, authored transitions and third person
+retain their previous behavior. This applies to both TR4 and TR5.
+
+`tools/build_ground_queue_tests.cmd` reproduced the VCI failure before the fix
+and passed 5,428 focused checks afterward, including four directions, reversals,
+head-relative movement, wall/ceiling rejection and queue preservation. The prior
+crouch regression passed 3,226 focused checks, the 55 installed gait tables passed
+asset verification, and Release/x64 built successfully. No full self-test or game
+DLL execution was used. In-headset confirmation remains pending.
 
 ### Faster backpedal startup (2026-10-04)
 

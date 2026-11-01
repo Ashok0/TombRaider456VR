@@ -1,0 +1,14 @@
+﻿{
+    "dll":  "5BC258741382F1DD858E37A3F5032564C2628FF97048CAD131A9E2D1AB13F76A",
+    "installed_gait_tables":  55,
+    "previous_dll":  "02D6761D3AE4EB14C57B100C8D6B144A0B94430B536785F3D11F8615EEE39998",
+    "release_build_passed":  true,
+    "focused_ground_queue_checks":  5428,
+    "headset_tested":  false,
+    "focused_crouch_checks":  3226,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-ground-queue-20261101-132659",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "change":  "TR4/5 first-person standing gait entry and backpedal startup remain responsive with inactive required DUCK queue; active crouching and native collision remain authoritative",
+    "deployed":  "2026-11-01T13:26:59.5523668-05:00",
+    "full_suite_run":  false
+}
