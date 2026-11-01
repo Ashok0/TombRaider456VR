@@ -1,0 +1,17 @@
+﻿{
+    "full_suite_run":  false,
+    "previous_dll":  "DC92021ED60725AF93165EA42577FA76512723E7EFCF60A3EC3E08C52D1E4664",
+    "verified_vci_pose_frames":  336,
+    "deployed":  "2026-11-01T14:21:36.1473667-05:00",
+    "vci_directions":  2,
+    "focused_interaction_checks":  16838,
+    "dll":  "368BF8FD67318669E342763829E9C71EE6B018A61E740FD6051604E02BBD5EEE",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-vci-levers-20261101-142135",
+    "verified_vci_native_layouts":  2,
+    "change":  "TR5 VCI up/down levers use verified moving-bar contact and accurate partial regrips in first person; existing native activation, completion and timer handling preserved",
+    "vci_wall_orientations":  4,
+    "vci_models":  2,
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "headset_tested":  false,
+    "release_build_passed":  true
+}

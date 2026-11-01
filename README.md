@@ -1336,6 +1336,17 @@ At the end
 stop, native activation and completion commands run once in the same tick,
 preserving level triggers and switch control without replaying the motion.
 This supports ordinary wall levers, including compatible TR5 type-4 levers.
+TR5's VCI up/down levers (`SWITCH_TYPE1_RICH1` and `SWITCH_TYPE1_RICH3`)
+have dedicated contact on their moving horizontal grip bar. With weapons
+holstered in first person, hold **Right Grip** on the bar and move it through
+its arc to flip the switch up or down. No Action icon is required. Partial
+flips remain in place after release; regrabbing another part of the bar moves
+the palm attachment to that spot without resetting the lever. Both directions
+use the original native completion and timer handling. Button faces and
+keypads keep their separate touch controls; third-person use is unchanged.
+`tools/build_vci_lever_tests.cmd` verifies both meshes, their installed poses
+and native OCB-4 branches, then runs focused interaction regressions without
+launching the game or the full self-test.
 TR4 floor/rail levers, including the forward/backward lever in Desert Railroad,
 also support Right Grip at the end of the handle. Move your hand through the
 handle's arc to the opposite stop; either direction works. Standing, physical
