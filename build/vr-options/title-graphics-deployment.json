@@ -1,0 +1,11 @@
+﻿{
+    "dll":  "70760ab77d95eb9d67088f097324ad9782ec604f35e1dfd12a0d828a8d461244",
+    "change":  "Y+RT sends native graphics toggle from TR1-6 title menus, independent of first-person configuration",
+    "release_build_passed":  true,
+    "native_graphics_handler_inspected":  true,
+    "headset_tested":  false,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-title-graphics-20261031-223942",
+    "ini_unchanged":  "32A6B7456E313B28C366E2ADDF8E090B5922460F7D1F3E0EDAE330CB912A5CCE",
+    "deployed":  "2026-10-31T22:39:42.3103910-04:00",
+    "full_suite_run":  false
+}

@@ -1,0 +1,116 @@
+[
+  {
+    "game": 1,
+    "flavor": "pdb",
+    "stamp": 1783318783,
+    "setItemMatrix": 472256,
+    "drawReturn": 65111,
+    "path": "C:\\dev\\TombRaider123VR\\PDB\\tomb1.dll"
+  },
+  {
+    "game": 1,
+    "flavor": "retail",
+    "stamp": 1783331880,
+    "setItemMatrix": 473424,
+    "drawReturn": 65159,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-retail-verify\\tomb1.dll"
+  },
+  {
+    "game": 1,
+    "flavor": "egs",
+    "stamp": 1788958334,
+    "setItemMatrix": 476000,
+    "drawReturn": 65767,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-egs-verify\\tomb1.dll"
+  },
+  {
+    "game": 2,
+    "flavor": "pdb",
+    "stamp": 1783318805,
+    "setItemMatrix": 687568,
+    "drawReturn": 97362,
+    "path": "C:\\dev\\TombRaider123VR\\PDB\\tomb2.dll"
+  },
+  {
+    "game": 2,
+    "flavor": "retail",
+    "stamp": 1783331903,
+    "setItemMatrix": 687312,
+    "drawReturn": 97394,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-retail-verify\\tomb2.dll"
+  },
+  {
+    "game": 2,
+    "flavor": "egs",
+    "stamp": 1788958358,
+    "setItemMatrix": 686896,
+    "drawReturn": 96146,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-egs-verify\\tomb2.dll"
+  },
+  {
+    "game": 3,
+    "flavor": "pdb",
+    "stamp": 1783318797,
+    "setItemMatrix": 999024,
+    "drawReturn": 175806,
+    "path": "C:\\dev\\TombRaider123VR\\PDB\\tomb3.dll"
+  },
+  {
+    "game": 3,
+    "flavor": "retail",
+    "stamp": 1783331895,
+    "setItemMatrix": 1006704,
+    "drawReturn": 175998,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-retail-verify\\tomb3.dll"
+  },
+  {
+    "game": 3,
+    "flavor": "egs",
+    "stamp": 1788958349,
+    "setItemMatrix": 1010016,
+    "drawReturn": 176270,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-egs-verify\\tomb3.dll"
+  },
+  {
+    "game": 4,
+    "flavor": "pdb",
+    "stamp": 1768638873,
+    "setItemMatrix": 870288,
+    "drawReturn": 111839,
+    "path": "C:\\dev\\TombRaider456VR\\PDB\\tomb4.dll"
+  },
+  {
+    "game": 4,
+    "flavor": "retail",
+    "stamp": 1757491162,
+    "setItemMatrix": 873136,
+    "drawReturn": 111039,
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\4\\tomb4.dll"
+  },
+  {
+    "game": 5,
+    "flavor": "pdb",
+    "stamp": 1768638876,
+    "setItemMatrix": 657712,
+    "drawReturn": 96617,
+    "drawReturns": [
+      96617,
+      99444,
+      101503
+    ],
+    "path": "C:\\dev\\TombRaider456VR\\PDB\\tomb5.dll"
+  },
+  {
+    "game": 5,
+    "flavor": "retail",
+    "stamp": 1757491177,
+    "setItemMatrix": 658576,
+    "drawReturn": 96934,
+    "drawReturns": [
+      96934,
+      99914,
+      102095
+    ],
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\5\\tomb5.dll"
+  }
+]

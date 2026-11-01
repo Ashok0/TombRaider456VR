@@ -309,7 +309,9 @@ bool ApplyViewChords(XGamepad& pad) {
     const bool fpChords = Cfg().firstPerson && CurrentGame() != 2;
     const bool yHeld = (pad.wButtons & XB_Y) != 0;
     const bool viewToggle = fpChords && yHeld && pad.bLeftTrigger > 30;
-    const bool graphicsToggle = fpChords && !viewToggle && yHeld &&
+    // Title graphics switching is independent of first-person support (TR6)
+    // and the FirstPerson INI setting. Let native START debounce the switch.
+    const bool graphicsToggle = (fpChords || InTitle()) && !viewToggle && yHeld &&
         pad.bRightTrigger > 30;
     if (viewToggle && !g_viewToggleHeld) FirstPersonToggle();
     g_viewToggleHeld = viewToggle;
@@ -319,9 +321,9 @@ bool ApplyViewChords(XGamepad& pad) {
     } else if (graphicsToggle) {
         pad.wButtons &= static_cast<uint16_t>(~XB_Y);
         pad.wButtons |= XB_START;
-        pad.bRightTrigger = 0;
+        pad.bLeftTrigger = pad.bRightTrigger = 0;
     }
-    if (fpChords) {
+    if (fpChords || graphicsToggle) {
         g_menuChordSince = 0;
         g_menuChordFired = false;
         g_menuPressUntil = 0;

@@ -1,0 +1,12 @@
+﻿{
+    "dll":  "5b784d536095f2803c28dd50b8af32407d582035f755f4c51e3e606b44085e82",
+    "change":  "Classic first-person body centering and live physical-turn fallback in TR1-5",
+    "full_suite_run":  false,
+    "verified_game_layouts":  13,
+    "menu_regression_checks":  164,
+    "headset_tested":  false,
+    "classic_body_checks":  407,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-classic-turn-20261031-195917",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "deployed":  "2026-10-31T19:59:17.5928986-04:00"
+}

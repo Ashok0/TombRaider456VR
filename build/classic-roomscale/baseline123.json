@@ -1,0 +1,5 @@
+{
+  "src/FirstPerson.cpp": "29eeb2ec90cc9b43f60cd4abff707e80b76139690d28e2939b56650f8fa56ad8",
+  "src/ClassicBodyRender.h": "ded223a90f024bbd6dbf3b29a462ed1bbb82731da5af961154bbd2a06a9ca4bf",
+  "tools/classic_body_tests.cpp": "84040f4b908feaaecec31b94ac67de9b1cc7c0d1ad722c5f9c418efc6782825a"
+}

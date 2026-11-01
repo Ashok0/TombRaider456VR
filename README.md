@@ -1997,7 +1997,10 @@ gameplay, inventory and title menus; it never doubles as the graphics toggle.
 Release and press the chord again to switch back. Selecting first person in a
 menu takes effect when normal gameplay resumes. Startup is still third person:
 the INI setting enables the feature, not an automatic first-person startup.
-TR6, or `FirstPerson=0`, retains the legacy Y + LT hold chord for graphics.
+Y + RT toggles Classic/Remastered graphics from the title menus in all three
+games, including TR6 and `FirstPerson=0`. On Meta Touch, hold Y on the left
+controller and press the right trigger. TR6, or `FirstPerson=0`, also retains
+the legacy Y + LT hold chord for graphics during gameplay.
 
 Active TR4/5 first person now forces Modern Controls, ported from TR1/3.
 The control mode selected on entry is restored when first person exits or is
