@@ -1,0 +1,14 @@
+﻿{
+    "dll":  "1C15429DAE54709640A2098CACB115E48B5BDBF768435E7209A5F59B68EC6E55",
+    "previous_dll_present":  false,
+    "release_build_passed":  true,
+    "physical_interaction_checks":  4491,
+    "container_asset_variants":  8,
+    "headset_tested":  false,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-containers-20261101-012141",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "native_layouts_verified":  2,
+    "change":  "TR5 searchable drawers and independent cabinet doors: Right Grip opening/closing, retained partial poses, visible handles and native pickup completion",
+    "deployed":  "2026-11-01T01:21:41.6200342-04:00",
+    "full_suite_run":  false
+}

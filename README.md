@@ -1381,6 +1381,37 @@ layouts. `tools/verify_cog_wheels.py` performs read-only asset/address checks;
 sequencing, release, tracking loss and cleanup against a native-engine stand-in.
 These checks do not load game DLLs. In-headset confirmation remains pending.
 
+### Physical drawers and cabinet doors in VR
+
+TR5's searchable drawers and hinged cabinets support **Right Grip** in first
+person with weapons holstered. Reach for the visible handle, hold Right Grip,
+and pull the drawer out or swing the cabinet door open. Reverse the movement
+to close it. The Action icon is not required. Releasing the handle leaves it
+where you put it, so you can move and re-grab. Each cabinet door moves
+independently, and the visible palm follows its handle.
+
+This covers the SEARCH_OBJECT2 drawers in ANDY1, RICH2 and JOBY3/JOBY5, and
+SEARCH_OBJECT1 cabinets in RICH1, RICH2, JOBY2 and JOBY5. Drawer models that
+normally hide their handles during Lara's scripted search retain a visible
+handle while being pulled. Both Classic and remastered graphics use the
+physical joint poses. Opening far enough invokes the native search handler,
+including inventory, pickup statistics and trophies, once; closing and opening
+again does not duplicate the contents. Native Action hands control back to
+the conventional search animation. No new INI setting is required.
+
+Physical poses are temporary: recentering or leaving first person restores
+the closed pose without restoring collected loot. Open positions are not a
+new persistent savegame feature. Static furniture, open shelves and trapped
+search chests are excluded. These searchable drawer/cabinet handlers are
+TR5 objects; this does not add new furniture mechanics to TR4 or TR6.
+
+`tools/build_container_tests.cmd` checks installed meshes, authored animation
+paths and both supported binary layouts, then runs the actual interaction code
+with native/VR stand-ins. It covers opening/closing, independent doors,
+release/re-grab, tracking loss, pickup completion, native Action fallback and
+stale item identities. It does not execute a game DLL or run the full
+first-person self-test. In-headset confirmation remains pending.
+
 ### Physical wall valves in VR
 
 The TR5 airlock-style wall valve in Trajan's Markets (ANDREA2), and the matching

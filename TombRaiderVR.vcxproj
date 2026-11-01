@@ -201,6 +201,7 @@
     <ClInclude Include="src\CogWheelMotion.h" />
     <ClInclude Include="src\ValveTurn.h" />
     <ClInclude Include="src\PhysicalCogWheel.inl" />
+    <ClInclude Include="src\PhysicalContainer.inl" />
     <ClInclude Include="src\LedgePullGesture.h" />
     <ClInclude Include="src\LedgeGrabFeedback.h" />
     <ClInclude Include="src\MotionHandSkin.h" />
