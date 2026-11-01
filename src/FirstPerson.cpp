@@ -611,6 +611,11 @@ bool ScriptedCameraActive() {
     return d.vonCroyCutscene && *Ptr<uint8_t>(d.vonCroyCutscene);
 }
 
+bool PhysicalCrowbarOwns(const uint8_t* item);
+bool HoldPhysicalCrowbarLara(uint8_t* item);
+void AttachPhysicalCrowbarHand(int hand,motiongun::Frame& wrist);
+void PhysicalCrowbarCamera(const uint8_t* item,PHD_3DPOS& pose);
+
 bool Gate(bool inventoryBackground=false) {
     if (!g_boundDll || !g_boundBase || !Cfg().enabled ||
         !Cfg().firstPerson || !g_runtimeEnabled)
@@ -627,7 +632,7 @@ bool Gate(bool inventoryBackground=false) {
     // through Gate restores the camera, full mesh and input together; it does
     // not toggle the user's first-person preference.
     if(firstperson::SwitchUsesThirdPerson(dll.game,
-        *reinterpret_cast<const int16_t*>(item+off::item_anim_state))) return false;
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_state)) && !PhysicalCrowbarOwns(item)) return false;
     const int water=LaraWaterStatus();
     // Suspend the whole FP path, not just its camera or body mask. Wading
     // remains eligible; native surface/underwater swimming uses third person.
@@ -1333,6 +1338,7 @@ bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller,
     AttachPhysicalCogHand(hand,out,motiongun::Transform(out,local));
     AttachPhysicalPulleyHand(hand,out,motiongun::Transform(out,local));
     AttachPhysicalContainerHand(hand,out,motiongun::Transform(out,local));
+    AttachPhysicalCrowbarHand(hand,out);
     return true;
 }
 
@@ -1384,6 +1390,7 @@ bool UnarmedIKReady() {
     if(FlareIKReady()) return true;
     if (!Cfg().firstPersonUnarmedIK || ControllerTrackingBlockedReason()) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(PhysicalCrowbarOwns(item)) return true;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool crouchHands=status==1 && CanSteerCrouch(item);
     // Full-body free jumps retain controller hands; ledges retain authored grips.
@@ -2014,6 +2021,10 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
     bool solved[2]{};
     bool bindReference[2]{};
     for (int hand=0;hand<2;++hand) {
+        // The crowbar is part of the native right-hand mesh. Keep that entire
+        // authored arm intact so IK reach limits cannot pull its tip out of
+        // the socket. The left arm remains independently tracked.
+        if(hand==1 && PhysicalCrowbarOwns(item)) continue;
         const int first=hand ? 8 : 11;
         motiongun::Frame native[3]{};
         bool present[3]{};int reference=-1;
@@ -3199,6 +3210,7 @@ void AccelerateBackpedalStart(uint8_t* item,uint64_t action) {
 // Match TR1-3: one animation tick, scaling only horizontal root displacement.
 // Native collision still runs afterwards, and vertical/gravity motion is intact.
 void __cdecl Detour_AnimateLara(uint8_t* item) {
+    if(HoldPhysicalCrowbarLara(item)) return;
     auto original = &AdvanceLaraAnimation;
     // Gravity/goal changes can precede current_anim_state. Check both sides
     // of AnimateLara: a grounded tick can execute a jump or relocation command.
@@ -3521,6 +3533,7 @@ struct GroundJumpInputScope {
 #include "PhysicalCogWheel.inl"
 #include "PhysicalPulley.inl"
 #include "PhysicalContainer.inl"
+#include "PhysicalCrowbar.inl"
 #include "PhysicalMonitor.inl"
 #include "PhysicalButton.inl"
 
@@ -4310,6 +4323,7 @@ bool Anchor(PHD_3DPOS& pose) {
         pose.y_pos=int32_t(std::lround(smoothed.y));
         pose.z_pos=int32_t(std::lround(smoothed.z));
     } else g_mountEyeTransition.Reset();
+    PhysicalCrowbarCamera(item,pose);
     FitBodyToRenderedEye(item,pose,head);
     const locomotion::Vec unclampedEye{float(pose.x_pos),float(pose.z_pos)};
     ClampRenderedHeadToCollision(item, pose);
@@ -4955,6 +4969,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
     InstallPhysicalCogs(d,base);
     InstallPhysicalPulleys(d,base);
     InstallPhysicalContainers(d,base);
+    InstallPhysicalCrowbar(d,base);
     InstallPhysicalMonitors(d,base);
     InstallPhysicalButtons(d,base);
     return true;
@@ -4968,6 +4983,7 @@ void Remove() {
     ResetPhysicalHolsters();
     ResetPhysicalMonitors();g_monitorDll=nullptr;
     ResetPhysicalButtons();g_buttonDll=nullptr;
+    RemovePhysicalCrowbar();
     RemovePhysicalContainers();
     RemovePhysicalPulleys();
     RemovePhysicalCogs();
@@ -5256,6 +5272,7 @@ void FirstPersonUpdate() {
 }
 
 void FirstPersonRecenter() {
+    ResetPhysicalCrowbar();
     g_autoBodyCalibration.pending=g_autoBodyCalibration.waiting=false;
     ResetBodyFollower();
     CancelHolsterTracking();
@@ -5286,6 +5303,7 @@ void FirstPersonTrackingOriginChanged(float yawCorrection) {
 }
 
 void FirstPersonToggle() {
+    ResetPhysicalCrowbar();
     UpdateControlMode(false);
     ResetPhysicalHolsters();
     ResetPhysicalSwitch();
@@ -5359,6 +5377,7 @@ uint64_t FirstPersonBodyWristSeamMask() {
 
 bool FirstPersonSwitchGrip(bool down, bool allowed) {
     const auto now=GetTickCount64();
+    if(PhysicalCrowbarOwns(g_crowbar.lara)) return UpdatePhysicalCrowbarGrip(down,allowed,now);
     const bool pulley=UpdatePhysicalPulleyGrip(down,allowed && !g_switchGripClaimed && !g_cogClaimed && !g_containerClaimed,now);
     const bool container=UpdatePhysicalContainerGrip(down,allowed && !g_switchGripClaimed && !g_cogClaimed && !pulley,now);
     const bool cog=UpdatePhysicalCogGrip(down,allowed && !g_switchGripClaimed && !container && !pulley,now);

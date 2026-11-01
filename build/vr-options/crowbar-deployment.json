@@ -1,0 +1,16 @@
+﻿{
+    "full_suite_run":  false,
+    "cog_checks":  2508,
+    "previous_dll":  "368BF8FD67318669E342763829E9C71EE6B018A61E740FD6051604E02BBD5EEE",
+    "deployed":  "2026-11-01T15:06:53.0583687-05:00",
+    "verified_crowbar_binaries":  2,
+    "verified_crowbar_level_assets":  3,
+    "focused_interaction_checks":  23563,
+    "dll":  "339BDDF85C90D6AC71E41FF989D8346DF4E44E11E389E89CEA4FAA01EE7E38BF",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-crowbar-20261101-150652",
+    "pulley_checks":  1665,
+    "change":  "TR4 native crowbar insertion followed by physical RG downward pry; release holds pose; native failures, removal, effects and completion retained",
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "headset_tested":  false,
+    "release_build_passed":  true
+}

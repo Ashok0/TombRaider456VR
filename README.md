@@ -1360,6 +1360,35 @@ Turn switches, underwater switches, independent HD animation skeletons and
 special animation-command variants retain their existing controls.
 Using Y also retains the existing native interaction and camera behavior.
 
+### Physical crowbar switches (TR4)
+
+Use the crowbar normally to begin inserting it into a `CROWBAR_SWITCH` socket.
+In first person, the animation pauses once the tool is inserted. Bring the
+right controller to Lara's grip on the crowbar, press **Right Grip**, and pull
+down about **8 cm** to pry it. Release and regrab to continue a partial pry;
+release keeps the current pose. The grab itself needs no Action icon. No new
+INI setting is required. This supports the verified sockets loaded by
+`TRAIN`, `HIGHSTRT` and `JOBY4A` in both graphics modes.
+
+Insertion still requires the crowbar, native inventory selection and alignment.
+The right arm/tool retain their authored contact with the socket; the left hand
+keeps controller tracking in Remastered graphics. The camera retains its position
+through Lara's bending animation while headset tracking remains live. The short
+pry advances only forward, at no more than native animation speed. Removal,
+sounds, mesh swaps and switch completion then run through the original code.
+The switch's timer continues ticking while its animation waits for the pry.
+
+Press native Action again to finish through the original animation. Sustained
+controller tracking loss, leaving first person or recentering also yield to
+native use without rewinding the animation or toggling the tool mesh. Failed
+pries, unsupported animations, crowbar doors and TR5 retain their native behavior.
+
+`tools/build_crowbar_tests.cmd` verifies both TR4 binaries and all three installed
+animation sets, then runs focused interaction tests with native-engine stand-ins.
+The checks cover both socket directions, four headings, both graphics modes,
+partial regrabs, native cleanup, refusal/failure and mode/tracking interruptions.
+No game DLL or full self-test is executed. Headset confirmation remains pending.
+
 ### Physical pulleys, mechanism chains and ropes
 
 Verified TR4/5 `PULLEY` mechanisms support **Right Grip** in first person.

@@ -7,6 +7,7 @@
 #include "monitor_regression.inl"
 #include "button_regression.inl"
 #include "vci_lever_regression.inl"
+#include "crowbar_regression.inl"
 namespace tr { void VRMenuShutdown() {} } // No menu/UI runtime in this fixture.
 int main() {
     using namespace tr;
@@ -49,5 +50,6 @@ int main() {
     TestPhysicalMonitor(reset,rva,pose);
     TestPhysicalButton(reset,rva,pose);
     TestPhysicalVciLever(reset,rva,pose);
+    TestPhysicalCrowbar(reset,rva,pose);
     std::printf("PASS: %d physical-switch checks (TR4/5)\n",checks);
 }

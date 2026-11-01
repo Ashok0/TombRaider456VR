@@ -7,6 +7,8 @@ python tools\verify_containers.py "%CONTAINER_GAME%" build\container-poses.bin
 if errorlevel 1 goto failed
 python tools\verify_vci_levers.py "%CONTAINER_GAME%" build\vci-lever-poses.bin
 if errorlevel 1 goto failed
+python tools\verify_crowbar.py "%CONTAINER_GAME%" build\crowbar-poses.bin
+if errorlevel 1 goto failed
 call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
 if errorlevel 1 goto failed
 if not exist build\container-runtime-test mkdir build\container-runtime-test
