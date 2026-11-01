@@ -1345,9 +1345,39 @@ not a grab point. Acquisition and pulling use the visible calibrated palm;
 handle contact uses the same mesh inverse bind as the native renderer. The
 attached palm stays on that handle point. These floor levers do not require an
 Action icon either.
-Turn switches, pulleys, underwater switches, independent HD animation skeletons and
+Turn switches, underwater switches, independent HD animation skeletons and
 special animation-command variants retain their existing controls.
 Using Y also retains the existing native interaction and camera behavior.
+
+### Physical pulleys, mechanism chains and ropes
+
+Verified TR4/5 `PULLEY` mechanisms support **Right Grip** in first person.
+This native family appears as a hanging chain in TR4 and a rope in TR5.
+Holster weapons, stand beside it on its normal interaction floor, bring the
+right palm to the visible chain/rope, hold Grip and pull downward about **35 cm**.
+The Action icon need not be visible. Release and grab again for mechanisms
+that need several pulls. No additional INI setting is required.
+
+Partial pulls retain their position for regripping. A completed stroke counts
+once, then returns after release before the next stroke. TR4's chain uses its
+authored downward poses; TR5's native rope mesh is stationary and the hand
+travels along it. Contact uses the rendered skeleton and inverse bind in both
+graphics modes. Tracking loss, excessive sideways motion, other interactions
+and leaving first person release the hand safely.
+
+Native pulley collision and Lara's verified pull event preserve the original
+pull count, resettable latch, one-use flags and achievement callback. Normal
+floor triggers activate the mechanism; switch timers still run once per tick.
+Native Action takes over without rolling back counters or linked mechanisms.
+Locked chains, TR5's special scripted pulley flag, unknown meshes/animations,
+climbable/swinging ropes, tightropes and animated trap chains retain native use.
+Third-person interaction is unchanged.
+
+`tools/build_pulley_tests.cmd` checks four supported native binary layouts,
+both meshes and all 12 installed pulley animation sets, then exercises the
+production interaction against native-engine stand-ins. It never launches the
+game or the full first-person self-test. This is offline validation; physical
+reach and feel still require headset testing.
 
 ### Physical cog wheels in VR
 

@@ -1282,6 +1282,7 @@ GunVec JointPoint(uint8_t* item, int joint, int x, int y, int z) {
 
 void AttachPhysicalSwitchHand(int hand,motiongun::Frame& wrist,motiongun::Vec trackedGrip);
 void AttachPhysicalCogHand(int hand,motiongun::Frame& wrist,motiongun::Vec trackedGrip);
+void AttachPhysicalPulleyHand(int hand,motiongun::Frame& wrist,motiongun::Vec trackedGrip);
 void AttachPhysicalContainerHand(int hand,motiongun::Frame& wrist,motiongun::Vec trackedGrip);
 
 bool TrackedControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller, GunVec* gripLocal=nullptr) {
@@ -1330,6 +1331,7 @@ bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller,
     if (gripLocal) *gripLocal=local;
     AttachPhysicalSwitchHand(hand,out,motiongun::Transform(out,local));
     AttachPhysicalCogHand(hand,out,motiongun::Transform(out,local));
+    AttachPhysicalPulleyHand(hand,out,motiongun::Transform(out,local));
     AttachPhysicalContainerHand(hand,out,motiongun::Transform(out,local));
     return true;
 }
@@ -3517,6 +3519,7 @@ struct GroundJumpInputScope {
 
 #include "PhysicalSwitch.inl"
 #include "PhysicalCogWheel.inl"
+#include "PhysicalPulley.inl"
 #include "PhysicalContainer.inl"
 #include "PhysicalMonitor.inl"
 #include "PhysicalButton.inl"
@@ -3855,6 +3858,7 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
     }
     AdvancePhysicalSwitch(item,nativeCollision,GetTickCount64());
     AdvancePhysicalCog(item,nativeCollision,GetTickCount64());
+    AdvancePhysicalPulley(item,nativeCollision,GetTickCount64());
     AdvancePhysicalContainer(item,nativeCollision,GetTickCount64());
     ObserveJumpLanding(item);
     FinishFirstPersonLanding(item,airborneBefore);
@@ -4949,6 +4953,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
     if(!InstallClassicBody(d,base)) return false;
     InstallPhysicalSwitches(d,base);
     InstallPhysicalCogs(d,base);
+    InstallPhysicalPulleys(d,base);
     InstallPhysicalContainers(d,base);
     InstallPhysicalMonitors(d,base);
     InstallPhysicalButtons(d,base);
@@ -4964,6 +4969,7 @@ void Remove() {
     ResetPhysicalMonitors();g_monitorDll=nullptr;
     ResetPhysicalButtons();g_buttonDll=nullptr;
     RemovePhysicalContainers();
+    RemovePhysicalPulleys();
     RemovePhysicalCogs();
     RemovePhysicalSwitches();
     g_hClassicItemMatrix.Remove();g_classicBodyDll=nullptr;
@@ -5254,6 +5260,7 @@ void FirstPersonRecenter() {
     ResetBodyFollower();
     CancelHolsterTracking();
     ResetPhysicalSwitch();
+    ResetPhysicalPulleys();
     ResetPhysicalCogs();
     ResetPhysicalContainers();
     ResetPhysicalMonitors();
@@ -5282,6 +5289,7 @@ void FirstPersonToggle() {
     UpdateControlMode(false);
     ResetPhysicalHolsters();
     ResetPhysicalSwitch();
+    ResetPhysicalPulleys();
     ResetPhysicalCogs();
     ResetPhysicalContainers();
     ResetPhysicalMonitors();
@@ -5351,10 +5359,11 @@ uint64_t FirstPersonBodyWristSeamMask() {
 
 bool FirstPersonSwitchGrip(bool down, bool allowed) {
     const auto now=GetTickCount64();
-    const bool container=UpdatePhysicalContainerGrip(down,allowed && !g_switchGripClaimed && !g_cogClaimed,now);
-    const bool cog=UpdatePhysicalCogGrip(down,allowed && !g_switchGripClaimed && !container,now);
-    const bool lever=UpdatePhysicalSwitchGrip(down,allowed && !cog && !container,now);
-    return container || cog || lever;
+    const bool pulley=UpdatePhysicalPulleyGrip(down,allowed && !g_switchGripClaimed && !g_cogClaimed && !g_containerClaimed,now);
+    const bool container=UpdatePhysicalContainerGrip(down,allowed && !g_switchGripClaimed && !g_cogClaimed && !pulley,now);
+    const bool cog=UpdatePhysicalCogGrip(down,allowed && !g_switchGripClaimed && !container && !pulley,now);
+    const bool lever=UpdatePhysicalSwitchGrip(down,allowed && !cog && !container && !pulley,now);
+    return pulley || container || cog || lever;
 }
 
 unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightValid,bool allowed) {

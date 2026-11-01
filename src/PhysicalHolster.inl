@@ -128,6 +128,7 @@ struct HolsterRenderScope {
 };
 
 extern bool g_switchGripClaimed;
+extern bool g_pulleyClaimed;
 unsigned UpdatePhysicalHolsterGrips(bool left,bool right,bool leftValid,bool rightValid,
                                    bool allowed,uint64_t now) {
     const bool down[]={left,right},valid[]={leftValid,rightValid};
@@ -151,7 +152,7 @@ unsigned UpdatePhysicalHolsterGrips(bool left,bool right,bool leftValid,bool rig
     for(int hand=0;hand<2;++hand) {
         float rightMetres=0,downMetres=0,forwardMetres=0;
         vr::HmdMatrix34_t pose{};
-        const bool tracked=allowed && valid[hand] && !(hand==1 && g_switchGripClaimed) &&
+        const bool tracked=allowed && valid[hand] && !(hand==1 && (g_switchGripClaimed || g_pulleyClaimed)) &&
             VR().ControllerPose(hand,pose) &&
             VR().FirstPersonControllerOffset(hand,rightMetres,downMetres,forwardMetres) &&
             std::isfinite(rightMetres+downMetres+forwardMetres) &&

@@ -74,7 +74,7 @@ bool ActivatePhysicalMonitor(int16_t index,uint8_t* target,uint8_t* lara,void* c
 }
 void AdvancePhysicalMonitor(uint8_t* lara,void* collision,uint64_t now) {
     if(!g_monitorDll || !PhysicalSwitchReady() || !lara || lara!=*Ptr<uint8_t*>(g_boundDll->laraItem) ||
-       g_switchGripClaimed || g_cogClaimed || g_containerClaimed ||
+       g_switchGripClaimed || g_cogClaimed || g_containerClaimed || g_pulleyClaimed ||
        (*reinterpret_cast<uint32_t*>(lara+0x1820)&8)) { ResetPhysicalMonitors();return; }
     const int state=*reinterpret_cast<int16_t*>(lara+18);
     if(state!=2 && state!=71 && state!=80) { ResetPhysicalMonitors();return; }

@@ -103,7 +103,7 @@ bool ActivatePhysicalButton(int16_t index,uint8_t* target,uint8_t* lara,void* co
 }
 void AdvancePhysicalButton(uint8_t* lara,void* collision,uint64_t now) {
     if(!g_buttonDll || !PhysicalSwitchReady() || !lara || lara!=*Ptr<uint8_t*>(g_boundDll->laraItem) ||
-       g_switchGripClaimed || g_cogClaimed || g_containerClaimed || (*reinterpret_cast<uint32_t*>(lara+0x1820)&8)) {
+       g_switchGripClaimed || g_cogClaimed || g_containerClaimed || g_pulleyClaimed || (*reinterpret_cast<uint32_t*>(lara+0x1820)&8)) {
         ResetPhysicalButtons();return;
     }
     const int state=*reinterpret_cast<int16_t*>(lara+18);

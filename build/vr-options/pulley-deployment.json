@@ -1,0 +1,16 @@
+﻿{
+    "full_suite_run":  false,
+    "previous_dll":  "5BC258741382F1DD858E37A3F5032564C2628FF97048CAD131A9E2D1AB13F76A",
+    "existing_switch_checks":  11730,
+    "deployed":  "2026-11-01T14:01:25.7848674-05:00",
+    "existing_cog_checks":  2508,
+    "headset_tested":  false,
+    "dll":  "DC92021ED60725AF93165EA42577FA76512723E7EFCF60A3EC3E08C52D1E4664",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\vr-options\\before-pulleys-20261101-140125",
+    "focused_pulley_checks":  1665,
+    "change":  "TR4/5 first-person RG downward pulls for verified native PULLEY mechanism chains/ropes; native count/latch/one-use/floor triggers and timers preserved; locked/special/traversal/trap variants remain native",
+    "verified_native_layouts":  4,
+    "ini_unchanged":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "verified_pulley_animation_sets":  12,
+    "release_build_passed":  true
+}

@@ -201,6 +201,7 @@
     <ClInclude Include="src\CogWheelMotion.h" />
     <ClInclude Include="src\ValveTurn.h" />
     <ClInclude Include="src\PhysicalCogWheel.inl" />
+    <ClInclude Include="src\PhysicalPulley.inl" />
     <ClInclude Include="src\PhysicalContainer.inl" />
     <ClInclude Include="src\PhysicalMonitor.inl" />
     <ClInclude Include="src\MonitorTouch.h" />
