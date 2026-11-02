@@ -49,5 +49,5 @@ bool FirstPersonCalibrationKeyReserved(int virtualKey);
 // Called after view/graphics chords and physical-pad merge. Returns Y ownership.
 bool FirstPersonGunTriggers(uint8_t& left, uint8_t& right, bool chordConsumed, bool y=false);
 void FirstPersonInput(float& leftX, float& leftY, float& rightX, bool shifted,
-                      bool jumpPressed = false);
+                      bool jumpPressed = false, bool walkPressed = false);
 } // namespace tr

@@ -1,0 +1,32 @@
+﻿[
+    {
+        "collection":  "123",
+        "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered",
+        "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.ini",
+        "iniHash":  "C363724E2E97AD0D30A0E6BF16C980C4CA1C736851D78C1EEF4633EB88DE9A99",
+        "files":  [
+                      {
+                          "source":  "C:\\dev\\TombRaider456VR\\build\\back-hop\\123\\bin\\TombRaiderVR.dll",
+                          "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+                          "relative":  "TombRaiderVR.dll",
+                          "expectedNew":  "43CA23B3E3651839B5734830A77B9463DCAEDA103E5D7C8AC9EC396D4A81289C",
+                          "expectedOld":  "3EC9B03F33A1FDC8E80A72F35258D6479572776302B77F2DD743697E9A2C7CF4"
+                      }
+                  ]
+    },
+    {
+        "collection":  "456",
+        "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+        "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.ini",
+        "iniHash":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+        "files":  [
+                      {
+                          "source":  "C:\\dev\\TombRaider456VR\\build\\back-hop\\456\\bin\\TombRaiderVR.dll",
+                          "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+                          "relative":  "TombRaiderVR.dll",
+                          "expectedNew":  "CD4C3660078FC28090306789EDC11D030A514DE23E80DF77CBE1B75B7C7D740A",
+                          "expectedOld":  "555BBA0B3DFB08998818953A4EE839A2A71FE83F499F9F6531EA338B248C33CC"
+                      }
+                  ]
+    }
+]

@@ -1,0 +1,46 @@
+﻿{
+    "fullSelfTestRun":  false,
+    "manifest":  {
+                     "value":  [
+                                   {
+                                       "collection":  "123",
+                                       "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered",
+                                       "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.ini",
+                                       "iniHash":  "C363724E2E97AD0D30A0E6BF16C980C4CA1C736851D78C1EEF4633EB88DE9A99",
+                                       "files":  [
+                                                     {
+                                                         "source":  "C:\\dev\\TombRaider456VR\\build\\third-person-back-hop\\123\\bin\\TombRaiderVR.dll",
+                                                         "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+                                                         "relative":  "TombRaiderVR.dll",
+                                                         "expectedNew":  "373AFBE93CAEFAEC80FC2CC57921852B3F0BEE39D25732755343C9203C286193",
+                                                         "expectedOld":  "43CA23B3E3651839B5734830A77B9463DCAEDA103E5D7C8AC9EC396D4A81289C"
+                                                     }
+                                                 ]
+                                   },
+                                   {
+                                       "collection":  "456",
+                                       "game":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+                                       "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.ini",
+                                       "iniHash":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+                                       "files":  [
+                                                     {
+                                                         "source":  "C:\\dev\\TombRaider456VR\\build\\third-person-back-hop\\456\\bin\\TombRaiderVR.dll",
+                                                         "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+                                                         "relative":  "TombRaiderVR.dll",
+                                                         "expectedNew":  "64194AEDE3D97907E6D9A59BA5C50CB1267C7AA8CD835639C433317FE64F8AB3",
+                                                         "expectedOld":  "CD4C3660078FC28090306789EDC11D030A514DE23E80DF77CBE1B75B7C7D740A"
+                                                     }
+                                                 ]
+                                   }
+                               ],
+                     "Count":  2
+                 },
+    "thirdPersonHopChecks123":  6126,
+    "groundQueueChecks123":  11716,
+    "thirdPersonHopChecks456":  3176,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\third-person-back-hop\\before-third-person-hop-20261102-001632",
+    "groundQueueChecks456":  5428,
+    "firstPersonSimulationRestored":  true,
+    "deployed":  "2026-11-02T00:16:32.6813909-05:00",
+    "bothReleaseBuildsPassed":  true
+}

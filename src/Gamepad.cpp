@@ -580,7 +580,8 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
     float fpLeftY = mine.Gamepad.sThumbLY / 32767.0f;
     float fpRightX = mine.Gamepad.sThumbRX / 32767.0f;
     const bool jumpPressed = !inventoryOwned && (mine.Gamepad.wButtons & XB_A) != 0;
-    FirstPersonInput(fpLeftX, fpLeftY, fpRightX, shifted, jumpPressed);
+    const bool walkPressed = !inventoryOwned && (mine.Gamepad.wButtons & XB_X) != 0;
+    FirstPersonInput(fpLeftX, fpLeftY, fpRightX, shifted, jumpPressed, walkPressed);
     mine.Gamepad.sThumbLX = Axis(fpLeftX);
     mine.Gamepad.sThumbLY = Axis(fpLeftY);
     mine.Gamepad.sThumbRX = Axis(fpRightX);

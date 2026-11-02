@@ -1,11 +1,119 @@
 ## Tomb Raider IV-VI Remastered VR Mod
-Native stereo 6DOF VR mod for Tomb Raider IV-VI Remastered. Tomb Raider I-V can be toggled between third and first preson.  First person mode supports 6DOF motion controls, working scopes, and Roomscale movement.  Tomb Raider VI runs off an updated version of Core Engine and currently works in third person only.  
+Native stereo 6DOF VR mod for Tomb Raider IV-VI Remastered. TR4/5 can be toggled
+between third and first person; first person supports motion controllers, working
+scopes and roomscale movement. TR6 uses a different engine and remains third-person
+only. TR1–3 support is provided by the separate
+[TombRaider123VR mod](https://github.com/Ashok0/TombRaider123VR).
+
+## Recent updates
+
+Current behavior reviewed through **2026-11-02**, covering the past week's changes
+(October 26–November 2). This summary takes precedence over older development
+snapshots below. The game starts in third person; **Y + LT** toggles first person
+in TR4/5. Features below apply to TR4/5 unless a narrower game scope is given.
+
+| Area | Current behavior |
+|---|---|
+| Third-person backward hop | **RG + LS down**, without Jump, requests a short native hop behind Lara, including with guns drawn. This shortcut is **third-person only**. First-person backward walking and vent crawling retain their original behavior. See [backward hop](#third-person-backward-hop). |
+| Jump takeoff and landing | First person skips the preparatory knee bend/foot shuffle and ordinary landing recovery delay. Native clearance, airborne physics and hard-fall handling remain. Armed backward/sideways takeoffs keep their intended direction and sideways-jump cameras are stabilized. |
+| Held running jump | Holding Jump while moving forward retains the ledge auto-jump assist through playable fixed/heavy camera changes. Actual cutscenes and loss of player control still cancel it. |
+| Physical crouching | Enabled by default. A partial real squat bends the visible legs; a 55 cm headset drop requests native crouch and hides the body. Rising within 23 cm of calibrated standing height releases it, subject to ceiling clearance. Elevator/VCI crouch steering and tracked hands are fixed, as is delayed standing movement from a leftover crouch queue. |
+| Climbing and body transitions | Ledge/monkey-bar arms preserve native hand contacts with stable elbows. Crate/ledge mount camera recovery is smoothed; mount and recovery draws show hands with opaque black wrist caps. Original arm-recovery timing is retained. |
+| Classic graphics and roomscale | The Classic mesh follows physical turns and uses the corrected rendered-body origin after roomscale movement. **Y + RT** also toggles graphics in the TR4–6 title menus. See [Classic graphics](#classic-graphics-and-roomscale). |
+| Native VR Options | **Options > VR Options** contains Controller Type and Color Scheme, with their current values visible. Dark stays the default; Brighter restores the native sRGB render-target presentation and applies immediately. |
+| Valve Index | Optional SteamVR action bindings separate face buttons from grip squeeze. `ValveIndexControllers=0` remains the default; selecting Index requires restarting and the shipped bindings folder. |
+| Physical interactions | Grip-driven wall/floor levers, VCI levers, cog wheels, TR5 wall valves, pulleys/chains/ropes, TR4 crowbar sockets and TR5 drawers/cabinets; touch-driven buttons, elevator panels, monitors and numeric keypads. See the coverage table below. |
+| Flares and keypads | Swing the left controller to throw a lit flare in Remastered first person; left grip still crouches. TR5 code-entry keypads accept individual fingertip presses in the world, beep, and light the touched key green for 350 ms. |
+| Mirrors | TR5's six verified RICH2 restroom panes reflect Lara in either view using the native pose, without first-person IK. TR4 Sacred Lake/Coastal Ruins native mirrors bypass first-person hiding and IK. See [reflection coverage](#tr1–6-reflection-audit-2026-11-01). |
+| Aiming, calibration and inventory | Mesh-aligned world lasers, controller-arm shadows and costume cuffs, smooth button-driven pistol draw/holster, shared view-toggle recentering, spatial inventory backgrounds, roomscale ledge falls and water-exit camera handling retain the week's fixes. |
+
+### Current interaction coverage
+
+Use first person with weapons holstered for physical grabbing and touching.
+The Action icon does not need to appear. Grip interactions use the right hand;
+touch interactions accept either controller. Native Y/Action remains available.
+These are supported object families, not a claim that every decorative object,
+wall switch or custom level is interactive.
+
+| Object / game | Motion-controller interaction | Details |
+|---|---|---|
+| Ordinary wall levers, TR4/5; VCI up/down levers, TR5 | Hold RG on the handle and follow its arc. Release/regrab retains partial travel. | [Wall and floor levers](#physical-wall-and-floor-levers-in-vr) |
+| Floor/rail levers, TR4, including Desert Railroad | Grab the end of the handle with RG and flip it forward/backward. | [Floor levers](#physical-wall-and-floor-levers-in-vr) |
+| Pegged cog wheels, TR4/5, including Guardian of Semerkhet | Grip a peg, pull around the axle, release and regrip. The wheel's working-side pushback is relaxed so the hand can reach it; room/platform collision remains. | [Cog wheels](#physical-cog-wheels-in-vr) |
+| Wall valves, TR5, including Trajan's Markets | Grip the rim and rotate; partial rotation survives regripping. | [Wall valves](#physical-wall-valves-in-vr) |
+| Mechanism pulleys/chains/ropes, TR4/5 | Grip and pull down; repeat strokes when the native mechanism requires them. | [Pulleys](#physical-pulleys-mechanism-chains-and-ropes) |
+| Inserted crowbar switches, TR4 | Insert the crowbar normally, then grip it in the socket and pry down. Crowbar doors and TR5 are excluded. | [Crowbar switches](#physical-crowbar-switches-tr4) |
+| Searchable drawers/cabinets, TR5 | Grip a handle to open/close. Regripping retains the pose; native loot is collected once. | [Containers](#physical-drawers-and-cabinet-doors-in-vr) |
+| Wall/sequence buttons, TR4/5; elevator panels, TR5 | Touch the button face. For the generic interior elevator panel, touch the panel and let the native lift logic choose the destination. | [Buttons and elevators](#touching-wall-and-elevator-buttons-in-vr) |
+| Interactive TV/monitor screens, TR5 RICH1/RICH2 | Touch the glass to run its native interaction. | [Monitors](#touching-tvmonitor-screens-in-vr) |
+| Numeric puzzle keypads, TR5 RICH1/RICH2 | In Remastered graphics, touch individual keys, Clear and Enter; pressed keys glow green. This is separate from generic elevator panels. | [Keypads](#physical-code-entry-keypads-tr5) |
+
+Partial grip poses are session previews, not a new persistent savegame feature.
+Native Action, recentering, mode/level changes and object-specific resets can clear
+them; details differ by mechanism. Jump switches, underwater switches, horizontal
+turn switches, climbable/swinging ropes, tightropes, trapped search chests and
+unverified variants retain native interaction. TR6 does not receive these
+first-person interaction paths.
+
+### Current defaults for the recent features
+
+| INI setting under `[VR]` | Default | Purpose |
+|---|---|---|
+| `FirstPersonPhysicalCrouch` | `1` | HMD-height native crouch in TR4/5. Requires full-body IK and positional tracking; recenter while standing upright. |
+| `ValveIndexControllers` | `0` | Legacy Touch-style input; `1` enables the Index-oriented action path after restart. |
+| `ValveIndexGripPress` / `ValveIndexGripRelease` | `0.55` / `0.35` | Squeeze thresholds in Index mode. |
+| `VRBrighterColors` | `0` | Dark presentation; `1` selects Brighter. Also available in VR Options. |
+| `FirstPersonMirrorReflections` | `1` | Verified TR5 panes and TR4 first-person native-mirror compatibility. |
+
+Defaults apply to new INIs and missing keys; existing explicit values remain in
+effect. The new hop, physical object interactions, flare gesture, keypad lights and
+Classic centering use existing feature gates; they add no separate INI toggles.
+The detailed notes retain dated test results. Automated checks do not establish
+a complete headset playthrough, and physical Index hardware validation remains
+outstanding.
+
+### Third-person backward hop
+
+In TR4/5 **third person only**, hold **Right Grip (RG) + LS down** to request
+Lara's short native backward hop. No Jump button is needed. The hop goes behind
+Lara's current facing, rather than turning her toward the stick or headset.
+Both armed and unarmed states are supported. Native floor clearance, animation,
+gravity and wall collision still decide the outcome.
+
+First-person movement is restored to its pre-shortcut behavior: LS back remains
+continuous backward walking, including with RG held. Crouching and backward
+crawling in vents are unchanged. Jump, Action, roll/drop, shifted D-pad input,
+menus, vehicles and scripted control take priority. The shortcut does not activate
+when a selected first-person view is merely suspended by a native camera.
+The earlier proposed D-pad ledge-hang shortcut was reverted and is not included.
+TR6 has no implementation of this backward-hop shortcut.
+
+The corrected build passed focused third-person-hop/first-person-preservation
+checks and existing ground-movement regressions for both mods. The original
+first-person simulation, ground-gait and directional-jump paths were compared
+against their pre-shortcut versions. In-headset confirmation of the corrected
+third-person shortcut is still needed.
+
+### Classic graphics and roomscale
+
+Classic first-person Lara now follows live physical headset turning rather than
+reusing an old Remastered body-follow pose. The Classic draw origin also receives
+the rendered-body offset, keeping the visible mesh centered after walking around
+the play space. This is a rendering correction: Lara's collision position,
+unrelated objects and native shadows keep their own transforms. It does not add
+the Remastered full-body IK solver to the Classic mesh.
+
+**Y + RT** toggles Classic/Remastered graphics from the title menus in TR4, TR5
+and TR6, including when first person is disabled. Hold Y on the left Touch
+controller and press the right trigger; release the chord before toggling again.
+Classic graphics are separate from the Dark/Brighter color setting in VR Options.
 
 
 ## VR Options
 
 Open **Options > VR Options** from the title screen. This uses the game's native menu, with no popup.
 Use Up/Down to select a row, Left/Right or Select to change it, and Back to return.
+Both rows display their current selected value on the native page.
 
 - **Controller Type:** Meta Touch or Valve Index. Changes apply after restarting.
 - **Color Scheme:** Dark (default) or Brighter. Changes apply immediately in the headset.
@@ -28,7 +136,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 ## VR Mod Features
 
 * Native stereo with 6DOF
-* First person mode (TR1-5 only).  Supports 6DOF motion controls, Roomscale movement, and functional scopes in VR.  Swimming, cutscenes, switch-use animations, and TR5 X-ray sequences temporarily use third person.
+* First person mode in TR4/5, with motion controls, roomscale movement and functional scopes. Swimming, cutscenes, native switch-use animations and TR5 X-ray sequences temporarily use third person; physical interactions use their own paths described above.
 * Full-body VRIK in TR4/5 HD first person using headset and controllers: inferred torso/hips, leg IK on animated foot targets, and arms sharing the gun wrist calibration.
 * Ledge and monkey-bar arms retain animated hand contacts throughout traversal. Torso movement respects both arms' reach, elbows remain stable near full extension, and released hands blend back to controller tracking over 180 ms. Native climbing grips remain available if controller tracking briefly drops out.
 * With first-person movement stabilization enabled, finishing a crate vault or ledge pull-up eases the camera back to its saved standing position over 180 ms. Headset tracking stays immediate, collision clearance remains active, and jumping or starting another climb cancels the handoff.
@@ -56,6 +164,11 @@ Set `ValveIndexControllers=1` under `[VR]` in the installed `TombRaiderVR.ini`,
 then restart the game. Keep the shipped `TombRaiderVRBindings` folder beside
 `TombRaiderVR.dll`; builds copy it to the output and deployment folders.
 The default is `0`, which retains the existing Touch controller input.
+
+This setting selects an input path, not a hardware lock. Touch controllers may
+still work with `ValveIndexControllers=1` if SteamVR supplies compatible action
+bindings; leave it at `0` for the normal Touch profile. The shipped action
+manifest provides the Index binding, not automatic controller detection.
 
 Index mode separates the A/B buttons from grip squeeze using SteamVR Input
 actions. Thumbsticks, clicks, triggers and controller haptics are supported;
@@ -110,47 +223,55 @@ Start Tomb Raider IV-VI Remastered through Steam as normal.
 
 ## Controls
 
+Motion-controller labels below use Meta Touch face-button names. **RG** means
+right grip and **LG** means left grip; LT/RT are the triggers. See the Index
+table above for its equivalent face buttons.
+
 | Action | Control |
 |---|---|
 | Move | Left Stick (LS) |
-| Walk | RB + LS |
+| Walk | RG + LS; standing backward input in TR4/5 third person uses the hop below |
+| Backward Hop (TR4/5, third person only) | RG + LS down; no Jump button |
 | Dash | L3 |
 | Look | Right Stick (RS) |
 | Zoom | R3 |
 | Jump | A |
-| Action | Y or LB + RB |
-| Toggle Classic Graphics | Y + RT |
-| Toggle First Person (TR1-5 only) | Y + LT; also recalibrates head/controller heading and position in TR4/5 |
+| Action | Y or both grips |
+| Toggle Classic Graphics | Y + RT; also works in TR4–6 title menus |
+| Toggle First Person (TR4/5 only) | Y + LT; also recalibrates head/controller heading and position |
 | Equip Weapon (Third Person) | LT (Hold) |
-| Equip Weapon (First Person; TR1-5 only) | LT (Press while unarmed) |
-| Holster Weapon (First Person; TR1-5 only) | Y |
+| Equip Weapon (First Person; TR4/5 only) | LT (Press while unarmed) |
+| Holster Weapon (First Person; TR4/5 only) | Y |
 | Shoot (Third Person) | RT |
-| Shoot (First Person; TR1-5 only) | LT and/or RT |
+| Shoot (First Person; TR4/5 only) | LT and/or RT |
 | Roll | B |
-| Duck | LB |
+| Duck | LG; physical crouching is also enabled by default in TR4/5 first person |
 | Photo Mode | L3 + R3 |
 | Photo Mode Select | R3 (Dpad) + LS |
 | Ledge Grab | RT |
-| Mount Ledge (First Person; TR1-5 only) | Pull both controllers down together |
+| Mount Ledge (First Person; TR4/5 only) | Pull both controllers down together |
 | Ledge Drop | B |
 | Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
 | 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
 | Swan Dive | Jump (A) + Move (LS) + Roll (B) |
 | Recenter Camera + Calibrate First-Person Height | Right System (hold for the runtime recenter) |
-| Adjust Camera Pitch | RT + RB + RS |
+| Adjust Camera Pitch | RT + RG + RS |
 | Menu | X |
 | Spatial Inventory (TR4/5) | X with weapons holstered opens a level, eye-height ring ahead of your horizontal facing; release, then LS navigates, A selects/uses, B backs out |
 | Change Ammo  | X + Weapon equipped |
-| Sneak (TR6 only) | RB + Y |
+| Sneak (TR6 only) | RG + Y |
+| Physical lever/wheel/container | RG on a supported handle in first person; see interaction coverage |
+| Physical button/monitor/keypad | Touch with either controller in first person; numeric keypads require Remastered graphics |
+| Throw lit flare physically (TR4/5) | Swing the left controller in Remastered first person; no release button |
 
 
 ## Development Notes
 
-### Recent changes through 2026-10-28
+### Earlier changes through 2026-10-28
 
 This overview covers October 13–28. Unless stated otherwise, these changes
 apply to TR4/5 VR. Dated notes below retain the implementation history;
-this overview and the October 26–28 updates describe the current behavior.
+the [recent updates](#recent-updates) above describe subsequent changes.
 
 | Area | Current behavior |
 |---|---|
@@ -166,8 +287,9 @@ this overview and the October 26–28 updates describe the current behavior.
 | Shadows and costumes | Unarmed controller arms now update the shadow pose. Armed costume wrists preserve blended cuff surfaces instead of showing transparent gaps. |
 
 The earlier October 13–25 arm, body, jump and flare changes already have detailed
-notes below. The following additions cover the subsequent work. Reverted color
-adjustments are not part of the current changes.
+notes below. The following additions cover subsequent work. Dark remains the
+default; the restored brighter color presentation is now an optional VR Options
+setting, as described above.
 
 ### Armed directional jumps and sideways-jump comfort (2026-10-30)
 
@@ -1478,7 +1600,9 @@ OCB 5/7 use their normal switch triggers. Only OCB 6 starts a preset lift trip:
 Lara must be inside that panel's native floor-trigger area, and the original
 lift controller chooses the destination, runs the doors and releases its
 travel control lock at arrival. Used panels and an ongoing trip
-cannot be retriggered. Actual inventory code-entry puzzles retain native controls.
+cannot be retriggered. Actual numeric code-entry puzzles use the separate
+[physical keypad path](#physical-code-entry-keypads-tr5) in Remastered first
+person; Y still opens their native entry screen.
 Wall holes, levers, valves, jump switches and tool-operated mechanisms are not
 touch buttons.
 Existing physical grip interactions remain available. No INI change is needed.
@@ -1803,7 +1927,9 @@ automatic native crouch; physical squatting still bends the rendered body.
 Duck mask inside the above-water simulation tick, rather than synthesizing an LB
 button that the game's toggle/debounce path can latch. The temporary hold-mode
 override remains active until the native crouch/crawl exit finishes. Third person
-and the TR1-3 project are unchanged. The release build and 102 standalone
+is unchanged. The corresponding posture behavior was subsequently ported to
+TR3; TR1/2 use posture-driven body hiding because they have no native crawl.
+The release build and 102 standalone
 posture/input checks passed (`tools/physical_crouch_tests.cpp`); the crashing full
 self-test was not run. Native TR4/5 crouch entry/exit branches were inspected;
 headset behavior still requires in-game confirmation.
@@ -3889,6 +4015,9 @@ suit hands better than thumbs:
   Both grips take priority in gameplay: they hold Action without also sending
   Duck, Walk or Sneak. This works in TR4, TR5 and TR6, and after a physical pad
   is merged. In menus and FMVs the grips retain their individual bindings.
+  In TR4/5 **third person only**, right grip + LS down requests Lara's native
+  backward hop relative to her facing. First-person movement and vent crawling
+  keep their existing controls; Jump and interaction inputs take priority.
   Photo Mode keeps its [native L3+R3 chord](https://www.tombraider.com/news/video-games/photo-mode-returns-when-tomb-raider-iv-vi-remastered-launches-on-february).
 - **System is the left hand's lower face button.** Touch has no Start or Back of
   its own, and putting either on a chord made it awkward to reach mid-play.
@@ -8482,14 +8611,14 @@ roomscale movement, crouch, mount, landing, weapon and arm tests remain in the
 suite. The headset result still requires confirmation.
 
 
-### Physical flare throwing (TR2-5)
+### Physical flare throwing (TR4/5)
 
 In first person with Remastered graphics and tracked flare hands, light/equip a
 flare normally, then **swing the left controller to throw it**. No button
 press or release is needed. Left grip keeps its normal crouch binding. Direction
 and speed come from your hand motion; normal flare burn time, lighting and native
 collision behavior remain intact. Enabled automatically; no new INI setting.
-TR1 has no flares.
+The companion TR1–3 mod implements this gesture for TR2/3; TR1 has no flares.
 
 The gesture accepts natural underhand, overhand and sideways arm swings after
 the hand settles; moving the hand farther away from the HMD is not required.
@@ -8526,7 +8655,7 @@ untouched pixels and clearing light uniforms when another object draws. It
 never executes the full first-person self-test or loads a native game DLL into
 the test process. The button glow still needs headset confirmation.
 
-### Lara mirror reflection prototype (TR5)
+### Lara mirror reflections (TR5)
 
 The six bathroom mirrors in RICH2 (Escape with the Iris, rooms 134 and 135) can show
 Lara's full mesh in first or third person with Remastered graphics. The reflection
@@ -8544,7 +8673,7 @@ catsuit environment highlights use the reflected eye position, while the origina
 texture, room lighting and animation remain intact.
 
 Enabled by default, including with an existing INI. Add
-`FirstPersonMirrorReflections=0` under `[VR]` to disable it. The prototype requires
+`FirstPersonMirrorReflections=0` under `[VR]` to disable it. The reflection overlay requires
 the ordinary stereo settings (duplicate draws, per-eye view/projection and
 EyeOffsetMode 3). Other TR5 rooms, TR5 Classic graphics and TR6 retain
 their existing rendering; TR4 native mirror compatibility is described below.

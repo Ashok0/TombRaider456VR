@@ -1,0 +1,60 @@
+[
+  {
+    "collection": "123",
+    "game": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered",
+    "ini": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.ini",
+    "iniHash": "C363724E2E97AD0D30A0E6BF16C980C4CA1C736851D78C1EEF4633EB88DE9A99",
+    "files": [
+      {
+        "source": "C:\\dev\\TombRaider456VR\\build\\redeploy-reverted-20261101\\123\\bin\\TombRaiderVR.dll",
+        "destination": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+        "relative": "TombRaiderVR.dll",
+        "expectedNew": "3EC9B03F33A1FDC8E80A72F35258D6479572776302B77F2DD743697E9A2C7CF4",
+        "expectedOld": "2FCE85C1D18999302DB4DD2B8B648129BF4CB9C0F83FF0944D64CE8403ADC778"
+      },
+      {
+        "source": "C:\\dev\\TombRaider123VR\\TombRaiderVRBindings\\actions.json",
+        "destination": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVRBindings\\actions.json",
+        "relative": "TombRaiderVRBindings/actions.json",
+        "expectedNew": "2A85BDEA9D7B3E76580B17621E0DEC29721FAC8752AB09521F1D944509AC66E7",
+        "expectedOld": "2A85BDEA9D7B3E76580B17621E0DEC29721FAC8752AB09521F1D944509AC66E7"
+      },
+      {
+        "source": "C:\\dev\\TombRaider123VR\\TombRaiderVRBindings\\bindings_index.json",
+        "destination": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVRBindings\\bindings_index.json",
+        "relative": "TombRaiderVRBindings/bindings_index.json",
+        "expectedNew": "1C23C56951F393E4F933932625F20C03264F7F9971ACF54736F68405FC50189F",
+        "expectedOld": "1C23C56951F393E4F933932625F20C03264F7F9971ACF54736F68405FC50189F"
+      }
+    ]
+  },
+  {
+    "collection": "456",
+    "game": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.ini",
+    "iniHash": "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+    "files": [
+      {
+        "source": "C:\\dev\\TombRaider456VR\\build\\redeploy-reverted-20261101\\456\\bin\\TombRaiderVR.dll",
+        "destination": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+        "relative": "TombRaiderVR.dll",
+        "expectedNew": "555BBA0B3DFB08998818953A4EE839A2A71FE83F499F9F6531EA338B248C33CC",
+        "expectedOld": null
+      },
+      {
+        "source": "C:\\dev\\TombRaider456VR\\TombRaiderVRBindings\\actions.json",
+        "destination": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVRBindings\\actions.json",
+        "relative": "TombRaiderVRBindings/actions.json",
+        "expectedNew": "2A85BDEA9D7B3E76580B17621E0DEC29721FAC8752AB09521F1D944509AC66E7",
+        "expectedOld": "2A85BDEA9D7B3E76580B17621E0DEC29721FAC8752AB09521F1D944509AC66E7"
+      },
+      {
+        "source": "C:\\dev\\TombRaider456VR\\TombRaiderVRBindings\\bindings_index.json",
+        "destination": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVRBindings\\bindings_index.json",
+        "relative": "TombRaiderVRBindings/bindings_index.json",
+        "expectedNew": "1C23C56951F393E4F933932625F20C03264F7F9971ACF54736F68405FC50189F",
+        "expectedOld": "1C23C56951F393E4F933932625F20C03264F7F9971ACF54736F68405FC50189F"
+      }
+    ]
+  }
+]
