@@ -8519,3 +8519,112 @@ Validation uses `tools/build_keypad_tests.cmd`: offline PE/mesh/pose checks and
 a focused mocked-engine fixture. It never executes the full first-person
 self-test or loads a native game DLL into the test process. Headset confirmation
 of touch alignment and readability is still needed.
+
+### Lara mirror reflection prototype (TR5)
+
+The six bathroom mirrors in RICH2 (Escape with the Iris, rooms 134 and 135) can show
+Lara's full mesh in first or third person with Remastered graphics. The reflection
+includes her head, animated facial features and hair. Both views reflect her
+native third-person animation without VR IK, fitted-body offsets, or tracked-hand
+overrides. The ordinary first-person body and hands keep their tracking. It renders
+independently for each eye, clips to the audited glass rectangles, and respects
+objects in front of the mirror. The normal first-person visibility policy remains
+in effect outside the glass. This is a Lara-only reflection layered over the
+existing mirror material; it does not reflect the rest of the room.
+
+The capture retains the native opaque, transparent and additive passes, including
+hairline detail. Transparent edges blend over the original glass. Rim lighting and
+catsuit environment highlights use the reflected eye position, while the original
+texture, room lighting and animation remain intact.
+
+Enabled by default, including with an existing INI. Add
+`FirstPersonMirrorReflections=0` under `[VR]` to disable it. The prototype requires
+the ordinary stereo settings (duplicate draws, per-eye view/projection and
+EyeOffsetMode 3). Other TR5 rooms, TR5 Classic graphics and TR6 retain
+their existing rendering; TR4 native mirror compatibility is described below.
+The extra body material passes and stereo capture target add
+rendering/memory cost while this scene is eligible.
+
+`tools/build_mirror_tests.cmd` audits the installed glass geometry, runs focused
+pose/visibility fixtures, and checks actual reflected geometry, per-eye clipping,
+depth occlusion, hair transparency, both color schemes and GL-state restoration in a hidden OpenGL
+window. It does not run the full self-test or load any native game DLL. Headset
+confirmation of the game's final body alignment and appearance is still needed.
+The material fixture also runs the shipped catsuit shader to reproduce excessive
+brightness and verify retained texture contrast with the reflected observer.
+
+The second restroom was identified from a read-only live snapshot of retail TR5:
+native room 135, origin `(29696, 0, 74752)`, glass index range `(4026003, 48)`.
+Its three panes lie at world X=30720. The renderer selects each room's audited
+plane and glass bounds, recreates its surface when changing rooms, and rejects
+mixed material passes from different rooms. The two restroom assets contain 28
+glass triangles in total. Release validation passed 13,683 focused mirror checks,
+146 real-driver OpenGL checks, 3,226 crouch-transition checks and 10,304 keypad
+checks. The full self-test was not run.
+
+### TR1–6 reflection audit (2026-11-01)
+
+This audit distinguishes a missing Lara image on decorative glass from the
+games' existing reflection systems. It does not certify every surface visually.
+The installed asset inventory was parsed without loading or executing a game
+DLL: 144 TRG files with 16,421 HD room records across TR1–5, plus a label scan of
+57 TR6 GMX files (including cutscenes and test maps). An HD room record is not
+necessarily a distinct playable room; alternate rooms and auxiliary records are
+included. Texture appearance alone cannot be inferred from these tables.
+
+| Game | Evidence and result |
+| --- | --- |
+| TR1 | 24 TRG files / 1,686 room records. No additional decorative mirror requiring this patch was confirmed. Native PDB symbol inspection found no named Lara mirror renderer. This is not proof that every decorative texture is nonreflective. |
+| TR2 | 28 TRG files / 2,925 room records. Same result: no confirmed additional wall-mirror case. Manor and other decorative surfaces remain subject to visual inspection. |
+| TR3 | 38 TRG files / 3,910 room records. No confirmed additional wall-mirror case or named native Lara mirror renderer. |
+| TR4 | 39 TRG files / 5,177 room records. All 41 compiled level sequences were decoded and their command bytes matched against the installed DLL. Exactly two sequences enable native Lara mirrors: Sacred Lake, level 9 / room 11 / Z=28672; Coastal Ruins, level 15 / room 69 / Z=29696. These already use `Draw_Mirror_Lara`, not the TR5 glass overlay. |
+| TR5 | 15 TRG files / 2,723 room records. All 15 compiled level sequences were decoded and matched against the installed DLL; none enable the native mirror command. The two RICH2 restrooms are the six confirmed decorative panes supported by this patch. No other room was positively identified as requiring it. |
+| TR6 | A different engine provides `App_Render_Scene_PlanarReflection`. Its shipped `6/AREA/ROOM_PLANES.TXT` configures 224 unique level/room pairs across 20 level IDs (212 with positive reflection gain; 12 with zero gain). These are horizontal reflection planes, not 224 wall mirrors. Native code renders rooms and characters; the mod already adjusts reflection-view culling for headset movement. No additional missing wall-mirror case was confirmed. |
+
+TR4's separate first-person mirror fix is now implemented. Static call tracing confirms
+`Draw_Mirror_Lara` calls `DrawLara(..., 1)`, which reaches the ordinary HD hooks.
+Previously that path inherited first-person visibility and pose changes. A
+version-checked hook now scopes the game's own mirror routine in Sacred Lake and
+Coastal Ruins. It restores the native mesh mask during that draw, preserves head
+and hair, bypasses controller IK/hand substitutions/holster overrides, and excludes
+the first-person body offset in Classic graphics. Underwater first-person body
+hiding does not hide the reflection. Mirrored palettes cannot drive or receive
+the live-body spring deformation. All temporary visibility/control state is
+restored immediately. The native plane, room geometry, puzzle behavior and
+position/matrix reflection remain owned by the game. No extra TR5 capture is used.
+
+The dynamic-bone draw hook also now forwards TR4's native mirror flag, which
+selects reflected joint pass 2; the old one-argument hook dropped that register.
+TR5 keeps its separate one-argument draw entry. Both supported TR4 prologues and
+both games' draw signatures were checked against the installed/reference DLLs
+without loading their code. The compatibility scope is first-person only and
+honors `FirstPersonMirrorReflections`; ordinary third-person mirror rendering and
+native shadows retain their original path. This build does not alter TR1–3/TR6.
+Focused fixture checks cover both TR4 rooms, all three material passes, Classic
+and Remastered graphics, native facial weights, hidden underwater bodies,
+argument forwarding and restoration of normal state. In-headset confirmation in
+these two TR4 rooms is still needed.
+
+Combined release validation passed 19,758 focused mirror checks, 146 real-driver
+OpenGL checks, 3,226 crouch-transition checks, 10,304 keypad checks and 551 Classic
+body checks. The native shadow audit passed for all four supported DLLs. No full
+self-test or execution of native game DLLs was used for this validation.
+
+TR6's 226 configuration lines include two repeated rooms; native loading uses the
+last entry, yielding 224 unique rooms. The planar-renderer call chain and the
+mod's existing `IsTr6RenderCalculateCall` / `Detour_Tr6Calculate` handling were
+reviewed. The `MIRROR` labels found in GMX files describe mirrored character
+animations, not identifiable mirror surfaces. Neither those labels nor the
+TRG material scan can rule out unlabelled decorative mirrors. A universal
+automatic mirror rule would also affect windows, water, shiny surfaces or puzzle
+objects, so support remains restricted to positively identified glass.
+
+Reproducible evidence is in `tools/mirror_asset_audit.py`,
+`tools/audit_mirror_gameflow.py`, `tools/audit_mirror_collections.py`,
+`tools/audit_mirror_tr6.py` and the generated JSON under `build/mirror/`.
+`tools/verify_native_mirror.py` verifies the TR4 hook boundary/RIP operand and
+the different TR4/5 HD draw signatures; `native-hook-audit.json` records them.
+`asset-audit.json` records both restroom geometries; `native-gameflow-audit.json`
+records every TR4/5 sequence; `collection-asset-audit.json` records every asset;
+`tr6-native-planes.json` lists all configured TR6 room planes. Read-only live
+room metadata is retained in `current-room.json`.

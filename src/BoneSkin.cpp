@@ -7,6 +7,8 @@
 #include "Log.h"
 #include "FirstPerson.h"
 #include "MotionHandSkin.h"
+#include "MirrorReflection.h"
+#include "MirrorReflectionShader.h"
 #include "WristCap.h"
 #include "GameDll.h"
 
@@ -249,6 +251,15 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
             } else Log("motion hands: shader pair rejected; retaining original hand rendering");
         }
     }
+    std::string mirrorFs;
+    if(c.enabled && useVs && useFs) {
+        mirrorFs=useFs;
+        if(mirror::PatchObserver(useVs,mirrorFs)) {
+            gl::Load();
+            if(gl::LoadedShaderApi() && HandPairLinks(useVs,mirrorFs)) useFs=mirrorFs.c_str();
+            else Log("mirror: material observer shader rejected; retaining original shader");
+        }
+    }
     original(shader, fvf, useVs, useFs);
 
     // shader_init just gave this Shader a fresh program. If the name is being
@@ -264,6 +275,8 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
 constexpr uint32_t kMaxProgram = 4096;
 
 struct ProgramState {
+    GLint locMirror=-2;
+    bool mirrorLive=false;
     GLint locBodyMask=-2, locJoints=-2, locWristSeams=-2;
     bool bodyMaskLive=false;
     GLint locHand = -2;
@@ -981,6 +994,11 @@ void BoneSkinAfterValidate() {
     if (prog == 0 || prog >= kMaxProgram) return;
 
     ProgramState& ps = g_prog[prog];
+    if(ps.locMirror==-2) ps.locMirror=gl::GetUniformLocation(prog,"uMirrorObserver");
+    if(ps.locMirror>=0 && (MirrorReflectionCapturing() || ps.mirrorLive)) {
+        float observer[4]{};MirrorReflectionObserver(observer);
+        gl::Uniform4fv(ps.locMirror,1,observer);ps.mirrorLive=MirrorReflectionCapturing();
+    }
     if(ps.locHand==-2) ps.locHand=gl::GetUniformLocation(prog,"uTrackedHandJoint");
     if(ps.locHand>=0) {
         const int joint=FirstPersonTrackedHandJoint();

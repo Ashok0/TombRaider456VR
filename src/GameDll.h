@@ -84,7 +84,8 @@ struct GameDllLayout {
     uint32_t sGetObjectBounds;  // int  S_GetObjectBounds(int16* bounds)
     uint32_t drawSkyHD;         // void DrawSkyHD(void) -- HD sky/horizon dome
 
-    // void DrawLaraHD(ITEM_INFO*) -- the HD Lara draw, hooked for its SCOPE
+    // TR4: DrawLaraHD(ITEM_INFO*, int mirror); TR5: DrawLaraHD(ITEM_INFO*).
+    // The HD Lara draw is hooked for its SCOPE
     // rather than its argument: it is how DynamicBones tells Lara's skinned
     // draws apart from every other character sharing those shaders in the same
     // frame. Both DLLs give 8 position-independent prologue bytes, but not the

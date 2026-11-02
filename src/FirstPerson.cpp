@@ -2,6 +2,8 @@
 #include "Gamepad.h"
 #include "InventoryScene.h"
 #include "HKScopeMath.h"
+#include "MirrorReflection.h"
+#include "MirrorReflectionMath.h"
 #include "Config.h"
 #include "Engine.h"
 #include "GameDll.h"
@@ -391,6 +393,16 @@ constexpr CrouchDrawDll kCrouchDrawDlls[] = {
     {0x68C12FDA,0x1AB40}, {0x68C12FE9,0x17490},
 };
 hook::InlineHook g_hCrouchDraw;
+// The native TR4 mirror routine owns reflection of Lara, hair and gun shells.
+// Scope its existing draw; never add a second reflection or alter its plane.
+struct NativeMirrorDll { uint32_t timestamp,draw; uint8_t prologue[10]; };
+constexpr NativeMirrorDll kNativeMirrorDlls[]={
+    {0x696B4999,0x650E0,{0x48,0x83,0xec,0x28,0x8b,0x05,0x16,0x8b,0x5d,0x00}},
+    {0x68C12FDA,0x64E30,{0x48,0x83,0xec,0x28,0x8b,0x05,0x06,0x9d,0x5d,0x00}},
+};
+hook::InlineHook g_hNativeMirror;
+bool g_nativeMirrorDraw=false;
+bool RenderingLaraReflection() { return g_nativeMirrorDraw || MirrorReflectionCapturing(); }
 hook::InlineHook g_hCrouchGun;
 bool g_crouchGunsReady=false;
 
@@ -1515,8 +1527,25 @@ bool DrawingNativeShadow() {
     return g_boundBase && g_shadowDll && *Ptr<int32_t>(g_shadowDll->renderPass)==4;
 }
 
+void __cdecl Detour_NativeMirror() {
+    const auto original=g_hNativeMirror.Original<void (__cdecl*)()>();
+    if(!g_active || !g_scenePoseValid || !g_boundDll || !g_boundBase || g_boundDll->game!=0 ||
+       !Cfg().enabled || !Cfg().firstPersonMirrorReflections || DrawingNativeShadow()) {
+        original();return;
+    }
+    auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(!item) { original();return; }
+    auto& bits=*reinterpret_cast<uint32_t*>(item+off::item_mesh_bits);
+    const uint32_t savedBits=bits;
+    const bool previous=g_nativeMirrorDraw;
+    g_nativeMirrorDraw=true;
+    if(g_meshOverride && item==g_meshItem) bits=g_meshBaseBits;
+    original(); // Native code mirrors and restores its own positions/matrices.
+    bits=savedBits;g_nativeMirrorDraw=previous;
+}
+
 bool BodyVisualOffsetApplies(const uint8_t* item) {
-    return g_active && g_scenePoseValid && g_boundDll && g_boundBase &&
+    return !g_nativeMirrorDraw && g_active && g_scenePoseValid && g_boundDll && g_boundBase &&
         item && item==g_headingItem && item==*Ptr<uint8_t*>(g_boundDll->laraItem) &&
         (CanFitStandingBody(item) || g_bodyWallOffset.x!=0 || g_bodyWallOffset.z!=0);
 }
@@ -2231,11 +2260,38 @@ void CaptureSealedHand(uint8_t* item,const float* joints,int count,int nativeJoi
     }
 }
 
+bool g_mirrorHeadScope=false;
+const int32_t* MirrorJointMapping(uint8_t* item,int count) {
+    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
+    if(object<0) return nullptr;
+    const auto* geom=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride+off::object_geom;
+    return *reinterpret_cast<const int32_t*>(geom+28)==count ?
+        *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+}
 int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
     g_sealedHandReady=false;
     g_renderHandJoint = -1;
     g_bodySkinReady=false;
     const int32_t count = g_hGetJoints.Original<Fn_GetJoints>()(item, joints, pass);
+    if(RenderingLaraReflection()) {
+        // Both viewing modes reflect the same native animation. Return before
+        // body fitting, arm IK, controller weapons, or room-scale offsets.
+        if(joints && item && count>0 && count<=33 && g_boundDll &&
+           item==*Ptr<uint8_t*>(g_boundDll->laraItem) && !DrawingNativeShadow()) {
+            const auto* mapping=MirrorJointMapping(item,count);
+            if(g_bodySkinScope) {
+                // A facial animation joint is not a native mesh bit. The
+                // complete head pass must retain all its 33 skin slots.
+                g_bodySkinMask=g_mirrorHeadScope ? (uint64_t(1)<<count)-1 :
+                    firstperson::SkinJointMask(*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits),mapping,count);
+                g_bodyWristSeamMask=0;g_bodySkinCount=count;
+                std::memcpy(g_bodySkinPalette,joints,count*12*sizeof(float));
+                g_bodySkinReady=true;
+            }
+            if(g_bodySkinReady) std::memcpy(g_bodyRenderPalette,joints,count*12*sizeof(float));
+        }
+        return count;
+    }
     // Keep the native shadow body/root and all visibility/physics state.
     // Only free unarmed arms follow the controllers; their targets are rebased
     // through the light-pass wrist, not the scene-camera or eye-fit offset.
@@ -4426,9 +4482,29 @@ public:
     UnarmedRestHandScope& operator=(const UnarmedRestHandScope&)=delete;
 };
 
+const mirror::RoomProfile* MirrorRoomProfile(uint8_t* item) {
+    if(!g_boundDll || !g_boundBase || !item || !Cfg().enabled || !Cfg().firstPersonMirrorReflections ||
+       g_boundDll->game!=1 || CurrentGame()!=1 || !VR().active() || !VR().poseValid() ||
+       InTitle() || InFMV() || InInventory() || AppState(drva::app_off::photoMode) || ScriptedCameraActive() ||
+       !(AppState(drva::app_off::cfgFlags)&1) ||
+       AppState(drva::app_off::level)!=12 || *Ptr<uint8_t>(g_boundDll->lara+off::lara_skelebob)) return nullptr;
+    const int room=*reinterpret_cast<const int16_t*>(item+off::item_room);
+    const int count=*Ptr<int16_t>(g_boundDll->numberRooms);
+    const auto* rooms=*Ptr<const uint8_t*>(g_boundDll->room);
+    if((room!=134 && room!=135) || count!=mirror::NativeRooms || !rooms) return nullptr;
+    const auto* r=rooms+room*304;
+    const int chunks=*reinterpret_cast<const int32_t*>(r+256);
+    const auto* chunk=*reinterpret_cast<const uint8_t* const*>(r+264);
+    if(chunks!=1 || !chunk) return nullptr;
+    return mirror::FindProfile(g_boundDll->game,AppState(drva::app_off::level),room,count,
+        *reinterpret_cast<const int32_t*>(r+40),*reinterpret_cast<const int32_t*>(r+48),chunks,
+        *reinterpret_cast<const uint32_t*>(chunk+36),*reinterpret_cast<const uint32_t*>(chunk+40));
+}
+bool MirrorRoomEligible(uint8_t* item) { return MirrorRoomProfile(item)!=nullptr; }
+
 void __cdecl Detour_CrouchDraw(uint8_t* item,int32_t drawType) {
     const auto original=g_hCrouchDraw.Original<void (__cdecl*)(uint8_t*,int32_t)>();
-    if(DrawingNativeShadow() || !g_active || !g_scenePoseValid || !g_boundDll ||
+    if(DrawingNativeShadow() || !g_boundDll ||
        !g_boundBase || !g_motionDll || item!=*Ptr<uint8_t*>(g_boundDll->laraItem)) {
         original(item,drawType);return;
     }
@@ -4436,20 +4512,60 @@ void __cdecl Detour_CrouchDraw(uint8_t* item,int32_t drawType) {
     if(!app) { original(item,drawType);return; }
     auto& flags=*reinterpret_cast<uint32_t*>(app+drva::app_off::cfgFlags);
     const uint32_t modern=flags&2u;
-    // This render-only routine gates its proximity rejection on modern
-    // controls. Skip that branch, retaining the HD bit and every other flag.
-    // This is a first-person visibility policy, independent of IK readiness:
-    // wall impacts and temporarily missing controller poses must not bring
-    // proximity hiding back. Explicit stance masks and shadow rendering remain.
-    flags&=~2u;
-    const HolsterRenderScope holsters(item,app);
-    original(item,drawType);
-    flags=(flags&~2u)|modern;
+    if(g_nativeMirrorDraw) {
+        // The native mirror already transforms the body. Keep its drawType
+        // and hand selections; bypass only first-person proximity hiding.
+        flags&=~2u;original(item,drawType);flags=(flags&~2u)|modern;
+        return;
+    }
+    const bool firstPerson=g_active && g_scenePoseValid;
+    const auto* mirrorProfile=MirrorRoomProfile(item);
+    if(firstPerson) {
+        flags&=~2u;
+        {
+            // Only the ordinary first-person view uses physical holsters.
+            // Restore native hand/weapon selections before the mirror draw.
+            const HolsterRenderScope holsters(item,app);
+            original(item,drawType);
+        }
+        flags=(flags&~2u)|modern;
+    } else {
+        original(item,drawType);
+    }
+    const int nativePass=g_shadowDll ? *Ptr<int32_t>(g_shadowDll->renderPass) : -1;
+    if(mirrorProfile && MirrorReflectionPrepare(nativePass,mirrorProfile) && MirrorReflectionBegin()) {
+        auto& bits=*reinterpret_cast<uint32_t*>(item+off::item_mesh_bits);
+        const uint32_t saved=bits,previousModern=flags&2u;
+        if(firstPerson && g_meshOverride && item==g_meshItem) bits=g_meshBaseBits;
+        // The reflected body cannot intersect the real camera. Bypass
+        // proximity hiding for this extra render in either viewing mode.
+        flags&=~2u;
+        original(item,drawType);
+        bits=saved;flags=(flags&~2u)|previousModern;
+        MirrorReflectionEnd();
+    }
 }
 
 void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
                                    int32_t renderPass) {
     const KeypadMeshScope keypadMesh(item,useMeshBits);
+    if(RenderingLaraReflection() && !DrawingNativeShadow() && g_boundDll && item &&
+       item==*Ptr<uint8_t*>(g_boundDll->laraItem)) {
+        // Retain native per-mesh masks (outfit/face/hands) but bypass the
+        // first-person clipping policy. Keep native hands and animation;
+        // GetJoints skips all VR pose corrections during this capture.
+        auto& bits=*reinterpret_cast<uint32_t*>(item+off::item_mesh_bits);
+        const uint32_t savedBits=bits;
+        const int arm=g_renderArm,joint=g_renderHandJoint;
+        const bool scope=g_bodySkinScope,headScope=g_mirrorHeadScope;
+        g_mirrorHeadScope=DrawingLaraHead(item);
+        if(!useMeshBits) bits=UINT32_MAX;
+        g_renderArm=g_renderHandJoint=-1;g_bodySkinScope=true;g_bodySkinReady=false;
+        g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
+        g_renderArm=arm;g_renderHandJoint=joint;g_bodySkinScope=scope;g_bodySkinReady=false;
+        g_mirrorHeadScope=headScope;
+        bits=savedBits;return;
+    }
     if (DrawingNativeShadow()) {
         // First-person clipping/hand splitting belongs only to the eye view.
         // The light must see the intact native body, head and weapon meshes.
@@ -4601,6 +4717,10 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
 }
 
 void __cdecl Detour_DrawHair(int32_t argument) {
+    if(RenderingLaraReflection()) {
+        g_hDrawHair.Original<Fn_DrawHair>()(argument);
+        return;
+    }
     const auto* item=g_boundDll && g_boundBase ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
     const uint32_t bodyMask=!DrawingNativeShadow() && g_active ? FirstPersonBodyMask(item) : UINT32_MAX;
     if (!DrawingNativeShadow() && g_active && (!ShowJumpHair(item) || bodyMask==firstperson::HandMeshBits) && (HideLandingHead(item) || g_headHidden || g_rollHidden || g_crouchHidden || g_underwaterHidden || bodyMask==firstperson::ArmMeshBits || bodyMask==firstperson::HandMeshBits || IsHandsOnlyBodyState(item) || MotionReady())) {
@@ -4979,6 +5099,14 @@ bool Install(const GameDllLayout& d, uint64_t base) {
             "firstperson: crouched tracked weapons unavailable; native restrictions retained");
     }
     if(!InstallClassicBody(d,base)) return false;
+    if(d.game==0) for(const auto& entry:kNativeMirrorDlls) if(entry.timestamp==d.timestamp) {
+        constexpr int ripOffset=6; // mov eax,[rip+gfMirrorZPlane] in the stolen prologue.
+        const bool installed=g_hNativeMirror.Install(reinterpret_cast<void*>(base+entry.draw),
+            reinterpret_cast<void*>(&Detour_NativeMirror),sizeof(entry.prologue),entry.prologue,
+            sizeof(entry.prologue),"NativeMirrorLara",&ripOffset,1);
+        Log(installed ? "firstperson: TR4 native mirror pose/visibility isolated" :
+            "firstperson: TR4 mirror hook unavailable; native renderer retained");
+    }
     InstallPhysicalFlareThrow(d.timestamp,g_flareHooksReady && g_hGunJoint.installed() && g_hCrouchGun.installed());
     InstallPhysicalSwitches(d,base);
     InstallPhysicalCogs(d,base);
@@ -5007,6 +5135,7 @@ void Remove() {
     RemovePhysicalCogs();
     RemovePhysicalSwitches();
     g_hClassicItemMatrix.Remove();g_classicBodyDll=nullptr;
+    g_hNativeMirror.Remove();g_nativeMirrorDraw=false;
     g_hCrouchDraw.Remove();
     g_crouchGunsReady=false;g_crouchWeaponScope=nullptr;g_hCrouchGun.Remove();
     g_hDrawActionIndicators.Remove();
@@ -5393,6 +5522,7 @@ const float* FirstPersonBodyPalette(uint64_t& mask,int& count) {
     mask=g_bodySkinMask; count=g_bodySkinCount;
     return g_bodySkinScope && g_bodySkinReady && g_renderArm<0 ? g_bodySkinPalette : nullptr;
 }
+bool FirstPersonNativeMirrorDrawing() { return g_nativeMirrorDraw; }
 const float* FirstPersonRenderBodyPalette(uint64_t& mask,int& count) {
     return FirstPersonBodyPalette(mask,count) ? g_bodyRenderPalette : nullptr;
 }

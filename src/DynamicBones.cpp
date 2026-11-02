@@ -34,10 +34,10 @@ constexpr float kTicksPerSecond = 30.0f;
 
 hook::InlineHook g_hDrawLaraHD;
 
-// DrawLaraHD takes one pointer in rcx. We only need the scope, not the
-// argument, but the signature has to match the call or the stack is wrong on
-// the way back through the trampoline.
-typedef void (__fastcall* Fn_DrawLaraHD)(void*);
+// TR4's RDX carries the native mirror flag. DrawLaraHD turns it into joint-pass 2;
+// dropping it can leave a reflected body with an ordinary-view skeleton.
+typedef void (__fastcall* Fn_DrawLaraHD)(void*,int32_t);
+typedef void (__fastcall* Fn_DrawLaraHD5)(void*);
 
 const GameDllLayout* g_boundDll   = nullptr;
 uint64_t             g_boundBase  = 0;
@@ -276,19 +276,22 @@ float RotDet(const Joint& M) {
 
 // --- the hook ---------------------------------------------------------------
 
-void __fastcall Detour_DrawLaraHD(void* item) {
+void __fastcall Detour_DrawLaraHD(void* item,int32_t drawType) {
     g_inLara         = true;
     g_scopeLatched   = false;
     g_scopeDraws     = 0;
     g_scopeJointsMin = 0;
     g_scopeJointsMax = 0;
-    g_hDrawLaraHD.Original<Fn_DrawLaraHD>()(item);
+    if(g_boundDll && g_boundDll->game==1)
+        g_hDrawLaraHD.Original<Fn_DrawLaraHD5>()(item);
+    else g_hDrawLaraHD.Original<Fn_DrawLaraHD>()(item,drawType);
     g_inLara = false;
 
     if (g_frameScopes < kMaxScopes)
         g_frameScopeJoints[g_frameScopes] = g_scopeJointsMax;
     ++g_frameScopes;
 }
+void __fastcall Detour_DrawLaraHD5(void* item) { Detour_DrawLaraHD(item,0); }
 
 // TR4 and TR5 both give 8 clean position-independent bytes before the first
 // RIP-relative instruction, but the bytes differ:
@@ -309,7 +312,7 @@ bool Install(const GameDllLayout& d, uint64_t base) {
                                           : sizeof(kDrawLaraHDTR5);
     return g_hDrawLaraHD.Install(
         reinterpret_cast<void*>(base + d.drawLaraHD),
-        reinterpret_cast<void*>(&Detour_DrawLaraHD),
+        d.game==0 ? reinterpret_cast<void*>(&Detour_DrawLaraHD) : reinterpret_cast<void*>(&Detour_DrawLaraHD5),
         8, expect, len, "DrawLaraHD");
 }
 
@@ -753,7 +756,7 @@ void Report() {
 void DynamicBonesObserveDraw() {
     g_drawIsBody = false;
     g_drawRenderBody = false;
-    if (!g_inLara) return;
+    if (!g_inLara || FirstPersonNativeMirrorDrawing()) return;
 
     const RenderState& vs = VidState();
     if (vs.num_joints <= 0 || !vs.joints) return;

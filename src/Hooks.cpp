@@ -47,6 +47,7 @@
 #include "VRSystem.h"
 #include "FirstPerson.h"
 #include "HKScope.h"
+#include "MirrorReflection.h"
 #include "WorldLaser.h"
 
 #include <cstring>
@@ -1426,6 +1427,12 @@ void __cdecl Detour_validate_draw() {
         }
     }
 
+    // Reflect in the native camera frame, inside the per-eye transform. This
+    // reaches body, head, hair and attachments without mutating their palettes.
+    if(MirrorReflectionCapturing()) {
+        MirrorReflectionProjection(*livePr,g_currentEye);vs.consts|=kProj;
+    }
+
     // Force the uploads. The engine's own dirty tracking would skip them: the
     // proj bit is set on a POINTER comparison in vid_setPass, so writing new
     // contents into the same mProj[1] would not trip it.
@@ -1640,7 +1647,7 @@ void DuplicatePerEye(const hook::InlineHook& h, Args... args) {
     // Render-only third view. Never replay simulation, native optics, HUD,
     // shadow/offscreen targets, or Lara's controller-driven hands.
     if (IsWorldPass() && VidState().proj && !IsOrthoProjection(*VidState().proj) &&
-        !IsBypassPass() && HKScopeBeginCapture()) {
+        !IsBypassPass() && !MirrorReflectionCapturing() && HKScopeBeginCapture()) {
         g_inDuplicate=true;
         h.Original<Fn>()(args...);
         g_inDuplicate=false;
@@ -2401,6 +2408,7 @@ bool BringUpVR() {
 
 void __cdecl Detour_ogl_present() {
     // Composite using this frame's poses before polling/advancing any state.
+    MirrorReflectionPresent();
     HKScopePresent();
     WorldLaserPresent();
     ++g_frameIndex;
@@ -2761,6 +2769,7 @@ void RemoveHooks() {
     InventorySceneShutdown();
     TR4EffectsShutdown();
     HKScopeShutdown();
+    MirrorReflectionShutdown();
     WorldLaserShutdown();
     GamepadShutdown();
     FirstPersonShutdown();

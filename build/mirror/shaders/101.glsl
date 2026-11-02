@@ -1,0 +1,48 @@
+#version 150 
+uniform sampler3D sNoise;
+	uniform sampler2DArray sTex0;
+	uniform sampler2DArray sTex1;
+	uniform sampler2DArray sTex2;
+	uniform sampler2DArray sTex3;
+	uniform sampler2DArrayShadow sShadow;
+	uniform sampler2DArray sEnvMap;
+	uniform sampler2DArray sTex0_wrap;
+	uniform sampler2DArray sTex0_mirror;
+	in vec4 vTexCoord;
+	in vec4 vColor;
+	in vec3 vLight;
+	in float vLayer;
+	in float vFog;
+	in vec3 vNormal;
+	in vec3 vPos;
+	in vec4 vSProj;
+	uniform mat4 uProjMatrix;
+	uniform vec4 uViewMatrix[4];
+	uniform mat4 uShadowMatrix[6];
+	uniform vec4 uShadowFalloff[6];
+	uniform vec4 uShadowPos[6];
+	uniform vec4 uFogColor;
+    uniform vec4 uFogPlane;
+    uniform vec4 uDofPlane;
+    uniform vec4 uEffectOffsets[3];
+    uniform vec4 uModelMatrix[4];
+    uniform vec4 uParams;
+    uniform vec4 uColor;
+    uniform vec4 uLightPos[8];
+    uniform vec4 uLightCol[8];
+    uniform vec4 uLightDir[8];
+    uniform vec4 uAmbient[6];
+    uniform vec4 uJoints[72 * 3];
+out vec4 fragColor; void main() {
+	vec4 d = vec4(0.0, 0.0, 0.0, 1.0);
+	vec2 step = vec2(1.0 / 1280.0, 1.0 / 720.0);
+	vec2 uv = vTexCoord.xy;
+	d.xyz += texture(sTex0, vec3((uv + vec2(-3.0, 0.0) * step).xy, 0.0)).xyz * 0.062418;
+	d.xyz += texture(sTex0, vec3((uv + vec2(-2.0, 0.0) * step).xy, 0.0)).xyz * 0.104560;
+	d.xyz += texture(sTex0, vec3((uv + vec2(-1.0, 0.0) * step).xy, 0.0)).xyz * 0.144962;
+	d.xyz += texture(sTex0, vec3((uv + vec2( 0.0, 0.0) * step).xy, 0.0)).xyz * 0.162716;
+	d.xyz += texture(sTex0, vec3((uv + vec2( 1.0, 0.0) * step).xy, 0.0)).xyz * 0.144962;
+	d.xyz += texture(sTex0, vec3((uv + vec2( 2.0, 0.0) * step).xy, 0.0)).xyz * 0.104560;
+	d.xyz += texture(sTex0, vec3((uv + vec2( 3.0, 0.0) * step).xy, 0.0)).xyz * 0.062418;
+	fragColor = d;
+}

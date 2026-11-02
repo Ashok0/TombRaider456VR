@@ -1,0 +1,15 @@
+﻿{
+    "keypadChecks":  10304,
+    "fullSelfTestRun":  false,
+    "deployed":  "2026-11-01T18:28:12.3578668-05:00",
+    "mirrorRealGLChecks":  79,
+    "old":  "DE0E1D1BC6572641247CA0F97AF5D987269A7141998484834A34B822ED692C17",
+    "new":  "74D3B34CD91C64982D219B130D13AA0819396DD1C41DBBAB4EEF14DE214F353C",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\mirror\\before-native-pose-20261101-182812",
+    "releaseBuildPassed":  true,
+    "headsetTested":  false,
+    "behavior":  "Both camera modes reflect native third-person animation without VR IK, room-scale body offsets, tracked hand substitutions, or physical holster overrides; ordinary first-person tracking retained",
+    "crouchTransitionChecks":  3226,
+    "iniUnchanged":  true,
+    "mirrorFocusedChecks":  13642
+}

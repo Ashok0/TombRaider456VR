@@ -1,0 +1,16 @@
+[
+  [
+    "Room_SetReflectionPlanes",
+    "0x1ab52f",
+    "lea",
+    "r14, [rip + 0x27b69a]",
+    "0x426bd0"
+  ],
+  [
+    "run",
+    "0x1bf575",
+    "lea",
+    "rsi, [rip + 0x267654]",
+    "0x426bd0"
+  ]
+]

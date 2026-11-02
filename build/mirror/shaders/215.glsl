@@ -1,0 +1,44 @@
+#version 150 
+uniform sampler3D sNoise;
+	uniform sampler2DArray sTex0;
+	uniform sampler2DArray sTex1;
+	uniform sampler2DArray sTex2;
+	uniform sampler2DArray sTex3;
+	uniform sampler2DArrayShadow sShadow;
+	uniform sampler2DArray sEnvMap;
+	uniform sampler2DArray sTex0_wrap;
+	uniform sampler2DArray sTex0_mirror;
+	uniform mat4 uProjMatrix;
+	uniform vec4 uViewMatrix[4];
+	uniform mat4 uShadowMatrix[6];
+	uniform vec4 uShadowFalloff[6];
+	uniform vec4 uShadowPos[6];
+	uniform vec4 uFogColor;
+    uniform vec4 uFogPlane;
+    uniform vec4 uDofPlane;
+    uniform vec4 uEffectOffsets[3];
+    uniform vec4 uModelMatrix[4];
+    uniform vec4 uParams;
+    uniform vec4 uColor;
+    uniform vec4 uLightPos[8];
+    uniform vec4 uLightCol[8];
+    uniform vec4 uLightDir[8];
+    uniform vec4 uAmbient[6];
+    uniform vec4 uJoints[72 * 3];
+vec4 GetFog( const vec3 vPosition)
+{
+    vec4 pos = vec4(vPosition, 1.0);
+    float FogDistance = dot(pos, uFogPlane);
+    vec4 cFog = uFogColor;
+	cFog.a *= clamp( FogDistance, 0.0, 1.0);
+	return( cFog);
+}
+vec3 GetReflectionVec( const vec3 vNorm, const vec3 vDirection)
+{
+	return( (2.0 * vNorm * dot( vNorm, vDirection)) - vDirection);
+}
+    in vec2 vTexCoord;
+out vec4 fragColor; void main() {
+	float alpha = texture(sTex0, vec3(vTexCoord.xy, uParams.x)).a;
+    if (alpha <= 0.5f) discard;
+}

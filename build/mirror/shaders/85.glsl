@@ -1,0 +1,52 @@
+#version 150 
+uniform sampler3D sNoise;
+	in vec3 aCoord;
+	in vec4 aExtra;
+	in vec4 aNormal;
+	in vec4 aTexCoord;
+	in vec4 aLight;
+	in vec4 aColor;
+	out vec4 vTexCoord;
+	out vec4 vColor;
+	out vec3 vLight;
+	out float vLayer;
+	out float vFog;
+	out vec3 vNormal;
+	out vec3 vPos;
+	out vec4 vSProj;
+	uniform mat4 uProjMatrix;
+	uniform vec4 uViewMatrix[4];
+	uniform mat4 uShadowMatrix[6];
+	uniform vec4 uShadowFalloff[6];
+	uniform vec4 uShadowPos[6];
+	uniform vec4 uFogColor;
+    uniform vec4 uFogPlane;
+    uniform vec4 uDofPlane;
+    uniform vec4 uEffectOffsets[3];
+    uniform vec4 uModelMatrix[4];
+    uniform vec4 uParams;
+    uniform vec4 uColor;
+    uniform vec4 uLightPos[8];
+    uniform vec4 uLightCol[8];
+    uniform vec4 uLightDir[8];
+    uniform vec4 uAmbient[6];
+    uniform vec4 uJoints[72 * 3];
+vec2 rotate(vec2 v, float angle) {
+	angle *= (3.1415926536 * 2.0) / 4096.0;
+	vec2 cs = vec2(cos(angle), sin(angle));
+	return vec2(v.x*cs.x - v.y*cs.y, v.x*cs.y + v.y*cs.x);
+}
+void main() {
+	vec4 uv = aTexCoord;
+	uv.xy *= uParams.xx;
+	vTexCoord = uv;
+    vec3 light = aLight.xyz;
+    light.xyz *= mix(vec3(1.0, 1.0, 1.0), vec3(0.6, 0.843, 0.901), uModelMatrix[3].y);
+    vColor = vec4(pow(aColor.xyz * light * 3.0, vec3(2.2, 2.2, 2.2)), aColor.w);
+	vLayer = floor(aExtra.x * 255.0 + 0.5);
+	vec4 p = vec4(dot(uModelMatrix[0], vec4(aCoord.xyz, 1.0)), dot(uModelMatrix[1], vec4(aCoord.xyz, 1.0)), dot(uModelMatrix[2], vec4(aCoord.xyz, 1.0)), 1.0);
+	p = vec4(dot(uViewMatrix[0].xyz, (p).xyz), dot(uViewMatrix[1].xyz, (p).xyz), dot(uViewMatrix[2].xyz, (p).xyz), (p).w);
+	vFog = clamp(exp(-((length(p.xyz) / ((30.0 * 1000.0) / 2))*(length(p.xyz) / ((30.0 * 1000.0) / 2)))), 0.0, 1.0);
+	p.xy += rotate(uv.zw, aNormal.w) * aExtra.w;
+	gl_Position = ((uProjMatrix) * (p));
+}

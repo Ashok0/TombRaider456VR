@@ -25,6 +25,8 @@ bool FirstPersonSwitchGrip(bool down, bool allowed);
 unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightValid,bool allowed);
 // True only while the native light camera draws its shadow map.
 bool FirstPersonShadowPass();
+// TR4's native reflection draw uses an intact native pose, not the live VR body.
+bool FirstPersonNativeMirrorDrawing();
 // Unmasked palette only within Lara's first-person body draw.
 const float* FirstPersonBodyPalette(uint64_t& mask,int& count);
 // Complete eye-view palette, including unarmed IK; physics uses the native capture above.

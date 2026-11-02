@@ -742,6 +742,7 @@ struct Config {
     float firstPersonMotionGunRollDegrees = 0;
     bool firstPersonMotionGunHotkeys = true;
     bool firstPersonHKScope = true;
+    bool firstPersonMirrorReflections = true; // verified TR5 RICH2 bathroom panes
     bool firstPersonHKScopeMeshFit = true;
     float firstPersonHKScopeForwardMetres = 0.18f;
     float firstPersonHKScopeUpMetres = 0.24f;

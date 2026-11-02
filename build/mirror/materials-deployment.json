@@ -1,0 +1,16 @@
+﻿{
+    "keypadChecks":  10304,
+    "fullSelfTestRun":  false,
+    "deployed":  "2026-11-01T18:40:42.2733665-05:00",
+    "mirrorRealGLChecks":  122,
+    "old":  "74D3B34CD91C64982D219B130D13AA0819396DD1C41DBBAB4EEF14DE214F353C",
+    "new":  "EF19022C551EC4591B3109F8FD02A11900CC661B9A3AB9BD5BAD869BA5A409C9",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\mirror\\before-materials-20261101-184042",
+    "releaseBuildPassed":  true,
+    "headsetTested":  false,
+    "behavior":  "Capture all three native material passes with transparent hair coverage; compute rim and catsuit Fresnel from reflected eye position; native pose retained without IK",
+    "crouchTransitionChecks":  3226,
+    "evidence":  "Shipped head has 2508 transparent and 2040 additive indices; actual native catsuit shader reproduces saturated pixels with the real camera and retains dark texture contrast with reflected observer",
+    "iniUnchanged":  true,
+    "mirrorFocusedChecks":  13665
+}

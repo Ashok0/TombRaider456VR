@@ -1,0 +1,15 @@
+﻿{
+    "keypadChecks":  10304,
+    "fullSelfTestRun":  false,
+    "deployed":  "2026-11-01T17:36:55.3963666-05:00",
+    "mirrorRealGLChecks":  78,
+    "old":  "14F01BB1F12D7145AEDA3653C84B9A322540C8CBC60A82AA8755F5C483F6E20A",
+    "new":  "C46F5A4B1CCB79AA24DA864DC5712ED25014FA62483A98754941BFEF592B15DB",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\mirror\\before-install-20261101-173655",
+    "releaseBuildPassed":  true,
+    "existingInteractionChecks":  23563,
+    "behavior":  "Prototype: TR5 RICH2 room 134 three audited bathroom panes, first-person Remastered Lara body/head/hair reflection, per-eye capture and depth-tested glass composite, current body pose reused; enabled by default",
+    "headsetTested":  false,
+    "iniUnchanged":  true,
+    "mirrorFocusedChecks":  2175
+}

@@ -1,0 +1,16 @@
+﻿{
+    "keypadChecks":  10304,
+    "fullSelfTestRun":  false,
+    "deployed":  "2026-11-01T18:16:17.2823686-05:00",
+    "mirrorRealGLChecks":  79,
+    "old":  "229E2C5317875D339C34368ADA56B96CFEC8158C1B0B5824D5CE04E2C0031151",
+    "new":  "DE0E1D1BC6572641247CA0F97AF5D987269A7141998484834A34B822ED692C17",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\mirror\\before-face-fix-20261101-181616",
+    "releaseBuildPassed":  true,
+    "headsetTested":  false,
+    "behavior":  "Head descendants inherit fitted head correction with authored expressions intact; full facial skin palette visible; RICH2 mirrors also support third-person native pose and chase-camera distance",
+    "crouchTransitionChecks":  3226,
+    "diagnosis":  "The head uses 26 facial helpers mapped to native IDs 39..64, outside the body pose cache and mesh visibility bits",
+    "iniUnchanged":  true,
+    "mirrorFocusedChecks":  8502
+}

@@ -1,0 +1,61 @@
+#version 150 
+uniform sampler3D sNoise;
+	uniform sampler2DArray sTex0;
+	uniform sampler2DArray sTex1;
+	uniform sampler2DArray sTex2;
+	uniform sampler2DArray sTex3;
+	uniform sampler2DArrayShadow sShadow;
+	uniform sampler2DArray sEnvMap;
+	uniform sampler2DArray sTex0_wrap;
+	uniform sampler2DArray sTex0_mirror;
+	uniform mat4 uProjMatrix;
+	uniform vec4 uViewMatrix[4];
+	uniform mat4 uShadowMatrix[6];
+	uniform vec4 uShadowFalloff[6];
+	uniform vec4 uShadowPos[6];
+	uniform vec4 uFogColor;
+    uniform vec4 uFogPlane;
+    uniform vec4 uDofPlane;
+    uniform vec4 uEffectOffsets[3];
+    uniform vec4 uModelMatrix[4];
+    uniform vec4 uParams;
+    uniform vec4 uColor;
+    uniform vec4 uLightPos[8];
+    uniform vec4 uLightCol[8];
+    uniform vec4 uLightDir[8];
+    uniform vec4 uAmbient[6];
+    uniform vec4 uJoints[72 * 3];
+    in vec2 vTexCoord;
+    in vec3 vColor;
+    in vec3 vLight;
+    in float vLayer;
+    in float vFog;
+    in vec3 vNormal;
+    in vec3 vPos;
+    in vec3 vWorldPos;
+out vec4 fragColor; void main() {
+    vec4 d;
+    vec2 uv = vTexCoord;
+    vec3 normal = normalize(vNormal);
+    vec3 light = vLight;
+    vec3 color = vColor;
+    vec3 tc = vWorldPos.xyz / 2048.0;
+    float t = uModelMatrix[3].x * 0.025;
+    vec3 nt = normal * t;
+    float n = texture(sNoise, tc + nt).x;
+    n += texture(sNoise, (tc + nt) * 2.0).x;
+    n += texture(sNoise, tc * 0.25 + nt).x;
+    n /= 2.5;
+    n *= n;
+    d = texture(sTex0_wrap, vec3(uv.xy, vLayer));
+    vec3 lava_color = vec3(0.4, 0.14, 0.02) / n;
+    lava_color *= lava_color;
+    lava_color *= lava_color;
+    d.xyz *= (light + color) * 2.0; 
+    d.xyz += lava_color * (1.0 - d.w);
+    d.w = 1.0;
+    {
+        d.xyz = mix(uFogColor.xyz, d.xyz, vFog);
+    }
+    fragColor = d;
+}

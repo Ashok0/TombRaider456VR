@@ -1,0 +1,48 @@
+{
+  "asset": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\5\\DATA\\RICH2.TRG",
+  "sha256": "849ecc0228cc624c326a5cffa878bf4f034431a203fe08734037bcd7ebb7325b",
+  "rooms": [
+    {
+      "room": 134,
+      "glassTriangles": 12,
+      "planeX": 33792,
+      "top": -24930,
+      "bottom": -24558,
+      "worldZ": [
+        [
+          76157,
+          76419
+        ],
+        [
+          77179,
+          77438
+        ],
+        [
+          78204,
+          78465
+        ]
+      ]
+    },
+    {
+      "room": 135,
+      "glassTriangles": 16,
+      "planeX": 30720,
+      "top": -24961,
+      "bottom": -24591,
+      "worldZ": [
+        [
+          77183,
+          77435
+        ],
+        [
+          78202,
+          78465
+        ],
+        [
+          79230,
+          79486
+        ]
+      ]
+    }
+  ]
+}

@@ -653,6 +653,15 @@ bool InlineHook::Install(void*, void*, size_t, const uint8_t*, size_t,
 }
 namespace tr {
 bool InventorySceneReady() { return inventorySceneReady; }
+// No GL renderer is loaded by these focused native-memory fixtures.
+bool testMirrorReady=false,testMirrorCapturing=false;
+int testMirrorBegins=0,testMirrorEnds=0;
+int testMirrorPass=-1;
+const mirror::RoomProfile* testMirrorProfile=nullptr;
+bool MirrorReflectionPrepare(int nativePass,const mirror::RoomProfile* profile) { testMirrorPass=nativePass;testMirrorProfile=profile;return testMirrorReady && nativePass>=0 && nativePass<3; }
+bool MirrorReflectionBegin() { if(!testMirrorReady || testMirrorCapturing) return false;testMirrorCapturing=true;++testMirrorBegins;return true; }
+void MirrorReflectionEnd() { testMirrorCapturing=false;++testMirrorEnds; }
+bool MirrorReflectionCapturing() { return testMirrorCapturing; }
 bool InventorySceneDrawing() { return inventorySceneDrawing; }
 const Config& Cfg() { return config; }
 const motiongun::Calibration& LiveMotionGunCalibration() {

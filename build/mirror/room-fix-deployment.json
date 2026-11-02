@@ -1,0 +1,14 @@
+﻿{
+    "fullSelfTestRun":  false,
+    "iniUnchanged":  true,
+    "new":  "229E2C5317875D339C34368ADA56B96CFEC8158C1B0B5824D5CE04E2C0031151",
+    "mirrorRealGLChecks":  78,
+    "headsetTested":  false,
+    "releaseBuildPassed":  true,
+    "mirrorFocusedChecks":  2176,
+    "old":  "C46F5A4B1CCB79AA24DA864DC5712ED25014FA62483A98754941BFEF592B15DB",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\mirror\\before-room-fix-20261101-180507",
+    "diagnosis":  "Live TR5 RICH2 native number_rooms=179, unlike 180 HD TRG records; v1 rejected the scene before capture allocation",
+    "behavior":  "Use verified native room count in both mirror gates; keep exact room/origin/glass range checks; log first body capture and stereo composite",
+    "deployed":  "2026-11-01T18:05:08.6748672-05:00"
+}

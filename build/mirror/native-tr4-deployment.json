@@ -1,0 +1,18 @@
+﻿{
+    "keypadChecks":  10304,
+    "fullSelfTestRun":  false,
+    "deployed":  "2026-11-01T20:05:04.6333686-05:00",
+    "mirrorRealGLChecks":  146,
+    "old":  "EF19022C551EC4591B3109F8FD02A11900CC661B9A3AB9BD5BAD869BA5A409C9",
+    "new":  "4DA85395495BD708C82F5D895EAAB53A668D1BE8DE8EC93DC88716D5DE2C3374",
+    "nativeShadowAuditPassed":  true,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\mirror\\before-tr4-native-mirrors-20261101-200504",
+    "releaseBuildPassed":  true,
+    "headsetTested":  false,
+    "behavior":  "TR4 native Sacred Lake/Coastal Ruins mirror isolation in first person, preserved native mirror flag and untouched shadows; includes TR5 six-pane restroom support",
+    "crouchTransitionChecks":  3226,
+    "evidence":  "All four supported DLL draw signatures verified offline; TR4 mirror prologues and relocation verified; tests cover Classic/HD, underwater hiding, native facial weights, physics isolation, state restoration and existing TR5 glass",
+    "iniUnchanged":  true,
+    "classicBodyChecks":  551,
+    "mirrorFocusedChecks":  19758
+}

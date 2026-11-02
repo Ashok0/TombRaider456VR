@@ -1,0 +1,34 @@
+[
+  {
+    "game": 4,
+    "timestamp": "0x696b4999",
+    "innerDraw": "0xc40f0",
+    "flagSelectsJointPass2": true,
+    "mirrorDraw": "0x650e0",
+    "prologue": "4883ec288b05168b5d00",
+    "planeGlobal": "0x63dc00",
+    "stolenBytes": 10
+  },
+  {
+    "game": 4,
+    "timestamp": "0x68c12fda",
+    "innerDraw": "0xc4d20",
+    "flagSelectsJointPass2": true,
+    "mirrorDraw": "0x64e30",
+    "prologue": "4883ec288b05069d5d00",
+    "planeGlobal": "0x63eb40",
+    "stolenBytes": 10
+  },
+  {
+    "game": 5,
+    "timestamp": "0x696b499c",
+    "innerDraw": "0xb8c50",
+    "flagSelectsJointPass2": false
+  },
+  {
+    "game": 5,
+    "timestamp": "0x68c12fe9",
+    "innerDraw": "0xb8fb0",
+    "flagSelectsJointPass2": false
+  }
+]

@@ -2,14 +2,53 @@
 // dynamic-bone observer and solver, with only the render-state boundary stubbed.
 #include <cstdlib>
 #include "../src/FirstPerson.h"
+#define private public
+#include "../src/InlineHook.h"
+#undef private
 #include "../src/DynamicBones.cpp"
 
 namespace {
 tr::RenderState renderState{};
 bool worldPass=true;
+int observedDrawType=-1;
+void* observedDrawItem=nullptr;
+void __fastcall ObserveDrawArguments(void* item,int32_t drawType) {
+    observedDrawItem=item;observedDrawType=drawType;
+}
+void __fastcall ObserveDrawArguments5(void* item) { observedDrawItem=item;observedDrawType=-5; }
 void Require(bool ok,const char* message) {
     if (!ok) { std::printf("FAIL: jiggle integration: %s\n",message);std::exit(1); }
 }
+}
+
+void TestDynamicBonesMirrorArguments() {
+    using namespace tr;
+    const auto saved=g_hDrawLaraHD.m_trampoline;
+    const auto savedDll=g_boundDll;GameDllLayout layout{};g_boundDll=&layout;
+    g_hDrawLaraHD.m_trampoline=reinterpret_cast<void*>(&ObserveDrawArguments);
+    for(int drawType=0;drawType<3;++drawType) {
+        Detour_DrawLaraHD(&renderState,drawType);
+        Require(observedDrawItem==&renderState && observedDrawType==drawType,
+                "HD scope forwards the native reflection/interpolation flag exactly");
+        Require(!g_inLara,"HD scope ends after every native draw");
+    }
+    layout.game=1;g_hDrawLaraHD.m_trampoline=reinterpret_cast<void*>(&ObserveDrawArguments5);
+    Detour_DrawLaraHD5(&renderState);
+    Require(observedDrawItem==&renderState && observedDrawType==-5 && !g_inLara,
+            "TR5 retains its distinct one-argument native draw entry");
+    g_hDrawLaraHD.m_trampoline=saved;g_boundDll=savedDll;
+}
+
+void TestDynamicBonesMirrorIsolation(const float* palette) {
+    using namespace tr;
+    Require(FirstPersonNativeMirrorDrawing(),"fixture is inside actual native mirror scope");
+    renderState.joints=const_cast<float*>(palette);renderState.num_joints=15;renderState.shader=20;
+    const bool previous=g_inLara;g_inLara=true;worldPass=true;
+    g_haveThis=g_haveBest=false;g_bestScore=-1;g_candCount=0;
+    DynamicBonesObserveDraw();
+    Require(!DynamicBonesRenderBody() && !g_haveThis && !g_haveBest && g_candCount==0,
+            "reflected joints cannot drive or receive live-body spring deformation");
+    g_inLara=previous;
 }
 namespace tr {
 RenderState& VidState() { return renderState; }
