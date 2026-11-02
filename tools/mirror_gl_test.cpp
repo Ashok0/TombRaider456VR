@@ -10,6 +10,7 @@
 #include "../src/StereoRenderer.cpp"
 #include "../src/MirrorReflectionShader.h"
 #include "../src/MotionHandSkin.h"
+#include "../src/KeypadLightShader.h"
 #include "../build/mirror/native-shaders.h"
 namespace {
 tr::Config cfg;
@@ -190,6 +191,7 @@ int main() {
         Check(mirror::PatchObserver(v,f),"recognize audited native material camera convention");
         Check(!mirror::PatchObserver(v,f),"shader patch rejects duplicate observer injection");
         Check(motionhandskin::Patch(v,f),"mirror and first-person skin visibility patches coexist");
+        Check(keypad::PatchLight(v,f),"keypad lighting coexists with hand and reflection shader patches");
         const auto p=link(v,f);gl::DeleteProgram(p);
     }
     // Run the shipped catsuit fragment shader on controlled textured pixels.

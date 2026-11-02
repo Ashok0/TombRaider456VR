@@ -16,7 +16,12 @@ int kpCalls=0,kpPresses=0,kpTriggers=0,kpLastKey=-1,kpBirthdayCalls=0;
 uint32_t kpDrawMask=0;
 float kpRoot[3]={-1,-618,506};
 void __cdecl FakeKeypadCollision(int16_t,uint8_t*,void*) { Check(false,"physical keypad must never open inventory through collision"); }
-void __cdecl FakeKeypadMask(uint8_t* item) { kpDrawMask=*reinterpret_cast<uint32_t*>(item+12); }
+uint64_t kpDrawTime=0;float kpDrawLight[4]{};
+void __cdecl FakeKeypadDraw(uint8_t* item,int32_t pass) {
+    Check(pass==2,"static keypad draw preserves native render-pass argument");
+    kpDrawMask=*reinterpret_cast<uint32_t*>(item+12);
+    tr::KeypadLight(kpDrawLight,kpDrawTime);
+}
 void __cdecl FakeKeypadMatrices(uint8_t* item) {
     using namespace tr;
     const float a=Radians(reinterpret_cast<PHD_3DPOS*>(item+96)->y_rot),c=std::cos(a),s=std::sin(a);
@@ -68,7 +73,7 @@ int main() {
     table.combination=rva(&kpCombination);table.mesh=rva(&kpMesh);table.left=rva(&kpLeft);table.right=rva(&kpRight);
     table.up=rva(&kpUp);table.down=rva(&kpDown);table.select=rva(&kpSelect);table.menu=rva(&kpMenu);table.use=rva(&kpUse);
     g_keypadDll=&table;
-    g_hKeypadMask.m_trampoline=reinterpret_cast<void*>(&FakeKeypadMask);
+    g_hKeypadDraw.m_trampoline=reinterpret_cast<void*>(&FakeKeypadDraw);
     // Nonzero external state must survive every native call, including Enter.
     kpCount=3;kpY=2;kpX=1;kpPause=17;kpLeft=1;kpRight=2;kpUp=3;kpDown=4;kpSelect=1;kpUse=1;kpMenu=0;
     kpDigits[0]=9;kpDigits[1]=8;kpDigits[2]=7;kpDigits[3]=6;kpMesh=0xaabbccdd;kpCombination=3210;
@@ -146,6 +151,17 @@ int main() {
         tick(0,-60);switchSightBlocked=true;tick(0,-26);switchSightBlocked=false;Check(!kpPresses,"wall blocks finger contact");
         for(int key=0;key<12;++key) {
             ResetPhysicalKeypad();press(key);Check(kpLastKey==key,"rendered finger selects exact key for either hand and any panel yaw");
+            kpDrawTime=now;Detour_KeypadDraw(switchMemory,2);
+            Check(kpDrawLight[0]==key+1 && kpDrawLight[1]==key+13 && kpDrawLight[2]==1,"actual touch lights the correct raised and depressed key, including Clear/Enter");
+            float outside[4]={1,1,1,1};Check(!KeypadLight(outside,now) && outside[2]==0,"key light cannot escape the panel draw");
+            kpDrawTime=now+250;Detour_KeypadDraw(switchMemory,2);Check(kpDrawLight[2]==.5f,"pressed-key illumination fades smoothly");
+            kpDrawTime=now+350;Detour_KeypadDraw(switchMemory,2);Check(kpDrawLight[2]==0,"pressed-key illumination expires");
+            kpDrawTime=now-1;Detour_KeypadDraw(switchMemory,2);Check(kpDrawLight[2]==0,"clock rollback cannot leave a key lit");
+            kpDrawTime=now;Detour_KeypadDraw(itemMemory,2);Check(kpDrawLight[2]==0,"another item cannot inherit keypad illumination");
+            {int32_t use=0;KeypadMeshScope outer(switchMemory,use);
+             Check(KeypadLight(outside,now),"creature path receives the same button light");
+             {KeypadMeshScope inner(itemMemory,use);Check(!KeypadLight(outside,now),"nested unrelated drawing clears the light");}
+             Check(KeypadLight(outside,now),"nested draw restores the outer keypad light");}
             const int before=kpPresses;
             for(int i=0;i<5;++i) tick(key,-26);
             Check(kpPresses==before,"held finger does not repeat");tick((key+1)%12,-26);Check(kpPresses==before,"side swipe cannot press adjacent key");
@@ -153,9 +169,9 @@ int main() {
         ResetPhysicalKeypad();press(0);Check(g_keypad.entry.count==1,"physical entry contains first digit");
         tick(0,-60); {int32_t use=0;KeypadMeshScope scope(switchMemory,use);Check(use==1 && *reinterpret_cast<uint32_t*>(switchMemory+12)!=0x1fff,"pressed key visible in world only");}
         Check(*reinterpret_cast<uint32_t*>(switchMemory+12)==0x1fff,"render scope restores simulation mesh bits");
-        Detour_KeypadMask(switchMemory);Check(kpDrawMask==g_keypad.entry.mesh && kpDrawMask!=0x1fff,"static keypad MaskJoints path receives pressed-key mask");
+        Detour_KeypadDraw(switchMemory,2);Check(kpDrawMask==g_keypad.entry.mesh && kpDrawMask!=0x1fff,"static keypad draw receives pressed-key mask");
         Check(*reinterpret_cast<uint32_t*>(switchMemory+12)==0x1fff,"static draw leaves native item mask unchanged");
-        *reinterpret_cast<int32_t*>(appMemory+2148)=1;Detour_KeypadMask(switchMemory);Check(kpDrawMask==0x1fff,"ordinary inventory preserves native draw mask");
+        *reinterpret_cast<int32_t*>(appMemory+2148)=1;Detour_KeypadDraw(switchMemory,2);Check(kpDrawMask==0x1fff && kpDrawLight[2]==0,"ordinary inventory preserves native draw mask and has no added light");
         *reinterpret_cast<int32_t*>(appMemory+2148)=0;
         for(int mode=0;mode<6;++mode) {
             ResetPhysicalKeypad();tick(0,-60);const int before=kpPresses;
@@ -179,7 +195,7 @@ int main() {
         keypad::Entry complete{};complete.count=4;complete.digits[0]=8;complete.digits[1]=5;complete.digits[2]=2;complete.digits[3]=6;
         kpNoTrigger=true;FinishPhysicalKeypad(switchMemory,complete,8526);Check(kpTriggers==1,"missing floor cannot activate any trigger");kpNoTrigger=false;
         kpTriggerWords[0]=0x8004;FinishPhysicalKeypad(switchMemory,complete,8526);Check(kpTriggers==1,"ordinary adjacent trigger cannot be activated");kpTriggerWords[0]=0x8504;
-        ResetPhysicalKeypad();press(0);*reinterpret_cast<int16_t*>(switchMemory+48)=1234;tick(0,-60);Check(g_keypad.index==-1,"changed item identity drops old session");
+        ResetPhysicalKeypad();press(0);*reinterpret_cast<int16_t*>(switchMemory+48)=1234;kpDrawTime=now;Detour_KeypadDraw(switchMemory,2);Check(kpDrawLight[2]==0,"reused item identity cannot inherit illumination");tick(0,-60);Check(g_keypad.index==-1,"changed item identity drops old session");
     }
     kpLevel=12;kpBirthday=0;kpBirthdayTimer=99;kpBirthdayCalls=0;
     *reinterpret_cast<void (__cdecl**)(int32_t,int32_t)>(appMemory+0x4b0)=&FakeBirthday;

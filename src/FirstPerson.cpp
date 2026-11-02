@@ -5128,7 +5128,7 @@ void Remove() {
     ResetPhysicalHolsters();
     ResetPhysicalMonitors();g_monitorDll=nullptr;
     ResetPhysicalButtons();g_buttonDll=nullptr;
-    g_hKeypadMask.Remove();ResetPhysicalKeypad();g_keypadDll=nullptr;
+    g_hKeypadDraw.Remove();ResetPhysicalKeypad();g_keypadDll=nullptr;
     RemovePhysicalCrowbar();
     RemovePhysicalContainers();
     RemovePhysicalPulleys();
@@ -5545,6 +5545,7 @@ unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightV
         allowed,GetTickCount64());
 }
 
+bool FirstPersonKeypadLight(float out[4]) { return KeypadLight(out,GetTickCount64()); }
 bool FirstPersonActive() {
     return g_active;
 }

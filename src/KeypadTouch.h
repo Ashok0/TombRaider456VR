@@ -11,6 +11,14 @@ constexpr float RowTop[]={-55.31f,-25.79f,3.88f,33.44f};
 constexpr float RowBottom[]={-26.35f,3.17f,32.84f,62.40f};
 constexpr float Face=-26.f;
 constexpr int Clear=9,Zero=10,Enter=11;
+struct PressLight {
+    int key=-1;
+    uint64_t time=0;
+    float Strength(uint64_t now) const {
+        if(key<0 || key>=12 || now<time || now-time>=350) return 0;
+        return now-time<=150 ? 1.f : float(350-(now-time))/200.f;
+    }
+};
 inline bool Finite(motiongun::Vec p) {
     return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);
 }

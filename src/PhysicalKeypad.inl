@@ -5,6 +5,7 @@ struct KeypadDll {
     uint32_t timestamp,collision,step,stepSize;uint64_t stepHash;
     uint32_t finish,finishSize;uint64_t finishHash;
     uint32_t mask;uint64_t maskHash;
+    uint32_t draw,drawSize;uint64_t drawHash;
     uint32_t trigger,triggerIndex,level,birthdayDisplay,birthdayTimer,richCut,cutTrigger;
     uint32_t count,y,pause,x,combination,digits,mesh;
     uint32_t left,right,up,down,select,menu,use;
@@ -13,7 +14,8 @@ constexpr KeypadDll kKeypadDlls[]={
 #include "KeypadAddresses.inl"
 };
 const KeypadDll* g_keypadDll=nullptr;
-hook::InlineHook g_hKeypadMask;
+hook::InlineHook g_hKeypadDraw;
+uint8_t* g_keypadDrawItem=nullptr;
 struct KeypadHand {
     MonitorHandSample sample{};
     bool latched=false;
@@ -25,6 +27,7 @@ struct PhysicalKeypad {
     int16_t animation=0,frame=0,room=0;
     PHD_3DPOS position{};
     keypad::Entry entry{};
+    keypad::PressLight light{};
     bool submitted=false;
 } g_keypad;
 KeypadHand g_keypadHands[2]{};
@@ -185,6 +188,7 @@ bool AdvancePhysicalKeypad(uint8_t* lara,uint64_t now) {
             }
             h.latched=true;h.inverse=inverse;
             StepPhysicalKeypad(g_keypad.entry,key,g_keypad.combination);
+            g_keypad.light={key,now};
             LogF("vr-keypad: physical key=%d item=%d entered=%u",key,i,unsigned(g_keypad.entry.count));
             g_keypadHands[1-hand].sample={};return false;
         }
@@ -193,18 +197,30 @@ bool AdvancePhysicalKeypad(uint8_t* lara,uint64_t now) {
 }
 class KeypadMeshScope {
     uint8_t* item=nullptr;uint32_t saved=0;
+    uint8_t* previousDraw=g_keypadDrawItem;
 public:
     KeypadMeshScope(uint8_t* drawn,int32_t& useMeshBits) {
+        g_keypadDrawItem=nullptr;
         if(!g_keypadDll || g_keypad.index<0 || !drawn || g_keypad.submitted ||
            !g_active || !Gate() || DrawingNativeShadow() || drawn!=CurrentKeypad()) return;
-        item=drawn;saved=*reinterpret_cast<uint32_t*>(item+12);
+        item=drawn;g_keypadDrawItem=drawn;saved=*reinterpret_cast<uint32_t*>(item+12);
         *reinterpret_cast<uint32_t*>(item+12)=g_keypad.entry.mesh;useMeshBits=1;
     }
-    ~KeypadMeshScope() { if(item) *reinterpret_cast<uint32_t*>(item+12)=saved; }
+    ~KeypadMeshScope() { if(item) *reinterpret_cast<uint32_t*>(item+12)=saved;g_keypadDrawItem=previousDraw; }
 };
-void __cdecl Detour_KeypadMask(uint8_t* item) {
+bool KeypadLight(float out[4],uint64_t now) {
+    for(int i=0;i<4;++i) out[i]=0;
+    if(!g_keypadDrawItem || !g_active || !Gate() || DrawingNativeShadow() ||
+       g_keypad.submitted || g_keypadDrawItem!=CurrentKeypad()) return false;
+    const float strength=g_keypad.light.Strength(now);
+    if(strength<=0) return false;
+    // Both the raised and depressed native key mesh use the same light.
+    out[0]=float(g_keypad.light.key+1);out[1]=float(g_keypad.light.key+13);out[2]=strength;
+    return true;
+}
+void __cdecl Detour_KeypadDraw(uint8_t* item,int32_t renderPass) {
     int32_t use=1;const KeypadMeshScope scope(item,use);
-    g_hKeypadMask.Original<void (__cdecl*)(uint8_t*)>()(item);
+    g_hKeypadDraw.Original<void (__cdecl*)(uint8_t*,int32_t)>()(item,renderPass);
 }
 void InstallPhysicalKeypad(const GameDllLayout& d,uint64_t base) {
     ResetPhysicalKeypad();g_keypadDll=nullptr;
@@ -212,10 +228,14 @@ void InstallPhysicalKeypad(const GameDllLayout& d,uint64_t base) {
     for(const auto& k:kKeypadDlls) if(k.timestamp==d.timestamp &&
        flarethrow::Fingerprint(reinterpret_cast<uint8_t*>(base+k.step),k.stepSize)==k.stepHash &&
        flarethrow::Fingerprint(reinterpret_cast<uint8_t*>(base+k.finish),k.finishSize)==k.finishHash &&
-       flarethrow::Fingerprint(reinterpret_cast<uint8_t*>(base+k.mask),97)==k.maskHash) {
-        constexpr uint8_t prologue[]={0x48,0x0f,0xbf,0x41,0x10}; // movsx rax, word ptr [rcx+16]
-        if(!g_hKeypadMask.Install(reinterpret_cast<void*>(base+k.mask),reinterpret_cast<void*>(&Detour_KeypadMask),
-                                 5,prologue,5,"PhysicalKeypadMask")) break;
+       flarethrow::Fingerprint(reinterpret_cast<uint8_t*>(base+k.mask),97)==k.maskHash &&
+       flarethrow::Fingerprint(reinterpret_cast<uint8_t*>(base+k.draw),k.drawSize)==k.drawHash) {
+        // Scope the whole static-item draw, including material passes. MaskJoints
+        // itself returns before drawing and its callers keep a live count in r10.
+        constexpr uint8_t pdb[]={0x48,0x89,0x5c,0x24,0x18}; // mov [rsp+24],rbx
+        constexpr uint8_t retail[]={0x40,0x53,0x55,0x56,0x57}; // push rbx/rbp/rsi/rdi
+        if(!g_hKeypadDraw.Install(reinterpret_cast<void*>(base+k.draw),reinterpret_cast<void*>(&Detour_KeypadDraw),
+                                 5,k.timestamp==0x696b499c ? pdb : retail,5,"PhysicalKeypadDraw")) break;
         g_keypadDll=&k;Log("vr-keypad: physical individual keys enabled (native code validation/effects)");return;
     }
     Log("vr-keypad: native layout mismatch; Action keypad retained");

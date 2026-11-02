@@ -9,6 +9,10 @@ cl /nologo /std:c++17 /Od /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Isrc /Ithi
 if errorlevel 1 goto failed
 build\keypad-test\keypad_test.exe
 if errorlevel 1 goto failed
+cl /nologo /std:c++17 /O2 /Gy /EHsc /DWIN32_LEAN_AND_MEAN /DNOMINMAX /Isrc /Ithird_party\openvr\headers tools\keypad_gl_test.cpp src\GL.cpp /Febuild\keypad-test\keypad_gl_test.exe /Fobuild\keypad-test\ /link /OPT:REF user32.lib gdi32.lib opengl32.lib
+if errorlevel 1 goto failed
+build\keypad-test\keypad_gl_test.exe
+if errorlevel 1 goto failed
 popd
 exit /b 0
 :failed

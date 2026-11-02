@@ -27,6 +27,8 @@ unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightV
 bool FirstPersonShadowPass();
 // TR4's native reflection draw uses an intact native pose, not the live VR body.
 bool FirstPersonNativeMirrorDrawing();
+// Raised joint, depressed joint and brightness; zero outside the touched keypad draw.
+bool FirstPersonKeypadLight(float out[4]);
 // Unmasked palette only within Lara's first-person body draw.
 const float* FirstPersonBodyPalette(uint64_t& mask,int& count);
 // Complete eye-view palette, including unarmed IK; physics uses the native capture above.

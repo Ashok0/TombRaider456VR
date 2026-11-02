@@ -9,6 +9,7 @@
 #include "MotionHandSkin.h"
 #include "MirrorReflection.h"
 #include "MirrorReflectionShader.h"
+#include "KeypadLightShader.h"
 #include "WristCap.h"
 #include "GameDll.h"
 
@@ -260,6 +261,16 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
             else Log("mirror: material observer shader rejected; retaining original shader");
         }
     }
+    std::string keypadVs,keypadFs;
+    if(c.enabled && useVs && useFs) {
+        keypadVs=useVs;keypadFs=useFs;
+        if(keypad::PatchLight(keypadVs,keypadFs)) {
+            gl::Load();
+            if(gl::LoadedShaderApi() && HandPairLinks(keypadVs,keypadFs)) {
+                useVs=keypadVs.c_str();useFs=keypadFs.c_str();
+            } else Log("vr-keypad: button light shader rejected; retaining native material");
+        }
+    }
     original(shader, fvf, useVs, useFs);
 
     // shader_init just gave this Shader a fresh program. If the name is being
@@ -275,6 +286,8 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
 constexpr uint32_t kMaxProgram = 4096;
 
 struct ProgramState {
+    GLint locKeypad=-2;
+    bool keypadLive=false;
     GLint locMirror=-2;
     bool mirrorLive=false;
     GLint locBodyMask=-2, locJoints=-2, locWristSeams=-2;
@@ -994,6 +1007,12 @@ void BoneSkinAfterValidate() {
     if (prog == 0 || prog >= kMaxProgram) return;
 
     ProgramState& ps = g_prog[prog];
+    if(ps.locKeypad==-2) ps.locKeypad=gl::GetUniformLocation(prog,"uKeypadLight");
+    if(ps.locKeypad>=0) {
+        float light[4]{};const bool active=FirstPersonKeypadLight(light);
+        if(active || ps.keypadLive) gl::Uniform4fv(ps.locKeypad,1,light);
+        ps.keypadLive=active;
+    }
     if(ps.locMirror==-2) ps.locMirror=gl::GetUniformLocation(prog,"uMirrorObserver");
     if(ps.locMirror>=0 && (MirrorReflectionCapturing() || ps.mirrorLive)) {
         float observer[4]{};MirrorReflectionObserver(observer);

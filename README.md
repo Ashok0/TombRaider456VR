@@ -8505,7 +8505,11 @@ individual keys on the VCI keypad with Lara's fingertips. Either controller
 works. Enter the code, then touch the bottom-right Enter key; the bottom-left
 key clears the entry, and the bottom-middle key is zero. Withdraw your finger
 slightly between presses. No Action icon, Y press, grip, or inventory screen is
-needed. The keys light up on the world panel and use the native keypad sounds.
+needed. Each touched button glows green for 350 ms (a short hold followed by a
+smooth fade), including Clear and Enter, alongside the native keypad sounds.
+The glow preserves the printed number/symbol and is visible in dark rooms. It
+is scoped to that world keypad in first person; the panel frame, other objects
+and the original Action-button keypad menu keep their native lighting.
 
 The native digit restrictions and result sequence remain intact. Incorrect
 codes clear for another attempt; correct codes use the keypad's own level
@@ -8515,10 +8519,12 @@ physical entry. Y still opens the original keypad screen. Third person and
 Classic graphics retain their normal controls. Enabled automatically with the
 existing tracked-hand settings; no additional INI setting.
 
-Validation uses `tools/build_keypad_tests.cmd`: offline PE/mesh/pose checks and
-a focused mocked-engine fixture. It never executes the full first-person
-self-test or loads a native game DLL into the test process. Headset confirmation
-of touch alignment and readability is still needed.
+Validation uses `tools/build_keypad_tests.cmd`: offline PE/mesh/pose checks,
+13,056 focused interaction checks and 1,576 real-driver OpenGL checks using
+the shipped keypad shader. These cover all buttons, fading, texture contrast,
+untouched pixels and clearing light uniforms when another object draws. It
+never executes the full first-person self-test or loads a native game DLL into
+the test process. The button glow still needs headset confirmation.
 
 ### Lara mirror reflection prototype (TR5)
 

@@ -1,6 +1,7 @@
 """Offline keypad audit. Reads PE/TRM/PDP files; never loads native game code."""
 from pathlib import Path
 import struct,sys
+import pefile
 from port_addresses import Image
 from verify_revolver_laser_mesh import vertices
 repo=Path(__file__).resolve().parents[1]
@@ -38,13 +39,25 @@ for stamp,file,collision,step,stepSize,finish,finishSize,trigger,delta in rows:
     assert mc[0].bytes==bytes.fromhex('48 0f bf 41 10') and mc[-1].mnemonic=='ret' and mc[-1].address==mask+96
     if not delta:referenceMask=[(i.mnemonic,i.op_str) for i in mc if 'rip' not in i.op_str and i.mnemonic[0]!='j']
     else:assert referenceMask==[(i.mnemonic,i.op_str) for i in mc if 'rip' not in i.op_str and i.mnemonic[0]!='j']
+    draw,drawSize=(0xb67b0,0x2c3) if not delta else (0xb6940,0x2f1)
+    dc=list(im.md.disasm(im.mem[draw:draw+drawSize],draw))
+    assert dc[-1].address+dc[-1].size==draw+drawSize
+    assert im.mem[draw:draw+5]==bytes.fromhex('48 89 5c 24 18' if not delta else '40 53 55 56 57')
+    assert sum(i.size for i in dc if i.address<draw+5)==5
+    # Confirm the two-argument ABI and immediate material draws after MaskJoints;
+    # this scope excludes the separate inventory keypad renderer.
+    assert any(i.mnemonic=='mov' and i.op_str=='ebp, edx' for i in dc)
+    assert any(i.mnemonic=='mov' and i.op_str=='rsi, rcx' for i in dc)
+    assert any(i.mnemonic=='call' and i.op_str==hex(mask) for i in dc)
+    assert any(i.mnemonic=='call' and i.op_str=='qword ptr [rax + 0x190]' for i in dc)
+    assert dc[-1].mnemonic==('ret' if not delta else 'jmp')
     # Known native launch branch: slot 249 in levels 11/12, OCB supplied as
     # combination, no inventory puzzle-item consumption.
     cc=[x for s in im.starts if collision<=s<collision+1812 for x in im.disasm(s)]
     assert any(x[3]==0x1b6b98+delta for x in cc)
     output.append('    {'+','.join([hex(stamp),hex(collision),hex(step),str(stepSize),hex(fingerprint(im.mem[step:step+stepSize]))+'ull',
                                   hex(finish),str(finishSize),hex(fingerprint(im.mem[finish:finish+finishSize]))+'ull',
-                                  hex(mask),hex(fingerprint(im.mem[mask:mask+97]))+'ull',hex(trigger)]+[hex(a) for a in fields])+'},')
+                                  hex(mask),hex(fingerprint(im.mem[mask:mask+97]))+'ull',hex(draw),str(drawSize),hex(fingerprint(im.mem[draw:draw+drawSize]))+'ull',hex(trigger)]+[hex(a) for a in fields])+'},')
     print('PASS full keypad input/completion and globals:',hex(stamp))
 generated='\n'.join(output)+'\n'
 addressFile=repo/'src/KeypadAddresses.inl'
@@ -60,6 +73,28 @@ for key in range(12):
     for a,b in zip(lo,[left[col],-26,top[row]]):assert abs(a-b)<.01
     for a,b in zip(hi,[right[col],-11,bottom[row]]):assert abs(a-b)<.01
 print('PASS all 12 rendered key faces and native key ordering')
+# The panel's single material has type 0, selecting native shader 9.
+data=(root/'5/ITEM/PUZZLE_HOLE8_1.TRM').read_bytes()
+assert struct.unpack_from('<I',data,4)[0]==1 and data[8]==0
+# Keep coincident vertices: the ordinary position-keyed mesh helper discards
+# raised-key copies when their depressed copies share the same coordinates.
+offset=52;tiles=struct.unpack_from('<I',data,offset)[0];offset+=4+((tiles+1)//2)*4
+bones,indices,count=struct.unpack_from('<III',data,offset);offset+=12+((indices+1)//2)*4
+assert bones==0 and offset+count*24==len(data)
+skins=[data[offset+i*24+16:offset+i*24+24] for i in range(count)]
+for joint in range(1,25):
+    skin=[s for s in skins if s[0]==joint]
+    assert skin and all(s[4:7]==bytes((255,0,0)) for s in skin)
+exe=pefile.PE(str(repo/'PDB/tomb456.exe'),fast_load=True)
+memory=exe.get_memory_mapped_image();retailExe=(root/'tomb456.exe').read_bytes()
+sources=['// Audited shader 9 used by PUZZLE_HOLE8_1; matches retail verbatim.']
+for name,at,lea in [('NativeKeypadVertex',0x9d800,0x165b2),('NativeKeypadFragment',0x9e280,0x165a6)]:
+    assert lea+7+struct.unpack_from('<i',memory,lea+3)[0]==at
+    source=memory[at:memory.index(b'\0',at)]
+    assert source.startswith(b'#version 150') and source in retailExe
+    sources.append(f'const char {name}[]=R"KEYPAD({source.decode("ascii")})KEYPAD";')
+Path('build/keypad-shaders.h').write_text('\n'.join(sources)+'\n')
+print('PASS raised/depressed button skin weights and actual world-panel shader 9')
 poses=[]
 for level in ('RICH1','RICH2'):
     d=(root/f'5/DATA/{level}.PDP').read_bytes();at=0;t=[]

@@ -1,0 +1,16 @@
+﻿{
+    "headsetTested":  false,
+    "keypadFocusedChecks":  13056,
+    "deployed":  "2026-11-01T21:49:38.6233710-05:00",
+    "mirrorRealGLChecks":  148,
+    "old":  "4DA85395495BD708C82F5D895EAAB53A668D1BE8DE8EC93DC88716D5DE2C3374",
+    "new":  "A340D70400BBA2188053D1D9645164D80A0874289F0E33C6BBDE0A523B1F4813",
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\keypad-test\\before-button-light-20261101-214938",
+    "releaseBuildPassed":  true,
+    "fullSelfTestRun":  false,
+    "behavior":  "TR5 first-person world keypad: touched button glows green for 350ms, including Clear/Enter; preserves native sounds and texture lettering; scoped draw and per-program reset",
+    "keypadRealGLChecks":  1576,
+    "evidence":  "Full native draw fingerprints in both supported TR5 DLLs; actual keypad shader 9 tested on real GL driver, all 12 keys in raised/depressed states and unaffected panel/other keys; native input and mirror regressions passed",
+    "iniUnchanged":  true,
+    "mirrorFocusedChecks":  19758
+}
