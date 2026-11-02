@@ -1,0 +1,26 @@
+[
+  {
+    "source": "C:\\dev\\TombRaider456VR\\build\\button-haptics-20261102\\123-staged\\src\\VRSystem.h",
+    "destination": "C:\\dev\\TombRaider123VR\\src\\VRSystem.h",
+    "before": "0350d839ae07cdd6218f63ce78da693dc1ed34fc3fdd693f8cb88ea71df7423c",
+    "after": "81c762842a4fa5fd240cf14452fe7b398d1f177c79c2bccda8848a2ce78d4afa"
+  },
+  {
+    "source": "C:\\dev\\TombRaider456VR\\build\\button-haptics-20261102\\123-staged\\src\\PhysicalButton.inl",
+    "destination": "C:\\dev\\TombRaider123VR\\src\\PhysicalButton.inl",
+    "before": "f7f139e8d6efb523fd091846a611a8c006759e0a1f1a6bb779ad221da62fd3ea",
+    "after": "1b1a01d8054793a1c379b796ca85e2dab73116f825329f9cb7bfb96c846e0057"
+  },
+  {
+    "source": "C:\\dev\\TombRaider456VR\\build\\button-haptics-20261102\\123-staged\\tests\\button_touch_selftest.cpp",
+    "destination": "C:\\dev\\TombRaider123VR\\tests\\button_touch_selftest.cpp",
+    "before": "b2ab9f2655f6ce58257788370c280b85a788e2c13c002514bfa85da98757928e",
+    "after": "ade5409f6783e765f7fa9259d4ed8c3a4d64d8d93e40166dda7cbd3d5b15f03c"
+  },
+  {
+    "source": "C:\\dev\\TombRaider456VR\\build\\button-haptics-20261102\\123-staged\\README.md",
+    "destination": "C:\\dev\\TombRaider123VR\\README.md",
+    "before": "029bbbba987288a28c1ec04838053c0be3947dd606038b21700049b7de2decd7",
+    "after": "2206c5d9734a080a1b3d96ef8adb42d7ee35dd80189bf935678fcdfa2541ce27"
+  }
+]

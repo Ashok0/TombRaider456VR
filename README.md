@@ -32,6 +32,11 @@ in TR4/5. Features below apply to TR4/5 unless a narrower game scope is given.
 Use first person with weapons holstered for physical grabbing and touching.
 The Action icon does not need to appear. Grip interactions use the right hand;
 touch interactions accept either controller. Native Y/Action remains available.
+Each successful physical button activation or keypad key press gives a short
+80 ms vibration on the **right controller**, even when the left hand presses.
+This includes supported wall/sequence/elevator buttons and TR5 numeric keys,
+Clear and Enter. Holding contact does not repeat the feedback. It uses the
+existing Touch/Index haptics path automatically; no new INI setting is needed.
 These are supported object families, not a claim that every decorative object,
 wall switch or custom level is interactive.
 

@@ -108,7 +108,12 @@ void TestPhysicalButton(Reset reset,Rva rva,Pose pose) {
             VR().m_rawControllerPose[hand].m[1][3]-=delta.y/scale;
             VR().m_rawControllerPose[hand].m[2][3]-=delta.z/scale;
         };
-        uint64_t now=GetTickCount64();auto tick=[&](motiongun::Vec v) {setHand(v);AdvancePhysicalButton(itemMemory,nullptr,++now);};
+        uint64_t now=GetTickCount64();auto tick=[&](motiongun::Vec v) {
+            setHand(v);VR().m_gunHaptics.Reset();const int before=buttonActivations;
+            AdvancePhysicalButton(itemMemory,nullptr,++now);
+            Check(!VR().m_gunHaptics.until[0] && bool(VR().m_gunHaptics.until[1])==(buttonActivations>before),
+                "only successful button activation queues right-hand feedback, regardless of touching hand");
+        };
         tick({x,y,touch});Check(!buttonActivations,"tracking acquired on button is not a press");
         tick({x,y,outside});switchSightBlocked=true;tick({x,y,touch});switchSightBlocked=false;
         Check(!buttonActivations,"touch does not pass through walls");
@@ -135,13 +140,15 @@ void TestPhysicalButton(Reset reset,Rva rva,Pose pose) {
         }
         // OCB 5/7 use ordinary floor triggers, with no preset lift link.
         if(profile.elevator && !presetTrip) buttonLiftFloorMissing=true;
+        buttonReject=true;tick({x,y,outside});tick({x,y,touch});buttonReject=false;
+        Check(!buttonActivations,"native rejection gives neither activation nor haptic acknowledgement");
         tick({x,y,outside});tick({x,y,touch});
         Check(buttonActivations==1 && buttonSequenceActivations==(profile.sequence ? 1 : 0),"either hand activates correct native button handler");
         Check(*reinterpret_cast<int16_t*>(itemMemory+18)==2 && *reinterpret_cast<int16_t*>(itemMemory+24)==103 &&
             *reinterpret_cast<int16_t*>(laraMemory+2)==0 && *reinterpret_cast<int32_t*>(laraMemory+224)==0 && actionInput==0 && !g_switchCommit,
             "button preserves camera/body/input ownership");
         Check(*reinterpret_cast<int16_t*>(switchMemory+42)==900 && buttonSequence==0,"touch does not consume native timer or alter sequence bookkeeping");
-        if(presetTrip) Check(buttonControlLock==1 && buttonLiftQueries==2,"native elevator activation retains its travel lock and uses the checked floor route");
+        if(presetTrip) Check(buttonControlLock==1 && buttonLiftQueries==3,"native elevator activation retains its travel lock and uses the checked floor route");
         else Check(!buttonControlLock && !buttonLiftQueries,"ordinary panels do not require a preset lift route or lock Lara controls");
         // Even a native/script reset cannot make a resting hand retrigger.
         *reinterpret_cast<uint32_t*>(switchMemory+0x1820)=0;

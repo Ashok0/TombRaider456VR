@@ -189,6 +189,7 @@ bool AdvancePhysicalKeypad(uint8_t* lara,uint64_t now) {
             h.latched=true;h.inverse=inverse;
             StepPhysicalKeypad(g_keypad.entry,key,g_keypad.combination);
             g_keypad.light={key,now};
+            VR().ButtonPressHaptic();
             LogF("vr-keypad: physical key=%d item=%d entered=%u",key,i,unsigned(g_keypad.entry.count));
             g_keypadHands[1-hand].sample={};return false;
         }

@@ -144,7 +144,13 @@ int main() {
             const auto delta=Sub(motiongun::Transform(world,{x,y,z}),initialHand);VR().m_rawControllerPose[hand]=originalController;
             VR().m_rawControllerPose[hand].m[0][3]+=delta.x/scale;VR().m_rawControllerPose[hand].m[1][3]-=delta.y/scale;VR().m_rawControllerPose[hand].m[2][3]-=delta.z/scale;
         };
-        uint64_t now=1000;auto tick=[&](int key,float y) {setHand(key,y);return AdvancePhysicalKeypad(itemMemory,now+=34);};
+        uint64_t now=1000;auto tick=[&](int key,float y) {
+            setHand(key,y);VR().m_gunHaptics.Reset();const int before=kpPresses;
+            const bool result=AdvancePhysicalKeypad(itemMemory,now+=34);
+            Check(!VR().m_gunHaptics.until[0] && bool(VR().m_gunHaptics.until[1])==(kpPresses>before),
+                "each physical key press acknowledges on the right only; held, blocked and result ticks stay silent");
+            return result;
+        };
         auto press=[&](int key) {tick(key,-60);tick(key,-60);tick(key,-26);};
         kpPresses=kpTriggers=0;kpNoTrigger=kpChangeLevel=false;switchSightBlocked=false;
         tick(0,-26);Check(!kpPresses,"tracking starts on face without pressing");
@@ -201,5 +207,17 @@ int main() {
     *reinterpret_cast<void (__cdecl**)(int32_t,int32_t)>(appMemory+0x4b0)=&FakeBirthday;
     keypad::Entry birthday{};birthday.count=3;birthday.digits[0]=1;birthday.digits[1]=4;birthday.digits[2]=2;
     FinishPhysicalKeypad(switchMemory,birthday,8526);Check(kpBirthdayCalls==1 && kpBirthday==1 && !kpBirthdayTimer,"native optional keypad code remains functional");
+    VR().m_gunHaptics.Reset();VR().m_system=nullptr;VR().ButtonPressHaptic();
+    Check(!VR().m_gunHaptics.until[0] && !VR().m_gunHaptics.until[1],"button feedback without a VR runtime stays silent");
+    VR().m_system=reinterpret_cast<vr::IVRSystem*>(uintptr_t(1));
+    const auto started=GetTickCount64();VR().ButtonPressHaptic();
+    const auto deadline=VR().m_gunHaptics.until[1];
+    Check(!VR().m_gunHaptics.until[0] && deadline>=started+80 && deadline<=GetTickCount64()+80,
+        "button feedback queues one bounded 80 ms right-hand burst");
+    int pulses=0;
+    for(uint64_t t=deadline-80;t<=deadline+80;++t) VR().m_gunHaptics.Update(t,[&](int hand,unsigned short duration) {
+        Check(hand==1 && duration==3999 && t<deadline,"button feedback pulses only the right hand within its deadline");++pulses;
+    });
+    Check(pulses==16,"button feedback stops after 80 ms and respects the shared 5 ms pulse spacing");
     std::printf("PASS: %d focused physical keypad checks\n",checks);
 }

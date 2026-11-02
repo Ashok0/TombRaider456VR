@@ -1,0 +1,29 @@
+﻿{
+    "releaseBuildsPassed":  true,
+    "focusedButtonChecks123":  16976,
+    "deployed":  "2026-11-02T07:47:18.6542089-05:00",
+    "fullSelfTestRun":  false,
+    "focusedKeypadChecks456":  16771,
+    "files":  [
+                  {
+                      "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.ini",
+                      "iniHash":  "C363724E2E97AD0D30A0E6BF16C980C4CA1C736851D78C1EEF4633EB88DE9A99",
+                      "source":  "C:\\dev\\TombRaider456VR\\build\\button-haptics-20261102\\123\\bin\\TombRaiderVR.dll",
+                      "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+                      "newHash":  "A0B4661948FB34A5B064CBA3E382F159D03FBC81F79CC8B8F4C125B297345D44",
+                      "oldHash":  "F4C26C1B54B97EBF086D7FC2E484DDC54A8B013BC79000BEDA691C3636D7616E",
+                      "collection":  "123"
+                  },
+                  {
+                      "ini":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.ini",
+                      "iniHash":  "322DAC5F19C400AD2854F6D0E5A74D3D0FE50E9A9727818ADA59FA5E90E53664",
+                      "source":  "C:\\dev\\TombRaider456VR\\build\\button-haptics-20261102\\456\\bin\\TombRaiderVR.dll",
+                      "destination":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+                      "newHash":  "364A9DB11B7F061EC2BCD01EED937FEA7555D9B95C373E87608E0DD3DB3E2F38",
+                      "oldHash":  "64194AEDE3D97907E6D9A59BA5C50CB1267C7AA8CD835639C433317FE64F8AB3",
+                      "collection":  "456"
+                  }
+              ],
+    "focusedButtonChecks456":  29251,
+    "backup":  "C:\\dev\\TombRaider456VR\\build\\button-haptics-20261102\\before-deploy-20261102-074718"
+}

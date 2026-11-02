@@ -98,7 +98,10 @@ bool ActivatePhysicalButton(int16_t index,uint8_t* target,uint8_t* lara,void* co
     // Native control now advances the button, timer, sound and sequence state
     // once per tick. Lift control retains its travel lock and releases it at
     // arrival. Never fast-forward timers or manufacture puzzle triggers.
-    if(activated) LogF("vr-button: touched item=%d sequence=%d; native button control continues",index,profile.sequence);
+    if(activated) {
+        VR().ButtonPressHaptic();
+        LogF("vr-button: touched item=%d sequence=%d; native button control continues",index,profile.sequence);
+    }
     return activated;
 }
 void AdvancePhysicalButton(uint8_t* lara,void* collision,uint64_t now) {

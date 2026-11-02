@@ -97,6 +97,9 @@ public:
     void ReadControllers(HandState out[2]) const;
     // Queue a strong, bounded burst for a confirmed shot (0=left, 1=right).
     void GunShotHaptic(int hand);
+    // Physical button/key acknowledgement: right hand, using the existing
+    // bounded 80 ms burst and Touch/Index haptic routing.
+    void ButtonPressHaptic() { GunShotHaptic(1); }
     // Refresh or stop gentle proximity feedback for this hand's holster.
     void HolsterHoverHaptic(int hand,bool active);
     // Both hands catch the ledge: one maximum-strength 80 ms burst.
