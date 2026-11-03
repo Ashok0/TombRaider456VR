@@ -74,6 +74,41 @@ inline float NativeRollTurn(int beforeState,int afterState,int beforeAnimation,i
             IsJumpRollAnimation(afterState,afterAnimation)) &&
         uint16_t(int(afterYaw)-int(beforeYaw))==0x8000u ? 3.14159265358979323846f : 0.f;
 }
+inline float NativeStoppedHangTurn(int beforeState,int afterState,int16_t beforeYaw,int16_t afterYaw) {
+    // TR4/5 lara_col_stop2hang aligns yaw by at most 364 angle units, then
+    // flips it at the forward ledge-drop endpoint. This happens AFTER
+    // AnimateLara. Backward drops and ordinary hang/shimmy do not flip.
+    const int delta=uint16_t(int(afterYaw)-int(beforeYaw));
+    return beforeState==139 && (afterState==139 || afterState==10) &&
+        std::abs(delta-32768)<=364 ? 3.14159265358979323846f : 0.f;
+}
+struct StoppedHangViewTurn {
+    int animation=-1;
+    float applied=0;
+    bool completed=false;
+    static bool Turning(int state,int clip) {
+        return state==139 && (clip==43 || clip==48 || clip==49);
+    }
+    float Cancel() { const float delta=-applied;*this={};return delta; }
+    float Sample(int clip,float localYaw) {
+        if(animation!=clip) { animation=clip;completed=false; }
+        if(completed || !std::isfinite(localYaw)) return 0;
+        constexpr float pi=3.14159265358979323846f;
+        // Follow the authored root's horizontal rotation. Clips 43/48 turn
+        // left and 49 turns right; unwrap across +/-180 without reversing.
+        float unwrapped=std::remainder(localYaw,2*pi);
+        if(clip==49 && unwrapped<-pi/2) unwrapped+=2*pi;
+        if(clip!=49 && unwrapped>pi/2) unwrapped-=2*pi;
+        const float target=std::clamp(unwrapped,clip==49 ? 0.f : -pi,clip==49 ? pi : 0.f);
+        const float delta=target-applied;applied=target;return delta;
+    }
+    float Finish(int clip,float nativeTurn) {
+        // Animation already supplied most of the turn. Commit only the
+        // remainder when collision flips item yaw; do not add another 180.
+        const float delta=std::remainder(nativeTurn-applied,2*3.14159265358979323846f);
+        *this={};animation=clip;completed=true;return delta;
+    }
+};
 inline bool IsMonkeyBarState(int state) {
     // TR4/5 lara_control_routines: hang2, swing, left/right traverse,
     // native half-turn, and hanging turns. Ledges/ladders are separate.

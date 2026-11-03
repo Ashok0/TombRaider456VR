@@ -228,6 +228,8 @@ uint64_t g_stabilizeAction=0;
 locomotion::Vec g_stabilizeDirection{};
 firstperson::LedgePullGesture g_ledgePull;
 firstperson::LedgeGrabFeedback g_ledgeGrab;
+locomotion::StoppedHangViewTurn g_ledgeViewTurn;
+void CancelStoppedHangViewTurn(bool preserveCompleted=false);
 stabilization::RootMotion g_rootMotion;
 stabilization::GroundEye g_groundEye;
 stabilization::StanceEye g_stanceEye;
@@ -323,6 +325,7 @@ void ResetBodyFollower() {
 }
 
 void ResetMovementStabilization() {
+    CancelStoppedHangViewTurn();
     ResetBodyFollower();
     g_bodyVisibility={};
     g_crouchDrive=false;
@@ -3210,6 +3213,47 @@ locomotion::Vec DragBody(uint8_t* item) {
     return actual * (1 / scale);
 }
 
+void ApplyNativeViewTurn(float turn,int16_t afterYaw,bool resetStickTurn=true) {
+    g_headingBase=Wrap(g_headingBase+turn);
+    VR().PivotHeadFloorOffset(turn);
+    g_manualWorld=locomotion::Rotate(g_manualWorld,turn);
+    g_lastHeadWorld=Wrap(g_headingBase+VR().HeadYawRadians());
+    g_lastBodyYaw=Radians(afterYaw);
+    auto* analog=Ptr<int16_t>(g_boundDll->analogInput);
+    analog[2]=analog[3]=Angle(g_lastHeadWorld);
+    g_rootMotion.Reset();
+    if(resetStickTurn) g_renderTurn.Reset();
+}
+
+void CancelStoppedHangViewTurn(bool preserveCompleted) {
+    if(preserveCompleted && g_ledgeViewTurn.completed) return;
+    const float delta=g_ledgeViewTurn.Cancel();
+    if(delta!=0 && g_boundDll && g_boundBase)
+        ApplyNativeViewTurn(delta,Angle(g_lastBodyYaw));
+}
+
+void FollowStoppedHangViewTurn(uint8_t* item,int fraction) {
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    const int clip=*reinterpret_cast<const int16_t*>(item+off::item_anim_number);
+    if(!locomotion::StoppedHangViewTurn::Turning(state,clip) || LaraWaterStatus()!=0) {
+        CancelStoppedHangViewTurn();return;
+    }
+    if(g_ledgeViewTurn.completed && g_ledgeViewTurn.animation==clip) return;
+    // Query the native interpolated pelvis right axis, before any rendered
+    // arm/body IK. Pitching down toward the ledge cannot flip this yaw axis.
+    PHD_VECTOR origin{},right{1024,0,0};
+    const auto joint=reinterpret_cast<Fn_GetJointAbsPositionLerp>(
+        g_boundBase+g_boundDll->getJointAbsPositionLerp);
+    joint(item,&origin,0,fraction);joint(item,&right,0,fraction);
+    const float x=float(right.x)-float(origin.x),z=float(right.z)-float(origin.z);
+    if(x*x+z*z<256.f*256.f || x*x+z*z>2048.f*2048.f) return;
+    const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const auto& old=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
+    const float bodyYaw=Radians(old.y_rot)+Wrap(Radians(pos.y_rot)-Radians(old.y_rot))*(fraction/256.f);
+    const float delta=g_ledgeViewTurn.Sample(clip,Wrap(std::atan2(-z,x)-bodyYaw));
+    if(delta!=0) ApplyNativeViewTurn(delta,pos.y_rot,false);
+}
+
 // Catch the native turn180 animation command before input/body-follow can
 // pull Lara back toward the old VR heading. Native code already turns Lara;
 // rotate only the VR frame and pending movement, exactly once per half-turn.
@@ -3228,15 +3272,7 @@ void AdvanceLaraAnimation(uint8_t* item) {
     const int16_t afterYaw=reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot;
     const float turn=locomotion::NativeRollTurn(beforeState,afterState,beforeAnimation,afterAnimation,beforeYaw,afterYaw);
     if (turn==0) return;
-    g_headingBase=Wrap(g_headingBase+turn);
-    VR().PivotHeadFloorOffset(turn);
-    g_manualWorld=locomotion::Rotate(g_manualWorld,turn);
-    g_lastHeadWorld=Wrap(g_headingBase+VR().HeadYawRadians());
-    g_lastBodyYaw=Radians(afterYaw);
-    auto* analog=Ptr<int16_t>(g_boundDll->analogInput);
-    analog[2]=analog[3]=Angle(g_lastHeadWorld);
-    g_rootMotion.Reset();
-    g_renderTurn.Reset();
+    ApplyNativeViewTurn(turn,afterYaw);
     LogF("firstperson: native roll turned VR heading 180 degrees state=%d->%d anim=%d->%d",
          beforeState,afterState,beforeAnimation,afterAnimation);
 }
@@ -3944,6 +3980,11 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
             {float(position.x_pos),float(position.y_pos),float(position.z_pos)});
     } else g_ledgeGrab.Reset();
     const bool airborneBefore=item && (*reinterpret_cast<const uint32_t*>(item+0x1820)&8);
+    const bool stoppedHang=item && item==g_headingItem && g_active && g_haveHeading &&
+        Gate() && LaraWaterStatus()==0 &&
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_state)==139;
+    const int16_t hangYaw=stoppedHang ? reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot : 0;
+    const int hangClip=stoppedHang ? *reinterpret_cast<const int16_t*>(item+off::item_anim_number) : -1;
     {
         // Keep hold semantics through the native crawl -> duck -> stand exit.
         // Native collision still decides whether the ceiling permits standing.
@@ -3960,6 +4001,15 @@ void __cdecl Detour_LaraAboveWater(uint8_t* item, void* nativeCollision) {
         RoomscaleCollisionScope roomscaleCollision(item);
         ThirdPersonBackHopScope backHop(item);
         g_hLaraAboveWater.Original<Fn_LaraAboveWater>()(item, nativeCollision);
+    }
+    if(stoppedHang && Gate() && LaraWaterStatus()==0) {
+        const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+        const int16_t yaw=reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot;
+        const float turn=NativeStoppedHangTurn(139,state,hangYaw,yaw);
+        if(turn!=0) {
+            ApplyNativeViewTurn(g_ledgeViewTurn.Finish(hangClip,turn),yaw);
+            LogF("firstperson: native ledge drop turned VR heading 180 degrees state=139->%d",state);
+        }
     }
     AdvancePhysicalSwitch(item,nativeCollision,GetTickCount64());
     AdvancePhysicalCog(item,nativeCollision,GetTickCount64());
@@ -4010,6 +4060,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         g_dragShown = shown;
     }
     if (!g_haveHeading || !sameBody || relocated) {
+        if(!sameBody || relocated || !g_ledgeViewTurn.completed) g_ledgeViewTurn={};
         ResetBodyFollower();
         // A native camera interruption invalidates the view heading, not a
         // held jump. Control-loss paths already cancel it; only a new body,
@@ -4038,6 +4089,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
     // One shared heading for this rendered camera, body following, culling,
     // eyes and tracked guns. Controller polling never advances it separately.
     AdvanceStickTurn(TurnTime());
+    FollowStoppedHangViewTurn(item,int(t*256));
     if (!CanTurnBody(item) && !Cfg().firstPersonMovementStabilization) {
         // Legacy animated-camera compensation only. With a stable/raw-tracked
         // view, consuming neck-corrected displacement while hanging invents a
@@ -4781,6 +4833,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         if(wasActive && g_boundDll && g_boundBase && Cfg().firstPersonDriftLog)
             LogF("fp-eye: camera suspended type=%d water=%d scripted=%d poseValid=%d",
                  *Ptr<int32_t>(g_boundDll->camera+off::camera_type),LaraWaterStatus(),ScriptedCameraActive(),VR().poseValid());
+        CancelStoppedHangViewTurn(true);
         g_eyeContinuity.valid=false;
         g_active = false;
         g_scenePoseValid = false;

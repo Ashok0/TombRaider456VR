@@ -1,0 +1,131 @@
+0005CF00 mov qword ptr [rsp + 8], rbx
+0005CF05 mov qword ptr [rsp + 0x10], rsi
+0005CF0A push rdi
+0005CF0B sub rsp, 0x30
+0005CF0F and dword ptr [rip + 0x379a47], 0xfff83fff
+0005CF19 mov rdi, rcx
+0005CF1C mov eax, 0x3fff
+0005CF21 mov dword ptr [rsp + 0x28], 0x2fa
+0005CF29 and word ptr [rip + 0x379a2c], ax
+0005CF30 mov rbx, rdx
+0005CF33 mov eax, 0xfff7
+0005CF38 xor esi, esi
+0005CF3A and word ptr [rcx + 0x1e4], ax
+0005CF41 movzx eax, word ptr [rcx + 0x66]
+0005CF45 mov word ptr [rcx + 0x24], si
+0005CF49 mov ecx, 0xfffd
+0005CF4E mov word ptr [rip + 0x379ac9], ax
+0005CF55 movzx eax, word ptr [rdx + 0x8c]
+0005CF5C mov dword ptr [rdx + 0x4c], 0x180
+0005CF63 and ax, cx
+0005CF66 mov dword ptr [rdx + 0x50], 0xfffffe80
+0005CF6D or ax, 5
+0005CF71 mov word ptr [rdx + 0x8c], ax
+0005CF78 mov rcx, rbx
+0005CF7B mov dword ptr [rdx + 0x54], esi
+0005CF7E movzx eax, word ptr [rip + 0x379a99]
+0005CF85 mov word ptr [rdx + 0x76], ax
+0005CF89 movzx eax, word ptr [rdi + 0x1c]
+0005CF8D mov r9d, dword ptr [rdi + 0x60]
+0005CF91 mov r8d, dword ptr [rdi + 0x5c]
+0005CF95 mov edx, dword ptr [rdi + 0x58]
+0005CF98 mov word ptr [rsp + 0x20], ax
+0005CF9D call 0x180016f40
+0005CFA2 mov rdx, rbx
+0005CFA5 mov rcx, rdi
+0005CFA8 call 0x180062110
+0005CFAD test eax, eax
+0005CFAF jne 0x18005d0e5
+0005CFB5 mov rcx, rdi
+0005CFB8 call 0x180123a10
+0005CFBD test eax, eax
+0005CFBF jne 0x18005d0e5
+0005CFC5 mov rdx, rbx
+0005CFC8 mov rcx, rdi
+0005CFCB call 0x180057270
+0005CFD0 test eax, eax
+0005CFD2 jne 0x18005d0e5
+0005CFD8 cmp dword ptr [rip + 0x15b84d], 6
+0005CFDF mov r10, qword ptr [rip + 0x439d1a]
+0005CFE6 jne 0x18005d08b
+0005CFEC movsx rcx, word ptr [rdi + 0x1c]
+0005CFF1 cmp ecx, 0x10
+0005CFF4 je 0x18005cfff
+0005CFF6 cmp ecx, 0x22
+0005CFF9 jne 0x18005d08b
+0005CFFF movzx edx, word ptr [rbx + 0x7a]
+0005D003 mov r8d, 0xfffc
+0005D009 lea eax, [rdx - 1]
+0005D00C test r8w, ax
+0005D010 jne 0x18005d08b
+0005D012 cmp dx, 3
+0005D016 je 0x18005d08b
+0005D018 mov edx, dword ptr [rbx + 0x58]
+0005D01B test edx, edx
+0005D01D jne 0x18005d024
+0005D01F cmp dword ptr [rbx + 0x60], esi
+0005D022 je 0x18005d08b
+0005D024 mov r8d, dword ptr [rdi + 0x60]
+0005D028 imul r9, rcx, 0xa8
+0005D02F mov ecx, dword ptr [rdi + 0x58]
+0005D032 add r9, r10
+0005D035 sub r8d, dword ptr [r9 + 0x30]
+0005D039 sub ecx, dword ptr [r9 + 0x28]
+0005D03D add r8d, dword ptr [rbx + 0x60]
+0005D041 add ecx, edx
+0005D043 sar r8d, 0xa
+0005D047 sar ecx, 0xa
+0005D04A test r8d, r8d
+0005D04D js 0x18005d08b
+0005D04F movsx edx, word ptr [r9 + 0x3c]
+0005D054 cmp r8d, edx
+0005D057 jge 0x18005d08b
+0005D059 test ecx, ecx
+0005D05B js 0x18005d08b
+0005D05D movsx eax, word ptr [r9 + 0x3e]
+0005D062 cmp ecx, eax
+0005D064 jge 0x18005d08b
+0005D066 imul edx, ecx
+0005D069 lea eax, [r8 + rdx]
+0005D06D cdqe 
+0005D06F lea rcx, [rax + rax*2]
+0005D073 mov rax, qword ptr [r9 + 0x10]
+0005D077 lea rdx, [rax + rcx*4]
+0005D07B movzx eax, byte ptr [rax + rcx*4 + 9]
+0005D080 cmp byte ptr [rdx + 0xb], al
+0005D083 jl 0x18005d08b
+0005D085 mov dword ptr [rbx + 0x58], esi
+0005D088 mov dword ptr [rbx + 0x60], esi
+0005D08B mov eax, dword ptr [rdi + 0x58]
+0005D08E add eax, dword ptr [rbx + 0x58]
+0005D091 mov dword ptr [rdi + 0x58], eax
+0005D094 mov eax, dword ptr [rdi + 0x5c]
+0005D097 add eax, dword ptr [rbx + 0x5c]
+0005D09A mov dword ptr [rdi + 0x5c], eax
+0005D09D mov eax, dword ptr [rdi + 0x60]
+0005D0A0 add eax, dword ptr [rbx + 0x60]
+0005D0A3 mov dword ptr [rdi + 0x60], eax
+0005D0A6 mov qword ptr [rbx + 0x5c], rsi
+0005D0AA mov dword ptr [rbx + 0x58], esi
+0005D0AD movsx rax, word ptr [rdi + 0x1c]
+0005D0B2 imul rcx, rax, 0xa8
+0005D0B9 test byte ptr [rcx + r10 + 0x66], 0x80
+0005D0BF je 0x18005d0dd
+0005D0C1 mov eax, dword ptr [rbx]
+0005D0C3 test eax, eax
+0005D0C5 js 0x18005d0dd
+0005D0C7 je 0x18005d0e5
+0005D0C9 add dword ptr [rdi + 0x5c], 2
+0005D0CD mov rbx, qword ptr [rsp + 0x40]
+0005D0D2 mov rsi, qword ptr [rsp + 0x48]
+0005D0D7 add rsp, 0x30
+0005D0DB pop rdi
+0005D0DC ret 
+0005D0DD mov eax, dword ptr [rdi + 0x5c]
+0005D0E0 add eax, dword ptr [rbx]
+0005D0E2 mov dword ptr [rdi + 0x5c], eax
+0005D0E5 mov rbx, qword ptr [rsp + 0x40]
+0005D0EA mov rsi, qword ptr [rsp + 0x48]
+0005D0EF add rsp, 0x30
+0005D0F3 pop rdi
+0005D0F4 ret 

@@ -1,0 +1,20 @@
+[
+  {
+    "game": 1,
+    "function": "ModernControlsAutoGrab",
+    "rva": 489280,
+    "instructions": 122
+  },
+  {
+    "game": 2,
+    "function": "ModernControlsAutoGrab",
+    "rva": 680352,
+    "instructions": 122
+  },
+  {
+    "game": 3,
+    "function": "ModernControlsAutoGrab",
+    "rva": 1056608,
+    "instructions": 122
+  }
+]

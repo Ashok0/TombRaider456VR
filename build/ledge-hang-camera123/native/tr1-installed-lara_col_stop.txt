@@ -1,0 +1,85 @@
+00023A50 mov qword ptr [rsp + 8], rbx
+00023A55 mov qword ptr [rsp + 0x10], rsi
+00023A5A push rdi
+00023A5B sub rsp, 0x30
+00023A5F and dword ptr [rip + 0x31aeb7], 0xfff83fff
+00023A69 mov rbx, rcx
+00023A6C mov eax, 0x3fff
+00023A71 mov dword ptr [rsp + 0x28], 0x2fa
+00023A79 and word ptr [rip + 0x31ae9c], ax
+00023A80 mov rdi, rdx
+00023A83 xor esi, esi
+00023A85 movzx eax, word ptr [rbx + 0x66]
+00023A89 mov word ptr [rcx + 0x24], si
+00023A8D mov ecx, 0xfff7
+00023A92 and word ptr [rbx + 0x1e4], cx
+00023A99 mov ecx, 0xfffd
+00023A9E mov word ptr [rip + 0x31af39], ax
+00023AA5 movzx eax, word ptr [rdx + 0x8c]
+00023AAC mov dword ptr [rdx + 0x4c], 0x180
+00023AB3 and ax, cx
+00023AB6 mov dword ptr [rdx + 0x50], 0xfffffe80
+00023ABD or ax, 5
+00023AC1 mov word ptr [rdx + 0x8c], ax
+00023AC8 mov rcx, rdi
+00023ACB mov dword ptr [rdx + 0x54], esi
+00023ACE movzx eax, word ptr [rip + 0x31af09]
+00023AD5 mov word ptr [rdx + 0x76], ax
+00023AD9 movzx eax, word ptr [rbx + 0x1c]
+00023ADD mov r9d, dword ptr [rbx + 0x60]
+00023AE1 mov r8d, dword ptr [rbx + 0x5c]
+00023AE5 mov edx, dword ptr [rbx + 0x58]
+00023AE8 mov word ptr [rsp + 0x20], ax
+00023AED call 0x180006890
+00023AF2 mov rdx, rdi
+00023AF5 mov rcx, rbx
+00023AF8 call 0x180025710
+00023AFD test eax, eax
+00023AFF jne 0x180023bb1
+00023B05 cmp dword ptr [rdi], 0x64
+00023B08 jle 0x180023b45
+00023B0A mov rax, qword ptr [rip + 0x3fd26f]
+00023B11 mov word ptr [rbx + 0x18], 0x22
+00023B17 movzx ecx, word ptr [rax + 0x564]
+00023B1E or word ptr [rbx + 0x1e4], 8
+00023B26 mov word ptr [rbx + 0x1a], cx
+00023B2A mov dword ptr [rbx + 0x12], 0x30003
+00023B31 mov word ptr [rbx + 0x24], si
+00023B35 mov rbx, qword ptr [rsp + 0x40]
+00023B3A mov rsi, qword ptr [rsp + 0x48]
+00023B3F add rsp, 0x30
+00023B43 pop rdi
+00023B44 ret 
+00023B45 mov rdx, rdi
+00023B48 mov rcx, rbx
+00023B4B call 0x1800266a0
+00023B50 test eax, eax
+00023B52 jne 0x180023bb1
+00023B54 mov eax, dword ptr [rdi + 0x58]
+00023B57 add dword ptr [rbx + 0x58], eax
+00023B5A mov eax, dword ptr [rdi + 0x5c]
+00023B5D add dword ptr [rbx + 0x5c], eax
+00023B60 mov eax, dword ptr [rdi + 0x60]
+00023B63 add dword ptr [rbx + 0x60], eax
+00023B66 mov eax, dword ptr [rdi]
+00023B68 mov qword ptr [rdi + 0x5c], rsi
+00023B6C mov dword ptr [rdi + 0x58], esi
+00023B6F add dword ptr [rbx + 0x5c], eax
+00023B72 cmp dword ptr [rip + 0xe1f3f], 5
+00023B79 jne 0x180023bb1
+00023B7B cmp dword ptr [rdi], 0xfffffc00
+00023B81 jg 0x180023bb1
+00023B83 mov rax, qword ptr [rip + 0x31af06]
+00023B8A cmp word ptr [rax + 0x1c], 0x19
+00023B8F jne 0x180023bb1
+00023B91 mov rax, qword ptr [rip + 0x3fd1d8]
+00023B98 test byte ptr [rax + 0xa94], 0x10
+00023B9F jne 0x180023bb1
+00023BA1 mov edx, 0x64
+00023BA6 mov ecx, 0x38
+00023BAB call qword ptr [rax + 0x2f8]
+00023BB1 mov rbx, qword ptr [rsp + 0x40]
+00023BB6 mov rsi, qword ptr [rsp + 0x48]
+00023BBB add rsp, 0x30
+00023BBF pop rdi
+00023BC0 ret 

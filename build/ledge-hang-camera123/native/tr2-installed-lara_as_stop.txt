@@ -1,0 +1,163 @@
+0003EE50 mov qword ptr [rsp + 0x10], rbx
+0003EE55 push rdi
+0003EE56 sub rsp, 0x20
+0003EE5A cmp word ptr [rcx + 0x26], 0
+0003EE5F mov rdi, rdx
+0003EE62 mov rbx, rcx
+0003EE65 jg 0x18003ee78
+0003EE67 mov word ptr [rcx + 0x14], 8
+0003EE6D mov rbx, qword ptr [rsp + 0x38]
+0003EE72 add rsp, 0x20
+0003EE76 pop rdi
+0003EE77 ret 
+0003EE78 mov eax, dword ptr [rip + 0x3f6022]
+0003EE7E bt eax, 0xc
+0003EE82 jae 0x18003eebc
+0003EE84 cmp word ptr [rip + 0x33db80], 4
+0003EE8C je 0x18003eebc
+0003EE8E mov rax, qword ptr [rip + 0x420053]
+0003EE95 mov word ptr [rcx + 0x18], 0x92
+0003EE9B movzx ecx, word ptr [rax + 0x16e4]
+0003EEA2 add cx, 2
+0003EEA6 mov dword ptr [rbx + 0x12], 0x2002d
+0003EEAD mov word ptr [rbx + 0x1a], cx
+0003EEB1 mov rbx, qword ptr [rsp + 0x38]
+0003EEB6 add rsp, 0x20
+0003EEBA pop rdi
+0003EEBB ret 
+0003EEBC mov word ptr [rcx + 0x14], 2
+0003EEC2 cmp word ptr [rip + 0x33db50], 0
+0003EECA jne 0x18003eefe
+0003EECC mov rcx, qword ptr [rip + 0x3f5fdd]
+0003EED3 test byte ptr [rcx + 0x854], 2
+0003EEDA je 0x18003eef0
+0003EEDC cmp dword ptr [rcx + 0x344], 3
+0003EEE3 je 0x18003eef0
+0003EEE5 mov eax, dword ptr [rip + 0x33db55]
+0003EEEB and eax, 1
+0003EEEE jmp 0x18003eef5
+0003EEF0 and eax, 0x200
+0003EEF5 test eax, eax
+0003EEF7 je 0x18003eefe
+0003EEF9 call 0x18003e670
+0003EEFE mov rcx, rbx
+0003EF01 call 0x1800a6870
+0003EF06 mov eax, dword ptr [rip + 0x3f5f94]
+0003EF0C bt eax, 0xa
+0003EF10 jae 0x18003ef1a
+0003EF12 mov word ptr [rbx + 0x14], 0x16
+0003EF18 jmp 0x18003ef3e
+0003EF1A bt eax, 0xb
+0003EF1E jae 0x18003ef28
+0003EF20 mov word ptr [rbx + 0x14], 0x15
+0003EF26 jmp 0x18003ef3e
+0003EF28 test al, 4
+0003EF2A je 0x18003ef34
+0003EF2C mov word ptr [rbx + 0x14], 7
+0003EF32 jmp 0x18003ef3e
+0003EF34 test al, 8
+0003EF36 je 0x18003ef3e
+0003EF38 mov word ptr [rbx + 0x14], 6
+0003EF3E cmp word ptr [rip + 0x33dac6], 4
+0003EF46 jne 0x18003ef9b
+0003EF48 test al, 0x10
+0003EF4A je 0x18003ef52
+0003EF4C mov word ptr [rbx + 0x14], 0xf
+0003EF52 test al, 1
+0003EF54 je 0x18003ef7e
+0003EF56 mov rdx, rdi
+0003EF59 mov rcx, rbx
+0003EF5C test al, al
+0003EF5E jns 0x18003ef6f
+0003EF60 mov rbx, qword ptr [rsp + 0x38]
+0003EF65 add rsp, 0x20
+0003EF69 pop rdi
+0003EF6A jmp 0x180040200
+0003EF6F mov rbx, qword ptr [rsp + 0x38]
+0003EF74 add rsp, 0x20
+0003EF78 pop rdi
+0003EF79 jmp 0x18003e870
+0003EF7E test al, 2
+0003EF80 je 0x18003f101
+0003EF86 mov rdx, rdi
+0003EF89 mov rcx, rbx
+0003EF8C mov rbx, qword ptr [rsp + 0x38]
+0003EF91 add rsp, 0x20
+0003EF95 pop rdi
+0003EF96 jmp 0x18003fb00
+0003EF9B test al, 0x10
+0003EF9D je 0x18003f0ce
+0003EFA3 cmp word ptr [rbx + 0x18], 0x52
+0003EFA8 mov word ptr [rbx + 0x14], 0xf
+0003EFAE jne 0x18003f101
+0003EFB4 call 0x1800a5940
+0003EFB9 test eax, eax
+0003EFBB jne 0x18003f101
+0003EFC1 mov rax, qword ptr [rip + 0x3f5ee8]
+0003EFC8 test byte ptr [rax + 0x854], 2
+0003EFCF je 0x18003f101
+0003EFD5 cmp dword ptr [rax + 0x344], 3
+0003EFDC je 0x18003f101
+0003EFE2 movsx edx, word ptr [rip + 0x3f5d77]
+0003EFE9 movsx ecx, word ptr [rip + 0x3f5d72]
+0003EFF0 test dx, dx
+0003EFF3 jne 0x18003effe
+0003EFF5 test cx, cx
+0003EFF8 je 0x18003f101
+0003EFFE mov eax, dword ptr [rip + 0x3f5e3c]
+0003F004 test eax, 0xfffffffc
+0003F009 jne 0x18003f101
+0003F00F cmp eax, 2
+0003F012 je 0x18003f101
+0003F018 cmp word ptr [rip + 0x33d9fa], 0
+0003F020 jne 0x18003f032
+0003F022 test dword ptr [rip + 0x33da14], 1
+0003F02C jne 0x18003f101
+0003F032 call 0x1800a7aa0
+0003F037 add ax, word ptr [rip + 0x3f5d26]
+0003F03E movss xmm3, dword ptr [rip + 0xf130a]
+0003F046 movss xmm2, dword ptr [rip + 0xf1296]
+0003F04E cwde 
+0003F04F movd xmm1, eax
+0003F053 movsx eax, word ptr [rbx + 0x66]
+0003F057 cvtdq2ps xmm1, xmm1
+0003F05A movd xmm0, eax
+0003F05E mulss xmm1, dword ptr [rip + 0xf1246]
+0003F066 cvtdq2ps xmm0, xmm0
+0003F069 mulss xmm1, dword ptr [rip + 0xf1243]
+0003F071 mulss xmm0, dword ptr [rip + 0xf1233]
+0003F079 mulss xmm0, dword ptr [rip + 0xf1233]
+0003F081 call 0x1800a93c0
+0003F086 divss xmm0, dword ptr [rip + 0xf1226]
+0003F08E mulss xmm0, dword ptr [rip + 0xf12da]
+0003F096 cvttss2si eax, xmm0
+0003F09A mov word ptr [rbx + 0x66], ax
+0003F09E cmp dword ptr [rip + 0x3f5d9b], 1
+0003F0A5 je 0x18003f101
+0003F0A7 movzx eax, word ptr [rip + 0x3f5cb6]
+0003F0AE mov word ptr [rip + 0x3f5cb1], ax
+0003F0B5 add ax, word ptr [rip + 0x3f5ca4]
+0003F0BC mov word ptr [rip + 0x3f5ca1], ax
+0003F0C3 mov rbx, qword ptr [rsp + 0x38]
+0003F0C8 add rsp, 0x20
+0003F0CC pop rdi
+0003F0CD ret 
+0003F0CE test al, 1
+0003F0D0 je 0x18003f0ef
+0003F0D2 mov rdx, rdi
+0003F0D5 mov rcx, rbx
+0003F0D8 test al, al
+0003F0DA js 0x18003ef6f
+0003F0E0 mov rbx, qword ptr [rsp + 0x38]
+0003F0E5 add rsp, 0x20
+0003F0E9 pop rdi
+0003F0EA jmp 0x18003e9b0
+0003F0EF test al, 2
+0003F0F1 je 0x18003f101
+0003F0F3 test al, al
+0003F0F5 js 0x18003ef86
+0003F0FB mov word ptr [rbx + 0x14], 5
+0003F101 mov rbx, qword ptr [rsp + 0x38]
+0003F106 add rsp, 0x20
+0003F10A pop rdi
+0003F10B ret 

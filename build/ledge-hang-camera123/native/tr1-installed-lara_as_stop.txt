@@ -1,0 +1,13 @@
+000219E0 mov qword ptr [rsp + 0x18], rbx
+000219E5 push rsi
+000219E6 sub rsp, 0x40
+000219EA cmp word ptr [rcx + 0x26], 0
+000219EF mov rsi, rdx
+000219F2 mov rbx, rcx
+000219F5 jg 0x180021a08
+000219F7 mov word ptr [rcx + 0x14], 8
+000219FD mov rbx, qword ptr [rsp + 0x60]
+00021A02 add rsp, 0x40
+00021A06 pop rsi
+00021A07 ret 
+00021A08 mov eax, dword ptr [rip + 0x3ff066]
