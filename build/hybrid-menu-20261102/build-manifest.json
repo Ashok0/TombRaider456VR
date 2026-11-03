@@ -1,0 +1,16 @@
+[
+  {
+    "collection": "123",
+    "dll": "C:\\dev\\TombRaider456VR\\build\\hybrid-menu-20261102\\123\\bin\\TombRaiderVR.dll",
+    "sha256": "b657771a48ab641acaefc31e0e7295e52088dbcaffda2b5931e2e06f4d3bd48c",
+    "settings_checks": 73,
+    "native_menu_checks": 165
+  },
+  {
+    "collection": "456",
+    "dll": "C:\\dev\\TombRaider456VR\\build\\hybrid-menu-20261102\\456\\bin\\TombRaiderVR.dll",
+    "sha256": "65f2853e9d7b885662aa9c2893e744ce826b08e33edb47f1ef1ed6ebabaacc97",
+    "settings_checks": 73,
+    "native_menu_checks": 165
+  }
+]

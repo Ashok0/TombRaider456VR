@@ -10,6 +10,7 @@
 #include "StereoMath.h"
 #include "GunHaptics.h"
 #include "IndexInput.h"
+#include "ControllerProbe.h"
 #include "GL.h"        // GLuint, and windows.h for HMODULE
 #include <openvr.h>
 
@@ -95,6 +96,7 @@ public:
     };
     // [0] = left hand, [1] = right hand.
     void ReadControllers(HandState out[2]) const;
+    void PollControllerProbe();
     // Queue a strong, bounded burst for a confirmed shot (0=left, 1=right).
     void GunShotHaptic(int hand);
     // Physical button/key acknowledgement: right hand, using the existing
@@ -177,6 +179,10 @@ private:
     GunHaptics m_gunHaptics;
     vr::IVRInput* m_input = nullptr;
     mutable IndexInput m_indexInput;
+    ControllerProbe m_controllerProbe;
+    uint64_t m_probeReadStart=0;
+    vr::EVRInitError m_inputInterfaceError=vr::VRInitError_None;
+    void LogControllerProbe(bool details);
     mutable vr::EVRInputError m_indexReadError = vr::VRInputError_None;
     vr::IVRSystem*     m_system     = nullptr;
     vr::IVRCompositor* m_compositor = nullptr;

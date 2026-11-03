@@ -277,6 +277,9 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.alternateEyeMinOffscreen =
         GetIntAuto(L"AlternateEyeMinOffscreen", g_cfg.alternateEyeMinOffscreen, ini);
     g_cfg.gamepadEnabled      = GetBool (L"GamepadEnabled",     g_cfg.gamepadEnabled,     ini);
+    g_cfg.hybridModernTankControls = GetBool(L"HybridModernTankControls",false,ini);
+    LogF("config: Hybrid Modern/Tank Controls=%s (third-person Walk + back hop in TR1-5; TR6 stays native)",
+        g_cfg.hybridModernTankControls ? "ON" : "OFF");
     g_cfg.menuChordSeconds    = GetFloat(L"MenuChordSeconds",    g_cfg.menuChordSeconds,   ini);
     g_cfg.menuChordPressSeconds = GetFloat(L"MenuChordPressSeconds", g_cfg.menuChordPressSeconds, ini);
     g_cfg.dpadShift           = GetBool (L"DpadShift",           g_cfg.dpadShift,          ini);

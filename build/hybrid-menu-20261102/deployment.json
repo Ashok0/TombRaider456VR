@@ -1,0 +1,38 @@
+﻿[
+    {
+        "Collection":  "123",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\hybrid-menu-20261102\\before-deploy-20261102-222846\\123\\TombRaiderVR.dll",
+        "SHA256":  "B657771A48AB641ACAEFC31E0E7295E52088DBCAFFDA2B5931E2E06F4D3BD48C"
+    },
+    {
+        "Collection":  "123",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVRBindings\\actions.json",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\hybrid-menu-20261102\\before-deploy-20261102-222846\\123\\TombRaiderVRBindings\\actions.json",
+        "SHA256":  "2A85BDEA9D7B3E76580B17621E0DEC29721FAC8752AB09521F1D944509AC66E7"
+    },
+    {
+        "Collection":  "123",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVRBindings\\bindings_index.json",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\hybrid-menu-20261102\\before-deploy-20261102-222846\\123\\TombRaiderVRBindings\\bindings_index.json",
+        "SHA256":  "1C23C56951F393E4F933932625F20C03264F7F9971ACF54736F68405FC50189F"
+    },
+    {
+        "Collection":  "456",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\hybrid-menu-20261102\\before-deploy-20261102-222846\\456\\TombRaiderVR.dll",
+        "SHA256":  "65F2853E9D7B885662AA9C2893E744CE826B08E33EDB47F1EF1ED6EBABAACC97"
+    },
+    {
+        "Collection":  "456",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVRBindings\\actions.json",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\hybrid-menu-20261102\\before-deploy-20261102-222846\\456\\TombRaiderVRBindings\\actions.json",
+        "SHA256":  "2A85BDEA9D7B3E76580B17621E0DEC29721FAC8752AB09521F1D944509AC66E7"
+    },
+    {
+        "Collection":  "456",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVRBindings\\bindings_index.json",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\hybrid-menu-20261102\\before-deploy-20261102-222846\\456\\TombRaiderVRBindings\\bindings_index.json",
+        "SHA256":  "1C23C56951F393E4F933932625F20C03264F7F9971ACF54736F68405FC50189F"
+    }
+]

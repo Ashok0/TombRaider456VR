@@ -30,6 +30,7 @@ void __cdecl BackHopAboveWater(uint8_t* item,void* collision) {
 int main() {
     using namespace tr;
     using namespace tr::locomotion;
+    Check(!Config{}.hybridModernTankControls,"Hybrid Modern/Tank Controls defaults Off");
     g_boundBase=reinterpret_cast<uint64_t>(GetModuleHandleW(nullptr));
     const auto rva=[](const void* p) { const auto n=reinterpret_cast<uint64_t>(p)-g_boundBase;Check(n<=UINT32_MAX,"fixture RVA fits");return uint32_t(n); };
     dll.lara=rva(laraMemory);dll.laraItem=rva(&laraItem);dll.camera=rva(cameraMemory);
@@ -39,6 +40,7 @@ int main() {
     auto& anim=*reinterpret_cast<int16_t*>(itemMemory+24);auto& pos=*reinterpret_cast<PHD_3DPOS*>(itemMemory+96);
     const auto reset=[&](int which,bool modern,bool armed,bool smooth,float head,int clip) {
         config=Config{};config.enabled=config.firstPerson=config.gamepadEnabled=true;
+        config.hybridModernTankControls=true;
         config.firstPersonRoomscaleMove=false;config.firstPersonMovementStabilization=smooth;
         game=dll.game=which;water=0;cutseq=cutseqNumber=cutseqTransition=spotCamera=0;
         std::memset(itemMemory,0,sizeof(itemMemory));std::memset(laraMemory,0,sizeof(laraMemory));
@@ -72,6 +74,26 @@ int main() {
     };
     for(int which:{0,1}) for(bool modern:{false,true}) for(bool armed:{false,true})
     for(bool smooth:{false,true}) for(float head:{0.f,.7f}) for(int clip:{103,40,12,13,44,69}) {
+        reset(which,modern,armed,smooth,head,clip);
+        config.hybridModernTankControls=false;captureOnly=true;
+        float x=.1f,z=-1,turn=.3f;
+        FirstPersonInput(x,z,turn,false,false,true);
+        Check(!g_thirdPersonBackHopPressed && x==.1f && z==-1 && turn==.3f,
+            "disabled hybrid preserves third-person stick input without queuing a hop");
+        analogMemory[0]=1234;analogMemory[1]=-23456;
+        const int originalState=state,originalAnim=anim;
+        const int16_t originalAxes[4]={analogMemory[0],analogMemory[1],analogMemory[2],analogMemory[3]};
+        Detour_LaraAboveWater(itemMemory,nullptr);
+        Check(seenInput==(Back|Walk) && !std::memcmp(seenAnalog,originalAxes,sizeof(originalAxes)),
+            "disabled hybrid forwards native Walk/direction bits and camera-relative analog axes");
+        Check(state==originalState && anim==originalAnim,"disabled hybrid does not force a standing or hop animation");
+        g_thirdPersonBackHopPressed=true;
+        { ThirdPersonBackHopScope stale(itemMemory);
+          Check(actionInput==(Back|Walk) && !std::memcmp(analogMemory,originalAxes,sizeof(originalAxes)),
+              "disabled hybrid also rejects a previously queued hop at simulation time"); }
+    }
+    for(int which:{0,1}) for(bool modern:{false,true}) for(bool armed:{false,true})
+    for(bool smooth:{false,true}) for(float head:{0.f,.7f}) for(int clip:{103,40,12,13,44,69}) {
         reset(which,modern,armed,smooth,head,clip);input(0,-1,true);
         const int ticks=animationTicks,collisions=nativeCollisionPasses;
         Detour_LaraAboveWater(itemMemory,nullptr);
@@ -89,8 +111,9 @@ int main() {
         Check(pos.x_pos==before.x_pos && pos.z_pos==before.z_pos,"native wall collision remains final");
     }
     for(int which:{0,1}) {
-        for(bool grip:{false,true}) {
+        for(bool hybrid:{false,true}) for(bool grip:{false,true}) {
             reset(which,true,false,true,0,103);
+            config.hybridModernTankControls=hybrid;
             g_active=g_runtimeEnabled=g_haveHeading=true;g_headingItem=itemMemory;
             input(0,-1,grip);Detour_LaraAboveWater(itemMemory,nullptr);
             Check(state==16 && (seenInput&Walk),"first-person movement is unchanged with RG held or released");

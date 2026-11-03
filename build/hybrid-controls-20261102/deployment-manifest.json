@@ -1,0 +1,16 @@
+[
+  {
+    "collection": "123",
+    "directory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered",
+    "ini_before_sha256": "c363724e2e97ad0d30a0e6bf16c980c4ca1c736851d78c1eef4633eb88de9a99",
+    "ini_after_sha256": "2b75d45b129cc14678e9be30583d6302a47813e2ed054e00bc7d798333c51e9d",
+    "dll_sha256": "55d734d27684bacd74ce904c50cc4cd39c5b777a8691259e7bc4adeda4043004"
+  },
+  {
+    "collection": "456",
+    "directory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "ini_before_sha256": "322dac5f19c400ad2854f6d0e5a74d3d0fe50e9a9727818ada59fa5e90e53664",
+    "ini_after_sha256": "a87218a2daee8028aabdd83469417bdec24adf097f992e05c7e53fcceaf4d385",
+    "dll_sha256": "35547572273d9aec2c44e45631f4b216505f26e6a0f6036caf2b8f48c40f5ca2"
+  }
+]

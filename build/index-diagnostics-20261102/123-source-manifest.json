@@ -1,0 +1,50 @@
+[
+  {
+    "path": "src/IndexInput.h",
+    "before": "98ca590c39d0930f81f8db0f4563b07bd8851733d4be84432824bbb1f1251411"
+  },
+  {
+    "path": "src/ControllerProbe.h",
+    "before": null
+  },
+  {
+    "path": "src/ControllerProbe.inl",
+    "before": null
+  },
+  {
+    "path": "tools/index_input_test.cpp",
+    "before": null
+  },
+  {
+    "path": "tools/index_diagnostics_test.inl",
+    "before": null
+  },
+  {
+    "path": "src/VRSystem.h",
+    "before": "81c762842a4fa5fd240cf14452fe7b398d1f177c79c2bccda8848a2ce78d4afa"
+  },
+  {
+    "path": "src/VRSystem.cpp",
+    "before": "7c5605278cd2719e8e481887de7d83499aaa6ddaaa2fb104455d043fb7dda0ab"
+  },
+  {
+    "path": "src/Gamepad.cpp",
+    "before": "a72cc98ee84cb182cfc93bdd8049e29722884500cdb178293362ca49f3010fb2"
+  },
+  {
+    "path": "src/Gamepad.h",
+    "before": "8b83941d6b59f76b6463cdfb5df8ce8264cdbcc6f5cbdd45641272ab36c95ae9"
+  },
+  {
+    "path": "src/Hooks.cpp",
+    "before": "31a55f504d9672e0d45b0b562102c63aac4d9a729133b5a037d53855cc1e6872"
+  },
+  {
+    "path": "TombRaiderVR.vcxproj",
+    "before": "e85d9d4b55b14d8f38be4e22998c00715ae7da1a66917f958dfbd8d26861cc6c"
+  },
+  {
+    "path": "README.md",
+    "before": "2206c5d9734a080a1b3d96ef8adb42d7ee35dd80189bf935678fcdfa2541ce27"
+  }
+]

@@ -14,13 +14,13 @@ in TR4/5. Features below apply to TR4/5 unless a narrower game scope is given.
 
 | Area | Current behavior |
 |---|---|
-| Third-person backward hop | **RG + LS down**, without Jump, requests a short native hop behind Lara, including with guns drawn. This shortcut is **third-person only**. First-person backward walking and vent crawling retain their original behavior. See [backward hop](#third-person-backward-hop). |
+| Hybrid Modern/Tank Controls | **Off by default.** With `HybridModernTankControls=0`, Walk + stick down retains native movement, walking towards the camera with Modern Controls. Set it to `1` to enable the **third-person-only** RG + LS down backward-hop shortcut in TR4/5. First-person movement and TR6 retain their existing controls. See [backward hop](#third-person-backward-hop). |
 | Jump takeoff and landing | First person skips the preparatory knee bend/foot shuffle and ordinary landing recovery delay. Native clearance, airborne physics and hard-fall handling remain. Armed backward/sideways takeoffs keep their intended direction and sideways-jump cameras are stabilized. |
 | Held running jump | Holding Jump while moving forward retains the ledge auto-jump assist through playable fixed/heavy camera changes. Actual cutscenes and loss of player control still cancel it. |
 | Physical crouching | Enabled by default. A partial real squat bends the visible legs; a 55 cm headset drop requests native crouch and hides the body. Rising within 23 cm of calibrated standing height releases it, subject to ceiling clearance. Elevator/VCI crouch steering and tracked hands are fixed, as is delayed standing movement from a leftover crouch queue. |
 | Climbing and body transitions | Ledge/monkey-bar arms preserve native hand contacts with stable elbows. Crate/ledge mount camera recovery is smoothed; mount and recovery draws show hands with opaque black wrist caps. Original arm-recovery timing is retained. |
 | Classic graphics and roomscale | The Classic mesh follows physical turns and uses the corrected rendered-body origin after roomscale movement. **Y + RT** also toggles graphics in the TR4–6 title menus. See [Classic graphics](#classic-graphics-and-roomscale). |
-| Native VR Options | **Options > VR Options** contains Controller Type and Color Scheme, with their current values visible. Dark stays the default; Brighter restores the native sRGB render-target presentation and applies immediately. |
+| Native VR Options | **Options > VR Options** contains Controller Type, Color Scheme and Hybrid Modern/Tank Controls, with their current values visible. Hybrid controls stay Off by default and apply immediately. Dark remains the default color scheme. |
 | Valve Index | Optional SteamVR action bindings separate face buttons from grip squeeze. `ValveIndexControllers=0` remains the default; selecting Index requires restarting and the shipped bindings folder. |
 | Physical interactions | Grip-driven wall/floor levers, VCI levers, cog wheels, TR5 wall valves, pulleys/chains/ropes, TR4 crowbar sockets and TR5 drawers/cabinets; touch-driven buttons, elevator panels, monitors and numeric keypads. See the coverage table below. |
 | Flares and keypads | Swing the left controller to throw a lit flare in Remastered first person; left grip still crouches. TR5 code-entry keypads accept individual fingertip presses in the world, beep, and light the touched key green for 350 ms. |
@@ -65,13 +65,14 @@ first-person interaction paths.
 | INI setting under `[VR]` | Default | Purpose |
 |---|---|---|
 | `FirstPersonPhysicalCrouch` | `1` | HMD-height native crouch in TR4/5. Requires full-body IK and positional tracking; recenter while standing upright. |
+| `HybridModernTankControls` | `0` | Hybrid Modern/Tank Controls: Off uses native walking; On enables the third-person Walk + back hop in TR4/5. TR6 remains native. |
 | `ValveIndexControllers` | `0` | Legacy Touch-style input; `1` enables the Index-oriented action path after restart. |
 | `ValveIndexGripPress` / `ValveIndexGripRelease` | `0.55` / `0.35` | Squeeze thresholds in Index mode. |
 | `VRBrighterColors` | `0` | Dark presentation; `1` selects Brighter. Also available in VR Options. |
 | `FirstPersonMirrorReflections` | `1` | Verified TR5 panes and TR4 first-person native-mirror compatibility. |
 
 Defaults apply to new INIs and missing keys; existing explicit values remain in
-effect. The new hop, physical object interactions, flare gesture, keypad lights and
+effect. Physical object interactions, flare gesture, keypad lights and
 Classic centering use existing feature gates; they add no separate INI toggles.
 The detailed notes retain dated test results. Automated checks do not establish
 a complete headset playthrough, and physical Index hardware validation remains
@@ -79,7 +80,13 @@ outstanding.
 
 ### Third-person backward hop
 
-In TR4/5 **third person only**, hold **Right Grip (RG) + LS down** to request
+**Hybrid Modern/Tank Controls is Off by default.** Under `[VR]` in
+`TombRaiderVR.ini`, `HybridModernTankControls=0` leaves Walk + stick down to the
+original game. With Modern Controls selected, Lara walks towards the camera.
+The mod does not change the third-person control style selected in the game.
+
+Set `HybridModernTankControls=1` and restart to opt in. In TR4/5 **third person
+only**, hold **Right Grip (RG) + LS down** to request
 Lara's short native backward hop. No Jump button is needed. The hop goes behind
 Lara's current facing, rather than turning her toward the stick or headset.
 Both armed and unarmed states are supported. Native floor clearance, animation,
@@ -92,6 +99,10 @@ menus, vehicles and scripted control take priority. The shortcut does not activa
 when a selected first-person view is merely suspended by a native camera.
 The earlier proposed D-pad ledge-hang shortcut was reverted and is not included.
 TR6 has no implementation of this backward-hop shortcut.
+
+You can also change **Hybrid Modern/Tank Controls** in **Options > VR Options**.
+The menu shows **Off/On**, saves the same INI key and applies immediately without
+a restart. Its TR6 help text explains that the option affects TR4/5 only.
 
 The corrected build passed focused third-person-hop/first-person-preservation
 checks and existing ground-movement regressions for both mods. The original
@@ -118,7 +129,7 @@ Classic graphics are separate from the Dark/Brighter color setting in VR Options
 
 Open **Options > VR Options** from the title screen. This uses the game's native menu, with no popup.
 Use Up/Down to select a row, Left/Right or Select to change it, and Back to return.
-Both rows display their current selected value on the native page.
+All three rows display their current selected value on the native page.
 
 - **Controller Type:** Meta Touch or Valve Index. Changes apply after restarting.
 - **Color Scheme:** Dark (default) or Brighter. Changes apply immediately in the headset.
@@ -127,8 +138,13 @@ Both rows display their current selected value on the native page.
   color conversion before submission. Classic rendering retains its native
   conversion state. This changes neither game lighting nor saturation; final
   headset appearance still depends on the display.
+- **Hybrid Modern/Tank Controls:** Off (default) or On. Changes save and apply
+  immediately. Off retains native Modern walking towards the camera; On enables
+  the third-person Walk + back hop in TR4/5. First-person controls stay unchanged.
+  The row is also visible in TR6, with a note that TR6 retains native movement.
 
-Changes save automatically to `ValveIndexControllers` and `VRBrighterColors` in the
+Changes save automatically to `ValveIndexControllers`, `VRBrighterColors` and
+`HybridModernTankControls` in the
 installed INI. Existing INIs without a color setting keep Dark; new INIs include
 `VRBrighterColors=0`. Other settings stay unchanged, and the previous INI is backed
 up as `TombRaiderVR.ini.vr-options.bak`. Index mode uses the existing
@@ -214,6 +230,36 @@ Validation: standalone `tools/index_input_test.cpp`, binding checks with
 `python tools/validate_index_bindings.py --steamvr "<SteamVR installation>"`, and
 a Release build. Physical Index hardware testing remains outstanding.
 
+### Controller troubleshooting with F7
+
+After selecting **Valve Index** in VR Options, fully exit and restart the game.
+Install the `TombRaiderVRBindings` folder beside `TombRaiderVR.dll`, including both
+`actions.json` and `bindings_index.json`. Selecting Index alone does not prove
+SteamVR has activated a controller binding. If a custom binding is selected,
+try the shipped **Tomb Raider Index** binding in SteamVR's binding editor.
+
+With the game window focused, press **F7** without modifiers to record a
+**20-second controller diagnostic** in `TombRaiderVR.log` beside the mod DLL.
+During the capture, move both sticks, click them, press A/B on each hand, pull
+both triggers and squeeze both grips. Hold each input briefly; do not press
+everything at once. F7 again stops early. The title menu is sufficient; no save
+or working controller input is required. The game continues to receive normal
+input, so a menu or clear safe spot is preferable. There is no popup.
+
+Send the **complete log before launching again**, since each launch replaces it.
+Look for `input-probe: BEGIN` and `input-probe: END`. Capture continues if desktop
+focus changes after it starts. Ctrl+F7 and Ctrl+Shift+F7 retain weapon calibration.
+No INI edit is needed to enable the probe; it also works with Index mode off or
+Index initialization failing.
+
+The capture reports the loaded build, saved versus running controller mode,
+binding-file presence, exact initialization stage/errors, connected device types
+and hand roles, pose validity, SteamVR input/focus state, live binding sources,
+per-action activity/errors/values, short button presses and analog peaks, and
+the final emulated gamepad state/poll count. It does not change bindings, inject
+input, send test haptics, or perform additional action-state refreshes. Raw legacy
+controller reads can be unavailable in action mode; that alone is not a failure.
+
 ## Installation
 ## Tomb Raider IV-VI Remastered VR — Installation
 
@@ -235,8 +281,8 @@ table above for its equivalent face buttons.
 | Action | Control |
 |---|---|
 | Move | Left Stick (LS) |
-| Walk | RG + LS; standing backward input in TR4/5 third person uses the hop below |
-| Backward Hop (TR4/5, third person only) | RG + LS down; no Jump button |
+| Walk | RG + LS; native movement by default, including towards the camera with Modern Controls |
+| Backward Hop (TR4/5, third person only; optional) | Enable `HybridModernTankControls=1`, then RG + LS down; no Jump button |
 | Dash | L3 |
 | Look | Right Stick (RS) |
 | Zoom | R3 |
@@ -4020,7 +4066,8 @@ suit hands better than thumbs:
   Both grips take priority in gameplay: they hold Action without also sending
   Duck, Walk or Sneak. This works in TR4, TR5 and TR6, and after a physical pad
   is merged. In menus and FMVs the grips retain their individual bindings.
-  In TR4/5 **third person only**, right grip + LS down requests Lara's native
+  With `HybridModernTankControls=1` (Off by default), in TR4/5 **third person
+  only**, right grip + LS down requests Lara's native
   backward hop relative to her facing. First-person movement and vent crawling
   keep their existing controls; Jump and interaction inputs take priority.
   Photo Mode keeps its [native L3+R3 chord](https://www.tombraider.com/news/video-games/photo-mode-returns-when-tomb-raider-iv-vi-remastered-launches-on-february).

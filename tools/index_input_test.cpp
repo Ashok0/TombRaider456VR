@@ -14,6 +14,7 @@ struct IndexRuntimeFixture {
     std::map<vr::VRActionHandle_t,vr::InputDigitalActionData_t> digital;
     vr::EVRInputError initError=vr::VRInputError_None,updateError=vr::VRInputError_None;
     vr::VRActionHandle_t failAction=0,lastHaptic=0;
+    std::string failInitName;
     int updates=0,haptics=0;float duration=0;
     vr::EVRInputError SetActionManifestPath(const char* path) {
         Check(path && *path,"Index manifest is supplied");return initError;
@@ -22,6 +23,7 @@ struct IndexRuntimeFixture {
         Check(std::string(name)=="/actions/game","Index activates game action set");*out=100;return initError;
     }
     vr::EVRInputError GetActionHandle(const char* name,vr::VRActionHandle_t* out) {
+        if(name==failInitName) return vr::VRInputError_NameNotFound;
         const auto found=handles.find(name);
         *out=found==handles.end() ? handles.emplace(name,handles.size()+1).first->second : found->second;
         return initError;
@@ -103,4 +105,5 @@ void TestIndexInput() {
     runtime.initError=vr::VRInputError_None;input.Init(runtime,"manifest.json");
 }
 }
-int main() { TestIndexInput();std::printf("Index input: %d checks passed\n",checks); }
+#include "index_diagnostics_test.inl"
+int main() { TestIndexInput();TestDiagnostics();std::printf("Index input and diagnostics: %d checks passed\n",checks); }

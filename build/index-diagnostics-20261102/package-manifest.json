@@ -1,0 +1,16 @@
+[
+  {
+    "collection": "123",
+    "archive": "C:\\dev\\TombRaider456VR\\build\\index-diagnostics-20261102\\TombRaider123VR-Index-Diagnostics.zip",
+    "archive_sha256": "698f0ed3305cae10a7511de206d812865f62a21ae0003f55946b9df6566f6989",
+    "dll_sha256": "69e3562ccd285c55cf4f380bb6c5e8e898138818f5259b44f7203daf5822c8fe",
+    "focused_checks": 413
+  },
+  {
+    "collection": "456",
+    "archive": "C:\\dev\\TombRaider456VR\\build\\index-diagnostics-20261102\\TombRaider456VR-Index-Diagnostics.zip",
+    "archive_sha256": "e49f3ade87c6fa1581346101028a4bf70a7447a742fa3e139d8e5cb8718fb87f",
+    "dll_sha256": "345150d0f25cb8c4d53ddba80ced180e8ab30100d106c5fde6809824c12c9ba0",
+    "focused_checks": 413
+  }
+]

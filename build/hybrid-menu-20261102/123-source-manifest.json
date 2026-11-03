@@ -1,0 +1,30 @@
+[
+  {
+    "path": "src/VRMenuSettings.h",
+    "before": "05ab89217958bf09d7acf7c16183e5e2cf7762c27a3e8152c4070dd645190680"
+  },
+  {
+    "path": "src/VRMenuSettings.inl",
+    "before": "cbf01d4a7d90ad7f91b7ade2d3a2304c5df948c064623bd8f450eb5da5099313"
+  },
+  {
+    "path": "src/VRMenuModel.h",
+    "before": "c3bbbefa5eff480bf03aa6b5300572b789f5a352c3653f36ca9f06ed0d6205ea"
+  },
+  {
+    "path": "src/VRNativeMenu.cpp",
+    "before": "48b70667d830b806abe0617526ff81ddf4deb8e16ef86e13ee7c36475eb61aba"
+  },
+  {
+    "path": "tools/vr_menu_tests.cpp",
+    "before": "d7a00eb1e0c3761c4e4d2c491e91880fda8dacdd01b46f565c875b4ba101d100"
+  },
+  {
+    "path": "tools/vr_native_menu_tests.cpp",
+    "before": "d93f243c207c1918a44f3fc5756052ab159f7bd62f80de43dc7b5393312f9e15"
+  },
+  {
+    "path": "README.md",
+    "before": "b2e27ee7c4a3498233d4869d407476f17e7ec89238702587d684240b4441597e"
+  }
+]

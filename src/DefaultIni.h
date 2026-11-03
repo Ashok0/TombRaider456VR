@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 61372 bytes, 1220 lines.
+// Source: TombRaiderVR.ini, 61916 bytes, 1229 lines.
 #pragma once
 
 namespace tr {
@@ -458,6 +458,12 @@ AlternateEyeMinOffscreen=50
 ; also sending Duck or Walk; Photo Mode keeps its native L3+R3 chord.
 GamepadEnabled=1
 
+; Hybrid Modern/Tank Controls: 0 = Off (default), 1 = On. Restart after editing.
+; Off: Walk + stick down uses native controls (towards the camera in Modern).
+; On: Walk + stick down requests a Lara-relative backward hop in third person
+; in TR1-5. First-person movement/crawling and TR6 native controls are unchanged.
+HybridModernTankControls=0
+
 ; Set to 1 for Valve Index controllers, then restart the game. Uses explicit
 ; SteamVR Input bindings to separate A/B, thumbstick clicks and grip squeeze.
 ; Keep the TombRaiderVRBindings folder beside TombRaiderVR.dll.
@@ -489,7 +495,8 @@ GamepadLogButtons=0
 ; RT+RB -- nothing is out of reach, and comfort is the right default in a
 ; headset. Set this to 0 for the stock two-axis stick.
 ;
-; Applied to whatever right stick reaches the game, including a physical pad
+)INI"
+           R"INI(; Applied to whatever right stick reaches the game, including a physical pad
 ; merged in alongside the Touch controllers. The binding line in the log says
 ; "look=Rstick(yaw only; hold RT+RB for pitch)" when both are on.
 DecoupledPitch=1
@@ -497,8 +504,7 @@ DecoupledPitch=1
 ; Hold RT + RB to get stick pitch BACK for as long as both are held. 1 = on,
 ; and it costs nothing when unused.
 ;
-)INI"
-           R"INI(; This only ever hands pitch back -- it never takes it away. With
+; This only ever hands pitch back -- it never takes it away. With
 ; DecoupledPitch=0 the stick already pitches and the chord does nothing at all;
 ; with DecoupledPitch=1 you keep the comfortable head-only default and can still
 ; reach for the stick for the one shot that wants it, then let go.
@@ -640,15 +646,15 @@ DpadShift=1
 ; Native 3D items over the live head-tracked level; gameplay remains paused.
 WorldInventory=1
 
-; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
+)INI"
+           R"INI(; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
 ;
 ; Touch has no Start or Back of its own, so both have to come from somewhere.
 ; The System button on the left hand's lower face sends one of them (see
 ; GamepadMenuUsesBack); this chord reaches the other without spending a button.
 ;
 ; The hold is what separates the chord from real play: Y is Action and LT is
-)INI"
-           R"INI(; Equip, so the pair does occur naturally. One second is comfortable but IS
+; Equip, so the pair does occur naturally. One second is comfortable but IS
 ; within reach of normal play -- raise this if it ever fires unintentionally.
 ;
 ; It sends a PRESS, not a latch -- Menu toggles the pause screen itself, and a
@@ -800,7 +806,8 @@ CullDumpKey=0x77
 ; through, so the dome stays centred on the game camera -- that is "at
 ; infinity" on a monitor. The stereo path then composes the per-eye
 ; transform, whose translation is IPD plus any 6DOF head offset, and the dome
-; gets stereo disparity equal to its mesh radius: a painted sphere a few
+)INI"
+           R"INI(; gets stereo disparity equal to its mesh radius: a painted sphere a few
 ; metres away, sitting in front of distant geometry.
 ;
 ; On: those draws use the rotation of the eye transform only (looking around
@@ -809,8 +816,7 @@ CullDumpKey=0x77
 ; stereo, for A/B.
 SkyAtInfinity=1
 
-)INI"
-           R"INI(; TR4 HD sunrays and selected smoke/fire/spray/splash cells are enhanced in
+; TR4 HD sunrays and selected smoke/fire/spray/splash cells are enhanced in
 ; memory. No New Effects DDS installation is required; TR5/6 are unchanged.
 ; Restart the game after changing these load-time settings. Disable this if
 ; stacking with replacement effect textures is too bright.
@@ -928,6 +934,9 @@ FirstPersonMotionGunHotkeys=1
 ; Other guns, grip calibration and third person are unchanged.
 ; Requires normal per-draw stereo, EyeOffsetMode=3, PerEyeProjection=1.
 FirstPersonHKScope=1
+; Prototype: reflect Lara in the three verified RICH2 bathroom mirrors (TR5,
+; Remastered graphics, first or third person). Other rooms/games retain native behavior.
+FirstPersonMirrorReflections=1
 FirstPersonHKScopeMeshFit=1
 FirstPersonHKScopeForwardMetres=0.18
 FirstPersonHKScopeUpMetres=0.24
@@ -953,7 +962,8 @@ FirstPersonTurnDeadzone=0.25
 ; whether it is worth reimplementing depends on whether 30 Hz source
 ; animation gives a spring anything smooth to chase at headset frame rates.
 ;
-; The answer turned out to be yes, so this is the master switch for the whole
+)INI"
+           R"INI(; The answer turned out to be yes, so this is the master switch for the whole
 ; section: it runs the solver, and it is what lets the skinning shader be
 ; patched. Off means no chest motion at all, whatever the settings below say.
 ;
@@ -967,8 +977,7 @@ FirstPersonTurnDeadzone=0.25
 ; off it will buzz rather than swing.
 DynamicBones=1
 
-)INI"
-           R"INI(; Which joint carries the chest. CONFIRMED from the engine, not lore:
+; Which joint carries the chest. CONFIRMED from the engine, not lore:
 ; tomb5.dll SkinUseMatrix is 14 byte-pairs of which only four are filled --
 ; (1,2) (4,5) (8,9) (11,12), the two knees and two elbows, where the skin
 ; blends between rigid meshes. That pins the canonical order:
@@ -1117,7 +1126,8 @@ DynamicBonesForwardSign=0
 ;
 ; 1.0 moves the bust as far as the whole-torso view moved the whole upper body,
 ; which reads as much less because so much less of her moves. Simulated first
-; bounce at this value and the default spring: about 16 units for a small hop,
+)INI"
+           R"INI(; bounce at this value and the default spring: about 16 units for a small hop,
 ; 28 standing, 40 running, 57 for a long fall, with the second bounce under a
 ; third of the first. Raise for more; lower if rubbery.
 ;
@@ -1130,8 +1140,7 @@ DynamicBonesChestStrength=2.5
 ;
 ; Height is normally MEASURED: the band is fitted to the bump the bust makes in
 ; the mesh's front profile. Top/Bottom are only the fallback for an outfit with
-)INI"
-           R"INI(; no distinct bump, as fractions of torso height from the neck end down.
+; no distinct bump, as fractions of torso height from the neck end down.
 DynamicBonesChestTop=0.18
 DynamicBonesChestBottom=0.52
 ; Depth: where the weight starts, as a fraction of torso depth behind the front

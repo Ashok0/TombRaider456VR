@@ -2432,6 +2432,7 @@ void __cdecl Detour_ogl_present() {
     // Re-assert the XInput pointer every frame: cheap, and it self-heals if the
     // game re-resolves XInput or if we got here before WinMain had.
     GamepadUpdate();
+    VR().PollControllerProbe();
 
     // The game DLLs load after we do, and the player can switch between TR4 and
     // TR5 without restarting, so both of these run every frame.

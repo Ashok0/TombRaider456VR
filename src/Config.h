@@ -395,6 +395,9 @@ struct Config {
     bool valveIndexControllers = false;
     float valveIndexGripPress = .55f;
     float valveIndexGripRelease = .35f;
+    // Hybrid Modern/Tank Controls: opt-in third-person Walk + back hop (TR1-5).
+    // Off preserves the native control style, including Modern camera-relative walking.
+    bool hybridModernTankControls = false;
     // Present the VR controllers to the game as an Xbox pad.
     //
     // The game resolves XInput through GetProcAddress into a function-pointer
