@@ -1,0 +1,14 @@
+[
+  {
+    "path": "README.md",
+    "sha256": "27ab5eeed3240fee088d5b6d66c71e21cbce6fbb22d41e6fed4e4e2675bf076d"
+  },
+  {
+    "path": "src/Config.h",
+    "sha256": "076b81bda9c0e5bcfe9f5f75b29a9233862363b374e31c16bf6041564bd1d2b0"
+  },
+  {
+    "path": "tests/sky_selftest.cpp",
+    "sha256": null
+  }
+]

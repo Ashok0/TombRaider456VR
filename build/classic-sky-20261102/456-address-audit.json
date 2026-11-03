@@ -1,0 +1,68 @@
+[
+  {
+    "game": 4,
+    "stamp": "0x696b4999",
+    "kind": "phase",
+    "entry": "0x2f2e0",
+    "flush": "0xb1b50",
+    "stolen": 11,
+    "prologue": "48 83 ec 38 48 8b 05 1d 4c 63 00",
+    "rip": 7,
+    "path": "C:\\dev\\PDB\\tomb4.dll"
+  },
+  {
+    "game": 4,
+    "stamp": "0x68c12fda",
+    "kind": "phase",
+    "entry": "0x2f150",
+    "flush": "0xb26c0",
+    "stolen": 11,
+    "prologue": "48 83 ec 38 48 8b 05 ed 5c 63 00",
+    "rip": 7,
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\4\\tomb4.dll"
+  },
+  {
+    "game": 5,
+    "stamp": "0x696b499c",
+    "kind": "phase",
+    "entry": "0x30120",
+    "flush": "0xa5460",
+    "stolen": 7,
+    "prologue": "48 83 ec 28 45 33 c0",
+    "rip": -1,
+    "path": "C:\\dev\\PDB\\tomb5.dll"
+  },
+  {
+    "game": 5,
+    "stamp": "0x68c12fe9",
+    "kind": "phase",
+    "entry": "0x305a0",
+    "flush": "0xa5750",
+    "stolen": 7,
+    "prologue": "48 83 ec 28 45 33 c0",
+    "rip": -1,
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\5\\tomb5.dll"
+  },
+  {
+    "game": 6,
+    "stamp": "0x696b49a4",
+    "kind": "room",
+    "entry": "0x1af5e0",
+    "skyRoom": "0x3ae940",
+    "stolen": 6,
+    "prologue": "40 55 56 57 41 54",
+    "rip": -1,
+    "path": "C:\\dev\\PDB\\tomb6.dll"
+  },
+  {
+    "game": 6,
+    "stamp": "0x68c12fe6",
+    "kind": "room",
+    "entry": "0x1afb00",
+    "skyRoom": "0x3ad8a0",
+    "stolen": 6,
+    "prologue": "40 55 56 57 41 54",
+    "rip": -1,
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\6\\tomb6.dll"
+  }
+]

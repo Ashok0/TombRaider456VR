@@ -1,4 +1,4 @@
-// Sky.h -- draw the remaster's HD sky at optical infinity.
+// Sky.h -- draw Classic and Remastered skies at optical infinity.
 //
 // DrawSkyHD in tomb4/5.dll pushes a copy of the current matrix onto the
 // matrix stack with its translation zeroed (confirmed in the disassembly:
@@ -14,27 +14,27 @@
 // geometry, and the engine's own depth range lets its fragments win a depth
 // test against the world behind it.
 //
-// The hook wraps DrawSkyHD and SkyPassActive() is true for every draw it
-// issues. Hooks.cpp then uses the rotation of E only, and pushes those
+// The hooks wrap DrawSkyHD and the queued Classic SkyDrawPhase. SkyPassActive()
+// is true until the sky commands have actually flushed. Hooks.cpp uses the
+// rotation of E only, and pushes those
 // fragments to the far plane, so the sky fuses at infinity and never
 // occludes the world.
 //
-// TR6 (Angel of Darkness) has no row here: different engine, no PDB, and its
-// scene is rendered offscreen and composited whole (see AlternateEyeActive
-// in Hooks.cpp) rather than duplicated per draw, so this per-draw mechanism
-// does not apply to it.
+// TR6 uses DrawRoom with SYS_DRAW_BUFFER::pSkyRoom to scope its dedicated sky
+// mesh. This also works inside its per-eye scene replay, without flattening
+// the ordinary rooms that use the same drawing function.
 #pragma once
 
 namespace tr {
 
-// Install or drop the DrawSkyHD hook to match the DLL currently bound.
+// Install or drop the sky hooks to match the DLL currently bound.
 // Cheap and idempotent; call once per frame, after GameDllUpdate().
 void SkyUpdate();
 
 // Remove the hook. Called from RemoveHooks.
 void SkyShutdown();
 
-// True while the original DrawSkyHD is on the stack.
+// True only while a verified sky draw/command flush is on the stack.
 bool SkyPassActive();
 
 } // namespace tr

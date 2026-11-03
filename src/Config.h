@@ -688,7 +688,7 @@ struct Config {
     // no block for exactly that reason.
     int   cullDumpKey           = 0x77;   // VK_F8
 
-    // Draw the HD sky at optical infinity. 1 = on and the default.
+    // Draw Classic/Remastered sky backgrounds at optical infinity. Default on.
     //
     // DrawSkyHD already zeros the translation of the matrix it draws the dome
     // through, so the dome stays centred on the game camera -- "at infinity"

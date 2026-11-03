@@ -1,0 +1,56 @@
+[
+  {
+    "game": 2,
+    "path": "C:\\dev\\TombRaider123VR\\PDB\\tomb2.dll",
+    "stamp": "0x6a4b4915",
+    "entry": "0x9be00",
+    "skyReturn": "0x148dc",
+    "flush": "0x8f740",
+    "prologue": "48 89 5c 24 18"
+  },
+  {
+    "game": 3,
+    "path": "C:\\dev\\TombRaider123VR\\PDB\\tomb3.dll",
+    "stamp": "0x6a4b490d",
+    "entry": "0xe60f0",
+    "skyReturn": "0x29b9e",
+    "flush": "0xd3aa0",
+    "prologue": "48 89 5c 24 18"
+  },
+  {
+    "game": 2,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-gold-verify\\tomb2.dll",
+    "stamp": "0x6a4b7c3f",
+    "entry": "0x9bc80",
+    "skyReturn": "0x148ec",
+    "flush": "0x8f210",
+    "prologue": "48 89 5c 24 18"
+  },
+  {
+    "game": 3,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-gold-verify\\tomb3.dll",
+    "stamp": "0x6a4b7c37",
+    "entry": "0xe7dc0",
+    "skyReturn": "0x29c5e",
+    "flush": "0xd5340",
+    "prologue": "48 89 5c 24 18"
+  },
+  {
+    "game": 2,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-october-verify\\tomb2.dll",
+    "stamp": "0x6aa15696",
+    "entry": "0x9bae0",
+    "skyReturn": "0x143bc",
+    "flush": "0x8f080",
+    "prologue": "48 89 5c 24 18"
+  },
+  {
+    "game": 3,
+    "path": "C:\\dev\\TombRaider123VR\\build\\current-october-verify\\tomb3.dll",
+    "stamp": "0x6aa1568d",
+    "entry": "0xe8aa0",
+    "skyReturn": "0x29d6e",
+    "flush": "0xd6010",
+    "prologue": "48 89 5c 24 18"
+  }
+]

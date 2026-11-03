@@ -20,6 +20,7 @@ in TR4/5. Features below apply to TR4/5 unless a narrower game scope is given.
 | Physical crouching | Enabled by default. A partial real squat bends the visible legs; a 55 cm headset drop requests native crouch and hides the body. Rising within 23 cm of calibrated standing height releases it, subject to ceiling clearance. Elevator/VCI crouch steering and tracked hands are fixed, as is delayed standing movement from a leftover crouch queue. |
 | Climbing and body transitions | Ledge/monkey-bar arms preserve native hand contacts with stable elbows. Crate/ledge mount camera recovery is smoothed; actual mounts show hands with opaque black wrist caps. Arms return on the first standing or ground-movement frame, without waiting for recovery timers. Original arm-recovery timing is retained. |
 | Classic graphics and roomscale | The Classic mesh follows physical turns and uses the corrected rendered-body origin after roomscale movement. **Y + RT** also toggles graphics in the TR4–6 title menus. See [Classic graphics](#classic-graphics-and-roomscale). |
+| Sky and horizon depth | Classic TR4/5 horizon meshes and cloud layers now receive the same infinity-depth treatment as Remastered skies. TR6's dedicated sky mesh is covered in both graphics modes. Ordinary scenery retains normal stereo depth. Enabled by the existing `SkyAtInfinity=1` default. |
 | Native VR Options | **Options > VR Options** contains Controller Type, Color Scheme and Hybrid Modern/Tank Controls, with their current values visible. Hybrid controls stay Off by default and apply immediately. Dark remains the default color scheme. |
 | Valve Index | Optional SteamVR action bindings separate face buttons from grip squeeze. `ValveIndexControllers=0` remains the default; selecting Index requires restarting and the shipped bindings folder. |
 | Physical interactions | Grip-driven wall/floor levers, VCI levers, cog wheels, TR5 wall valves, pulleys/chains/ropes, TR4 crowbar sockets and TR5 drawers/cabinets; touch-driven buttons, elevator panels, monitors and numeric keypads. See the coverage table below. |
@@ -2856,7 +2857,7 @@ Deployment and backup: `build/backpedal-start-deploy/manifest.json`.
 | **Phase 9** | **Inventory fix** — items no longer stack, by preserving the engine's own projection shear | Working. On by default |
 | **Phase 10** | **Decoupled pitch** — the headset owns pitch; the right stick turns only, except when Lara needs vertical swim control | Working. On by default. TR6 swimming confirmed in-headset |
 | **Phase 11** | **Ceiling clamp** — caps the tracked head so it cannot rise through low ceilings | Working. On by default |
-| **Phase 12** | **Sky fix** — the HD sky dome drawn at optical infinity instead of its mesh radius | Working. TR4 / TR5 |
+| **Phase 12** | **Sky fix** — Classic and Remastered sky backgrounds drawn at optical infinity instead of their mesh radius | Implemented. TR4 / TR5 / TR6 |
 | **Phase 13** | **Laser sight fix** — the dot and the bullet made to agree, by putting the head centre back on the aim line | Working. On by default |
 | **Phase 14** | **Hide vignettes** — the binocular, scope and infra-red overlays stubbed out, keeping the aiming dot | Working. On by default |
 | **Phase 15** | **The stick stops displacing you** — the head's offset integrated in world space, so only the headset moves your eye | Working. On by default |
@@ -3129,7 +3130,8 @@ More hooks land **outside the exe**, in `tomb4.dll` / `tomb5.dll`. They are
 installed lazily, because the game DLLs load after the mod does. `PrintRoomsList`
 and `S_GetObjectBounds` are what [Phase 7](#phase-7-culling-fix) uses to extend
 the visible set; `DrawSkyHD` is what [Phase 12](#phase-12-sky-fix) uses to mark
-every sky draw so stereo can put the dome at optical infinity. `DrawSkyHD` is
+Remastered sky draws so stereo can put the dome at optical infinity. Classic
+`SkyDrawPhase` and TR6's dedicated sky-mesh hook cover the other paths. Sky handling is
 independent of `PortalCulling` — it installs whenever `SkyAtInfinity=1`.
 
 `validate_draw` is the single choke point where every uniform reaches the GPU,
@@ -5245,11 +5247,9 @@ guess, and one of them is a hook target.
 
 ### TR6
 
-Not addressed. It is a different engine with different room structures, and it
-has no row in the address table, so the culling simply does not install for it.
-The same is true of the sky fix — its scene is rendered offscreen and composited
-whole (see [Phase 6](#phase-6-tr6-support)) rather than duplicated per draw, so
-the per-draw mechanism Phase 12 depends on does not reach it either.
+TR6 uses separate room structures and culling hooks, with per-eye scene replay
+(see [Phase 6](#phase-6-tr6-support)). Its dedicated sky-mesh scope now applies
+the infinity-depth fix within that replay; see Phase 12 below.
 
 ---
 
@@ -5280,7 +5280,16 @@ test against farther world geometry.
 DrawSkyHD            <- PrintRoomsList (x1)
 ```
 
-One hook covers every sky triangle the remaster issues.
+That hook covers Remastered sky geometry. Classic graphics instead use
+`SkyDrawPhase`, which emits cloud layers and horizon geometry through the native
+command buffer. The Classic hook flushes earlier world commands before entering
+the sky scope and finishes sky commands inside it, so normal objects keep their
+stereo depth. The supported TR4/5 builds have verified function addresses and
+prologues in `src/SkyBindings.h`.
+
+TR6 uses a separate hook on `DrawRoom_SYS_D3D_ROOM`, restricted to the exact
+`SYS_DRAW_BUFFER::pSkyRoom` mesh. It works in both graphics modes and inside the
+per-eye scene replay. Ordinary room meshes retain their native depth.
 
 **Fix.** `src\Sky.cpp` hooks `DrawSkyHD` and sets a flag for the life of that
 call. Every `validate_draw` that runs underneath it computes the per-eye
@@ -5305,7 +5314,8 @@ The stolen window is the same 5-byte PIC `mov [rsp+8], rbx` as
 
 | file | what it holds |
 |---|---|
-| `src\Sky.cpp` | the `DrawSkyHD` hook and the in-sky flag |
+| `src\Sky.cpp` | Remastered, Classic queued-sky and TR6 sky-mesh scopes |
+| `src\SkyBindings.h` | verified Classic/TR6 addresses and complete hook prologues |
 | `src\Hooks.cpp` | the rotation-only eye transform at inject time; far-plane depth around the duplicated draw |
 | `src\GameDll.cpp` | the two-row address table those RVAs live in |
 | `tools\verify_addresses.py` | re-derives both RVAs and the prologue from the PDBs |
@@ -5314,12 +5324,13 @@ The stolen window is the same 5-byte PIC `mov [rsp+8], rbx` as
 
 ```
 sky: hooked tomb4.dll (Tomb Raider IV) -- sky draws use rotation-only eye transform (optical infinity) and far-plane depth
-sky: first DrawSkyHD draw (shader N) -- rotation-only eye transform, far-plane depth
+sky: first sky draw (shader N) -- rotation-only eye transform, far-plane depth
 ```
 
 The health report's `sky=` count is per injected eye. Outdoors it should be
-non-zero; `sky=0` forever with the "hooked" line present means `DrawSkyHD` is
-not running (indoors, or a title screen).
+non-zero. Classic graphics also log `Classic horizon/cloud layers`, while TR6
+logs `Classic/Remastered sky mesh`. A zero count indoors is normal; outdoors,
+check for hook failures and the active graphics mode before diagnosing it.
 
 The GPU verify sample skips sky draws on purpose — both eyes share a
 translation-free transform there, so sampling one would report zero separation
@@ -8411,7 +8422,7 @@ src/FirstPerson.* TR4/5 first-person camera, locomotion, aiming and visibility
 src/LocomotionMath.h first-person directional movement and neck-pivot maths
 src/PortalCull.*  head-driven room culling, hooked into the game DLL
 src/PortalGeom.h  the frustum maths behind it, tested by tests/
-src/Sky.*         DrawSkyHD hook: sky draws at optical infinity
+src/Sky.*         Classic/Remastered sky scopes: sky draws at optical infinity
 src/DynamicBones.* TR4/5 chest physics: DrawLaraHD hook, spring solver
 src/BoneSkin.*   shader_init hook: per-vertex chest deformation
 src/Callsite.*    return-address census, from before the DLLs had symbols
