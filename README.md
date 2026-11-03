@@ -18,7 +18,7 @@ in TR4/5. Features below apply to TR4/5 unless a narrower game scope is given.
 | Jump takeoff and landing | First person skips the preparatory knee bend/foot shuffle and ordinary landing recovery delay. Native clearance, airborne physics and hard-fall handling remain. Armed backward/sideways takeoffs keep their intended direction and sideways-jump cameras are stabilized. |
 | Held running jump | Holding Jump while moving forward retains the ledge auto-jump assist through playable fixed/heavy camera changes. Actual cutscenes and loss of player control still cancel it. |
 | Physical crouching | Enabled by default. A partial real squat bends the visible legs; a 55 cm headset drop requests native crouch and hides the body. Rising within 23 cm of calibrated standing height releases it, subject to ceiling clearance. Elevator/VCI crouch steering and tracked hands are fixed, as is delayed standing movement from a leftover crouch queue. |
-| Climbing and body transitions | Ledge/monkey-bar arms preserve native hand contacts with stable elbows. Crate/ledge mount camera recovery is smoothed; mount and recovery draws show hands with opaque black wrist caps. Original arm-recovery timing is retained. |
+| Climbing and body transitions | Ledge/monkey-bar arms preserve native hand contacts with stable elbows. Crate/ledge mount camera recovery is smoothed; actual mounts show hands with opaque black wrist caps. Arms return on the first standing or ground-movement frame, without waiting for recovery timers. Original arm-recovery timing is retained. |
 | Classic graphics and roomscale | The Classic mesh follows physical turns and uses the corrected rendered-body origin after roomscale movement. **Y + RT** also toggles graphics in the TR4–6 title menus. See [Classic graphics](#classic-graphics-and-roomscale). |
 | Native VR Options | **Options > VR Options** contains Controller Type, Color Scheme and Hybrid Modern/Tank Controls, with their current values visible. Hybrid controls stay Off by default and apply immediately. Dark remains the default color scheme. |
 | Valve Index | Optional SteamVR action bindings separate face buttons from grip squeeze. `ValveIndexControllers=0` remains the default; selecting Index requires restarting and the shipped bindings folder. |
@@ -161,7 +161,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * Full-body VRIK in TR4/5 HD first person using headset and controllers: inferred torso/hips, leg IK on animated foot targets, and arms sharing the gun wrist calibration.
 * Ledge and monkey-bar arms retain animated hand contacts throughout traversal. Torso movement respects both arms' reach, elbows remain stable near full extension, and released hands blend back to controller tracking over 180 ms. Native climbing grips remain available if controller tracking briefly drops out.
 * With first-person movement stabilization enabled, finishing a crate vault or ledge pull-up eases the camera back to its saved standing position over 180 ms. Headset tracking stays immediate, collision clearance remains active, and jumping or starting another climb cancels the handoff.
-* During a mount and the following recovery, only the hands remain visible, with opaque black wrist caps. Arms return once recovery finishes; the original shoulder/elbow recovery timing and 180 ms wrist handoff are retained.
+* During an actual mount, only the hands remain visible, with opaque black wrist caps. Arms return on the first standing or ground-movement frame, even while the camera/torso/wrist recovery continues. Walking or turning immediately after a climb keeps them visible. The original shoulder/elbow recovery timing and 180 ms wrist handoff are retained; torso visibility keeps its existing recovery protection. This applies only to first person.
 * TR4/5 spatial inventory at eye height, with level text and a freshly rendered stereo world behind it (gameplay remains paused).
 * World-space laser sights for the revolver, Desert Eagle and crossbow with an attached sight; the HK uses its scope without a projected laser.
 * Smooth first-person pistol draw/holster animations for LT/Y, with live controller tracking when using physical holster zones.
@@ -2014,9 +2014,10 @@ crouching/walking, planted feet, native crouch input, shadows and jiggle. Headse
 required practical check.
 
 First-person draw masks hide the chest throughout landing clips and for at
-least 350 ms of recovery. Ledge hangs and mounts show only arms and hands, with
-the same recovery hold and any additional time needed for the body pose to
-settle. These rules apply with full-body IK enabled and with guns drawn; hip
+least 350 ms of recovery. Ledge hangs show arms and hands; actual mounts show
+only capped hands. On the first standing or ground-movement frame, complete
+arms return while the torso retains its recovery hold until its pose settles.
+These rules apply with full-body IK enabled and with guns drawn; hip
 and back holster meshes are also suppressed in arms-only views. Normal body
 visibility returns after recovery, and native shadows retain the full body.
 Native crouch and crawl states show only hands (and equipped hand-held weapons),

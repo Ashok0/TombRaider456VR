@@ -23,6 +23,9 @@ bool DynamicBonesTorsoFrame(float*) { return false; }
 bool DynamicBonesLaraForward(float*) { return false; }
 const float* FirstPersonRenderBodyPalette(uint64_t&,int&) { return nullptr; }
 uint64_t FirstPersonBodyWristSeamMask() { return 0; }
+bool FirstPersonKeypadLight(float*) { return false; }
+bool MirrorReflectionCapturing() { return false; }
+void MirrorReflectionObserver(float*) {}
 int FirstPersonTrackedHandJoint() { return sealing ? 10 : -1; }
 uint64_t Base() { return reinterpret_cast<uint64_t>(&appPointer); }
 const Layout& L() { return layout; }
@@ -45,11 +48,12 @@ int main() {
     firstperson::BodyVisibilityRecovery visibility;
     const auto mask=[&](double time,bool grip,bool recovering) {return visibility.Update(&visibility,0,time,grip,false,recovering);};
     mask(1,true,false);
-    Check(firstperson::TraversalTransitionHandsOnly(2,mask(1.1,false,true)),"post-mount recovery hides arms");
+    Check(!firstperson::TraversalTransitionHandsOnly(2,mask(1.1,false,true)),"first standing frame reveals arms during ongoing recovery");
     Check(firstperson::TraversalTransitionHandsOnly(71,firstperson::ArmMeshBits),"finishing a mount into crouch also seals the hands");
     Check(!firstperson::TraversalTransitionHandsOnly(71,UINT32_MAX),"ordinary crouching does not inherit transition cap scope");
-    Check(firstperson::TraversalTransitionHandsOnly(2,mask(1.8,false,true)),"hands remain isolated throughout long recovery");
-    Check(!firstperson::TraversalTransitionHandsOnly(2,mask(1.81,false,false)),"arms return when recovery finishes");
+    for(int state:{0,1,2,5,6,7,16,20,21,22,73})
+        Check(!firstperson::TraversalTransitionHandsOnly(state,mask(1.8,false,true)),"standing, moving and turning retain arms throughout long recovery");
+    Check(!firstperson::TraversalTransitionHandsOnly(2,mask(1.81,false,false)),"arms remain visible when recovery finishes");
     WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"TransitionCapTest";wc.style=CS_OWNDC;
     Check(RegisterClassW(&wc)!=0,"register hidden GL window");
     HWND window=CreateWindowW(wc.lpszClassName,L"Transition cap test",WS_OVERLAPPED,0,0,64,64,nullptr,nullptr,wc.hInstance,nullptr);

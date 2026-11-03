@@ -1,0 +1,18 @@
+[
+  {
+    "path": "src/FirstPersonVisibility.h",
+    "before": "36bad3c74555908fb95e9850c079aa85cd24a73359424436ba051a9daf233328"
+  },
+  {
+    "path": "README.md",
+    "before": "d73cadad4274a4d9949f0532fa608f5595760c438912e4f2f5811b69127c7aa7"
+  },
+  {
+    "path": "tests/remaining_parity_selftest.h",
+    "before": "b293dc805faba4b1faf88d0006554e1e25bb061c2491316dde21eb697d40fb4e"
+  },
+  {
+    "path": "tests/transition_hands_selftest.cpp",
+    "before": "835d3304492cd64c5afe90af2c9b37b8105e97f6f432e6be96c6d66a7ecf6d98"
+  }
+]

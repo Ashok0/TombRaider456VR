@@ -9,6 +9,15 @@ constexpr uint32_t ArmMeshBits = 0x3f00u;
 constexpr uint32_t HandMeshBits = 0x2400u;
 
 inline bool TraversalTransitionHandsOnly(int state,uint32_t recoveryMask) {
+    // Once native movement is upright again, reveal the arms immediately.
+    // Torso/camera/wrist recovery can continue without extending hands-only
+    // rendering. Include movement/turn states so walking off the mount cannot
+    // hide the arms again before the recovery timers expire.
+    switch(state) {
+    case 0: case 1: case 2: case 5: case 6: case 7:
+    case 16: case 20: case 21: case 22: case 73: return false;
+    default: break;
+    }
     return locomotion::IsLedgeMountState(state) ||
         (!locomotion::IsTraversalGripState(state) && recoveryMask==ArmMeshBits);
 }
