@@ -43,6 +43,19 @@ struct BodyVisibilityRecovery {
 
 inline bool UseHeadCamera(int hitPoints) { return hitPoints > 0; }
 
+inline bool QuestItemUsesThirdPerson(int game,int state,int socket=-1,int trigger=0,int animation=-1) {
+    if(game!=0 && game!=1) return false;
+    // Native USEKEY / USEPUZZLE, including alternate key-use animations.
+    if(state==42 || state==43) return true;
+    // Negative-OCB puzzle sockets select a custom CONTROLLED animation.
+    // Match the actual socket and its animation; other controlled actions
+    // must not inherit this camera policy. PuzzleDone can replace the socket
+    // with its filled version before Lara's animation has finished.
+    const int first=game==0 ? 260 : 242,count=game==0 ? 12 : 8;
+    return state==89 && socket>=first && socket<first+count*2 &&
+        trigger<0 && animation>=0 && animation==-trigger;
+}
+
 inline bool SwitchUsesThirdPerson(int game,int state) {
     if(game!=0 && game!=1) return false;
     // Native TR4/5 switch-use states: on/off (also jump/crowbar/block

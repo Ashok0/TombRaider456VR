@@ -1,0 +1,14 @@
+[
+  {
+    "Relative": "src/FirstPersonVisibility.h",
+    "Before": "92d16f09980c55fa2b65f2fb2880e3984d280d96aad82f188cb01a1b4b7043c3"
+  },
+  {
+    "Relative": "src/FirstPerson.cpp",
+    "Before": "ab3e8d32376f7c1b8f701cfac4df04478c268ad499c863562597429684466e11"
+  },
+  {
+    "Relative": "README.md",
+    "Before": "2f2fe90e388be51188cbc6782adc8e8fbfaf0d18532491cec4a3b0ac4c0607e9"
+  }
+]

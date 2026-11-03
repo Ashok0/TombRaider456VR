@@ -88,6 +88,7 @@ constexpr uint32_t lara_move_angle  = 222;
 constexpr uint32_t lara_vehicle     = 38;
 constexpr uint32_t lara_movement_flags = 68; // IsMoving is bit 5; CanMonkeySwing is bit 6.
 constexpr uint32_t lara_skelebob = 350; // uint8: native TR5 X-ray rendering mode.
+constexpr uint32_t lara_interacted_item = 348; // int16 InteractedItem, native socket/interaction owner.
 constexpr uint32_t camera_type      = 32;
 constexpr uint32_t object_stride    = 3792;
 constexpr uint32_t object_geom      = 112;
@@ -630,6 +631,7 @@ bool PhysicalCrowbarOwns(const uint8_t* item);
 bool HoldPhysicalCrowbarLara(uint8_t* item);
 void AttachPhysicalCrowbarHand(int hand,motiongun::Frame& wrist);
 void PhysicalCrowbarCamera(const uint8_t* item,PHD_3DPOS& pose);
+bool QuestItemCameraOverride(const uint8_t* item);
 
 bool Gate(bool inventoryBackground=false) {
     if (!g_boundDll || !g_boundBase || !Cfg().enabled ||
@@ -642,12 +644,13 @@ bool Gate(bool inventoryBackground=false) {
     const auto* item=*Ptr<uint8_t*>(dll.laraItem);
     if (!item || !firstperson::UseHeadCamera(
         *reinterpret_cast<const int16_t*>(item+off::item_hit_points))) return false;
-    // Read the active animation state, not its goal: native switches can
+    // Read the active animation state, not its goal: native interactions can
     // request STOP before the interaction animation has finished. Suspending
     // through Gate restores the camera, full mesh and input together; it does
     // not toggle the user's first-person preference.
     if(firstperson::SwitchUsesThirdPerson(dll.game,
         *reinterpret_cast<const int16_t*>(item+off::item_anim_state)) && !PhysicalCrowbarOwns(item)) return false;
+    if(QuestItemCameraOverride(item)) return false;
     const int water=LaraWaterStatus();
     // Suspend the whole FP path, not just its camera or body mask. Wading
     // remains eligible; native surface/underwater swimming uses third person.
@@ -3605,6 +3608,23 @@ struct GroundJumpInputScope {
 #include "PhysicalMonitor.inl"
 #include "PhysicalButton.inl"
 #include "PhysicalKeypad.inl"
+
+bool QuestItemCameraOverride(const uint8_t* item) {
+    if(!g_boundDll || !g_boundBase || !item) return false;
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    if(firstperson::QuestItemUsesThirdPerson(g_boundDll->game,state)) return true;
+    if(state!=89 || !g_switchDll || !g_switchDll->items || !g_switchDll->count) return false;
+    const int index=*Ptr<int16_t>(g_boundDll->lara+off::lara_interacted_item);
+    const int count=*Ptr<int32_t>(g_switchDll->count);
+    if(count<1 || count>32768 || index<0 || index>=count) return false;
+    const auto* items=*Ptr<const uint8_t*>(g_switchDll->items);
+    if(!items) return false;
+    const auto* socket=items+index*off::item_stride;
+    return firstperson::QuestItemUsesThirdPerson(g_boundDll->game,state,
+        *reinterpret_cast<const int16_t*>(socket+off::item_object),
+        *reinterpret_cast<const int16_t*>(socket+48),
+        *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
+}
 
 bool UpdateLedgePull(uint8_t* item, uint64_t now) {
     // IsLedgeHangState is a visibility group which also includes monkey bars.
