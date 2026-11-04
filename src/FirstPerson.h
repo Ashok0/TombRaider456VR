@@ -34,6 +34,7 @@ const float* FirstPersonBodyPalette(uint64_t& mask,int& count);
 // Complete eye-view palette, including unarmed IK; physics uses the native capture above.
 const float* FirstPersonRenderBodyPalette(uint64_t& mask,int& count);
 // Hidden wrist palette slots whose mixed costume/forearm surfaces remain visible.
+bool FirstPersonBodyClearance(float out[4],uint64_t& mask);
 uint64_t FirstPersonBodyWristSeamMask();
 // Render-scoped rigid floating-hand palette and anatomical cap centre.
 const float* FirstPersonSealedHandSkin(int& joint,float centre[3]);

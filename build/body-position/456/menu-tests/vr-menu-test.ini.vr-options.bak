@@ -1,0 +1,13 @@
+; keep comment
+[VR]
+ValveIndexControllers=0
+ValveIndexGripPress=0.63
+ValveIndexGripRelease=0.31
+DpadShift=0
+FirstPersonTurnDegreesPerSecond=123
+FirstPersonMotionGunPitchDegrees=-17
+VRBrighterColors=0
+HybridModernTankControls=0
+FirstPersonBodyForwardCm=10
+[Other]
+Custom=77

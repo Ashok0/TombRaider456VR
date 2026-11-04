@@ -362,6 +362,8 @@ void LoadConfig(const wchar_t* ini) {
     g_cfg.firstPersonBodyFollowSpeedMetres=std::clamp(GetFloat(L"FirstPersonBodyFollowSpeedMetres",.9f,ini),.2f,2.f);
     g_cfg.firstPersonBodyHandYawWeight=std::clamp(GetFloat(L"FirstPersonBodyHandYawWeight",.15f,ini),0.f,.35f);
     g_cfg.firstPersonBodyScale=GetFloat(L"FirstPersonBodyScale",0,ini);
+    const float bodyForward=GetFloat(L"FirstPersonBodyForwardCm",0,ini);
+    g_cfg.firstPersonBodyForwardCm=std::isfinite(bodyForward) ? std::round(std::clamp(bodyForward,0.f,20.f)) : 0;
     if(!std::isfinite(g_cfg.firstPersonBodyScale) || g_cfg.firstPersonBodyScale<=0) g_cfg.firstPersonBodyScale=0;
     else g_cfg.firstPersonBodyScale=std::clamp(g_cfg.firstPersonBodyScale,.5f,1.5f);
     g_cfg.firstPersonPhysicalCrouch=GetBool(L"FirstPersonPhysicalCrouch",g_cfg.firstPersonPhysicalCrouch,ini);

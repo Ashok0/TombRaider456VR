@@ -7,6 +7,16 @@ only. TR1–3 support is provided by the separate
 
 ## Recent updates
 
+### Jump body centering after VR turns (2026-11-04)
+
+In TR4/5 first person, jumping now keeps the visible body beneath the tracked
+player after partial analog-stick turns and roomscale movement. Airborne placement
+and Body Position use the current tracked facing instead of the native takeoff
+heading. The HD palette is fitted from its actual pelvis each draw, preserving
+native joint rotations, jump height, controller targets and gameplay collision.
+This works with full-body IK enabled or disabled; it requires movement
+stabilization and positional head tracking. No 360-degree turn or recenter is needed.
+
 Current behavior reviewed through **2026-11-02**, covering the past week's changes
 (October 26–November 2). This summary takes precedence over older development
 snapshots below. The game starts in third person; **Y + LT** toggles first person
@@ -21,13 +31,13 @@ in TR4/5. Features below apply to TR4/5 unless a narrower game scope is given.
 | Climbing and body transitions | Ledge/monkey-bar arms preserve native hand contacts with stable elbows. Crate/ledge mount camera recovery is smoothed; actual mounts show hands with opaque black wrist caps. Arms return on the first standing or ground-movement frame, without waiting for recovery timers. Original arm-recovery timing is retained. |
 | Classic graphics and roomscale | The Classic mesh follows physical turns and uses the corrected rendered-body origin after roomscale movement. **Y + RT** also toggles graphics in the TR4–6 title menus. See [Classic graphics](#classic-graphics-and-roomscale). |
 | Sky and horizon depth | Classic TR4/5 horizon meshes and cloud layers now receive the same infinity-depth treatment as Remastered skies. TR6's dedicated sky mesh is covered in both graphics modes. Ordinary scenery retains normal stereo depth. Enabled by the existing `SkyAtInfinity=1` default. |
-| Native VR Options | **Options > VR Options** contains Controller Type, Color Scheme and Hybrid Modern/Tank Controls, with their current values visible. Hybrid controls stay Off by default and apply immediately. Dark remains the default color scheme. |
+| Native VR Options | **Options > VR Options** contains Controller Type, Color Scheme, Hybrid Modern/Tank Controls and Body Position, with their current values visible. Hybrid controls stay Off by default and apply immediately. Dark remains the default color scheme. |
 | Valve Index | Optional SteamVR action bindings separate face buttons from grip squeeze. `ValveIndexControllers=0` remains the default; selecting Index requires restarting and the shipped bindings folder. |
 | Physical interactions | Grip-driven wall/floor levers, VCI levers, cog wheels, TR5 wall valves, pulleys/chains/ropes, TR4 crowbar sockets and TR5 drawers/cabinets; touch-driven buttons, elevator panels, monitors and numeric keypads. See the coverage table below. |
 | Key and puzzle-item use | In TR4/5, using keys, moonstones, gemstones and other socket items temporarily shows Lara in third person for the native insertion animation, then automatically resumes first person. This includes custom puzzle-socket animations. Third-person players keep their selected view. |
 | Flares and keypads | Swing the left controller to throw a lit flare in Remastered first person; left grip still crouches. TR5 code-entry keypads accept individual fingertip presses in the world, beep, and light the touched key green for 350 ms. |
 | Mirrors | TR5's six verified RICH2 restroom panes reflect Lara in either view using the native pose, without first-person IK. TR4 Sacred Lake/Coastal Ruins native mirrors bypass first-person hiding and IK. See [reflection coverage](#tr1–6-reflection-audit-2026-11-01). |
-| Aiming, calibration and inventory | Mesh-aligned world lasers, controller-arm shadows and costume cuffs, smooth button-driven pistol draw/holster, shared view-toggle recentering, spatial inventory backgrounds, roomscale ledge falls and water-exit camera handling retain the week's fixes. |
+| Aiming, calibration and inventory | Mesh-aligned world lasers, controller-arm shadows and costume cuffs, animated sidearm draw/holster, shared view-toggle recentering, spatial inventory backgrounds, roomscale ledge falls and water-exit camera handling retain the week's fixes. |
 
 ### Current interaction coverage
 
@@ -129,9 +139,9 @@ Classic graphics are separate from the Dark/Brighter color setting in VR Options
 
 ## VR Options
 
-Open **Options > VR Options** from the title screen. This uses the game's native menu, with no popup.
+Open **Options > VR Options** from the title screen or the in-game menu. This uses the game's native menu, with no popup.
 Use Up/Down to select a row, Left/Right or Select to change it, and Back to return.
-All three rows display their current selected value on the native page.
+All four rows display their current selected value on the native page.
 
 - **Controller Type:** Meta Touch or Valve Index. Changes apply after restarting.
 - **Color Scheme:** Dark (default) or Brighter. Changes apply immediately in the headset.
@@ -145,8 +155,17 @@ All three rows display their current selected value on the native page.
   the third-person Walk + back hop in TR4/5. First-person controls stay unchanged.
   The row is also visible in TR6, with a note that TR6 retains native movement.
 
-Changes save automatically to `ValveIndexControllers`, `VRBrighterColors` and
-`HybridModernTankControls` in the
+- **Body Position:** Default (0 cm) through 20 cm forward, in 1 cm steps.
+  Left/Right adjusts the visible first-person body in TR4/5 immediately; Select restores
+  the exact default. With movement stabilization enabled, ground movement and stopping
+  keep the pelvis and chest at this position without the native run/stop torso
+  blend or idle settling. Real headset movement and physical crouching remain active. Camera, controller wrists
+  and collision remain in place. A 20 cm clearance volume around the headset
+  trims nearby body surfaces so the view cannot fill with the inside of the torso;
+  tracked arms/hands are excluded. Shadows and third-person rendering stay native.
+
+Changes save automatically to `ValveIndexControllers`, `VRBrighterColors`,
+`HybridModernTankControls` and `FirstPersonBodyForwardCm` in the
 installed INI. Existing INIs without a color setting keep Dark; new INIs include
 `VRBrighterColors=0`. Other settings stay unchanged, and the previous INI is backed
 up as `TombRaiderVR.ini.vr-options.bak`. Index mode uses the existing
@@ -166,7 +185,7 @@ Claude Code was used heavily in the development of this mod.  AI was used to rev
 * During an actual mount, only the hands remain visible, with opaque black wrist caps. Arms return on the first standing or ground-movement frame, even while the camera/torso/wrist recovery continues. Walking or turning immediately after a climb keeps them visible. The original shoulder/elbow recovery timing and 180 ms wrist handoff are retained; torso visibility keeps its existing recovery protection. This applies only to first person.
 * TR4/5 spatial inventory at eye height, with level text and a freshly rendered stereo world behind it (gameplay remains paused).
 * World-space laser sights for the revolver, Desert Eagle and crossbow with an attached sight; the HK uses its scope without a projected laser.
-* Smooth first-person pistol draw/holster animations for LT/Y, with live controller tracking when using physical holster zones.
+* First-person sidearm draw/holster animations play for LT/Y, with smooth handoffs to controller tracking. Physical holster-zone grabs stay tracked.
 * Culling fixes for VR
 * Camera fixes for VR
 * Vignettes removed 
@@ -333,7 +352,7 @@ the [recent updates](#recent-updates) above describe subsequent changes.
 | Ordinary jump landings | First-person ground jumps keep a standing eye and upright VRIK body during the recovery clip. Drops and hard falls retain the native landing dip; third person keeps its normal animation. |
 | Controls and flares | First person uses Modern Controls even when third person uses Tank Controls. VR controller polling survives desktop focus changes. Held flares and their lights follow the left controller; dropped flares cannot enter creature hit-testing and crash gun targeting. |
 | Jump input and presentation | Brief A presses take priority over ordinary gait transitions. Holding A while moving forward queues the running ledge-jump assist. Unarmed side/back takeoffs retain the intended direction; backjumps use the collision-root arc, and airborne legs use native animation. Only backpedal jumps hide the body/hair. |
-| Body transitions | Landing, drawing/holstering and the inventory background retain consistent first-person body placement. Button pistol equip uses a smooth arm blend; physical holster transfers keep hands controller-tracked. |
+| Body transitions | Landing, drawing/holstering and the inventory background retain consistent first-person body placement. Button sidearm transfers animate to/from the holsters with a smooth 160 ms handoff; physical grabs stay tracked. Empty hands retain their resting finger pose. |
 | Inventory and calibration | Unarmed X opens the level, eye-height spatial ring; armed X cycles native ammo. LT+Y view changes recalibrate the shared tracking frame. |
 | Roomscale and cameras | Physical steps can cross a ledge and start a native fall. The base first-person camera stops at crates/walls while physical head leaning can pass through them by default. Third-person startup waits for a loaded level before capturing tracking neutral; water exits use constrained climb handling. |
 | Weapon aiming | Attached revolver, Desert Eagle and crossbow sights project collision-tested world beams. Mesh-calibrated firing remains aligned with attached sights or bare barrels. The HK retains its scope and firing calibration but has no world beam. |
@@ -434,7 +453,7 @@ simulation is observed before and after each tick to distinguish a jump from
 walking off a ledge, rather than treating every use of a landing clip alike.
 The camera retains its standing eye offset. Full-body IK uses the pre-jump
 upper-body reference and upright leg fitting while keeping native foot contacts,
-live headset/controller movement and authored weapon draw/holster arms.
+live headset/controller movement, including during weapon draw/holster.
 
 Hard landings and fast falls keep their native impact presentation. A jump
 landing more than 128 game units below its takeoff height also counts as a
@@ -459,8 +478,7 @@ and elbow solver even with steady controllers, in both armed and unarmed play.
 The reference travels and turns with Lara; the body solver still responds to
 actual headset lean and the hands remain directly controller-driven.
 
-Animated feet remain targets for leg IK. Forward movement, native weapon
-draw/holster arms, crouches, jumps, interactions, shadows and gameplay physics
+Animated feet remain targets for leg IK. Forward movement, crouches, jumps, interactions, shadows and gameplay physics
 retain their existing paths. Leaving upright ground poses, losing tracking,
 changing the model or recalibrating releases the reference.
 
@@ -560,31 +578,19 @@ tests include HK beam suppression without changing native scope state, other
 weapon beams, firing alignment and physical-versus-button holster transitions.
 These automated results do not substitute for in-headset confirmation.
 
-### Animated first-person pistol draw and holster (2026-10-26; updated 2026-10-28)
+### First-person draw/holster and running somersaults (updated 2026-11-04)
 
-Button-triggered pistol drawing/holstering (LT/Y; native weapon statuses 2/3)
-temporarily gives the visible hands to Lara's authored animation. Native
-animation retains the frame at which each pistol moves between hand and
-holster. Head tracking and fitted body positioning stay active.
+Button-triggered sidearm drawing and holstering play Lara's native arm motion
+on the stabilized first-person body. A 160 ms blend connects that animation to
+the tracked arms at each end, including reversed/cancelled transitions. Both
+full-body and arm-only modes keep the hand/weapon attachments on the same
+animated wrists. Physical holster-zone grabs remain controller-driven. Native
+weapon sequencing still determines when guns equip and fire. Temporary open empty-hand meshes use the standing hand descriptor,
+including the matching glove/material bank; actual gun grips remain native.
 
-Physical holster-zone transfers instead keep the visible arms and hands on the
-motion controllers throughout drawing/holstering, with hand/holster meshes
-following physical grip ownership immediately. They do not play the canned
-arm animation. Native equip sequencing and readiness still control firing.
-Using LT/Y clears physical ownership and returns to the animated button path.
-
-With full-body IK, a 160 ms joint-local blend connects tracked arms to animated
-arms and back again. The blend preserves arm reach, follows the fitted chest,
-and shares the resulting wrists with pistol/hand attachments. It advances once
-per tracking pose so stereo redraws cannot speed it up. Other weapons retain
-their existing behavior; native animation speed, equip logic and physics are
-unchanged. Physical transfers bypass the blend but retain their latest tracked
-pose for a smooth handoff if the next equip change comes from a button.
-
-Regression coverage includes controller-motion isolation for button animations,
-live tracking and grip occupancy for physical transfers, returning to LT/Y,
-native mesh timing, arm continuity and reach at 60/90/120 Hz, repeated draws,
-and restoration of exact target poses.
+First-person rolls, including TR4/5's running sprint somersault, hide Lara's
+body even when controller weapon tracking is active. Native shadow and mirror
+passes retain their existing rendering.
 
 ### First-person body continuity during transitions (2026-10-26)
 

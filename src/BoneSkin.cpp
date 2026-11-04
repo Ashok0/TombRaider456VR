@@ -6,6 +6,7 @@
 #include "InlineHook.h"
 #include "Log.h"
 #include "FirstPerson.h"
+#include "BodyClearanceShader.h"
 #include "MotionHandSkin.h"
 #include "MirrorReflection.h"
 #include "MirrorReflectionShader.h"
@@ -271,6 +272,16 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
             } else Log("vr-keypad: button light shader rejected; retaining native material");
         }
     }
+    std::string clearanceVs,clearanceFs;
+    if(c.enabled && useVs && useFs) {
+        clearanceVs=useVs;clearanceFs=useFs;
+        if(bodyclearance::Patch(clearanceVs,clearanceFs)) {
+            gl::Load();
+            if(gl::LoadedShaderApi() && HandPairLinks(clearanceVs,clearanceFs)) {
+                useVs=clearanceVs.c_str();useFs=clearanceFs.c_str();
+            } else Log("body clearance: shader rejected; retaining previous shader");
+        }
+    }
     original(shader, fvf, useVs, useFs);
 
     // shader_init just gave this Shader a fresh program. If the name is being
@@ -286,6 +297,8 @@ void __fastcall Detour_shader_init(Shader* shader, int fvf,
 constexpr uint32_t kMaxProgram = 4096;
 
 struct ProgramState {
+    GLint locClearance=-2,locClearanceJoints=-2;
+    bool clearanceLive=false;
     GLint locKeypad=-2;
     bool keypadLive=false;
     GLint locMirror=-2;
@@ -1025,6 +1038,20 @@ void BoneSkinAfterValidate() {
             gl::Uniform1i(ps.locHand,joint+1);
             ps.handJoint=joint;
         }
+    }
+    if(ps.locClearance==-2) {
+        ps.locClearance=gl::GetUniformLocation(prog,"uBodyClearance");
+        ps.locClearanceJoints=gl::GetUniformLocation(prog,"uBodyClearanceJoints");
+    }
+    if(ps.locClearance>=0 && ps.locClearanceJoints>=0) {
+        float sphere[4]{};uint64_t joints=0;
+        const bool active=FirstPersonBodyClearance(sphere,joints);
+        if(active || ps.clearanceLive) {
+            const float mask[4]={float(joints&0xffffu),float((joints>>16)&0xffffu),float(joints>>32),0};
+            gl::Uniform4fv(ps.locClearance,1,sphere);
+            gl::Uniform4fv(ps.locClearanceJoints,1,mask);
+        }
+        ps.clearanceLive=active;
     }
     if (ps.locBodyMask==-2) {
         ps.locBodyMask=gl::GetUniformLocation(prog,"uVisibleBody");

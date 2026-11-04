@@ -54,6 +54,7 @@ void TestUnarmedHandMeshes() {
     auto& state=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state);
     auto& status=*reinterpret_cast<int16_t*>(laraMemory+2);
     const auto savedBits=bits;const auto savedState=state;const auto savedStatus=status;
+    const auto savedHandGun=*reinterpret_cast<int16_t*>(laraMemory+4);
     for(int i=0;i<65;++i) {
         auto* geom=hands+i*off::geom_stride;std::memset(geom,i,off::geom_stride);
         *reinterpret_cast<const void**>(geom+off::geom_mesh)=geom; // Unique live mesh identity.
@@ -63,9 +64,10 @@ void TestUnarmedHandMeshes() {
     for(int bank:{0,30,60}) for(int variant:{2,4})
         *reinterpret_cast<const void**>(hands+(bank+variant)*off::geom_stride+off::geom_mesh)=hands+variant*off::geom_stride;
     for(int which:{0,1}) for(int bank:{0,30,60}) for(int gait:{0,1,2,28})
-    for(int variant:{2,4}) for(uint32_t mask:{0x600u,0x3000u,0x3600u}) {
-        if(variant==4 && gait!=28) continue;
-        dll.game=which;state=int16_t(gait);status=0;bits=mask;
+    for(int variant:{2,4}) for(int weaponStatus:{0,2,3}) for(uint32_t mask:{0x600u,0x3000u,0x3600u}) {
+        if(variant==4 && gait!=28 && weaponStatus==0) continue;
+        dll.game=which;state=int16_t(gait);status=int16_t(weaponStatus);bits=mask;
+        *reinterpret_cast<int16_t*>(laraMemory+4)=1;
         const auto* run=hands+(bank+variant)*off::geom_stride;
         const auto* rest=hands+(bank+1)*off::geom_stride;
         std::memcpy(current,run,off::geom_stride);
@@ -87,7 +89,7 @@ void TestUnarmedHandMeshes() {
         ShadowDll shadow{};static int pass=4;
         shadow.renderPass=uint32_t(reinterpret_cast<uint64_t>(&pass)-g_boundBase);
         if(reason==0) status=4;
-        if(reason==1) status=2;
+        if(reason==1) status=1;
         if(reason==2) config.firstPersonUnarmedIK=false;
         if(reason==3) g_active=false;
         if(reason==4) VR().m_controllerPoseValid[0]=false;
@@ -111,6 +113,7 @@ void TestUnarmedHandMeshes() {
     }
     g_active=true;VR().m_controllerPoseValid[0]=true;appMemory[0x9e4]=1;
     config=savedSettings;bits=savedBits;state=savedState;status=savedStatus;
+    *reinterpret_cast<int16_t*>(laraMemory+4)=savedHandGun;
     std::memcpy(current,original,sizeof(original));
     g_hDrawCreatureHD.m_trampoline=savedDraw;g_unarmedHandDll=savedHandDll;g_shadowDll=savedShadow;
     dll.gLaraHeads=savedHeads;dll.game=savedGame;g_bodySkinScope=savedScope;
@@ -121,6 +124,7 @@ void TestUnarmedIK() {
     const auto settings=config; const auto savedDll=dll;
     const auto savedVisibility=g_bodyVisibility;g_bodyVisibility={};
     config.firstPersonFullBodyIK=false; // Preserve coverage of the arm-only fallback.
+    g_pistolAnimation.Reset();
     const auto savedCalibration=testCalibration;
     const auto savedItem=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
     const auto savedLara=std::string(reinterpret_cast<char*>(laraMemory),sizeof(laraMemory));
@@ -656,6 +660,19 @@ void TestUnarmedIK() {
                 uint64_t mask=0;int captured=0;const auto* physics=FirstPersonBodyPalette(mask,captured);
                 Check(physics && captured==count && !std::memcmp(physics,nativePalette,count*12*sizeof(float)),
                       "armed IK never replaces jiggle physics with controller motion");
+                config.firstPersonBodyForwardCm=5;
+                const auto bodyShift=BodyMeshOffset(itemMemory);
+                float adjustedPalette[33*12]{};Detour_GetJoints(itemMemory,adjustedPalette,0);
+                for(int i=0;i<count;++i) {
+                    const int joint=mapping[i];
+                    const auto old=Multiply(ReadRows(armedPalette+i*12),bind[i]);
+                    const auto adjusted=Multiply(ReadRows(adjustedPalette+i*12),bind[i]);
+                    if(joint<8 || joint>13) Check(nearVec(adjusted.origin,Add(old.origin,{bodyShift.x,0,bodyShift.z})),
+                        "armed body moves by the visual offset without moving simulation");
+                    if(joint==10 || joint==13) Check(nearVec(adjusted.origin,old.origin),
+                        "body position leaves every tracked weapon wrist fixed");
+                }
+                config.firstPersonBodyForwardCm=0;
                 for(int i=0;i<count;++i) {
                     const int joint=mapping[i];
                     if(joint<8 || joint>13) Check(!std::memcmp(armedPalette+i*12,nativePalette+i*12,12*sizeof(float)),
@@ -701,7 +718,9 @@ void TestUnarmedIK() {
                         const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,-testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
                         Check(nearVec(Transform(armWrist,grip),Transform(gunWrist,grip)),"armed IK and floating hand share the identical grip pivot");
                     }
-                    GunPose after{};Check(BuildGunPose(hand,after) && !std::memcmp(&before[hand],&after,sizeof(after)),
+                    // Compare every field, excluding indeterminate tail padding.
+                    GunPose after{};Check(BuildGunPose(hand,after) &&
+                        !std::memcmp(&before[hand],&after,offsetof(GunPose,meshAligned)+sizeof(after.meshAligned)),
                                           "arm rendering cannot change weapon pose muzzle or aim");
                 }
             }
@@ -857,7 +876,7 @@ void TestUnarmedIK() {
             if(reason==0) VR().m_controllerPoseValid[0]=false;
             if(reason==1) VR().m_controllerPoseValid[1]=false;
             if(reason==2) status=4;
-            if(reason==3) status=2;
+            if(reason==3) status=1;
             if(reason==4) gun=7;
             if(reason==5) appMemory[0x9e4]=0;
             if(reason==6) config.firstPersonUnarmedIK=false;

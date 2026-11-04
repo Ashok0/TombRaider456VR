@@ -1,3 +1,4 @@
+#include <array>
 #define main UnusedFullFirstPersonSuite
 #include "first_person_tests.cpp"
 #undef main
@@ -87,6 +88,29 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
                 const auto* physics=FirstPersonBodyPalette(visible,captured);
                 Check(physics && captured==count && !std::memcmp(physics,fixture,count*12*sizeof(float)),
                       "jump arm stabilization never changes the physics skeleton");
+                uint8_t itemBefore[sizeof(itemMemory)];std::memcpy(itemBefore,itemMemory,sizeof(itemBefore));
+                const auto cameraBefore=g_scenePose;
+                for(float cm:{1.f,5.f,20.f,10.f,0.f}) {
+                    config.firstPersonBodyForwardCm=cm;
+                    Detour_GetJoints(itemMemory,repeat,0);
+                    for(int i=0;i<count;++i) {
+                        const int j=mapping[i];
+                        const auto old=Multiply(ReadRows(palette+i*12),binds[i]);
+                        const auto adjusted=Multiply(ReadRows(repeat+i*12),binds[i]);
+                        if(j<8 || j==14) Check(firstperson::Length(Sub(adjusted.origin,Add(old.origin,{0,0,cm*10})))<.05f,
+                            "live body position moves torso and legs forward by the chosen centimetres, including zero reset");
+                        if(j==10 || j==13) {
+                            Check(firstperson::Length(Sub(adjusted.origin,old.origin))<.04f,"body offset never moves tracked wrists");
+                            for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                                Check(std::fabs(adjusted.basis.r[r][c]-old.basis.r[r][c])<.001f,"body offset preserves controller wrist orientation");
+                        }
+                    }
+                    Check(!std::memcmp(itemBefore,itemMemory,sizeof(itemBefore)) &&
+                          !std::memcmp(&cameraBefore,&g_scenePose,sizeof(cameraBefore)),
+                          "body slider cannot move Lara's simulation position or camera");
+                    Check(!std::memcmp(FirstPersonBodyPalette(visible,captured),fixture,count*12*sizeof(float)),
+                          "body slider leaves native physics palette unchanged");
+                }
                 bits=0x3600;Detour_GetJoints(itemMemory,repeat,0);
                 for(int i=0;i<count;++i) if(mapping[i]>=8 && mapping[i]<=13)
                     for(int k=0;k<12;++k) Check(std::fabs(repeat[i*12+k]-palette[i*12+k])<.04f,
@@ -97,6 +121,9 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
     skinFixture=nullptr;skinFixtureCount=0;worldCameraValid=false;g_bodySkinScope=false;
     std::memset(objectInfo,0,off::object_stride);
 }
+
+#include "body_transition_regression.inl"
+#include "jump_turn_regression.inl"
 
 void TestJumpArmRecovery() {
     using namespace tr;using namespace tr::motiongun;
@@ -203,6 +230,19 @@ int main() {
         reset(which,fullBody);
         TestJumpArmPalettes(objectInfo);
     }
+    for(int which:{0,1}) for(bool fullBody:{false,true}) {
+        reset(which,fullBody);TestJumpTurnCentering(objectInfo);
+        reset(which,fullBody);TestBodyTransitions(objectInfo);
+        for(int rollState:{23,45,74}) {
+            reset(which,fullBody);state=int16_t(rollState);status=4;
+            *reinterpret_cast<int16_t*>(laraMemory+4)=1;
+            Check(IsRollState(itemMemory),"running somersault joins ordinary roll visibility");
+            SetMeshVisibility(true,true,false,false,false,false,true);
+            const int before=draws;Detour_DrawCreatureHD(itemMemory,0,0);
+            Check(g_rollHidden && bits==0 && draws==before,"tracked weapons cannot reveal the somersaulting body");
+        }
+    }
+    TestPistolAnimationBlend();
     TestJumpArmRecovery();
     reset(0,false);
     TestUnarmedIK();
