@@ -20,6 +20,7 @@
 #include "FirstPersonIK.h"
 #include "FirstPersonBodyIK.h"
 #include "TraversalArmIK.h"
+#include "JumpArmIK.h"
 #include "BodyFollower.h"
 #include "ClassicBodyRender.h"
 #include "JumpLanding.h"
@@ -288,6 +289,7 @@ firstperson::BodyFollower g_bodyFollower;
 firstperson::BodySizeCalibration g_bodySize;
 firstperson::TorsoPoseFilter g_torsoPose;
 firstperson::TraversalArmIK g_traversalArms[2];
+firstperson::JumpArmIK g_jumpArms[2];
 firstperson::GroundGaitReference g_groundGait;
 int g_groundGaitObject=-1;
 firstperson::JumpLanding g_jumpLanding;
@@ -312,6 +314,7 @@ firstperson::BodyFollowSettings BodyFollowSettings() {
 void ResetBodyFollower() {
     g_mountEyeTransition.Reset();
     for(auto& arm:g_traversalArms) arm.Reset();
+    for(auto& arm:g_jumpArms) arm.Reset();
     g_pistolRoll={};
     g_pistolArmPose.valid=false;
     g_bodyFollower.Reset();g_roomscaleFollower={};g_roomscaleFollowTime={};
@@ -411,7 +414,8 @@ bool RenderingLaraReflection() { return g_nativeMirrorDraw || MirrorReflectionCa
 hook::InlineHook g_hCrouchGun;
 bool g_crouchGunsReady=false;
 
-// DrawLaraHD selects HAND_*_RUN (2/32/62) independently of the joint pose.
+// DrawLaraHD selects run (2/32/62) and up-jump open (4/34/64) hand
+// geometry independently of the tracked wrist pose. Standing uses 1/31/61.
 // Verified against both PDB and retail renderers and HAND_NAMES in the PDBs.
 struct UnarmedHandDll { uint32_t timestamp, hands; };
 constexpr UnarmedHandDll kUnarmedHandDlls[] = {
@@ -1379,7 +1383,7 @@ bool FullBodyState(const uint8_t* item) {
        *Ptr<int16_t>(g_boundDll->lara+off::lara_vehicle)>=0)) return false;
     if(CanFitStandingBody(item) || CanSteerCrouch(item) || FullBodyGripState(item)) return true;
     switch(*reinterpret_cast<const int16_t*>(item+off::item_anim_state)) {
-    case 3: case 9: case 15: case 25: case 26: case 27: case 71: case 73: return true;
+    case 3: case 9: case 15: case 25: case 26: case 27: case 28: case 71: case 73: return true;
     default: return false;
     }
 }
@@ -1422,8 +1426,13 @@ bool UnarmedIKReady() {
     if(PhysicalCrowbarOwns(item)) return true;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool crouchHands=status==1 && CanSteerCrouch(item);
+    // Keep tracking through compression as well as rise/descent. Dropping IK
+    // for state 15 flashes native arms for a frame at takeoff in arm-only mode.
+    const bool upJump=item && GroundBodyAvailable(item) &&
+        (*reinterpret_cast<const int16_t*>(item+off::item_anim_state)==15 ||
+         *reinterpret_cast<const int16_t*>(item+off::item_anim_state)==28);
     // Full-body free jumps retain controller hands; ledges retain authored grips.
-    if (!item || !(CanTurnBody(item) || (Cfg().firstPersonFullBodyIK &&
+    if (!item || !(CanTurnBody(item) || upJump || (Cfg().firstPersonFullBodyIK &&
         FullBodyState(item) && !FullBodyGripState(item))) || (status!=0 && !crouchHands) ||
         CurrentMotionWeapon()<0 || CurrentMotionWeapon()>6) return false;
     motiongun::Frame wrist{}; GunBasis controller{};
@@ -1771,6 +1780,18 @@ motiongun::Vec BodyPaletteCameraOrigin(uint8_t* item,const motiongun::Frame& hea
     return Sub(JointPoint(item,14,0,0,0),head.origin);
 }
 
+bool PrepareJumpArm(uint8_t* item,int hand,const motiongun::Frame& reference,motiongun::Frame (&chain)[3]) {
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    const bool jumping=state==15 || state==28;
+    if(*Ptr<int16_t>(g_boundDll->lara+2)!=0 || MotionReady() || FlareIKReady() ||
+       !GroundBodyAvailable(item) || (!jumping && !CanTurnBody(item))) {
+        g_jumpArms[hand].Reset();return true;
+    }
+    const bool mainBody=g_bodySkinScope &&
+        (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49;
+    return g_jumpArms[hand].Apply(item,VR().PoseSerial(),TurnTime(),jumping,mainBody,reference,chain);
+}
+
 bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
     if(!FullBodyIKReady()) { g_groundGait.Reset();return false; }
@@ -1998,6 +2019,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         Vec pole{side*.6f*std::cos(heading)-.25f*std::sin(heading),1.f,
                  -side*.6f*std::sin(heading)-.25f*std::cos(heading)};
         const Frame traversalReference{referenceYaw,Sub(eye,cameraOffset)};
+        if(!PrepareJumpArm(item,hand,traversalReference,chain)) return false;
         const bool traversal=grip || (!MotionReady() && !FlareIKReady());
         if(traversal) {
             const Frame authored[3]={native[first],native[first+1],native[first+2]};
@@ -2111,6 +2133,15 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
             const auto offset=BodyRenderOffset();
             target.origin=Sub(target.origin,{offset.x,0,offset.z});
         }
+        if(!shadow && !armed) {
+            // Use the same render-camera origin on the ground and in flight.
+            // Animated gameplay wrists can disagree with HD interpolation,
+            // especially at takeoff/landing; they are not a camera reference.
+            float rotation[3][3]{},position[3]{};
+            if(CameraViewFrame(rotation,position) && std::isfinite(position[0]) &&
+               std::isfinite(position[1]) && std::isfinite(position[2]))
+                target.origin=Sub(trackedOrigin,{position[0],position[1],position[2]});
+        }
         if(armed && CurrentMotionWeapon()==1 && g_pistolBodyScope) {
             motiongun::Frame head{},inverse{};
             if(ReadIKJoint(obj,joints,count,bones,mapping,poses,14,head) && motiongun::Inverse(head,inverse)) {
@@ -2141,8 +2172,9 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
         }
         motiongun::Frame changes[3]{};
         motiongun::Frame traversalReference{};
-        const bool traversal=!shadow && !armed && !FlareIKReady() && Cfg().firstPersonFullBodyIK;
-        if(traversal) {
+        const bool unarmedView=!shadow && !armed && !FlareIKReady();
+        const bool traversal=unarmedView && Cfg().firstPersonFullBodyIK;
+        if(unarmedView) {
             const float scale=LiveWorldUnitsPerMetre();
             locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
             view=locomotion::Rotate(view,g_headingBase)*scale;
@@ -2150,6 +2182,9 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
                 float(g_scenePose.y_pos)+VR().FirstPersonVerticalOffset()*scale,float(g_scenePose.z_pos)+view.z};
             const auto cameraOffset=Sub(trackedOrigin,target.origin);
             traversalReference={firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},g_headingBase)),Sub(eye,cameraOffset)};
+            if(!PrepareJumpArm(item,hand,traversalReference,chain)) return false;
+        }
+        if(traversal) {
             if(!g_traversalArms[hand].Prepare(item,VR().PoseSerial(),TurnTime(),false,
                 traversalReference,native,chain,target,pole)) return false;
         } else if(!shadow) g_traversalArms[hand].Reset();
@@ -2164,7 +2199,7 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
             g_pistolRoll.minConfidence[hand]=std::min(g_pistolRoll.minConfidence[hand],roll.confidence);
         }
         for(int i=0;i<3;++i) {
-            if(!bindReference[hand]) {
+            if(!bindReference[hand] && !unarmedView) {
                 correction[hand*3+i]=changes[i];
                 continue;
             }
@@ -4541,16 +4576,23 @@ public:
         const auto mesh=*reinterpret_cast<const void* const*>(current+off::geom_mesh);
         if (!mesh) return;
         const auto* hands=Ptr<uint8_t>(g_unarmedHandDll->hands);
+        const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
         for (int bank:{0,30,60}) {
-            const auto* run=hands+(bank+2)*off::geom_stride;
             const auto* rest=hands+(bank+1)*off::geom_stride;
-            if (mesh!=*reinterpret_cast<const void* const*>(run+off::geom_mesh) ||
-                std::memcmp(current,run,off::geom_stride) ||
-                !*reinterpret_cast<const void* const*>(rest+off::geom_mesh)) continue;
-            geometry=current;
-            std::memcpy(saved,current,sizeof(saved));
-            std::memcpy(current,rest,sizeof(saved));
-            break;
+            if(!*reinterpret_cast<const void* const*>(rest+off::geom_mesh)) continue;
+            for(int variant:{2,4}) {
+                // UPJUMP switches to an open mesh even with wrist IK active.
+                // Keep the standing fingers through flight, while native
+                // reach/ledge/weapon poses retain their own hand geometry.
+                if(variant==4 && state!=28) continue;
+                const auto* selected=hands+(bank+variant)*off::geom_stride;
+                if(mesh!=*reinterpret_cast<const void* const*>(selected+off::geom_mesh) ||
+                   std::memcmp(current,selected,off::geom_stride)) continue;
+                geometry=current;
+                std::memcpy(saved,current,sizeof(saved));
+                std::memcpy(current,rest,sizeof(saved));
+                return;
+            }
         }
     }
     ~UnarmedRestHandScope() { if (geometry) std::memcpy(geometry,saved,sizeof(saved)); }
@@ -4886,7 +4928,10 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
     const bool unarmedIK=UnarmedIKReady();
     const bool fullBodyIK=FullBodyIKReady();
     if(!fullBodyIK) g_bodyFollower.Reset();
-    if (!unarmedIK) g_unarmedTwist[0]=g_unarmedTwist[1]={};
+    if (!unarmedIK) {
+        g_unarmedTwist[0]=g_unarmedTwist[1]={};
+        for(auto& arm:g_jumpArms) arm.Reset();
+    }
     const bool hideUnarmedArms=g_unarmedArmVisibility.Hide(unarmedMovement && !unarmedIK,VR().HeadPitchRadians());
     SetMeshVisibility(g_active && (Cfg().firstPersonHideHead || HideLandingHead(item)),
                       g_active && IsRollState(item),

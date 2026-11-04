@@ -1,0 +1,9 @@
+﻿{
+    "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+    "Backup":  "C:\\dev\\TombRaider456VR\\build\\upjump-rest-hands\\before-install-20261103-185904\\TombRaiderVR.dll",
+    "SHA256":  "53171F526566DD7FF644457679BC0274FD12823263F68C62013DDF917FE5EEB4",
+    "INIUnchanged":  true,
+    "FocusedChecks":  982,
+    "InHeadsetTested":  false,
+    "BaselineSuiteFailure":  "calibrated HMD height can request native crouch (also fails before this change)"
+}

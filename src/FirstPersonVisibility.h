@@ -16,6 +16,9 @@ inline bool TraversalTransitionHandsOnly(int state,uint32_t recoveryMask) {
     switch(state) {
     case 0: case 1: case 2: case 5: case 6: case 7:
     case 16: case 20: case 21: case 22: case 73: return false;
+    // Jump preparation and the actual straight-up jump retain complete arms,
+    // including when the jump immediately follows a ledge mount.
+    case 15: case 28: return false;
     default: break;
     }
     return locomotion::IsLedgeMountState(state) ||

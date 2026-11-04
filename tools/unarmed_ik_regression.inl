@@ -45,7 +45,7 @@ void TestUnarmedHandMeshes() {
     const auto savedScope=g_bodySkinScope;const auto savedSettings=config;
     auto* current=Ptr<uint8_t>(dll.objects)+off::object_geom;
     uint8_t original[off::geom_stride];std::memcpy(original,current,sizeof(original));
-    alignas(16) static uint8_t hands[63*off::geom_stride]{};
+    alignas(16) static uint8_t hands[65*off::geom_stride]{};
     const auto rva=uint32_t(reinterpret_cast<uint64_t>(hands)-g_boundBase);
     UnarmedHandDll handDll{dll.timestamp,rva};g_unarmedHandDll=&handDll;
     g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&ObserveUnarmedHandDraw);
@@ -54,31 +54,32 @@ void TestUnarmedHandMeshes() {
     auto& state=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state);
     auto& status=*reinterpret_cast<int16_t*>(laraMemory+2);
     const auto savedBits=bits;const auto savedState=state;const auto savedStatus=status;
-    for(int i=0;i<63;++i) {
+    for(int i=0;i<65;++i) {
         auto* geom=hands+i*off::geom_stride;std::memset(geom,i,off::geom_stride);
         *reinterpret_cast<const void**>(geom+off::geom_mesh)=geom; // Unique live mesh identity.
     }
     // Different material banks may share mesh data. Match the full native
     // descriptor so a glove/X-ray pass never borrows the bare-hand material.
-    for(int bank:{0,30,60})
-        *reinterpret_cast<const void**>(hands+(bank+2)*off::geom_stride+off::geom_mesh)=hands+2*off::geom_stride;
-    for(int which:{0,1}) for(int bank:{0,30,60}) for(int gait:{0,1,2})
-    for(uint32_t mask:{0x600u,0x3000u,0x3600u}) {
+    for(int bank:{0,30,60}) for(int variant:{2,4})
+        *reinterpret_cast<const void**>(hands+(bank+variant)*off::geom_stride+off::geom_mesh)=hands+variant*off::geom_stride;
+    for(int which:{0,1}) for(int bank:{0,30,60}) for(int gait:{0,1,2,28})
+    for(int variant:{2,4}) for(uint32_t mask:{0x600u,0x3000u,0x3600u}) {
+        if(variant==4 && gait!=28) continue;
         dll.game=which;state=int16_t(gait);status=0;bits=mask;
-        const auto* run=hands+(bank+2)*off::geom_stride;
+        const auto* run=hands+(bank+variant)*off::geom_stride;
         const auto* rest=hands+(bank+1)*off::geom_stride;
         std::memcpy(current,run,off::geom_stride);
         Check(UnarmedIKReady(),"mesh regression runs with active controller arm IK");
         Detour_DrawCreatureHD(itemMemory,1,0);
         Check(!std::memcmp(observedHandGeometry,rest,off::geom_stride),
-              "VRIK draws resting hands with matching bare/glove/X-ray geometry and bindings");
+              "standing, running and jumping draw identical resting hands with matching materials and bindings");
         Check(!std::memcmp(current,run,off::geom_stride) && bits==mask && observedHandState==gait && state==gait,
               "hand mesh replacement restores full descriptor and preserves native gait and mask");
         std::memcpy(current,rest,off::geom_stride);
         Detour_DrawCreatureHD(itemMemory,1,0);
         Check(!std::memcmp(observedHandGeometry,rest,off::geom_stride),"already resting hands remain unchanged");
     }
-    for(int reason=0;reason<12;++reason) {
+    for(int reason=0;reason<15;++reason) {
         config=savedSettings;status=0;state=1;bits=0x3600;g_active=true;
         VR().m_controllerPoseValid[0]=true;appMemory[0x9e4]=1;g_shadowDll=nullptr;
         g_unarmedHandDll=&handDll;
@@ -97,6 +98,9 @@ void TestUnarmedHandMeshes() {
         if(reason==9) *reinterpret_cast<void**>(hands+off::geom_stride+off::geom_mesh)=nullptr;
         if(reason==10) state=10; // Ledge grip remains native.
         if(reason==11) g_unarmedHandDll=nullptr;
+        if(reason==12) { state=2;index=4; } // Open meshes outside up-jump stay native.
+        if(reason==13) { state=28;index=5; } // Weapon geometry is not an open hand.
+        if(reason==14) { state=28;index=4;status=1; } // Busy hands retain native ownership.
         const auto* selected=hands+index*off::geom_stride;
         std::memcpy(current,selected,off::geom_stride);
         Detour_DrawCreatureHD(itemMemory,useBits,0);

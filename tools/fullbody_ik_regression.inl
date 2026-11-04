@@ -627,7 +627,7 @@ void TestFullBodyIK() {
             g_holsters=savedHolsters;config=cfg;g_pistolAnimation.Reset();
             *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=oldAnim;
         }
-        for(int which:{0,1}) for(int stance:{0,1,2,3,9,15,25,26,27,71,73,10,30,31,19,54}) for(int armed:{0,1}) {
+        for(int which:{0,1}) for(int stance:{0,1,2,3,9,15,25,26,27,28,71,73,10,30,31,19,54}) for(int armed:{0,1}) {
             g_torsoPose.Reset();++VR().m_poseSerial;
             dll.game=which;state=int16_t(stance);status=armed ? 4 : 0;g_bodyVisualOffset={55,-80};
             g_headingBase=.4f;testCalibration={.04f,-.06985f,.2032f,-30.f,8,-6};

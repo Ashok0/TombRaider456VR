@@ -1,0 +1,47 @@
+﻿[
+    {
+        "Relative":  "src/FirstPerson.cpp",
+        "OriginalHash":  "4B27290C9C7E1C851A0939ABDCCB2F4CE0A9D3187BB3B9CDE8C030539553AEC2",
+        "ModifiedHash":  "9CEB3EAFAA29D59A715D0630240E008BA008EA144556123E402F264D32F5C368"
+    },
+    {
+        "Relative":  "src/FirstPersonBodyIK.h",
+        "OriginalHash":  "C10737205F6F2A249BED5861CEC2EA3AEBF3F36A10A13AB5837979ED036F17AF",
+        "ModifiedHash":  "08799A25047FA031A31076BE2976401E0E6468802F822EBF69D68555CE834FC8"
+    },
+    {
+        "Relative":  "src/FirstPersonVisibility.h",
+        "OriginalHash":  "49EDD478AC7450759BE559D598AD46E3FBEFE280F21A70351696D7D3E2173289",
+        "ModifiedHash":  "FCBF81EED49C3A0D668843BFF56C03F0399F9E95BD219B5D7742103AE90C4991"
+    },
+    {
+        "Relative":  "src/JumpArmIK.h",
+        "OriginalHash":  null,
+        "ModifiedHash":  "42663232C1BE4EE4C0B0D4EE19149D39D486CEE26B08D59DCB3E1950C5B8A080"
+    },
+    {
+        "Relative":  "TombRaiderVR.vcxproj",
+        "OriginalHash":  "8E395891E23A8416BEC366A608302DAE81F9319E91D6A1CEEB8D2FE56FC84BBD",
+        "ModifiedHash":  "8DFB1CEE8861D3CEDB1A86D4C009FA5B51BBDF6E4952DBEFAFD8813F00E6E0AA"
+    },
+    {
+        "Relative":  "tests/locomotion_selftest.cpp",
+        "OriginalHash":  "7C471EE01D1526EF873B56F35E7962E62FBE6BB26E34D0C990F08F9922C4D5F5",
+        "ModifiedHash":  "A8B25C27960EE26BF40DA3994A01E0CC2A3CEA23E0B991C7AA0752F29CA8251B"
+    },
+    {
+        "Relative":  "tests/jump_arm_selftest.h",
+        "OriginalHash":  null,
+        "ModifiedHash":  "08137FB6DCD1B1556935BAD2BA5BF470D7BE5720F2F2B2075844AD3AEC0DDCCF"
+    },
+    {
+        "Relative":  "tests/jump_arms_selftest.cpp",
+        "OriginalHash":  null,
+        "ModifiedHash":  "01FAD77573E29C53E921D8611AF29ECEB16252F5CF4DE6714E826B8DFFE09517"
+    },
+    {
+        "Relative":  "tests/build_jump_arms.cmd",
+        "OriginalHash":  null,
+        "ModifiedHash":  "FBB5918F3F048F73DDB8071249D5CFDFA588058CCCED2AA587C2A98C761B92B3"
+    }
+]
