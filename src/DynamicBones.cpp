@@ -424,9 +424,11 @@ void LogCensus() {
 // --- the solver -------------------------------------------------------------
 
 void Solve(float dt) {
-    if (!g_haveThis) return;
+    if (!g_haveThis || !std::isfinite(dt) || dt<=0 || dt>.1f) return;
 
     const Config& c = Cfg();
+    if(!std::isfinite(c.dynamicBonesStiffness+c.dynamicBonesDamping) ||
+       c.dynamicBonesStiffness<=0 || c.dynamicBonesDamping<0) return;
     const Joint&  M = g_torsoThis;
 
     const float det = RotDet(M);
@@ -533,7 +535,7 @@ void Solve(float dt) {
             std::memcpy(g_bone[i].anchor, anchor, sizeof(anchor));
             std::memset(g_bone[i].vel,  0, sizeof(g_bone[i].vel));
             std::memset(g_bone[i].accS, 0, sizeof(g_bone[i].accS));
-            std::memset(g_bone[i].x,    0, sizeof(g_bone[i].x));
+            for (int a = 0; a < 3; ++a) g_bone[i].x[a] = gLocal[a] / c.dynamicBonesStiffness;
             std::memset(g_bone[i].v,    0, sizeof(g_bone[i].v));
             g_bone[i].live = true;
             continue;
@@ -553,7 +555,7 @@ void Solve(float dt) {
             std::memcpy(g_bone[i].anchor, anchor, sizeof(anchor));
             std::memset(g_bone[i].vel,  0, sizeof(g_bone[i].vel));
             std::memset(g_bone[i].accS, 0, sizeof(g_bone[i].accS));
-            std::memset(g_bone[i].x,    0, sizeof(g_bone[i].x));
+            for (int a = 0; a < 3; ++a) g_bone[i].x[a] = gLocal[a] / c.dynamicBonesStiffness;
             std::memset(g_bone[i].v,    0, sizeof(g_bone[i].v));
             if (i == 0) ++g_snaps;
             continue;
@@ -651,35 +653,39 @@ void Solve(float dt) {
         const float used = Len3(drive);
         if (used > g_peakUsed) g_peakUsed = used;
 
-        float accel[3];
-        for (int a = 0; a < 3; ++a) {
-            accel[a] = -k * g_bone[i].x[a]
-                       - damp * g_bone[i].v[a]
-                       - drive[a] * c.dynamicBonesDriveScale
-                       + gLocal[a];
-        }
-        if (constrain) ProjectOnto(accel, axis);
-
-        for (int a = 0; a < 3; ++a) g_bone[i].v[a] += accel[a] * dt;
-
-        // Landing: the torso stops dead and the bone carries on downward.
-        // Applied as a velocity kick rather than an acceleration so it lands
-        // in full on one frame, whatever that frame's dt happens to be.
+        // A single semi-implicit step becomes unstable during long VR
+        // frames: at k=630 and damping=9.5, a 75 ms frame adds energy.
+        // Subdivide elapsed time, with an additional stability bound for
+        // custom spring settings. Engine events/landing impulses happen once.
+        const float rate=std::fmax(240.f,damp+std::sqrt(k));
+        const float requested=std::ceil(dt*rate);
+        if(!std::isfinite(requested) || requested>4096) return;
+        const int steps=int(std::fmax(1.f,requested));
+        const float h=dt/steps;
         if (landImpulse != 0.0f) {
             for (int a = 0; a < 3; ++a)
                 g_bone[i].v[a] += downLocal[a] * landImpulse;
         }
-        if (constrain) ProjectOnto(g_bone[i].v, axis);
-
-        for (int a = 0; a < 3; ++a) g_bone[i].x[a] += g_bone[i].v[a] * dt;
-        if (constrain) ProjectOnto(g_bone[i].x, axis);
-
-        const float mag = Len3(g_bone[i].x);
-        if (mag > c.dynamicBonesMaxDisplace && mag > 1e-6f) {
-            const float s = c.dynamicBonesMaxDisplace / mag;
+        for(int substep=0;substep<steps;++substep) {
+            float accel[3];
             for (int a = 0; a < 3; ++a) {
-                g_bone[i].x[a] *= s;
-                g_bone[i].v[a] *= 0.5f;
+                accel[a] = -k * g_bone[i].x[a]
+                           - damp * g_bone[i].v[a]
+                           - drive[a] * c.dynamicBonesDriveScale
+                           + gLocal[a];
+            }
+            if (constrain) ProjectOnto(accel, axis);
+            for (int a = 0; a < 3; ++a) g_bone[i].v[a] += accel[a] * h;
+            if (constrain) ProjectOnto(g_bone[i].v, axis);
+            for (int a = 0; a < 3; ++a) g_bone[i].x[a] += g_bone[i].v[a] * h;
+            if (constrain) ProjectOnto(g_bone[i].x, axis);
+            const float mag = Len3(g_bone[i].x);
+            if (mag > c.dynamicBonesMaxDisplace && mag > 1e-6f) {
+                const float limit = c.dynamicBonesMaxDisplace / mag;
+                for (int a = 0; a < 3; ++a) {
+                    g_bone[i].x[a] *= limit;
+                    g_bone[i].v[a] *= 0.5f;
+                }
             }
         }
     }
@@ -1008,17 +1014,14 @@ bool DynamicBonesTorsoFrame(float out[12]) {
 }
 
 bool DynamicBonesLaraForward(float out[3]) {
-    const GameDllLayout* d = GameDllBound();
-    const uint64_t base = GameDllBase();
-    if (!d || !base || d->laraItem == 0) return false;
-    const uint64_t item = *reinterpret_cast<uint64_t*>(base + d->laraItem);
-    if (!item) return false;
-    const int16_t yrot = *reinterpret_cast<int16_t*>(item + kItemYRot);
-    // TR moves forward by x += sin(y_rot), z += cos(y_rot).
-    const float t = static_cast<float>(yrot) * (6.28318530718f / 65536.0f);
-    out[0] = std::sin(t);
-    out[1] = 0.0f;
-    out[2] = std::cos(t);
+    if (!g_settled || !g_boundDll) return false;
+    // Both axes must come from the SAME captured skin palette. Its matrices
+    // may carry a render rotation; comparing the chest with gameplay y_rot
+    // can reverse front/back and apply chest physics to Lara's back instead.
+    out[0]=g_best.joints[0].m[2];out[1]=g_best.joints[0].m[6];out[2]=g_best.joints[0].m[10];
+    const float length=Len3(out);
+    if(!std::isfinite(length) || length<1.e-6f) return false;
+    for(int a=0;a<3;++a) out[a]/=length;
     return true;
 }
 

@@ -1,0 +1,18 @@
+[
+  {
+    "Id": "456",
+    "Process": "tomb456",
+    "Directory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "Source": "C:\\dev\\TombRaider456VR\\build\\upjump-camera\\456\\bin\\TombRaiderVR.dll",
+    "Expected": "5D6B375DFEDCC72DBB8C2A3F94B0B0E39745EF8E74E9160A66D26248D5E6CF53",
+    "Previous": "0B8A0C1BBC75CEB28204733A39635A342BDF7B043B8D385A01F90AFA4CF31D11"
+  },
+  {
+    "Id": "123",
+    "Process": "tomb123",
+    "Directory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered",
+    "Source": "C:\\dev\\TombRaider456VR\\build\\standing-height\\123\\bin\\TombRaiderVR.dll",
+    "Expected": "A695619D12787ADBA6BF55336CBDC8D0F5A0FF64A52CDC4DEC10EEFDED9131D3",
+    "Previous": "0F757E20D0F0631E0682708318A369DBD8417B68FEC803DE31954D0C9D14DC75"
+  }
+]

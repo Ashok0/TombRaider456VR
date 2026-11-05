@@ -1,0 +1,29 @@
+{
+  "ReleaseBuilds": "Both Release/x64 builds passed",
+  "RegressionChecks": {
+    "456": 2475146,
+    "123": 1667562
+  },
+  "OpenGLChecks": {
+    "456": 16,
+    "123": 16
+  },
+  "Evidence": "Reported session log shows rising torso at fixed horizontal body offset. New regression catches measured chest in downward viewing column while old skeletal estimate reports clear.",
+  "Changes": [
+    "Measure actual torso-weighted mesh bounds in chest bind space",
+    "Protect eye and 18 cm downward column with 5 cm clearance margin",
+    "Preserve 12-degree bend limit and lower-body joints",
+    "Apply increasing contact correction immediately; smooth release",
+    "Cache mesh reads per model and buffer; restore GL state",
+    "Add per-session clearance diagnostics"
+  ],
+  "Preserved": [
+    "Standing height calibration",
+    "Body Position setting and fixed pelvis placement",
+    "Tracked hand targets",
+    "Jump-camera fix",
+    "INI settings"
+  ],
+  "InHeadsetTested": false,
+  "Limitations": "Conservative mesh bounds and a bounded bend, not unrestricted mesh collision. Classic or unsupported vertex layouts retain the skeletal fallback. Extreme overlap can exceed the bend limit."
+}

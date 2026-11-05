@@ -1,0 +1,20 @@
+﻿[
+    {
+        "Collection":  "456",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+        "SHA256":  "565BC1F6B38F61341A92FED359793AF78A8E1416BE49F9EA4FA6166A605461E2",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\chest-physics-stability\\before-install-20261104-182233\\456",
+        "INIUnchanged":  true,
+        "RenderChecks":  2475370,
+        "InHeadsetTested":  false
+    },
+    {
+        "Collection":  "123",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+        "SHA256":  "FF65C54605B5348C3F05597B388EF53777CCAC962594E4E9E1FBE38AA89F39C7",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\chest-physics-stability\\before-install-20261104-182233\\123",
+        "INIUnchanged":  true,
+        "RenderChecks":  1905,
+        "InHeadsetTested":  false
+    }
+]

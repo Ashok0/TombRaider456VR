@@ -1,0 +1,20 @@
+{
+  "BeforeFix": "FAIL: turned straight-up jump camera follows only the native vertical arc, never animated neck launch",
+  "AfterFixChecks": 2460374,
+  "Games": [
+    "TR4",
+    "TR5"
+  ],
+  "Coverage": [
+    "Partial stick headings and physical head turning",
+    "Ascent/apex/descent with native animated neck sway",
+    "Render interpolation fractions 0,64,128,192,256",
+    "Full-body IK on and off",
+    "Item position, animation and velocities unchanged by camera correction",
+    "Live headset poses unchanged",
+    "Opt-out and uncalibrated midair entry retain native behavior",
+    "Existing height calibration, arm attachment, jumping, body placement and holstering checks"
+  ],
+  "TR123": "Existing ordinary forward/up-jump camera path already includes states 3 and 28; no change installed",
+  "InHeadsetTested": false
+}

@@ -1,0 +1,23 @@
+{
+  "TR456GameplayChecks": 2400710,
+  "TR123GameplayChecks": 1650481,
+  "TR456ShippedShaderPairs": 480,
+  "TR123ShippedShaderPairs": 288,
+  "TR456ClearanceGLChecks": 3466,
+  "TR123ClearanceGLChecks": 1707,
+  "CapGeometryAndGLChecks": 2049,
+  "CapGLRenders": 20,
+  "ReleaseBuilds": "Both passed; pre-existing TR456 C4310 warning",
+  "InHeadsetTested": false,
+  "Behavior": "Render-only clearance plane below headset with opaque caps over closed chest cuts and hidden-head opening; body pose, calibrated height, collision and controller tracking unchanged",
+  "Limitations": "Dark cap can be visible when leaning into chest; non-manifold/open contours rejected rather than drawing unsafe fans",
+  "Coverage": [
+    "Camera inside chest on both stereo eyes",
+    "Blended neck geometry and helper joint mapping through joint 32",
+    "Per-vertex dynamic chest deformation included in cap positions/cache",
+    "Arms and hidden surfaces excluded",
+    "Inactive clearance preserves third-person/NPC pixels",
+    "Shipped shader compile/link tests for both collections",
+    "Existing body-height, view-toggle, arms, jumping and holstering regression suites"
+  ]
+}

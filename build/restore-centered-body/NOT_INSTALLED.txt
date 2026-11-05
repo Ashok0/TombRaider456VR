@@ -1,0 +1,1 @@
+Provisional rollback was not installed. The subsequently available game log showed zero torso bend during the persistent 10 cm lateral displacement. Final fix: build/body-center-reference, which retains torso clearance and corrects the captured lateral body reference.

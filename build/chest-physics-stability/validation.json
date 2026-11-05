@@ -1,0 +1,22 @@
+{
+  "Evidence": "Reported log hit 40-unit displacement clamp while grounded and drive_used=0. Production solver regression with k=630,damping=9.5 and 75-95 ms frame times failed before fix: a one-unit disturbance amplified instead of decaying.",
+  "Changes": [
+    "Subdivide spring integration at 240 Hz or finer for custom stiffness/damping",
+    "Apply landing impulses once per frame, not once per substep",
+    "Start/reset TR4/5 spring at equilibrium, matching existing TR1-3 behavior",
+    "Reject invalid elapsed time or invalid spring parameters"
+  ],
+  "Verification": {
+    "TR45": "Full existing regression suite passed plus production spring checks at 10,12,20,60,90,120 Hz; sampled landing response matches analytic damped spring within 1 game unit; irregular-frame rest and camera-reset checks pass.",
+    "TR123": "1905 physics/shader checks passed; 288 native hand shader pairs and actual engine shader sources compiled.",
+    "Builds": "Both Release/x64 builds passed."
+  },
+  "Preserved": [
+    "INI physics strength and tuning",
+    "Body-centering correction",
+    "Torso-clearance correction",
+    "Height calibration",
+    "Jump-camera correction"
+  ],
+  "InHeadsetTested": false
+}

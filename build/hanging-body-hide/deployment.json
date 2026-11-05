@@ -1,0 +1,20 @@
+﻿[
+    {
+        "Collection":  "123",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+        "SHA256":  "BE351AC6CE260B5EF6D287FB4319C8EC6098D663135591D34B8E7E102CBC57DB",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\hanging-body-hide\\before-install-20261104-092916\\123",
+        "INIUnchanged":  true,
+        "RenderChecks":  1650403,
+        "InHeadsetTested":  false
+    },
+    {
+        "Collection":  "456",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+        "SHA256":  "82132DF49FF1ADD8D8DE051A2C3A69BF47AE52D6AA3B0B5E2C333946C14B3B15",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\hanging-body-hide\\before-install-20261104-092916\\456",
+        "INIUnchanged":  true,
+        "RenderChecks":  2400640,
+        "InHeadsetTested":  false
+    }
+]

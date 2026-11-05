@@ -1,0 +1,36 @@
+{
+  "Evidence": "User confirms entire upper torso rises on standing; captured session has near-upright chest about 28-32 cm below the eyes versus about 47 cm in the bent pose.",
+  "Changes": [
+    "Refine automatic visual scale once from measured collar bounds at full leg extension",
+    "Target 25 cm neutral eye-to-collar clearance; limit additional uniform reduction to 15%",
+    "Keep a fixed posture eye reserve so head following cannot lift the smaller torso back up",
+    "Manual body scale bypasses the refinement"
+  ],
+  "Verification": {
+    "TR45": 2475452,
+    "TR123": 1667741,
+    "Coverage": [
+      "Measured torso fitting through actual render hook",
+      "Standing chest lower; knees nearly straight and feet on original floor",
+      "Tracked wrists exact; scene camera unchanged",
+      "Fit remains fixed across head movement",
+      "Existing body centering, sidearm, holster, jumping and landing regressions",
+      "TR4/5 spring stability regression retained"
+    ],
+    "Builds": "Both Release/x64 builds passed; pre-existing TR4/5 C4310 warning remains."
+  },
+  "Preserved": [
+    "INI settings",
+    "Headset camera height",
+    "Body forward offset",
+    "Connected arms and controller targets",
+    "Stable chest physics",
+    "Native gameplay collision"
+  ],
+  "Limitations": [
+    "Visual body proportions are preserved by uniform scaling, so Lara may appear modestly smaller",
+    "25 cm target is limited by the 15% reduction cap; arbitrary leaning is not guaranteed clear",
+    "No in-headset verification"
+  ],
+  "InHeadsetTested": false
+}

@@ -35,6 +35,9 @@ const float* FirstPersonBodyPalette(uint64_t& mask,int& count);
 const float* FirstPersonRenderBodyPalette(uint64_t& mask,int& count);
 // Hidden wrist palette slots whose mixed costume/forearm surfaces remain visible.
 bool FirstPersonBodyClearance(float out[4],uint64_t& mask);
+bool FirstPersonTorsoMeasureInfo(float inverse[12],uint64_t& mask,bool& measured);
+bool FirstPersonTorsoBufferKnown(unsigned buffer);
+void FirstPersonTorsoMeasure(unsigned buffer,const float low[3],const float high[3],unsigned vertices);
 uint64_t FirstPersonBodyWristSeamMask();
 // Render-scoped rigid floating-hand palette and anatomical cap centre.
 const float* FirstPersonSealedHandSkin(int& joint,float centre[3]);

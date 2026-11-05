@@ -114,7 +114,8 @@ bool DynamicBonesWorldOffset(float out[3]);
 // first body draw of the session.
 bool DynamicBonesTorsoFrame(float out[12]);
 
-// Lara's facing as a world-space unit vector, from lara_item->pos.y_rot.
+// Model forward from the captured root skin matrix, in the torso palette's
+// render frame. Never compare this palette with gameplay-world y_rot.
 bool DynamicBonesLaraForward(float out[3]);
 
 // Put the solved displacement into the joint palette the draw is about to

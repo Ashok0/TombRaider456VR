@@ -1,0 +1,34 @@
+{
+  "Evidence": [
+    "Reported run: running chest ~63-65 cm below eyes versus standing ~42-46 cm; running knees ~80-98 degrees while posture drop ~0.05 m.",
+    "Reported run selects local -Z for chest front, while earlier working sessions select +Z; landing springs remain active at ~26-unit peak."
+  ],
+  "Changes": [
+    "Apply the existing neck-arc posture compensation to the moving/bent body target, keeping actual tracked camera/head unchanged.",
+    "Derive front direction from root and torso in the same captured native skin palette, removing the comparison with gameplay-world facing.",
+    "Keep the successful upright size fit and all spring strength/damping parameters."
+  ],
+  "RegressionEvidence": [
+    "The new running/looking-down test fails before the pose correction and passes after it.",
+    "The old physics direction code reproduces an incorrect -Z front at a rotated render heading; the corrected code remains +Z.",
+    "Actual OpenGL rendering confirms a scaled front chest vertex moves under spring displacement and the corresponding back vertex remains still."
+  ],
+  "Verification": {
+    "TR45PoseChecks": 2475482,
+    "TR123PoseChecks": 1667786,
+    "GPUChecksPerCollection": 24,
+    "TR123PhysicsShaderChecks": 1910,
+    "NativeHandShaderPairs": 288,
+    "ReleaseBuilds": "Both Release/x64 builds pass; pre-existing TR4/5 C4310 warning remains.",
+    "Whitespace": "git diff --check passed"
+  },
+  "Preserved": [
+    "Standing body scale and collar clearance fit",
+    "Headset camera height and full head tracking",
+    "Body forward position",
+    "Physical crouching and native leg animation",
+    "Tracked hand/arm targets",
+    "Stable spring integration and existing INI tuning"
+  ],
+  "InHeadsetTested": false
+}

@@ -1,11 +1,387 @@
-## Tomb Raider IV-VI Remastered VR Mod
-Native stereo 6DOF VR mod for Tomb Raider IV-VI Remastered. TR4/5 can be toggled
+# Tomb Raider IV-VI Remastered VR Mod
+Native stereo VR with six degrees of freedom for Tomb Raider IV-VI Remastered. TR4/5 can be toggled
 between third and first person; first person supports motion controllers, working
 scopes and roomscale movement. TR6 uses a different engine and remains third-person
 only. TR1–3 support is provided by the separate
 [TombRaider123VR mod](https://github.com/Ashok0/TombRaider123VR).
 
+[Features](#vr-mod-features) | [Controls](#controls) | [Installation](#installation) | [VR Options](#vr-options)
+
+## VR Mod Features
+
+This section describes the current mod behavior as of **November 4, 2026**.
+The dated development notes farther down record earlier implementations and
+experiments; use this section and [Controls](#controls) for the current defaults.
+
+### Game and graphics support
+
+| Capability | TR4: The Last Revelation / TR5: Chronicles | TR6: The Angel of Darkness |
+|---|---|---|
+| Stereo VR and positional head tracking | Supported in Classic and Remastered graphics | Supported through a separate renderer integration |
+| Third-person play | Supported; the starting view | Supported; the only view mode |
+| First-person play | Toggle during play; also available with Classic graphics | Not implemented |
+| Controller-driven weapons, tracked arms and full-body IK | Remastered graphics; Classic retains the head-aim/native-body path | Not implemented |
+| Physical object interactions and holster gestures | Supported interactions in Remastered first person | Native game interactions |
+| Native VR Options menu | Available from the title screen and in game | Available; TR4/5-only settings are identified |
+
+TR1–3 use the separate [TombRaider123VR mod](https://github.com/Ashok0/TombRaider123VR).
+The controls and capabilities documented here belong to the TR4–6 mod.
+
+### Stereo rendering, head tracking and presentation
+
+The mod uses OpenVR/SteamVR to render a separate view for each eye and supports six degrees of freedom:
+head rotation plus positional movement. Third-person head tracking lets you look
+around Lara and lean within the scene. World scale and eye separation can be
+adjusted independently, with live keyboard controls for comparing settings.
+
+VR-specific rendering fixes cover room and object visibility, camera offsets,
+sky and horizon depth, shadows, HUD placement and supported optics overlays.
+Skies remain at a distant depth instead of moving with nearby geometry. Menus,
+subtitles and video presentation have dedicated handling so they remain readable
+in the headset. TR6 has its own scene, effects and shadow integration rather than
+using the TR4/5 first-person renderer.
+
+The mod supports motion controllers and a conventional gamepad. Meta Touch-style
+input is the default. An optional SteamVR Input profile provides Valve Index
+buttons, sticks, triggers, squeeze grips and haptics. See
+[Valve Index controllers](#valve-index-controllers) for setup and binding details.
+
+### First-person movement and camera behavior: TR4/5
+
+Switch between third and first person with **Y + LT**. The game starts in third
+person. Switching views also recalibrates the local head/controller reference,
+so face your intended forward direction when changing modes.
+
+First person combines stick movement, smooth stick turning, physical turning and
+roomscale movement. It temporarily uses Modern Controls while preserving the
+third-person control preference. Head movement remains live while ground-camera
+stabilization reduces animation-driven bob and sideways drift. Roomscale movement
+uses native collision checks; stepping beyond supported ground can produce a
+normal in-game fall.
+
+Jump preparation and ordinary landing recovery are shortened for responsive VR
+movement. Native jump trajectories, collision checks and hard-fall behavior remain.
+Directional jumps retain their intended direction, and holding Jump while moving
+forward provides the running ledge-jump assist. Stick turns and roomscale movement
+use a consistent airborne body position, without requiring a full turn to recenter.
+
+Ledge and ladder cameras have separate handling for close geometry. The TR4/5
+stop-to-hang transition turns the view with Lara's animated turn so it faces her
+hands. Finishing a mount blends back to the standing camera while head tracking
+stays responsive.
+
+Some sequences temporarily use third person: swimming, cutscenes, native
+switch-use and key/puzzle-item insertion animations, and TR5 X-ray sequences.
+First person resumes when the supported gameplay state returns. Physical
+interactions use their own paths, described below.
+
+### Tracked body, connected arms and visibility: TR4/5 Remastered
+
+Full-body inverse kinematics (IK) uses the headset and controllers to infer Lara's
+torso, hips and limbs; additional body trackers are not required. Standing feet
+use the animated foot targets, while airborne legs retain the native animation.
+Unarmed hands keep their relaxed hand shape through running and jumping.
+
+Tracked shoulders remain attached to the rendered torso, including through jump
+and landing transitions. Hands and weapons retain their controller positions and
+rotations. Reachable poses keep their normal proportions. Beyond Lara's natural
+reach, the arm bones extend only as needed, with a small bend allowance; hand size,
+weapon size and arm thickness remain unchanged. Very close reaches fold smoothly.
+This prioritizes connected shoulders and accurate hand placement over perfectly
+rigid arm lengths at extreme reaches.
+
+Sidearm equip and unequip animations visibly move the arms to and from the
+holsters, with smooth transitions back to controller tracking. Physical holster
+gestures retain direct hand control. Climbing hands stay on their native ledge,
+ladder or monkey-bar contacts, rather than following free controller movement.
+
+Body visibility depends on the action:
+
+- **Ordinary movement:** the fitted body and tracked arms are visible, with the
+  head hidden by default.
+- **Hanging, shimmying and monkey bars:** arms and hands remain visible; torso and
+  legs are hidden to prevent looking inside the mesh.
+- **Ledge mounts and other close transitions:** hands-only rendering is used where
+  required. Arms return as upright movement resumes; torso recovery has its own hold.
+- **Crouching/crawling and directional jumps:** protective body restrictions apply
+  while supported tracked hands remain available.
+- **Rolls and running somersaults:** the body is hidden in first person.
+
+**Body Position** in VR Options moves the visible first-person body from its
+default fit up to 20 cm forward. Movement stabilization keeps the ground body from
+sliding backward as Lara stops. This visual offset does not move the camera,
+controllers or collision body. A local headset-clearance cutout trims nearby body
+surfaces, but does not seal mesh interiors; hanging therefore keeps the visibility
+restriction above.
+
+Automatic body sizing also checks the visible collar with the legs fully
+extended. It targets 25 cm of room below the standing eye position, reducing
+the rendered body uniformly by at most 15% from its initial height fit. This
+keeps the standing torso lower while preserving proportions and floor contact.
+The fit stays fixed until recentering or a model change; looking down does not
+repeatedly resize Lara. Camera height and controller targets are unchanged.
+An explicit `FirstPersonBodyScale` value bypasses this automatic refinement.
+Looking down uses the same neck-arc compensation while standing, running and
+crouching, so the moving torso does not sink by the headset's neck-rotation arc.
+Real crouching still lowers the body.
+
+Full-body IK measures the rendered torso mesh and checks clearance after
+applying Body Position. The check includes the short space below the eyes, where
+straightening the legs can bring the upper chest into the downward view even
+when the eye itself is outside the mesh. A bounded upper-body bend (at most
+12 degrees) preserves the hips, planted feet and standing height; shoulders
+follow the torso and the arms solve back to the controllers. The correction
+keeps up with the rising torso and eases back when clear. Extreme leaning can
+still exceed this posture limit. Before mesh measurements are available, the
+skeleton-based guard remains the fallback. The near-eye emergency trim stays at
+3 cm while torso correction is active. No caps or opaque replacement surfaces
+are added.
+
+Physical crouching is enabled by default. Lowering the headset bends the inferred
+body; a deeper crouch requests Lara's native crouch, and standing again releases it
+when clearance permits. Recenter while upright to establish the intended standing
+height. Full-body IK and positional tracking are required for this feature.
+
+### Weapons, aiming, flares and feedback: TR4/5 Remastered
+
+Supported weapons follow the controllers in first person. Pistols and Uzis can be
+aimed and fired independently with the two hands; single weapons use the right
+controller. Native ammunition, reload/animation timing and weapon availability
+remain in effect. Gunfire provides controller haptics.
+
+Weapons can be drawn with LT and holstered with Y, or handled through supported
+physical holster zones. Sidearms use the thigh/hip holsters; long weapons use the
+back location. The rendered holsters follow Lara's fitted body.
+
+Attached laser sights on the revolver, Desert Eagle and crossbow project into the
+world from the weapon. The TR5 HK has a working VR scope and does not project a
+laser. Optics handling removes supported flat-screen masks/tints and provides
+appropriate head positioning for the scoped view.
+
+A held flare and its light follow the left controller. Swinging the left hand can
+throw a lit flare with a physical trajectory; no release button is required.
+Ledge catches after substantial jumps also provide brief feedback in both hands.
+
+### Physical interactions: TR4/5 Remastered
+
+With weapons holstered, supported objects can be operated directly in first
+person. **Right grip** grabs handles; **either hand** can touch supported buttons
+and screens. The Action icon does not need to be visible, and native Y/Action
+remains available for normal game interaction.
+
+| Object | Physical action | Coverage |
+|---|---|---|
+| Wall levers | Grip the handle and move it through its arc | TR4/5, including TR5 VCI lever variants |
+| Floor/rail levers | Grip the handle end and flip it through its travel | TR4, including Desert Railroad |
+| Pegged cog wheels | Grip a peg, pull around the axle, release and regrip | Supported TR4/5 mechanisms |
+| Wall valves | Grip the rim and rotate; regrip as needed | Supported TR5 valves |
+| Mechanism pulleys, chains and ropes | Grip and pull down; repeat strokes as required | Supported TR4/5 mechanisms |
+| Inserted crowbar switches | Insert normally, then grip and pry the crowbar downward | TR4 switch sockets; not crowbar doors |
+| Searchable drawers and cabinets | Grip a handle to open or close | Supported TR5 containers; loot remains native |
+| Wall, sequence and elevator buttons | Touch the button face or supported panel | TR4/5 buttons and TR5 elevator panels |
+| Interactive monitors | Touch the screen | Supported TR5 RICH1/RICH2 screens |
+| Numeric puzzle keypads | Touch individual keys, Clear and Enter | TR5 RICH1/RICH2; pressed keys light green |
+
+Button and keypad activations give a short right-controller vibration, including
+when the left hand presses. Supported mechanisms can retain partial travel while
+you regrip, but these previews are not additional saved-game state. Unsupported
+object variants, underwater/jump switches, climbable ropes and other native-only
+interactions keep their normal controls. See [Current interaction coverage](#current-interaction-coverage)
+for object-specific details and exclusions.
+
+### Inventory, VR Options and visual extras
+
+TR4/5 can display the inventory ring at eye height in front of your horizontal
+facing, with level text and a stereo view of the paused world behind it. Opening
+the inventory establishes its placement; looking around does not tilt the text.
+
+Open **Options > VR Options** from the title screen or in-game menu. Changes save
+to the installed INI without requiring a return to the title screen.
+
+| Setting | Choices | When it applies |
+|---|---|---|
+| Controller Type | Meta Touch / Valve Index | Restart required |
+| Color Scheme | Dark / Brighter | Immediately |
+| Hybrid Modern/Tank Controls | Off / On | Immediately; optional TR4/5 third-person backward hop |
+| Body Position | Default (0 cm) to 20 cm forward, in 1 cm steps | Immediately; TR4/5 first-person body only |
+
+Dark, Meta Touch, Hybrid Off and Body Position 0 cm are the defaults for new or
+missing settings. Existing explicit INI values are preserved. The menu backs up
+the previous configuration when saving. Further settings in `TombRaiderVR.ini`
+control world scale, IPD, rendering resolution, turning speed, roomscale, body IK,
+physical crouching and other optional features. See [VR Options](#vr-options).
+
+Chest physics determines the front from the root and torso in the same rendered
+frame. Turning or changing camera orientation cannot redirect bounce to the back
+of the mesh. Spring strength and damping remain controlled by the existing INI.
+
+Additional visual work includes TR4/5 chest physics adapted from TR6's dynamic
+bones, TR4 sunray and smoke/fire/spray/splash enhancements, controller-arm shadow
+support, and verified TR4/5 mirror handling. These are game- and renderer-specific
+features; they do not imply that every effect or mirror in every level has been
+validated in VR.
+
+## Controls
+
+These are the default **motion-controller** bindings. Face-button names refer to
+Meta Touch: **A/B are on the right hand; X/Y are on the left**. **LS/RS** mean the
+left/right stick; **L3/R3** mean clicking those sticks. **LG/RG** are the left/right
+grips, and **LT/RT** are the left/right triggers. An Xbox-style gamepad retains the
+game's native mapping; its face-button prompts are not a one-to-one description
+of the physical Touch buttons.
+
+### Movement and common actions
+
+| Action | Motion-controller input | Notes |
+|---|---|---|
+| Move | LS | First person uses view-relative movement with the default settings |
+| Look / turn | RS | Horizontal input turns; look up/down with your headset |
+| Walk | Hold RG + move LS | Native walking by default |
+| Sprint / dash | L3 while moving | Subject to the game's movement state |
+| Jump | A | Hold while moving forward for the TR4/5 running ledge-jump assist |
+| Action / use / grab | Y, or both grips together | Both-grip Action applies during gameplay; physical grabs can take priority |
+| Roll | B | Also performs the supported native midair reversal during forward/backward jumps |
+| Crouch / duck | LG | Physical crouching is also available in TR4/5 first person |
+| Ledge grab / hang | RT when the native grab action is available | Walk + RT can enter the supported stop-to-hang transition |
+| Drop from a ledge | B | Native release behavior |
+| Mount a ledge physically | Pull both controllers down together | TR4/5 first person, while hanging |
+| Photo Mode | L3 + R3 | Opens the game's native Photo Mode |
+| D-pad input | Hold R3 and move LS | Used for directional menu/Photo Mode selections; does not also move Lara |
+| Look / zoom command | R3 without moving LS | Context-dependent native look/zoom action |
+| Adjust camera pitch manually | Hold RT + RG and move RS vertically | Temporarily releases decoupled pitch; Shoot/Walk remain active |
+| Sneak | RG + Y | TR6 |
+
+The game still decides whether a jump, backflip, dive, roll or climb is available
+in the current state. For directional jumps, use LS with A; drawn weapons retain
+the game's directional-jump behavior. B can add the supported midair turn.
+Swimming and zoomed optics restore their required native pitch controls.
+
+**Optional third-person backward hop:** enable **Hybrid Modern/Tank Controls** in
+VR Options, then hold RG and push LS backward in TR4/5 third person. No Jump press
+is needed. With Hybrid Off, Walk + backward retains native movement, including
+walking toward the camera with Modern Controls. This option does not change
+first-person controls or TR6 movement.
+
+### View, graphics and recentering
+
+| Action | Input | Availability |
+|---|---|---|
+| Toggle first/third person | Y + LT | TR4/5; also recalibrates the local head/controller reference |
+| Toggle Classic/Remastered graphics | Y + RT | TR4/5 gameplay; also supported in TR4–6 title menus |
+| Recenter through the VR runtime | Use the headset/runtime recenter command | On supported Touch runtimes, hold the right System button; the mod follows the resulting origin reset |
+| Recenter from the keyboard | Numpad 5 | Reanchors the view; also recenters the spatial inventory |
+| Recalibrate first-person position/height | End | TR4/5 first person |
+
+Stand upright and face forward when calibrating first-person height. The right
+System button belongs to the VR runtime, so its exact gesture depends on the
+headset/runtime. It is separate from the left-hand X inventory/menu button.
+TR6 has no first-person toggle. In TR6, or with the first-person feature disabled,
+holding Y + LT for the configured interval (1 second by default) sends the native
+Start/Menu command instead.
+
+### Weapons and physical holsters
+
+The first-person weapon controls below describe **TR4/5 Remastered motion-gun
+mode**. Classic graphics and third person use the native/head-aim weapon path.
+
+| Action | Input |
+|---|---|
+| Draw the selected weapon in first person | Press LT while unarmed; release before using it to fire |
+| Holster through the normal animation | Press Y while armed |
+| Fire the left pistol/Uzi | LT |
+| Fire the right pistol/Uzi or a single weapon | RT |
+| Continue firing | Hold the appropriate trigger; native fire rate still applies |
+| Equip in third person | Hold LT with the default native control setup |
+| Shoot in third person | RT |
+| Change ammunition | X while a weapon is equipped, where the weapon/game supports it |
+| Draw from a physical holster | Reach to a supported holster, squeeze that hand's grip, and pull away while holding it |
+| Stow in a physical holster | Grip the weapon, return the hand to its matching holster and release the grip there |
+| Throw a held lit flare | Swing the left controller; no release button |
+
+Sidearm holsters are near the upper outside thighs; long weapons are reached over
+the shoulder at the back. Each supported dual-wield hand can be drawn/stowed
+separately; single weapons belong to the right hand. Physical holsters require
+valid controller tracking and an eligible standing/moving state. LT/Y remain
+available as the normal equip/holster controls.
+
+### Menus, inventory and settings
+
+| Action | Input |
+|---|---|
+| Open inventory/menu | X; holster weapons first to avoid the ammunition shortcut |
+| Navigate the spatial inventory | Release the opening button, then use LS |
+| Select / use an inventory item | A |
+| Back / close a menu | B |
+| Send D-pad navigation | Hold R3 + move LS |
+| Open VR settings | Choose **Options > VR Options** from the title or in-game menu |
+| Select a VR Options row | Up/Down |
+| Change its value | Left/Right or Select |
+| Adjust Body Position | Left/Right changes 1 cm; Select restores 0 cm |
+
+The TR4/5 spatial inventory pauses gameplay while rendering the world behind it.
+TR6 keeps its native inventory presentation. Controller Type needs a restart;
+Color Scheme, Hybrid Controls and Body Position apply immediately where supported.
+
+### Valve Index equivalents
+
+Select **Valve Index** in VR Options, restart, and keep the shipped
+`TombRaiderVRBindings` folder beside the DLL. Index uses the same actions, with the
+following physical equivalents:
+
+| Touch label used above | Valve Index equivalent |
+|---|---|
+| A / B | Right A / B |
+| X / Y | Left A / B |
+| LT / RT | Left / right trigger |
+| LG / RG | Left / right grip squeeze |
+| LS / RS and L3 / R3 | Corresponding thumbstick and click |
+
+Trackpads are unbound in the supplied profile. Squeeze thresholds can be adjusted
+in the INI; SteamVR's binding editor can remap the named actions. Physical Index
+hardware validation remains outstanding. See [Controller troubleshooting with F7](#controller-troubleshooting-with-f7)
+if input is missing or mapped incorrectly.
+
+### Keyboard tuning and diagnostics
+
+| Key | Function |
+|---|---|
+| `Numpad +` / `Numpad -` | Increase / decrease the world-units-per-metre setting |
+| `Numpad *` / `Numpad /` | Increase / decrease IPD scale independently of world scale |
+| Numpad 0 | Restore world/IPD tuning to the INI values |
+| Numpad 5 | Recenter the view |
+| End | Recenter and recalibrate TR4/5 first person |
+| F7 | Start a 20-second controller diagnostic; press again to stop early |
+| Ctrl + F1 / F2 | Decrease / increase the tracked weapon's horizontal offset |
+| Ctrl + F3 / F4 | Decrease / increase its vertical offset |
+| Ctrl + F5 / F6 | Move the weapon mesh backward / forward |
+| Ctrl + Shift + F1 / F2 | Decrease / increase weapon yaw |
+| Ctrl + Shift + F3 / F4 | Decrease / increase weapon pitch |
+| Ctrl + Shift + F5 / F6 | Decrease / increase weapon roll |
+| Ctrl + F7 | Save the current weapon calibration to the INI |
+| Ctrl + Shift + F7 | Restore the last loaded/saved weapon calibration |
+
+Weapon calibration requires a supported weapon drawn in first-person motion-gun
+mode, the game window focused, and calibration hotkeys enabled. Position steps are
+6.35 mm; angle steps are 1 degree. F7 without modifiers records diagnostics and
+does not change calibration. The log is `TombRaiderVR.log` beside the DLL; retain
+it before relaunching because a new launch replaces it.
+
 ## Recent updates
+
+### Connected arms and hanging visibility (2026-11-04)
+
+In TR4/5 first person, tracked arms now keep their shoulders attached to the
+rendered torso, including during jump and landing smoothing. Hands and weapons
+retain their controller positions and orientations. Reachable poses retain their
+normal proportions; reaching beyond Lara's arm length extends the arm bones only
+as required, preserving mesh thickness and hand/gun size. Close reaches fold
+smoothly, and holster transitions preserve the connected arm shape.
+
+Ledge hangs, shimmies and supported monkey-bar traversal use arms-only rendering
+again: the camera-clearance cutout cannot seal the body's exposed interior.
+The connected-arm fix remains active, and native grip contacts and climbing
+physics are unchanged. Existing head hiding, mount/crouch restrictions and
+somersault hiding remain. Changes are visual only; no INI reset is required.
 
 ### Jump body centering after VR turns (2026-11-04)
 
@@ -17,9 +393,9 @@ native joint rotations, jump height, controller targets and gameplay collision.
 This works with full-body IK enabled or disabled; it requires movement
 stabilization and positional head tracking. No 360-degree turn or recenter is needed.
 
-Current behavior reviewed through **2026-11-02**, covering the past week's changes
-(October 26–November 2). This summary takes precedence over older development
-snapshots below. The game starts in third person; **Y + LT** toggles first person
+The following dated summary covers changes through **2026-11-02**
+(October 26 to November 2). The [VR Mod Features](#vr-mod-features) and
+[Controls](#controls) sections above take precedence over these older snapshots. The game starts in third person; **Y + LT** toggles first person
 in TR4/5. Features below apply to TR4/5 unless a narrower game scope is given.
 
 | Area | Current behavior |
@@ -158,11 +534,13 @@ All four rows display their current selected value on the native page.
 - **Body Position:** Default (0 cm) through 20 cm forward, in 1 cm steps.
   Left/Right adjusts the visible first-person body in TR4/5 immediately; Select restores
   the exact default. With movement stabilization enabled, ground movement and stopping
-  keep the pelvis and chest at this position without the native run/stop torso
-  blend or idle settling. Real headset movement and physical crouching remain active. Camera, controller wrists
-  and collision remain in place. A 20 cm clearance volume around the headset
-  trims nearby body surfaces so the view cannot fill with the inside of the torso;
-  tracked arms/hands are excluded. Shadows and third-person rendering stay native.
+  keep the pelvis at this position without the native run/stop torso
+  blend or idle settling. Upper-torso clearance can add a small bend above the hips. Real headset movement and physical crouching remain active. Camera, controller wrists
+  and collision remain in place. The near-eye trim uses a 3 cm radius when
+  full-body torso correction is active, with the existing 20 cm fallback otherwise.
+  This trims nearby body surfaces; it does not seal exposed mesh interiors. Hanging
+  uses arms-only visibility, and tracked arms/hands are excluded from the cutout.
+  Shadows and third-person rendering stay native.
 
 Changes save automatically to `ValveIndexControllers`, `VRBrighterColors`,
 `HybridModernTankControls` and `FirstPersonBodyForwardCm` in the
@@ -174,31 +552,6 @@ up as `TombRaiderVR.ini.vr-options.bak`. Index mode uses the existing
 
 ## AI Usage
 Claude Code was used heavily in the development of this mod.  AI was used to reverse engineer the game with Ghidra, explore strategies for porting the game to VR, and write code, and iterate on failures.  I used the AI to probe the game logic so I could debug the game in real-time and make architectural decisions when Claude was otherwise determined to make incorrect decisions. OpenAI Codex was used for adding VR support to Angel of Darkness which runs off a modified version of Core Engine. 
-
-## VR Mod Features
-
-* Native stereo with 6DOF
-* First person mode in TR4/5, with motion controls, roomscale movement and functional scopes. Swimming, cutscenes, native switch-use and key/puzzle-item insertion animations, and TR5 X-ray sequences temporarily use third person; physical interactions use their own paths described above.
-* Full-body VRIK in TR4/5 HD first person using headset and controllers: inferred torso/hips, leg IK on animated foot targets, and arms sharing the gun wrist calibration.
-* Ledge and monkey-bar arms retain animated hand contacts throughout traversal. Torso movement respects both arms' reach, elbows remain stable near full extension, and released hands blend back to controller tracking over 180 ms. Native climbing grips remain available if controller tracking briefly drops out.
-* With first-person movement stabilization enabled, finishing a crate vault or ledge pull-up eases the camera back to its saved standing position over 180 ms. Headset tracking stays immediate, collision clearance remains active, and jumping or starting another climb cancels the handoff.
-* During an actual mount, only the hands remain visible, with opaque black wrist caps. Arms return on the first standing or ground-movement frame, even while the camera/torso/wrist recovery continues. Walking or turning immediately after a climb keeps them visible. The original shoulder/elbow recovery timing and 180 ms wrist handoff are retained; torso visibility keeps its existing recovery protection. This applies only to first person.
-* TR4/5 spatial inventory at eye height, with level text and a freshly rendered stereo world behind it (gameplay remains paused).
-* World-space laser sights for the revolver, Desert Eagle and crossbow with an attached sight; the HK uses its scope without a projected laser.
-* First-person sidearm draw/holster animations play for LT/Y, with smooth handoffs to controller tracking. Physical holster-zone grabs stay tracked.
-* Culling fixes for VR
-* Camera fixes for VR
-* Vignettes removed 
-* UI fixes
-* FMV fixes
-* Gamepad and VR controller support
-* Two-hand pull-down gesture to mount a ledge in TR4/5 first person.
-* Brief maximum-strength rumble in both controllers when catching a ledge after a substantial jump in TR4/5 first person.
-* Dpad input support
-* Decoupled pitch
-* Sky dome fixes
-* Chest physics in TR1-5 ported from TR6's dynamic bones
-* Enhanced sunrays and smoke/fire/spray/splash FX
 
 ## Valve Index controllers
 
@@ -292,50 +645,6 @@ C:\Program Files (x86)\Steam\steamapps\common\Tomb Raider IV-VI Remastered
 
 **2. Launch the game**
 Start Tomb Raider IV-VI Remastered through Steam as normal.
-
-## Controls
-
-Motion-controller labels below use Meta Touch face-button names. **RG** means
-right grip and **LG** means left grip; LT/RT are the triggers. See the Index
-table above for its equivalent face buttons.
-
-| Action | Control |
-|---|---|
-| Move | Left Stick (LS) |
-| Walk | RG + LS; native movement by default, including towards the camera with Modern Controls |
-| Backward Hop (TR4/5, third person only; optional) | Enable `HybridModernTankControls=1`, then RG + LS down; no Jump button |
-| Dash | L3 |
-| Look | Right Stick (RS) |
-| Zoom | R3 |
-| Jump | A |
-| Action | Y or both grips |
-| Toggle Classic Graphics | Y + RT; also works in TR4–6 title menus |
-| Toggle First Person (TR4/5 only) | Y + LT; also recalibrates head/controller heading and position |
-| Equip Weapon (Third Person) | LT (Hold) |
-| Equip Weapon (First Person; TR4/5 only) | LT (Press while unarmed) |
-| Holster Weapon (First Person; TR4/5 only) | Y |
-| Shoot (Third Person) | RT |
-| Shoot (First Person; TR4/5 only) | LT and/or RT |
-| Roll | B |
-| Duck | LG; physical crouching is also enabled by default in TR4/5 first person |
-| Photo Mode | L3 + R3 |
-| Photo Mode Select | R3 (Dpad) + LS |
-| Ledge Grab | RT |
-| Mount Ledge (First Person; TR4/5 only) | Pull both controllers down together |
-| Ledge Drop | B |
-| Side Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) |
-| 180 Frontflip/Backflip | Equip Weapon (LT) + Jump (A) + Move (LS) + Roll (B) |
-| Swan Dive | Jump (A) + Move (LS) + Roll (B) |
-| Recenter Camera + Calibrate First-Person Height | Right System (hold for the runtime recenter) |
-| Adjust Camera Pitch | RT + RG + RS |
-| Menu | X |
-| Spatial Inventory (TR4/5) | X with weapons holstered opens a level, eye-height ring ahead of your horizontal facing; release, then LS navigates, A selects/uses, B backs out |
-| Change Ammo  | X + Weapon equipped |
-| Sneak (TR6 only) | RG + Y |
-| Physical lever/wheel/container | RG on a supported handle in first person; see interaction coverage |
-| Physical button/monitor/keypad | Touch with either controller in first person; numeric keypads require Remastered graphics |
-| Throw lit flare physically (TR4/5) | Swing the left controller in Remastered first person; no release button |
-
 
 ## Development Notes
 

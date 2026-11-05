@@ -16,7 +16,8 @@ struct BodyFollowSettings {
 // degree of freedom: ducking, walking and leaning must never shrink the body.
 struct BodySizeCalibration {
     bool valid=false;
-    float factor=1,units=0;
+    float factor=1,units=0,standingStature=0,eyeGap=0;
+    bool torsoFitted=false;
     void Reset() { *this={}; }
     bool Capture(const Frame (&native)[15],Vec anchor,float standingEyeY,float worldUnits) {
         if(valid) return true;
@@ -35,7 +36,37 @@ struct BodySizeCalibration {
         }
         const float stature=relaxedHipHeight*.5f+native[0].origin.y-anchor.y;
         if(!std::isfinite(stature+available) || stature<worldUnits*.5f || available<worldUnits*.5f) return false;
-        factor=std::clamp(available/stature,.5f,1.5f);units=worldUnits;valid=true;return true;
+        factor=std::clamp(available/stature,.5f,1.5f);units=worldUnits;standingStature=stature;valid=true;return true;
+    }
+    bool FitTorso(const Frame (&native)[15],Vec low,Vec high,float standingEyeY) {
+        if(!valid || torsoFitted || units<=1 || standingStature<=0) return false;
+        const float floor=std::max(native[3].origin.y,native[6].origin.y);
+        float uprightHip=-INFINITY;
+        for(int first:{1,4}) {
+            const float a=Length(Sub(native[first+1].origin,native[first].origin));
+            const float b=Length(Sub(native[first+2].origin,native[first+1].origin));
+            const Vec delta=Sub(native[first+2].origin,native[first].origin);
+            const float reach=(a+b)*.99995f,horizontal=delta.x*delta.x+delta.z*delta.z;
+            if(horizontal>=reach*reach) return false;
+            uprightHip=std::max(uprightHip,native[first+2].origin.y-std::sqrt(reach*reach-horizontal)-
+                (native[first].origin.y-native[0].origin.y));
+        }
+        float top=INFINITY;
+        for(int corner=0;corner<8;++corner) {
+            const Vec local{corner&1 ? high.x : low.x,corner&2 ? high.y : low.y,corner&4 ? high.z : low.z};
+            top=std::min(top,Transform(native[7],local).y);
+        }
+        // Measure the visible collar at FULL leg extension. Calibrating from
+        // a bent animation fits a taller torso once the standing constraint
+        // subsequently lifts the pelvis. Keep a fixed eye-to-collar reserve.
+        top+=uprightHip-native[0].origin.y;
+        const float height=floor-top,available=floor-standingEyeY-units*.25f;
+        if(!std::isfinite(height+available) || height<units*.4f || available<=0) return false;
+        // Uniform, floor-anchored fitting preserves proportions. Limit the
+        // refinement to 15%; never resize continuously with gaze or crouch.
+        const float fitted=std::clamp(available/height,factor*.85f,factor);
+        eyeGap=(factor-fitted)*standingStature;
+        factor=fitted;torsoFitted=true;return true;
     }
 };
 // Evaluate hands in the BODY frame, never the current gaze frame. Looking

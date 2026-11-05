@@ -174,7 +174,7 @@ struct GroundEye {
         local.x=flat.x; local.z=flat.z;
     }
     Point Apply(Point root, float artificialYaw, Point animated,float bodyYaw,
-                bool followAnimatedHeight=false) {
+                bool followAnimatedHeight=false,float bodyLateral=NAN) {
         using namespace locomotion;
         const float height=animated.y-root.y;
         // The first grounded frame after a high vault can still contain the
@@ -188,6 +188,11 @@ struct GroundEye {
             bodyLocal=Rotate({animated.x-root.x,animated.z-root.z},-bodyYaw);
             valid = true;
         }
+        // The first running/turning frame can contain sideways neck sway.
+        // Keep its camera reference, but never store that sway as a permanent
+        // lateral body offset. The caller supplies the configured anchor X;
+        // forward fit and calibrated height retain their existing references.
+        if(valid && std::isfinite(bodyLateral)) bodyLocal.x=bodyLateral;
         // Until a standing pose exists, use the actual animated joint. A
         // guessed height can put the camera above Lara after a crate mount.
         if (!valid) return animated;

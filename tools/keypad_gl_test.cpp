@@ -18,6 +18,10 @@ GLuint Link(GLuint vs,GLuint fs) {
     GLint ok=0;gl::GetProgramiv(p,GL_LINK_STATUS,&ok);if(!ok) {gl::DeleteProgram(p);return 0;}return p;
 }
 namespace tr {
+bool FirstPersonTorsoMeasureInfo(float*,uint64_t&,bool&) { return false; }
+bool FirstPersonTorsoBufferKnown(unsigned) { return false; }
+void FirstPersonTorsoMeasure(unsigned,const float*,const float*,unsigned) {}
+
 float requestedLight[4]{};
 uint64_t Base() { return 0; }
 const Layout& L() { static Layout l;return l; }

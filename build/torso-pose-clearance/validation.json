@@ -1,0 +1,19 @@
+{
+  "ReleaseBuilds": "Both Release/x64 builds passed",
+  "Checks": {
+    "456": 2474722,
+    "123": 1666994
+  },
+  "Tested": [
+    "bounded torso clearance at multiple headings, scales and camera rebases",
+    "unchanged hips, knees, feet and tracked head",
+    "exact controller wrist targets and connected shoulders",
+    "same-pose stereo repeatability and smooth return",
+    "production standing body offsets 0, 11 and 20 cm",
+    "height recenter and first/third person transitions",
+    "existing jump-camera, arm and body transition regressions"
+  ],
+  "InHeadsetTested": false,
+  "Limitations": "Skeleton-derived torso envelope with a 12-degree bend limit; extreme head/body overlap can remain.",
+  "INIChanged": false
+}

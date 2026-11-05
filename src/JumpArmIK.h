@@ -26,6 +26,7 @@ struct JumpArmIK {
             if(current.valid) for(int i=0;i<3;++i) chain[i]=Multiply(reference,current.chain[i]);
             return true;
         }
+        const Vec shoulder=chain[0].origin;
         if(serial!=frame || mode!=jumping) { seed=current;serial=frame;mode=jumping;time=now; }
         current=seed;
         if(jumping) {
@@ -58,6 +59,10 @@ struct JumpArmIK {
                 if(t>=1) current.recovering=false;
             }
         }
+        // Retain the cached arm directions, never its old shoulder position.
+        // Native jump/landing torso motion must carry the arm's attachment.
+        const Vec reconnect=Sub(shoulder,chain[0].origin);
+        for(auto& joint:chain) joint.origin=Add(joint.origin,reconnect);
         for(int i=0;i<3;++i) current.chain[i]=Multiply(inverse,chain[i]);
         current.valid=true;current.jumping=jumping;
         return true;

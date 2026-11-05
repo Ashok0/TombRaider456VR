@@ -56,6 +56,74 @@ bool IsWorldPass() { return worldPass; }
 bool BoneSkinActive() { return true; }
 }
 
+void TestDynamicBonesFrameStability() {
+    using namespace tr;
+    auto& config=const_cast<Config&>(Cfg());const auto savedConfig=config;
+    const auto savedTorso=g_torsoThis;
+    const auto item=*reinterpret_cast<uint8_t**>(GameDllBase()+GameDllBound()->laraItem);
+    auto& flags=*reinterpret_cast<uint32_t*>(item+kItemFlags);
+    auto& fall=*reinterpret_cast<int16_t*>(item+kItemFallspeed);
+    const auto savedFlags=flags;const auto savedFall=fall;
+    config.dynamicBonesDriveMode=1;config.dynamicBonesAirGravity=1;
+    config.dynamicBonesStiffness=630;config.dynamicBonesDamping=9.5f;
+    config.dynamicBonesGravity=5400;config.dynamicBonesAxis=1;
+    config.dynamicBonesMaxDisplace=40;config.dynamicBonesDebugScale=1;
+    ResetSolver();g_haveThis=true;g_torsoThis={};
+    g_torsoThis.m[0]=g_torsoThis.m[5]=g_torsoThis.m[10]=1;
+    flags&=~(1u<<kGravityStatusBit);fall=0;
+    for(int frame=0;frame<600;++frame) Solve(1.f/90);
+    for(auto& bone:g_bone) bone.x[1]+=1;
+    const float times[]={1.f/90,.09f,1.f/60,.075f,.095f};
+    float offset[3]{};
+    for(int frame=0;frame<200;++frame) {
+        Solve(times[frame%5]);
+        Require(DynamicBonesWorldOffset(offset),"irregular-frame solver remains live");
+        Require(std::fabs(offset[1])<2 && std::fabs(offset[0])+std::fabs(offset[2])<.001f,
+                "long frames must damp a small disturbance instead of amplifying it into clamp-sized bounce");
+    }
+    Require(std::fabs(offset[1])<.001f && g_jumps==0 && g_lands==0,
+            "grounded chest settles without fabricated jump or landing events");
+    ResetSolver();g_haveThis=true;Solve(1.f/90);
+    Require(DynamicBonesWorldOffset(offset) && std::fabs(offset[1])<.001f,
+            "first visible frame starts at authored rest without an upward chest pop");
+    g_torsoThis.m[3]+=2000;Solve(1.f/90);
+    Require(DynamicBonesWorldOffset(offset) && std::fabs(offset[1])<.001f,
+            "camera rebase resets to equilibrium rather than restarting a bounce");
+    config.dynamicBonesLandImpulse=.2f;
+    float referencePeak=0;
+    const int frameRates[]={120,90,60,20,12,10};
+    for(int hz:frameRates) {
+        ResetSolver();g_haveThis=true;g_torsoThis={};
+        g_torsoThis.m[0]=g_torsoThis.m[5]=g_torsoThis.m[10]=1;
+        flags&=~(1u<<kGravityStatusBit);fall=0;
+        for(int frame=0;frame<hz;++frame) Solve(1.f/hz);
+        flags|=1u<<kGravityStatusBit;fall=100;
+        for(int frame=0;frame<hz;++frame) Solve(1.f/hz);
+        flags&=~(1u<<kGravityStatusBit);fall=0;
+        float peak=0;
+        for(int frame=0;frame<3*hz;++frame) {
+            Solve(1.f/hz);DynamicBonesWorldOffset(offset);
+            peak=std::fmax(peak,offset[1]);
+            // A 10 Hz display samples after the first crest. Compare the
+            // physical response at the sample time, not an unseen peak.
+            const float time=float(frame+1)/hz,decay=config.dynamicBonesDamping*.5f;
+            const float frequency=std::sqrt(config.dynamicBonesStiffness-decay*decay);
+            const float expected=600.f/frequency*std::exp(-decay*time)*std::sin(frequency*time);
+            Require(std::fabs(offset[1]-expected)<1.f,
+                    "landing follows the damped-spring response even when display frames miss its crest");
+            Require(std::isfinite(offset[1]) && std::fabs(offset[1])<30,
+                    "normal landing stays bounded at both low and headset frame rates");
+        }
+        if(hz==120) referencePeak=peak;
+
+        Require(peak>8 && (hz<12 || std::fabs(peak-referencePeak)<referencePeak*.25f) && std::fabs(offset[1])<.01f,
+                "normal landing retains its bounce strength and settles at 10 through 120 Hz");
+        Require(g_jumps==1 && g_lands==1,"substeps apply each landing event exactly once");
+    }
+    flags=savedFlags;fall=savedFall;config=savedConfig;
+    ResetSolver();g_torsoThis=savedTorso;
+}
+
 void TestDynamicBonesVisibility(const float* rendered) {
     using namespace tr;
     uint64_t mask=0;int count=0;
@@ -81,6 +149,8 @@ void TestDynamicBonesVisibility(const float* rendered) {
             "physics uses complete captured skeleton, not zeroed hidden joints");
     Require(std::memcmp(g_torsoThis.m,full+Cfg().dynamicBonesTorsoJoint*12,12*sizeof(float))==0,
             "torso anchor matches rendered full palette");
+
+    TestDynamicBonesFrameStability();
 
     // Identical animation/engine input must produce identical physics whether
     // native joints are visible or masked. Exercise actual spring integration.

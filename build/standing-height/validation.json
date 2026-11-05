@@ -1,0 +1,14 @@
+{
+  "regression_before_fix": "FAIL: small standing headset-height changes cannot bend previously straight legs",
+  "TR456Checks": 2400710,
+  "TR123Checks": 1650481,
+  "ReleaseBuilds": "Both passed; existing C4310 warning in TR456",
+  "InHeadsetTested": false,
+  "Coverage": [
+    "Small standing head-height changes preserve hip height and nearly straight knees",
+    "Physical crouching and return to upright posture",
+    "TR456 production first/third-person toggle and tracking-origin recenter invalidate and recapture standing height",
+    "Late body-size calibration refreshes torso reference",
+    "Existing jump, hanging, arms, holstering and run/stop body-offset regressions"
+  ]
+}

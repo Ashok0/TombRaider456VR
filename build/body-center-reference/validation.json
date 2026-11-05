@@ -1,0 +1,17 @@
+{
+  "RootCause": "GroundEye captured animated sideways head displacement as bodyLocal.x, retaining a permanent lateral body offset. Session showed pelvis -10.38 cm sideways even when measured torso bend was 0 degrees.",
+  "Fix": "Production GroundEye calls use configured FirstPersonAnchorX for body lateral fit. Camera reference, forward depth, standing height and tracking remain unchanged.",
+  "RegressionChecks": {
+    "456": 2475370,
+    "123": 1667674
+  },
+  "ReleaseBuilds": "Both Release/x64 passed",
+  "Preserved": [
+    "Mesh-based torso clearance",
+    "Height calibration fix",
+    "TR4/5 jump-camera fix",
+    "INI settings"
+  ],
+  "ProvisionalRollbackInstalled": false,
+  "InHeadsetTested": false
+}

@@ -5,6 +5,56 @@
 namespace tr { void VRMenuShutdown() {} }
 namespace {
 void __cdecl JumpJoint(uint8_t*,tr::PHD_VECTOR* point,int,int) { *point={0,-700,0}; }
+void TestUpJumpCamera() {
+    using namespace tr;
+    const auto oldJoint=dll.getJointAbsPositionLerp;
+    dll.getJointAbsPositionLerp=uint32_t(reinterpret_cast<uint64_t>(&FakeGaitJoint)-g_boundBase);
+    config.firstPersonBodyFollowsHead=config.firstPersonRoomscaleMove=config.firstPersonWallCollision=false;
+    auto& pos=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+    auto& prev=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos_prev);
+    auto& state=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state);
+    auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+    for(bool stable:{false,true}) for(bool calibrated:{false,true})
+    for(float heading:{0.f,.7f,1.5707963f,-2.6f}) for(int jump:{3,15,28}) {
+        ResetMovementStabilization();config.firstPersonMovementStabilization=stable;
+        pos=prev={};state=2;flags=0;fraction=256;gaitSway={};g_headingBase=0;
+        g_previousBody={};g_haveHeading=true;g_headingItem=itemMemory;
+        PHD_3DPOS camera{};Check(Anchor(camera),"standing jump camera calibration available");
+        if(!calibrated) g_groundEye.Reset();
+        const auto reference=g_groundEye;
+        g_headingBase=heading;state=int16_t(jump);flags=8;
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number)=jump==28?28:16;
+        Head(.6f);VR().m_rawHeadPose.m[0][3]=.18f;VR().m_rawHeadPose.m[2][3]=-.12f;
+        const auto tracking=VR().m_rawHeadPose;
+        for(int tick=0;tick<=12;++tick) {
+            prev=pos;pos.y_pos=16*(tick-6)*(tick-6)-576;
+            // Native facing and animated neck lag the turn, then bend and
+            // reverse during the ascent/apex/descent. Physics stays vertical.
+            prev.y_rot=Angle(heading-.4f);pos.y_rot=Angle(heading+.2f);
+            gaitSway={tick%2 ? 120 : -120,tick%2 ? 160 : -160,tick%2 ? -90 : 90};
+            for(int f:{0,64,128,192,256}) {
+                fraction=f;const auto before=std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory));
+                Check(Anchor(camera),"up-jump remains in first person after turning");
+                if(stable && calibrated) {
+                    const float t=f/256.f;
+                    const auto flat=locomotion::Rotate({reference.local.x,reference.local.z},g_headingBase);
+                    Check(std::fabs(camera.x_pos-flat.x)<=.51f && std::fabs(camera.z_pos-flat.z)<=.51f &&
+                          std::fabs(camera.y_pos-(prev.y_pos+(pos.y_pos-prev.y_pos)*t+reference.local.y))<=.51f,
+                          "turned straight-up jump camera follows only the native vertical arc, never animated neck launch");
+                } else {
+                    PHD_VECTOR native{config.firstPersonAnchorX,config.firstPersonAnchorY,config.firstPersonAnchorZ};
+                    FakeGaitJoint(itemMemory,&native,14,f);
+                    Check(camera.x_pos==native.x && camera.y_pos==native.y && camera.z_pos==native.z,
+                          "opt-out and uncalibrated midair entry retain native camera");
+                }
+                Check(before==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)) &&
+                      !std::memcmp(&tracking,&VR().m_rawHeadPose,sizeof(tracking)),
+                      "camera repair cannot change Lara velocity, collision position, animation or headset tracking");
+            }
+        }
+    }
+    dll.getJointAbsPositionLerp=oldJoint;gaitSway={};
+}
 void TestJumpArmPalettes(uint8_t* objectInfo) {
     using namespace tr;using namespace tr::motiongun;
     const auto identity=firstperson::IdentityBasis();
@@ -69,12 +119,10 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
                     const int j=mapping[i];
                     auto actual=Multiply(ReadRows(palette+i*12),binds[i]);actual.origin=Add(actual.origin,camera);
                     if(step==0 && eye==0) baseline[j]=actual;
-                    if(j>=8 && j<=13) {
-                        Check(firstperson::Length(Sub(actual.origin,baseline[j].origin))<.1f,
-                              "native takeoff and landing shoulder snaps cannot flash the tracked arms in either eye");
-                        for(int r=0;r<3;++r) for(int c=0;c<3;++c)
-                            Check(std::fabs(actual.basis.r[r][c]-baseline[j].basis.r[r][c])<.001f,
-                                  "jump boundaries preserve arm orientation without a one-frame roll flash");
+                    if(state==28 && (j==8 || j==11)) {
+                        auto shoulder=Multiply(ReadRows(fixture+i*12),binds[i]);shoulder.origin=Add(shoulder.origin,camera);
+                        Check(firstperson::Length(Sub(actual.origin,shoulder.origin))<.1f,
+                              "jump shoulders remain attached to the currently rendered torso in both eyes");
                     }
                     if(state==28 && j<8) Check(!std::memcmp(palette+i*12,fixture+i*12,12*sizeof(float)),
                                               "airborne torso and legs retain their native animation");
@@ -123,6 +171,7 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
 }
 
 #include "body_transition_regression.inl"
+#include "torso_clearance_regression.inl"
 #include "jump_turn_regression.inl"
 
 void TestJumpArmRecovery() {
@@ -139,10 +188,12 @@ void TestJumpArmRecovery() {
             const auto turn=firstperson::RotationMatrix(firstperson::AxisRotation({1,0,0},1.f));
             for(auto& f:chain) {f.origin=Add(initial[0].origin,Transform(turn,Sub(f.origin,initial[0].origin)));f.origin.z+=180;f.basis=turn;}
         }
+        const Vec shoulder=chain[0].origin;
         Check(history.Apply(itemMemory,step,step/90.,jump,true,reference,chain),"jump arm recovery accepts a live render frame");
-        if(step>0) for(int j=0;j<3;++j)
-            Check(firstperson::Length(Sub(chain[j].origin,previous[j].origin))<90,
-                  "landing returns to the body with bounded movement instead of a flash");
+        Check(firstperson::Length(Sub(chain[0].origin,shoulder))<.01f,"jump smoothing cannot detach the shoulder from the current torso");
+        if(step>0) for(int j=1;j<3;++j)
+            Check(firstperson::Length(Sub(Sub(chain[j].origin,chain[0].origin),Sub(previous[j].origin,previous[0].origin)))<90,
+                  "landing blends arm directions smoothly relative to the attached shoulder");
         for(int j=1;j<3;++j) Check(std::fabs(firstperson::Length(Sub(chain[j].origin,chain[j-1].origin))-
             firstperson::Length(Sub(initial[j].origin,initial[j-1].origin)))<.01f,
             "landing blend preserves bone lengths through large native arm turns");
@@ -154,6 +205,7 @@ void TestJumpArmRecovery() {
 }
 int main() {
     using namespace tr;
+    TestTorsoClearance();
     g_boundBase=reinterpret_cast<uint64_t>(GetModuleHandleW(nullptr));
     const auto rva=[](const void* p){return uint32_t(reinterpret_cast<uint64_t>(p)-g_boundBase);};
     dll.lara=rva(laraMemory);dll.laraItem=rva(&laraItem);dll.camera=rva(cameraMemory);
@@ -231,8 +283,21 @@ int main() {
         TestJumpArmPalettes(objectInfo);
     }
     for(int which:{0,1}) for(bool fullBody:{false,true}) {
+        reset(which,fullBody);TestUpJumpCamera();
         reset(which,fullBody);TestJumpTurnCentering(objectInfo);
         reset(which,fullBody);TestBodyTransitions(objectInfo);
+        if(fullBody) { reset(which,true);TestStandingCalibration(objectInfo); }
+        for(int hang:{10,30,31,75,76,77,78,79,82,83,139}) {
+            reset(which,fullBody);state=int16_t(hang);
+            g_bodyVisibility.Update(itemMemory,0,TurnTime(),true,false,true);
+            const auto mask=FirstPersonBodyMask(itemMemory);
+            Check(mask==firstperson::ArmMeshBits,"hanging always selects arms-only rendering to prevent viewing the body interior");
+            SetMeshVisibility(true,false,false,mask==firstperson::ArmMeshBits,false,false,true);
+            Check(bits==firstperson::ArmMeshBits,"classic hanging hides torso legs and head while retaining complete arms");
+            const auto beforeBits=bits;const int beforeDraws=draws;Detour_DrawCreatureHD(itemMemory,0,0);
+            Check(draws==beforeDraws+1 && (drawnBodyBits&0x7fff)==firstperson::ArmMeshBits && bits==beforeBits,
+                  "HD hanging draws only the connected arms without leaking torso or leg meshes");
+        }
         for(int rollState:{23,45,74}) {
             reset(which,fullBody);state=int16_t(rollState);status=4;
             *reinterpret_cast<int16_t*>(laraMemory+4)=1;
@@ -242,6 +307,7 @@ int main() {
             Check(g_rollHidden && bits==0 && draws==before,"tracked weapons cannot reveal the somersaulting body");
         }
     }
+    TestConnectedArmMath();
     TestPistolAnimationBlend();
     TestJumpArmRecovery();
     reset(0,false);

@@ -1,0 +1,7 @@
+{
+  "TR45FocusedChecks": 2400640,
+  "TR123SuiteChecks": 1650403,
+  "TraversalIKChecks": 34381,
+  "InHeadsetTested": false,
+  "BroaderTR45Diagnostic": "Camera-rebase/arm-rotation checks pass; later hard-fall leg assertion also fails on the unchanged pre-task baseline. Focused attachment, jump, sidearm, hanging and traversal suites pass."
+}

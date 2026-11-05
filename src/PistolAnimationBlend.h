@@ -1,5 +1,6 @@
 #pragma once
 #include "FirstPersonIK.h"
+#include <cstdint>
 
 namespace tr::firstperson {
 // Render-only handoff. Cache joint-local transforms so camera translation and
@@ -35,14 +36,12 @@ struct PistolAnimationBlend {
             if(weight<1) {
                 auto a=RotationOf(from[i].basis),b=RotationOf(local[i].basis);
                 if(a.w*b.w+Dot(a.v,b.v)<0) { b.w=-b.w;b.v=Scale(b.v,-1); }
-                result.basis=RotationMatrix({a.w+(b.w-a.w)*weight,Add(Scale(a.v,1-weight),Scale(b.v,weight))});
-                for(int col=0;col<3;++col) {
-                    const auto length=[col](const Basis& basis) {
-                        return std::sqrt(basis.r[0][col]*basis.r[0][col]+basis.r[1][col]*basis.r[1][col]+basis.r[2][col]*basis.r[2][col]);
-                    };
-                    const float size=length(from[i].basis)*(1-weight)+length(local[i].basis)*weight;
-                    for(int row=0;row<3;++row) result.basis.r[row][col]*=size;
-                }
+                const auto fromShape=Multiply(RotationMatrix(RotationInverse(a)),from[i].basis);
+                const auto toShape=Multiply(RotationMatrix(RotationInverse(b)),local[i].basis);
+                Basis shape{};
+                for(int row=0;row<3;++row) for(int col=0;col<3;++col)
+                    shape.r[row][col]=fromShape.r[row][col]*(1-weight)+toShape.r[row][col]*weight;
+                result.basis=Multiply(RotationMatrix({a.w+(b.w-a.w)*weight,Add(Scale(a.v,1-weight),Scale(b.v,weight))}),shape);
                 result.origin=Add(Scale(from[i].origin,1-weight),Scale(local[i].origin,weight));
                 // Preserve the child bone's reach while blending its direction.
                 Vec direction{};

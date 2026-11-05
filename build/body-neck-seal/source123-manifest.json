@@ -1,0 +1,42 @@
+[
+  {
+    "Relative": "src/BoneSkin.cpp",
+    "OriginalHash": "0DCACA555497276E066B3E26C3362107A6D7FA3D58619A510FE0874B4E2DE76F",
+    "ModifiedHash": "65BABB80276A6326B41030DE8311B460D5B04213CFF979CF94EAC48C875D310F"
+  },
+  {
+    "Relative": "src/BodyClearanceShader.h",
+    "OriginalHash": "BA1C583A1E8FF1C5EA902ED0DA4EBDB7F92DDAA9B677D4A2E0900637E8CDA227",
+    "ModifiedHash": "5DDD432A0CB5529FCBBD7040082A687CA788BECACC6E9E6C66B70E37A632589C"
+  },
+  {
+    "Relative": "src/BodyNeckCap.h",
+    "OriginalHash": null,
+    "ModifiedHash": "48728D4AA636A879B1D7E54664038FF1978DC34F4B602D516C813A9197A71E9D"
+  },
+  {
+    "Relative": "src/BodyClearanceCap.h",
+    "OriginalHash": null,
+    "ModifiedHash": "BBEBCA9710A93CADA95DD4EFBEA9956D7591A53453B29A698C522CE98860192B"
+  },
+  {
+    "Relative": "src/SurfaceCapShader.h",
+    "OriginalHash": null,
+    "ModifiedHash": "078E8FA5826D2A8A4DF3B00072E3F4049220D995DA42A93E76BD2DC09D70884A"
+  },
+  {
+    "Relative": "tools/body_neck_gl_tests.cpp",
+    "OriginalHash": null,
+    "ModifiedHash": "04E72799DFAC21F72456C4E70EE02AC11A0871BFD743B1AA5E52F689AB9A234D"
+  },
+  {
+    "Relative": "tools/body_clearance_gl_tests.cpp",
+    "OriginalHash": null,
+    "ModifiedHash": "6476B7251177FDBD931C19EB0B088B41A6E6AA09A070ABB37B55B05FD13DBE21"
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "C1EAA98B0553DFC486979F20A952604A58B37910FA2C7D5423091BFF16AE4C4D",
+    "ModifiedHash": "EA0522177316808267DF1AF38140D3F70201F07571D3972D543E5002B062230D"
+  }
+]

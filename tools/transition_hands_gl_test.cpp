@@ -9,6 +9,10 @@ static void Check(bool ok,const char* label) { ++checks;if(!ok) {std::printf("FA
 void Log(const char* s) { std::puts(s); }
 void LogF(const char* f,...) {va_list args;va_start(args,f);std::vprintf(f,args);va_end(args);std::puts("");}
 namespace tr {
+bool FirstPersonTorsoMeasureInfo(float*,uint64_t&,bool&) { return false; }
+bool FirstPersonTorsoBufferKnown(unsigned) { return false; }
+void FirstPersonTorsoMeasure(unsigned,const float*,const float*,unsigned) {}
+
 static uint8_t appData[8192]{};
 static const uint8_t* appPointer=appData;
 static Layout layout{};
