@@ -22,6 +22,7 @@
 #include "TraversalArmIK.h"
 #include "JumpArmIK.h"
 #include "BodyFollower.h"
+#include "ControllerBodyAnchor.h"
 #include "GroundTorso.h"
 #include "TorsoClearance.h"
 #include "ClassicBodyRender.h"
@@ -288,6 +289,10 @@ firstperson::ArmRollContinuity PistolRollSeed(int hand,const uint8_t* item) {
     return g_pistolRoll.previous[hand];
 }
 firstperson::BodyFollower g_bodyFollower;
+void UpdateControllerBodyAnchor();
+void ResetControllerBodyAnchor();
+bool BodyControllersStationary();
+void BodyTrackingOffset(float& right,float& forward);
 firstperson::BodySizeCalibration g_bodySize;
 firstperson::TorsoPoseFilter g_torsoPose;
 firstperson::TraversalArmIK g_traversalArms[2];
@@ -318,6 +323,7 @@ firstperson::BodyFollowSettings BodyFollowSettings() {
     s.followSpeed=Cfg().firstPersonBodyFollowSpeedMetres;return s;
 }
 void ResetBodyFollower() {
+    ResetControllerBodyAnchor();
     g_torsoSurface.Reset();
     g_torsoClearance.Reset();
     g_groundTorso.Reset();
@@ -1589,8 +1595,13 @@ void __cdecl Detour_NativeMirror() {
     bits=savedBits;g_nativeMirrorDraw=previous;
 }
 
+#include "ControllerBodyAnchor.inl"
+
 float BodyPlacementHeading(const uint8_t* item) {
-    if(CanFitAirborneBody(item)) return Wrap(g_headingBase+VR().HeadYawRadians());
+    if(CanFitAirborneBody(item)) {
+        UpdateControllerBodyAnchor();
+        return Wrap(g_headingBase+(g_controllerBodyAnchor.held ? g_controllerBodyAnchor.yaw : VR().HeadYawRadians()));
+    }
     return g_bodyFollower.valid ? g_bodyFollower.yaw :
         Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
 }
@@ -1846,7 +1857,7 @@ bool FitAirborneBodyPalette(uint8_t* item,float* joints,int count) {
     if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,0,pelvis) ||
        !ReadIKJoint(obj,joints,count,bones,mapping,poses,14,head)) return false;
     const auto camera=BodyPaletteCameraOrigin(item,head);
-    locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+    locomotion::Vec view{};BodyTrackingOffset(view.x,view.z);
     view=locomotion::Rotate(view,g_headingBase)*LiveWorldUnitsPerMetre();
     const auto anchor=locomotion::Rotate(g_groundEye.bodyLocal,BodyPlacementHeading(item));
     stabilization::OffsetBodyPalette(joints,count,{
@@ -1861,7 +1872,7 @@ motiongun::Vec FixedBodyPlacement(uint8_t* item,motiongun::Vec pelvis,motiongun:
     const float heading=g_bodyFollower.valid ? g_bodyFollower.yaw :
         Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
     const auto anchor=locomotion::Rotate(g_groundEye.bodyLocal,heading);
-    locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+    locomotion::Vec view{};BodyTrackingOffset(view.x,view.z);
     view=locomotion::Rotate(view,g_headingBase)*LiveWorldUnitsPerMetre();
     // Cancel horizontal animation/root settling before the user's offset and
     // hand IK. The stable eye carries intentional travel, turns and roomscale.
@@ -2107,7 +2118,12 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     // Collision retraction belongs to the shared eye/body frame, not the
     // inferred physical step. Apply it immediately once to the whole body.
     const Vec wallShift{g_bodyWallOffset.x,0,g_bodyWallOffset.z};
-    const Vec physicalEye=Sub(eye,wallShift);
+    locomotion::Vec bodyView{};BodyTrackingOffset(bodyView.x,bodyView.z);
+    bodyView=locomotion::Rotate(bodyView,g_headingBase)*scale;
+    // The posture solver needs the same controller-anchored horizontal eye
+    // as the footprint. The actual eye still owns rendering and hidden-head IK.
+    const Vec postureEye{g_scenePose.x_pos+bodyView.x,eye.y,g_scenePose.z_pos+bodyView.z};
+    const Vec physicalEye=Sub(postureEye,wallShift);
     Vec followerGoal=Sub(Add(nativeRoot,headDelta),wallShift),followerNative=nativeRoot;
     if(Cfg().firstPersonMovementStabilization && g_groundEye.valid) {
         // Center the standing footprint under the eye in the BODY's facing.
@@ -2119,9 +2135,10 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         followerNative=simulationRoot;
     }
     if(grip) g_bodyFollower.Reset();
-    else g_bodyFollower.Update(VR().PoseSerial(),TurnTime(),g_headingBase,headYaw,facing,
+    else g_bodyFollower.Update(VR().PoseSerial(),TurnTime(),g_headingBase,
+        (BodyControllersStationary() || g_controllerBodyAnchor.valid) ? Wrap(g_headingBase+g_controllerBodyAnchor.yaw) : headYaw,facing,
         Scale(followerGoal,1/scale),Scale(followerNative,1/scale),moving,BodyFollowSettings(),Scale(physicalEye,1/scale),handsForward,
-        Cfg().firstPersonMovementStabilization && g_groundEye.valid,physicalTurn);
+        Cfg().firstPersonMovementStabilization && g_groundEye.valid,physicalTurn,BodyControllersStationary(),g_controllerBodyAnchor.valid);
     const float heading=grip || !g_bodyFollower.valid ? nativeHeading : g_bodyFollower.yaw;
     const Basis body{{{std::cos(heading),0,std::sin(heading)},{0,1,0},{-std::sin(heading),0,std::cos(heading)}}};
     Frame inverseBody{};Inverse({body,{}},inverseBody);
@@ -2176,10 +2193,10 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
             // poses must use the same posture height without moving the view.
             if(!firstperson::SolveFollowingBody(sized,sizedAnchor,Add(anchorInPalette,headDelta),
                 Wrap(heading-nativeHeading),headRotation,forward,scale,rootOffset,
-                firstperson::BodyChestTwist(Wrap(headYaw-heading),g_bodyFollower.supportedHands),
+                firstperson::BodyChestTwist(Wrap(headYaw-heading),BodyControllersStationary() || g_bodyFollower.supportedHands),
                 grounded,g_bodyFollower.phase,standing ? 0.f : g_bodyFollower.stepWeight,posed,upright,
                 (Cfg().firstPersonBodyScale==0 ? g_bodySize.eyeGap : 0.f)-
-                std::max(0.f,VR().FirstPersonHeightDrop()-VR().FirstPersonPostureDrop())*scale)) return false;
+                std::max(0.f,VR().FirstPersonHeightDrop()-VR().FirstPersonPostureDrop())*scale,Sub(postureEye,eye))) return false;
         } else if(!firstperson::SolveBodyAtEye(native,joint,anchorInPalette,Add(anchorInPalette,headDelta),
             Wrap(heading-nativeHeading),headRotation,forward,posed)) return false;
     }
@@ -2214,7 +2231,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     // the same rigid correction; exact tracked wrists are solved below.
     if(!grip && !landing && Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item)) {
         if(!g_torsoClearance.Apply(obj,posed,bind,Sub(eye,cameraOffset),heading,scale,
-            VR().PoseSerial(),TurnTime(),mainBody,&g_torsoSurface)) return false;
+            VR().PoseSerial(),TurnTime(),mainBody,&g_torsoSurface,BodyControllersStationary())) return false;
     } else if(mainBody) g_torsoClearance.Reset();
     static uint64_t nextStanceLog=0;
     if(g_bodySkinScope && Cfg().firstPersonDriftLog && GetTickCount64()>=nextStanceLog &&
@@ -2225,6 +2242,10 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         const auto chestLocal=firstperson::YawVector(Scale(Sub(posed[7].origin,eyeInPalette),100/scale),-heading);
         LogF("firstperson: fixed body state=%d offset=%.0fcm locked=%d hip=(%.2f,%.2f,%.2f)cm chest=(%.2f,%.2f,%.2f)cm",
             state,Cfg().firstPersonBodyForwardCm,g_groundTorso.valid,hipLocal.x,hipLocal.y,hipLocal.z,chestLocal.x,chestLocal.y,chestLocal.z);
+        LogF("firstperson: body world held=%d hip=(%.2f,%.2f) chest=(%.2f,%.2f) anchor=(%.3f,%.3f)m",
+            BodyControllersStationary(),posed[0].origin.x+cameraOffset.x,posed[0].origin.z+cameraOffset.z,
+            posed[7].origin.x+cameraOffset.x,posed[7].origin.z+cameraOffset.z,
+            g_controllerBodyAnchor.offset.x,g_controllerBodyAnchor.offset.z);
         LogF("firstperson: torso clearance measured=%d bend=%.2fdeg before=%.3f after=%.3f (clear>=1)",
             g_torsoClearance.measured,g_torsoClearance.angle*57.2957795f,g_torsoClearance.before,g_torsoClearance.after);
         LogF("firstperson: body stance state=%d posture=%.3fm idle=%d recovery=%d hands=%d planted=%d follow=%.2f gait=%.2f knee-bend=(%.1f,%.1f)deg",
@@ -3485,10 +3506,15 @@ locomotion::Vec DragBody(uint8_t* item) {
     if (*reinterpret_cast<const uint32_t*>(item+0x1820)&8) return {};
     if (!g_boundDll->getCollisionInfo || !g_boundDll->getFloor ||
         !g_boundDll->getHeight || !g_boundDll->itemNewRoom) return {};
+    // Fixed physical hands prohibit roomscale root consumption as well as
+    // render following. Otherwise a pending HMD lean can keep walking Lara.
+    if(Cfg().firstPersonFullBodyIK && BodyControllersStationary()) {
+        g_roomscaleFollower={};g_roomscaleFollowTime={};return {};
+    }
     Vec pending;
     VR().HeadFloorOffset(pending.x, pending.z);
     if(Cfg().firstPersonFullBodyIK && Cfg().firstPersonMovementStabilization)
-        VR().FirstPersonViewOffset(pending.x,pending.z);
+        BodyTrackingOffset(pending.x,pending.z);
     const float scale = LiveWorldUnitsPerMetre();
     if (!std::isfinite(scale) || scale <= 1) return {};
     pending = pending - Rotate(g_dragCurrent - g_dragShown, -g_headingBase);
@@ -4644,7 +4670,7 @@ void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose,const PHD_VE
     const int frac=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256);
     Vec view{},floor{};
     if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation && !VR().headAtCamera()) {
-        VR().FirstPersonViewOffset(view.x,view.z);
+        BodyTrackingOffset(view.x,view.z);
         VR().HeadFloorOffset(floor.x,floor.z);
     }
     if(airborne) floor={};

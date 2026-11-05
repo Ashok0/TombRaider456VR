@@ -203,13 +203,143 @@ void TestBodyCenterReference() {
     }
 }
 
+void TestControllerBodyAnchor() {
+    using namespace tr::firstperson;
+    ControllerBodyAnchor a;
+    const Vec left{-.2f,1,.3f},right{.2f,1,.3f},head{0,1.7f,0};
+    a.Update(1,1,head,left,right,0,0,true,false);
+    a.Update(2,1.15,head,left,right,0,0,true,false);
+    Check(a.held,"stationary controller positions arm body hold after settling");
+    for(int frame=3;frame<100;++frame) {
+        const Vec eye{.12f*std::sin(frame*.1f),1.7f,.10f*std::cos(frame*.1f)};
+        a.Update(frame,1.15+(frame-2)/90.,eye,left,right,0,0,true,false);
+        Check(a.held && Length(Flat(Sub(Sub(eye,a.offset),head)))<.00001f,
+              "stationary controllers hold body anchor while HMD moves in every horizontal direction");
+    }
+    {
+        ControllerBodyAnchor release;
+        release.Update(1,0,head,left,right,0,0,true,false);
+        release.Update(2,.2,head,left,right,0,0,true,false);
+        const tr::motiongun::Vec lean{.30f,0,0},step{.03f,0,0};
+        release.Update(3,.21,Add(head,lean),left,right,0,0,true,false);
+        release.Update(4,.22,Add(head,step),Add(left,step),Add(right,step),0,0,true,false);
+        BodyFollower facing;
+        facing.Update(1,0,0,0,0,{}, {},false,tr::firstperson::BodyFollowSettings());
+        facing.Update(2,.02,0,1.5f,0,step,{},false,tr::firstperson::BodyFollowSettings(),{},false,true,0,false,true);
+        Check(std::fabs(facing.yaw)<.00001f,"translation release cannot snap the held body toward a head-only glance");
+        facing.Update(3,.03,0,1.6f,0,step,{},false,tr::firstperson::BodyFollowSettings(),{},false,true,.1f,false,true);
+        Check(std::fabs(facing.yaw-.1f)<.00001f,"controller-owned facing still accepts corroborated physical turns");
+        const auto footprint=Sub(Add(head,step),release.offset);
+        Check(Length(Flat(Sub(footprint,Add(head,step))))<.00001f,
+              "physical release carries only controller movement, never accumulated head lean");
+        for(int frame=5;frame<20;++frame) {
+            const auto eye=Add(head,{.15f+frame*.01f,0,0});
+            release.Update(frame,.22+(frame-4)/90.,eye,Add(left,step),Add(right,step),0,0,true,false);
+            Check(Length(Flat(Sub(Sub(eye,release.offset),footprint)))<.00001f,
+                  "head-only motion stays excluded during physical-release settling");
+        }
+    }
+    {
+        // A large one-hand gesture must not drag the torso when the other hand
+        // drifts only a few centimetres in the same direction (session repro).
+        ControllerBodyAnchor gesture;
+        gesture.Update(1,0,head,left,right,0,0,true,false);
+        gesture.Update(2,.2,head,left,right,0,0,true,false);
+        const tr::motiongun::Vec lstep{.40f,0,0},rstep{.03f,0,0},eyeStep{.215f,0,0};
+        gesture.Update(3,.21,Add(head,eyeStep),Add(left,lstep),Add(right,rstep),0,0,true,false);
+        Check(gesture.held && Length(Flat(Sub(Sub(Add(head,eyeStep),gesture.offset),head)))<.00001f,
+              "asymmetric controller drift cannot be averaged into roomscale body travel");
+        ControllerBodyAnchor glance;
+        glance.Update(1,0,head,left,right,0,0,true,false);
+        glance.Update(2,.2,head,left,right,0,0,true,false);
+        const tr::motiongun::Vec drift{.03f,0,0};
+        glance.Update(3,.21,Add(head,drift),Add(left,drift),Add(right,drift),0,0,true,false,1.f);
+        Check(glance.held,"small common hand drift during a sideways head glance cannot release the body");
+        ControllerBodyAnchor parallax;
+        parallax.Update(1,0,head,left,right,0,0,true,false);
+        parallax.Update(2,.2,head,left,right,0,0,true,false);
+        parallax.Update(3,.21,head,Add(left,drift),Add(right,drift),0,0,true,false,.07f);
+        Check(parallax.held,"parallel controller drift is not a physical turn around the head");
+        ControllerBodyAnchor stale;
+        stale.Update(1,0,head,left,right,0,0,true,false);
+        stale.Update(2,.2,head,left,right,0,0,true,false);
+        const tr::motiongun::Vec gestureShift{.1f,0,0};
+        stale.Update(3,.21,head,Add(left,gestureShift),Add(right,gestureShift),0,0,true,false);
+        stale.Update(4,.5,head,Add(left,gestureShift),Add(right,gestureShift),0,0,true,false);
+        stale.Update(5,.51,Add(head,gestureShift),Add(left,gestureShift),Add(right,gestureShift),0,0,true,false);
+        Check(stale.held && Length(Flat(Sub(Sub(Add(head,gestureShift),stale.offset),head)))<.00001f,
+              "head movement cannot revive an old controller gesture as a physical step");
+        PhysicalBodyTurn signal;
+        signal.Observe(1,0,0,Sub(left,head),Sub(right,head),true);
+        Check(signal.Observe(2,.01,.07f,Sub(Add(left,drift),head),Sub(Add(right,drift),head),true)==0,
+              "head-relative hand parallax cannot accumulate a latent body turn");
+    }
+    {
+        ControllerBodyAnchor resumed;
+        resumed.Update(1,0,head,left,right,0,0,true,false);
+        resumed.Update(2,.2,head,left,right,0,0,true,false);
+        resumed.Update(3,.5,head,left,right,0,0,true,false,1.2f);
+        for(int i=1;i<=90;++i) {
+            const tr::motiongun::Vec shift{.001f*i,0,0};
+            resumed.Update(i+3,.5+i/90.,Add(head,shift),Add(left,shift),Add(right,shift),0,0,true,false,1.2f);
+        }
+        Check(!resumed.held && resumed.head.x>.06f,
+              "slow real walking remains available after a sideways head glance settles");
+    }
+    ControllerBodyAnchor noisy;noisy.Update(1,0,head,left,right,0,0,true,false);
+    noisy.Update(2,.3,head,left,right,0,0,true,false);
+    for(int i=3;i<100;++i) {
+        const tr::motiongun::Vec eye{.12f*std::sin(i*.1f),1.7f,.1f*std::cos(i*.1f)};
+        const tr::motiongun::Vec jitter{.0065f*(i%2 ? 1.f : -1.f),.002f,0}; // 13 mm between samples, seen in the session log.
+        noisy.Update(i,.3+(i-2)/90.,eye,Add(left,jitter),Sub(right,jitter),0,0,true,false);
+        Check(noisy.held && Length(Flat(Sub(Sub(eye,noisy.offset),head)))<.00001f,
+              "recorded controller-scale jitter cannot release the body to head translation");
+    }
+    a.Update(100,2.4,head,left,right,0,0,true,false); // Settle the glance before a real step.
+    a.Update(101,2.41,Add(head,{.04f,0,0}),Add(left,{.04f,0,0}),Add(right,{.04f,0,0}),0,0,true,false);
+    Check(!a.held,"coordinated physical head and controller translation releases the hold");
+    a.Update(102,2.6,Add(head,{.04f,0,0}),Add(left,{.04f,0,0}),Add(right,{.04f,0,0}),0,0,true,false);
+    Check(a.held,"controllers can settle again after motion");
+    a.Update(103,2.61,head,left,right,.4f,0,true,false);
+    Check(!a.held && Length(a.offset)==0,"stick turning discards the physical hold without stale correction");
+    a.Update(104,2.8,head,left,right,.4f,0,true,false);
+    a.Update(105,2.81,head,left,right,.4f,0,true,true);
+    Check(!a.held,"stick travel remains available with physically stationary controllers");
+    ControllerBodyAnchor turning;BodyFollower follower;PhysicalBodyTurn signal;
+    turning.Update(1,0,head,left,right,0,0,true,false);
+    turning.Update(2,.3,head,left,right,0,0,true,false);
+    signal.Observe(2,.3,0,Sub(left,head),Sub(right,head),true);
+    follower.Update(2,.3,0,0,0,{}, {},false,BodyFollowSettings());
+    bool released=false;
+    for(int i=1;i<=100;++i) {
+        const float angle=i*.005f;const double now=.3+i/90.;
+        const auto l=Add(head,YawVector(Sub(left,head),angle)),r=Add(head,YawVector(Sub(right,head),angle));
+        turning.Update(i+2,now,head,l,r,0,follower.yaw,true,false,angle);
+        const auto turn=signal.Observe(i+2,now,angle,Sub(l,head),Sub(r,head),true);
+        follower.Update(i+2,now,0,angle,0,{}, {},false,BodyFollowSettings(),{},false,true,turn,turning.held);
+        released=released || !turning.held;
+        Check(std::fabs(follower.yaw-(turning.held ? 0.f : angle))<.0001f,
+              "physical turns retain corroborated yaw across the stationary noise threshold");
+    }
+    Check(released,"deliberate physical turning releases the controller hold");
+    ControllerBodyAnchor slow;slow.Update(1,0,head,left,right,0,0,true,false);
+    for(int i=1;i<=90;++i) {
+        const tr::motiongun::Vec shift{.002f*i,0,0};
+        slow.Update(i+1,i/90.,Add(head,shift),Add(left,shift),Add(right,shift),0,0,true,false);
+        Check(!slow.held,"slow cumulative controller translation is not mistaken for stationary tracking noise");
+    }
+    a.Update(106,2.82,head,left,right,.4f,0,false,false);
+    Check(!a.valid && !a.held && Length(a.offset)==0,"tracking loss cannot retain a stale body anchor");
+}
+
 void TestPhysicalBodyTurn() {
+    TestControllerBodyAnchor();
     using namespace tr::firstperson;
     const tr::firstperson::Vec left{-.2f,0,.35f},right{.2f,0,.35f},foot{0,0,-.15f};
     tr::firstperson::BodyFollowSettings settings;
     for(float direction:{-1.f,1.f}) for(float glance:{0.f,.4f}) {
         PhysicalBodyTurn signal;BodyFollower physical,analog,mixed;
-        physical.Update(1,1,0,0,0,foot,{},false,settings,{},false,true);
+        physical.Update(1,1,0,0,0,foot,{},false,settings,{},false,true,0,false);
         analog=physical;mixed=physical;
         signal.Observe(1,1,glance,left,right,true);
         float angle=0;
@@ -218,15 +348,15 @@ void TestPhysicalBodyTurn() {
             angle+=step;const double now=1+double(frame-1)/90;
             const float observed=signal.Observe(frame,now,BodyAngle(angle+glance),YawVector(left,angle),YawVector(right,angle),true);
             Check(std::fabs(observed-step)<.00001f,"coherent physical turn crosses wrap and reverses without losing heading");
-            physical.Update(frame,now,0,BodyAngle(angle+glance),0,YawVector(foot,physical.yaw),{},false,settings,{},false,true,observed);
-            analog.Update(frame,now,angle,BodyAngle(angle+glance),0,YawVector(foot,analog.yaw),{},false,settings,{},false,true);
-            mixed.Update(frame,now,angle*.5f,BodyAngle(angle*1.5f+glance),0,YawVector(foot,mixed.yaw),{},false,settings,{},false,true,observed);
+            physical.Update(frame,now,0,BodyAngle(angle+glance),0,YawVector(foot,physical.yaw),{},false,settings,{},false,true,observed,false);
+            analog.Update(frame,now,angle,BodyAngle(angle+glance),0,YawVector(foot,analog.yaw),{},false,settings,{},false,true,0,false);
+            mixed.Update(frame,now,angle*.5f,BodyAngle(angle*1.5f+glance),0,YawVector(foot,mixed.yaw),{},false,settings,{},false,true,observed,false);
             Check(std::fabs(BodyAngle(physical.yaw-analog.yaw))<.00005f && Length(Sub(physical.root,analog.root))<.00005f,
                   "roomscale and analog turns keep identical body heading and centered footprint");
             Check(std::fabs(BodyAngle(physical.yaw-angle))<.00005f,"physical turn retains the existing head-only glance");
             Check(std::fabs(BodyAngle(mixed.yaw-angle*1.5f))<.0001f,"simultaneous physical and analog turns each apply once");
             const auto root=physical.root;const float yaw=physical.yaw;
-            physical.Update(frame,now,0,angle+glance,0,root,{},false,settings,{},false,true,observed);
+            physical.Update(frame,now,0,angle+glance,0,root,{},false,settings,{},false,true,observed,false);
             Check(physical.yaw==yaw && Length(Sub(root,physical.root))==0,"stereo and accessory passes cannot repeat a physical turn");
         }
     }
@@ -394,6 +524,42 @@ void TestStandingCalibration(uint8_t* objectInfo) {
                 Check(!std::memcmp(&camera,&g_scenePose,sizeof(camera)),"physical mesh heading never rotates or translates the camera");
             }
         }
+
+
+        config.firstPersonBodyHandYawWeight=.15f;
+        for(int holdGunStatus:{0,4}) {
+        *Ptr<int16_t>(dll.lara+2)=int16_t(holdGunStatus);
+        setTracking(0);VR().m_firstPersonNeutral[1]=1.7f;VR().m_firstPersonNeutralEyeNeckY=.08f;ResetBodyFollower();render();
+        g_controllerBodyAnchor.moved=TurnTime()-.2;
+        const auto heldPose=render();
+        Check(BodyControllersStationary(),"render fixture holds actual stationary controller positions");
+        const auto heldLeft=VR().m_rawControllerPose[0],heldRight=VR().m_rawControllerPose[1];
+        const auto sceneBefore=g_scenePose;
+        for(int frame=0;frame<180;++frame) {
+            const float yaw=1.5f*std::sin(frame*.4f),dx=.35f*std::sin(frame*.04f),dz=.25f*std::cos(frame*.04f);
+            Head(yaw,-1.f);VR().m_rawHeadPose.m[1][3]-=.25f;VR().m_rawHeadPose.m[0][3]+=dx;VR().m_rawHeadPose.m[2][3]-=dz;
+            VR().m_rawControllerPose[0]=heldLeft;VR().m_rawControllerPose[1]=heldRight;
+            VR().m_rawControllerPose[0].m[0][3]+=(frame%2 ? .0065f : -.0065f);
+            VR().m_rawControllerPose[1].m[0][3]-=(frame%2 ? .0065f : -.0065f);
+            if(frame==10) g_bodyFollower.Reset(); // Native jump/landing can restart the stance solver.
+            g_torsoPose.time=TurnTime()-1./90;
+            const auto pose=render();
+            Check(BodyControllersStationary(),"head movement does not release fixed controller positions");
+            Check(locomotion::Length(DragBody(itemMemory))==0,"stationary controllers prevent head-only roomscale root movement");
+            for(int joint:{0,7}) Check(firstperson::Length(firstperson::Flat(Sub(pose[joint].origin,heldPose[joint].origin)))<.1f,
+                  "head translation and rotation cannot slide pelvis or chest while controllers remain fixed in space");
+            Check(std::fabs(g_bodyFollower.yaw)<.0001f,"stationary controllers freeze physical body yaw");
+            for(int hand=0;hand<2;++hand) {
+                Frame wrist{};Basis controller{};Check(BuildControllerWrist(hand,wrist,controller),"body hold retains controller targets");
+                Check(firstperson::Length(Sub(pose[hand ? 10 : 13].origin,wrist.origin))<.1f,
+                      "stationary body retains exact tracked hands");
+            }
+            Check(!std::memcmp(&sceneBefore,&g_scenePose,sizeof(sceneBefore)),"body hold never alters the camera anchor");
+        }
+        Head(0);
+        ResetControllerBodyAnchor();
+        }
+        *Ptr<int16_t>(dll.lara+2)=0;
         config.firstPersonBodyHandYawWeight=savedHandWeight;
         VR()=savedVR;
     }

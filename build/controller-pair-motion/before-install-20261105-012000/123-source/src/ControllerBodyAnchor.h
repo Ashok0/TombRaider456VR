@@ -1,0 +1,66 @@
+#pragma once
+#include "BodyFollower.h"
+namespace tr::firstperson {
+// Controller POSITIONS, not their aim. Require coordinated head/hand travel.
+// A fixed reference and separate entry/continuation thresholds reject noise without
+// mistaking a slow cumulative physical step for stationary hands.
+struct ControllerBodyAnchor {
+    bool valid=false,held=false;
+    uint64_t serial=0;
+    double time=0,moved=0;
+    float base=0,yaw=0,height=0,motionYaw=0;
+    int reason=0;float handTravel[2]{};
+    Vec hands[2]{},offset{},head{},motionEye{},previousEye{};
+    void Reset() { *this={}; }
+    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0) {
+        if(!tracked || !Finite({IdentityBasis(),eye}) || !Finite({IdentityBasis(),left}) ||
+           !Finite({IdentityBasis(),right}) || !std::isfinite(now+artificial+bodyYaw+headYaw)) {Reset();return;}
+        if(valid && serial==frame && artificial==base) return;
+        const bool turn=valid && std::fabs(BodyAngle(artificial-base))>1.e-6f;
+        if(!valid || now<time || now-time>.5 || turn) {
+            *this={};valid=true;serial=frame;time=moved=now;base=artificial;
+            hands[0]=left;hands[1]=right;head=motionEye=previousEye=eye;motionYaw=headYaw;yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;return;
+        }
+        const float dt=float(std::clamp(now-time,0.,.05));serial=frame;time=now;
+        const Vec eyeStep=Flat(Sub(eye,previousEye));previousEye=eye;
+        const Vec delta[2]={Flat(Sub(left,hands[0])),Flat(Sub(right,hands[1]))};
+        const Vec headDelta=Flat(Sub(eye,motionEye)),common=Scale(Add(delta[0],delta[1]),.5f);
+        const float h=Length(headDelta),c=Length(common),a=Length(delta[0]),b=Length(delta[1]);
+        handTravel[0]=a;handTravel[1]=b;
+        // Releasing an established hold needs substantial, coordinated motion.
+        // Small independent hand drift is not evidence that the torso moved.
+        // Once moving, a lower continuation threshold preserves slow roomscale.
+        const float threshold=held ? .025f : .003f;
+        const bool translation=a>=threshold && b>=threshold && c>=threshold && h>=threshold &&
+            Dot(delta[0],delta[1])>.8f*a*b && Dot(common,headDelta)>.8f*c*h &&
+            Length(Sub(common,headDelta))<std::max(.025f,h*.5f);
+        const float turnDelta=BodyAngle(headYaw-motionYaw);
+        bool rotation=a>=threshold && b>=threshold && std::fabs(turnDelta)>(held ? .06f : .008f) && std::fabs(turnDelta)<1.5f;
+        const Vec live[2]={left,right};
+        for(int i=0;i<2 && rotation;++i) {
+            const Vec before=Flat(Sub(hands[i],motionEye)),after=Flat(Sub(live[i],eye));
+            const float oldRadius=Length(before),newRadius=Length(after);
+            const float angle=BodyAngle(std::atan2(after.x,after.z)-std::atan2(before.x,before.z));
+            rotation=oldRadius>.12f && newRadius>oldRadius*.8f && newRadius<oldRadius*1.25f &&
+                std::fabs(BodyAngle(angle-turnDelta))<std::fabs(turnDelta)*.4f+.01f;
+        }
+        if(walking || translation || rotation) {
+            // Move the body by corroborated travel, never erase an existing
+            // head-only lean merely because a hand-motion gate released.
+            if(!walking) head=Add(head,translation ? common : eyeStep);
+            hands[0]=left;hands[1]=right;motionEye=eye;motionYaw=headYaw;moved=now;held=false;
+            reason=walking ? 3 : rotation ? 2 : 1;
+        } else if(now-moved>=.12) {
+            if(!held) {held=true;height=eye.y;yaw=bodyYaw;}
+        }
+        if(!walking) offset=Flat(Sub(eye,head));
+        else {
+            // Explicit stick travel recentres smoothly; physical hand movement
+            // must never release the entire accumulated head-only displacement.
+            const float length=Length(offset);
+            if(length>0) offset=Scale(offset,std::max(0.f,1-dt/length));
+            head=Sub(eye,offset);height=eye.y;yaw=bodyYaw;
+        }
+    }
+};
+}

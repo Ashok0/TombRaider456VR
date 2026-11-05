@@ -204,7 +204,7 @@ inline bool SolveBodyAtEye(const Frame (&native)[15],int anchorJoint,Vec anchor,
 inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,float yawDelta,
                                const Basis& headRotation,Vec forward,float scale,Vec rootOffset,
                                float headTwist,bool grounded,float stepPhase,float stepWeight,
-                               Frame (&posed)[15],float standingWeight=0,float postureEyeOffset=0) {
+                               Frame (&posed)[15],float standingWeight=0,float postureEyeOffset=0,Vec horizontalPostureOffset={}) {
     if(!std::isfinite(scale) || scale<=1 || !Finite({headRotation,eye}) ||
        !Finite({IdentityBasis(),rootOffset})) return false;
     for(const auto& joint:native) { Frame inverse{};if(!Finite(joint) || !Inverse(joint,inverse)) return false; }
@@ -221,7 +221,10 @@ inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,floa
     // Keep the tracked head exact. The separate posture target includes the
     // fixed visual-fit reserve and removes the eyes' downward neck arc, so
     // looking down cannot masquerade as crouch when the standing gate releases.
-    const Vec postureHead=Add(Sub(eye,Transform(footprint[14].basis,localEye)),{0,postureEyeOffset,0});
+    // A controller-held footprint also holds the horizontal posture target.
+    // The hidden head and the rendered camera retain the true tracked eye.
+    const Vec postureHead=Add(Sub(eye,Transform(footprint[14].basis,localEye)),
+        {horizontalPostureOffset.x,postureEyeOffset,horizontalPostureOffset.z});
     const Vec displacement=Sub(postureHead,footprint[14].origin);
     const Vec spine=Sub(footprint[14].origin,footprint[0].origin);
     if(Length(spine)<.001f) return false;

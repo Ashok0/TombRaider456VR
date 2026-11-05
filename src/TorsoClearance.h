@@ -118,7 +118,7 @@ struct TorsoClearance {
         return std::isfinite(solution) ? solution : best;
     }
     bool Apply(const void* model,Frame (&pose)[15],const Frame (&bind)[15],Vec eye,float heading,
-               float worldUnits,uint64_t frame,double now,bool mainBody,const TorsoSurface* surface=nullptr) {
+               float worldUnits,uint64_t frame,double now,bool mainBody,const TorsoSurface* surface=nullptr,bool holdCorrection=false) {
         if(worldUnits<=1 || !std::isfinite(worldUnits+heading) || !std::isfinite(now)) return false;
         TorsoEnvelope shape;
         if(surface && surface->valid && surface->owner==model) {
@@ -127,7 +127,9 @@ struct TorsoClearance {
         } else if(!shape.Capture(bind)) { if(mainBody) Reset();return true; }
         const Vec right{std::cos(heading),0,-std::sin(heading)};
         if(owner!=model || std::fabs(units-worldUnits)>.01f) Reset();
-        if(mainBody && (!valid || serial!=frame)) {
+        // Looking around a held torso must not make it dodge the headset.
+        // Retain its established bend; hand IK and real eye clipping remain live.
+        if(mainBody && (!valid || serial!=frame) && (!holdCorrection || !valid)) {
             const float target=Required(shape,pose[7],pose[0].origin,right,eye,worldUnits);
             // Contact correction must keep up with a rising torso. Smoothing the
             // attack lets the mesh penetrate until the filter catches up.

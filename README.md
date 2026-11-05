@@ -160,6 +160,25 @@ body; a deeper crouch requests Lara's native crouch, and standing again releases
 when clearance permits. Recenter while upright to establish the intended standing
 height. Full-body IK and positional tracking are required for this feature.
 
+When both motion controllers stay in the same tracked positions, Lara's
+horizontal body position and physical facing are held while you move or turn
+your head. The view and controller hands remain fully tracked. Small independent controller drift does not release the hold. Coordinated
+head and both-controller travel of roughly 2.5 cm, or a corroborated physical
+turn, releases it; a lower continuation threshold preserves slow movement.
+After 120 ms without that movement the body holds again.
+Both controllers must travel together by comparable amounts, and physical
+turns must rotate the line between them along with the headset. Unrelated
+hand gestures and sideways head glances do not count as body movement.
+The movement detector refreshes after unrelated motion so old hand drift
+cannot later be mistaken for a step.
+Physical movement carries only the detected travel; it does not pull the body
+across an accumulated head lean. While held, horizontal posture and chest
+clearance corrections also stay anchored, so looking down and around Lara
+does not make the torso dodge your head. Vertical crouching and tracked hand IK
+remain active.
+Stick locomotion/turning still works. Tracking loss, recentering and game changes
+clear the hold. Native jumps and vertical crouching remain available.
+
 ### Weapons, aiming, flares and feedback: TR4/5 Remastered
 
 Supported weapons follow the controllers in first person. Pistols and Uzis can be

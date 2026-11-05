@@ -97,7 +97,7 @@ struct PhysicalBodyTurn {
     bool valid=false;
     uint64_t serial=0;
     double time=0;
-    float head=0,hand[2]{},radius[2]{},turn=0;
+    float head=0,hand[2]{},radius[2]{},turn=0,pairYaw=0,pairSpan=0;
     void Reset() { *this={}; }
     float Observe(uint64_t frame,double now,float headYaw,Vec left,Vec right,bool tracked) {
         const Vec hands[2]={Flat(left),Flat(right)};
@@ -116,6 +116,14 @@ struct PhysicalBodyTurn {
             coherent=coherent && std::fabs(movement-delta)<=std::fabs(delta)*.65f &&
                 lengths[i]>radius[i]*.8f && lengths[i]<radius[i]*1.25f;
         }
+        // Relative-to-head hand angles also change when the head moves
+        // between stationary controllers. The line joining the hands cancels
+        // that parallax and must corroborate a real physical turn as well.
+        const Vec pair=Sub(hands[1],hands[0]);const float span=Length(pair);
+        const float yaw=std::atan2(pair.x,pair.z),pairDelta=BodyAngle(yaw-pairYaw);
+        coherent=coherent && pairSpan>.12f && span>pairSpan*.9f && span<pairSpan*1.1f &&
+            std::fabs(BodyAngle(pairDelta-delta))<=std::fabs(delta)*.35f;
+        pairYaw=yaw;pairSpan=span;
         turn=coherent ? delta : 0.f;
         valid=true;serial=frame;time=now;head=headYaw;
         for(int i=0;i<2;++i) {hand[i]=angles[i];radius[i]=lengths[i];}
@@ -127,21 +135,22 @@ struct BodyFollower {
     bool valid=false,turning=false,stepping=false,supportedHands=false;
     uint64_t serial=0;
     double time=0;
-    float yaw=0,base=0,phase=0,stepWeight=0;
+    float yaw=0,base=0,phase=0,stepWeight=0,pendingPhysicalTurn=0;
     Vec root{},nativeRoot{};
     void Reset() { *this={}; }
     void Update(uint64_t frame,double now,float artificialYaw,float headYaw,float travelYaw,
                 Vec goal,Vec native,bool moving,const BodyFollowSettings& s,Vec turnPivot={},bool handsForward=false,
-                bool pivotFootprint=false,float trackedTurn=0) {
+                bool pivotFootprint=false,float trackedTurn=0,bool holdPhysical=false,bool holdHeadTurn=false) {
         if(!std::isfinite(now+artificialYaw+headYaw+travelYaw) ||
            !Finite({IdentityBasis(),goal}) || !Finite({IdentityBasis(),native})) { Reset();return; }
         if(!valid || now<time || now-time>.25 || Length(Sub(native,nativeRoot))>2) {
             valid=true;turning=stepping=false;serial=frame;time=now;
-            yaw=headYaw;base=artificialYaw;root=Flat(goal);nativeRoot=native;stepWeight=0;
+            yaw=headYaw;base=artificialYaw;root=Flat(goal);nativeRoot=native;stepWeight=0;pendingPhysicalTurn=0;
             supportedHands=handsForward;return;
         }
         const float turn=BodyAngle(artificialYaw-base);
         if(turn!=0) {
+            pendingPhysicalTurn=0;
             yaw=BodyAngle(yaw+turn);
             root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),turn));
             if(pivotFootprint) goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),turn));
@@ -157,7 +166,10 @@ struct BodyFollower {
         // Corroborated roomscale turning follows the same pivot as a stick
         // turn. Preserve any existing head-only glance rather than snapping
         // the torso to the current gaze when the whole body starts turning.
-        const float physical=!moving && std::isfinite(trackedTurn) ? std::clamp(trackedTurn,-.35f,.35f) : 0.f;
+        if(moving) pendingPhysicalTurn=0;
+        else if(std::isfinite(trackedTurn)) pendingPhysicalTurn=BodyAngle(pendingPhysicalTurn+trackedTurn);
+        const float physical=!holdPhysical && !moving ? std::clamp(pendingPhysicalTurn,-.35f,.35f) : 0.f;
+        pendingPhysicalTurn-=physical;
         yaw=BodyAngle(yaw+physical);
         if(pivotFootprint && physical!=0) {
             root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),physical));
@@ -167,7 +179,9 @@ struct BodyFollower {
         // Angular slack, without a timed chase: every degree beyond the
         // boundary is carried in this pose. Stopping the head stops the body.
         const bool supported=handsForward && !moving && !turning && std::fabs(delta)<1.3962634f;
-        const float change=moving ? BodyAngle(travelYaw-yaw) : supported ? 0.f :
+        // A positional controller hold freezes physical body following;
+        // explicit stick motion still owns travel and artificial yaw above.
+        const float change=moving ? BodyAngle(travelYaw-yaw) : (holdPhysical || holdHeadTurn || supported) ? 0.f :
             delta-std::clamp(delta,-s.yawSlack,s.yawSlack);
         turning=std::fabs(change)>.00001f;
         yaw=BodyAngle(yaw+change);
@@ -175,7 +189,7 @@ struct BodyFollower {
             root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),change));
             goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),change));
         }
-        const Vec offset=Flat(Sub(goal,root));const float distance=Length(offset);
+        const Vec offset=holdPhysical && !moving ? Vec{} : Flat(Sub(goal,root));const float distance=Length(offset);
         // Once an actual step starts, bring the visual body back under the
         // player. Collision-root hysteresis can retain a larger lean margin;
         // retaining it here as well leaves a permanent torso displacement.
