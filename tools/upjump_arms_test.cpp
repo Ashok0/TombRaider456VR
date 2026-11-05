@@ -121,8 +121,13 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
                     if(step==0 && eye==0) baseline[j]=actual;
                     if(state==28 && (j==8 || j==11)) {
                         auto shoulder=Multiply(ReadRows(fixture+i*12),binds[i]);shoulder.origin=Add(shoulder.origin,camera);
-                        Check(firstperson::Length(Sub(actual.origin,shoulder.origin))<.1f,
-                              "jump shoulders remain attached to the currently rendered torso in both eyes");
+                        Frame inverse{};Inverse(shoulder,inverse);
+                        const auto change=Multiply(actual,inverse);
+                        for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
+                            float dot=0;for(int k=0;k<3;++k) dot+=change.basis.r[k][r]*change.basis.r[k][c];
+                            Check(std::fabs(dot-(r==c?1.f:0.f))<.003f,
+                                  "jump shoulder adjustment retains rigid arm geometry in both eyes");
+                        }
                     }
                     if(state==28 && j<8) Check(!std::memcmp(palette+i*12,fixture+i*12,12*sizeof(float)),
                                               "airborne torso and legs retain their native animation");

@@ -39,8 +39,8 @@ void TestTorsoClearance() {
             Check(SolveTrackedArm(chain,target,{0,1,-1},arms,correction,true),"corrected shoulder still solves to the live controller");
             const auto wrist=Multiply(correction[2],chain[2]);
             Check(Length(Sub(wrist.origin,target.origin))<.05f,"tracked wrist stays exact after torso clearance");
-            const auto shoulder=Multiply(correction[0],chain[0]);
-            Check(Length(Sub(shoulder.origin,pose[first].origin))<.001f,"arm solving cannot detach the shoulder");
+            Frame solved[3]{};for(int j=0;j<3;++j) solved[j]=Multiply(correction[j],chain[j]);
+            CheckRigidTrackedReach(chain,solved);
         }
         Frame repeat[15]{};for(int j=0;j<15;++j) repeat[j]=original[j];
         const float held=guard.angle;

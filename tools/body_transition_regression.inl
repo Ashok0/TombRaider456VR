@@ -1,3 +1,38 @@
+void TestHiddenNeckSkin() {
+    using namespace tr::motiongun;
+    for(int count:{15,33}) for(float yaw:{0.f,.8f,3.14f}) for(float size:{.85f,1.f}) {
+        int32_t mapping[33]{};for(int i=0;i<count;++i) mapping[i]=i<15?i:14;
+        std::swap(mapping[7],mapping[3]); // Palette order is not joint order.
+        const auto visible=tr::firstperson::SkinJointMask(0x3fff,mapping,count);
+        float palette[33*12]{},before[33*12]{};
+        for(int frame=0;frame<=100;++frame) {
+            auto basis=tr::firstperson::RotationMatrix(tr::firstperson::AxisRotation({0,1,0},yaw));
+            for(auto& row:basis.r) for(auto& value:row) value*=size;
+            const Frame chest{basis,{10,100.f-frame,30}};
+            const Frame head{tr::firstperson::IdentityBasis(),{-30,-200-float(frame*3),-100}};
+            for(int i=0;i<count;++i) WriteRows(mapping[i]==14?head:chest,palette+i*12);
+            std::memcpy(before,palette,sizeof(before));
+            Check(tr::firstperson::StabilizeHiddenNeck(palette,count,mapping,visible),"hidden collar correction handles mapped body palettes");
+            const tr::motiongun::Vec vertex{12,-20,17};
+            for(int i=0;i<count;++i) {
+                if(mapping[i]!=14) Check(!std::memcmp(palette+i*12,before+i*12,12*sizeof(float)),"neck correction preserves every visible bone");
+                else for(float weight:{.01f,.25f,.49f}) {
+                    const auto mixed=Add(Scale(Transform(ReadRows(palette+i*12),vertex),weight),Scale(Transform(chest,vertex),1-weight));
+                    Check(tr::firstperson::Length(Sub(mixed,Transform(chest,vertex)))<.001f,"mixed collar vertices cannot spike toward the independently moving hidden head");
+                }
+            }
+            float repeat[33*12];std::memcpy(repeat,palette,sizeof(palette));
+            tr::firstperson::StabilizeHiddenNeck(palette,count,mapping,visible);
+            Check(!std::memcmp(repeat,palette,sizeof(palette)),"hidden collar correction is idempotent across stereo draws");
+            for(auto mask:{tr::firstperson::SkinJointMask(0x7fff,mapping,count),tr::firstperson::SkinJointMask(0x3f00,mapping,count)}) {
+                std::memcpy(palette,before,sizeof(palette));
+                Check(!tr::firstperson::StabilizeHiddenNeck(palette,count,mapping,mask) && !std::memcmp(palette,before,sizeof(palette)),
+                      "visible heads and arms-only attachments keep their original palettes");
+            }
+        }
+    }
+}
+
 #include "sidearm_animation_steps.inl"
 void TestBodyTransitions(uint8_t* objectInfo) {
     using namespace tr;using namespace tr::motiongun;
@@ -248,6 +283,7 @@ void TestForwardJumpTorso() {
 }
 
 void TestUprightTorsoFit() {
+    TestHiddenNeckSkin();
     TestPhysicalBodyTurn();
     TestForwardJumpTorso();
     using namespace tr::firstperson;using Vec=tr::motiongun::Vec;
@@ -360,6 +396,26 @@ void TestStandingCalibration(uint8_t* objectInfo) {
         }
         config.firstPersonBodyHandYawWeight=savedHandWeight;
         VR()=savedVR;
+    }
+    {
+        const auto savedBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
+        *reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits)=0x3fff;
+        for(int frame=0;frame<=40;++frame) {
+            VR().m_rawHeadPose.m[1][3]=initialHeight-.4f+frame*.01f;
+            g_torsoPose.time=TurnTime()-1./90;render();
+            fixture[14*12+3]=123;
+            const auto sceneBefore=g_scenePose;
+            Detour_GetJoints(itemMemory,palette,0);
+            uint64_t mask=0;int count=0;
+            const auto shown=FirstPersonRenderBodyPalette(mask,count);
+            const auto native=FirstPersonBodyPalette(mask,count);
+            Check(shown && count==15 && !std::memcmp(shown+14*12,shown+7*12,12*sizeof(float)),
+                  "production crouch recovery uploads a rigid hidden collar");
+            Check(native && native[14*12+3]==123,"hidden collar correction cannot enter the physics palette");
+            Check(!std::memcmp(&sceneBefore,&g_scenePose,sizeof(sceneBefore)),"hidden collar correction cannot move the view");
+        }
+        *reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits)=savedBits;
+        VR().m_rawHeadPose.m[1][3]=initialHeight;
     }
     ResetBodyFollower();
     const auto upright=render();
@@ -526,8 +582,11 @@ void TestStandingCalibration(uint8_t* objectInfo) {
         }
         Frame inverseChest{};Inverse(native[7],inverseChest);
         const auto chestChange=Multiply(shown[7],inverseChest);
-        for(int shoulder:{8,11}) Check(firstperson::Length(Sub(shown[shoulder].origin,Transform(chestChange,native[shoulder].origin)))<.1f,
-              "airborne shoulders remain attached after body scaling and torso clearance");
+        for(int shoulder:{8,11}) {
+            Frame reference[3]{},actual[3]{};
+            for(int j=0;j<3;++j) { reference[j]=Multiply(chestChange,native[shoulder+j]);actual[j]=shown[shoulder+j]; }
+            CheckRigidTrackedReach(reference,actual);
+        }
         Check(g_bodySize.factor==fixedSize,"jump never recalibrates visual size");
         if(jump==3 || jump==9) {
             Frame inverse{};Inverse({firstperson::RotationMatrix(firstperson::RotationOf(g_groundTorso.chest)),{}},inverse);

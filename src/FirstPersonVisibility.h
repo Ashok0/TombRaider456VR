@@ -96,6 +96,23 @@ inline uint64_t SkinJointMask(uint32_t meshBits, const int32_t* mapping, int cou
     return result;
 }
 
+// A hidden head must not pull shared collar vertices toward the tracked eye
+// while the fitted/filtered torso rises from a crouch. Skin matrices already
+// share mesh coordinates: use the final chest transform for hidden head weights.
+// Only the eye-view upload is changed; keep native physics, camera and shadow
+// palettes, visible heads and arms-only attachments untouched.
+inline bool StabilizeHiddenNeck(float* palette,int count,const int32_t* mapping,uint64_t visible) {
+    if(!palette || count<1 || count>64) return false;
+    const auto head=SkinJointMask(HeadMeshBit,mapping,count);
+    const auto chest=SkinJointMask(1u<<7,mapping,count)&visible;
+    if(!head || (head&visible) || !chest) return false;
+    int source=0;while(!(chest&(uint64_t(1)<<source))) ++source;
+    for(int k=0;k<12;++k) if(!std::isfinite(palette[source*12+k])) return false;
+    for(int i=0;i<count;++i) if(head&(uint64_t(1)<<i))
+        for(int k=0;k<12;++k) palette[i*12+k]=palette[source*12+k];
+    return true;
+}
+
 // DrawLaraHD passes zero for an unmasked body. Its effective native mask is
 // then all meshes, regardless of the persistent ITEM_INFO::mesh_bits value.
 // Restrict that draw locally so a stale item mask cannot remove hanging hands.

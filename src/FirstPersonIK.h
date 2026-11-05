@@ -303,7 +303,10 @@ inline ArmRotation ReachRotation(const Basis& basis,Vec axis,float ratio) {
 inline bool SolveTrackedArm(const Frame (&native)[3],const Frame& target,
                             Vec pole,const Frame (&bind)[3],Frame* corrections,
                             bool upperArmPresent=true,ArmRollContinuity* continuity=nullptr) {
-    if(!SolveArm(native,target,pole,corrections,nullptr,nullptr,false,{},true,true)) return false;
+    // Fixed mesh lengths take precedence over a pinned shoulder outside reach.
+    // Keep the historical minimum shoulder translation and exact tracked wrist;
+    // enabling connectedReach here reintroduces visibly rubbery arm extension.
+    if(!SolveArm(native,target,pole,corrections,nullptr,nullptr,false,{},true,false)) return false;
     const auto forearm=Multiply(corrections[1],native[1]);
     Vec axis{};if(!Unit(Sub(target.origin,forearm.origin),axis)) return false;
     const auto boneLength=[](Vec v) { return std::sqrt(Dot(v,v)); };

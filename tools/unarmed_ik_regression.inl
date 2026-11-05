@@ -1,3 +1,19 @@
+// Independent contract for the restored rigid arm solve: exact lengths and
+// the minimum shoulder displacement required by the reachable annulus.
+void CheckRigidTrackedReach(const tr::motiongun::Frame (&native)[3],const tr::motiongun::Frame (&posed)[3]) {
+    using namespace tr::motiongun;
+    const float a=tr::firstperson::Length(Sub(native[1].origin,native[0].origin));
+    const float b=tr::firstperson::Length(Sub(native[2].origin,native[1].origin));
+    const float distance=tr::firstperson::Length(Sub(posed[2].origin,native[0].origin));
+    const float margin=std::min(a,b)*.001f;
+    const float excess=std::fabs(distance-std::clamp(distance,std::fabs(a-b)+margin,a+b-margin));
+    Check(std::fabs(tr::firstperson::Length(Sub(posed[1].origin,posed[0].origin))-a)<.1f &&
+          std::fabs(tr::firstperson::Length(Sub(posed[2].origin,posed[1].origin))-b)<.1f,
+          "tracked arm keeps fixed upper and lower lengths at all reaches");
+    Check(std::fabs(tr::firstperson::Length(Sub(posed[0].origin,native[0].origin))-excess)<.1f,
+          "shoulder moves only by the unreachable excess, remaining anchored within reach");
+}
+
 // Included by first_person_tests.cpp: exercises real palette and controller paths.
 namespace {
 tr::motiongun::Vec ikWrists[2]{};
@@ -177,7 +193,7 @@ void TestUnarmedIK() {
         }
     }
     // Reach beyond Lara's proportions translates the tracked chain instead of
-    // detaching its shoulders. Exercise both reach boundaries, full folding,
+    // stretching its meshes. Exercise both reach boundaries, full folding,
     // mirrored arms, calibrated scales and rotated/translated palette frames.
     for(float scale:{.5f,1.f,2.f}) for(float side:{-1.f,1.f}) for(float yaw:{-2.f,0.f,1.3f}) {
         const Frame body{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},yaw)),{170,-90,240}};
@@ -189,7 +205,7 @@ void TestUnarmedIK() {
         for(int distance=0;distance<=1000;++distance) {
             const Frame target{body.basis,Add(chain[0].origin,Scale(direction,float(distance)*scale))};
             Frame changes[3]{},repeat[3]{};
-            Check(firstperson::SolveTrackedArm(chain,target,pole,chain,changes),"connected tracked reach solves near and far controllers");
+            Check(firstperson::SolveTrackedArm(chain,target,pole,chain,changes),"rigid tracked reach solves near and far controllers");
             Check(firstperson::SolveTrackedArm(chain,target,pole,chain,repeat) && !std::memcmp(changes,repeat,sizeof(changes)),
                   "tracked reach is independent of render history and stereo eye");
             Frame solved[3]{};
@@ -198,25 +214,18 @@ void TestUnarmedIK() {
                 for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
                     float dot=0;
                     for(int k=0;k<3;++k) dot+=changes[i].basis.r[k][r]*changes[i].basis.r[k][c];
-                    Vec axis{};float ratio=1;
-                    if(i<2) { firstperson::Unit(Sub(chain[i+1].origin,chain[i].origin),axis);
-                        ratio=firstperson::Length(Sub(Multiply(changes[i+1],chain[i+1]).origin,solved[i].origin))/firstperson::Length(Sub(chain[i+1].origin,chain[i].origin)); }
-                    const float v[3]={axis.x,axis.y,axis.z};
-                    Check(std::fabs(dot-((r==c ? 1.f : 0.f)+(ratio*ratio-1)*v[r]*v[c]))<.004f,
-                          "connected reach changes bone length only, without changing arm thickness or hand scale");
+                    Check(std::fabs(dot-(r==c ? 1.f : 0.f))<.002f,"tracked reach never scales or shears an arm mesh");
                 }
                 if(i<2) Check(nearVec(Transform(changes[i],chain[i+1].origin),Multiply(changes[i+1],chain[i+1]).origin),
                               "rigid arm meshes remain connected at elbow and wrist");
             }
             nearFrame(solved[2],target);
-            const float folded=distance/100.2f;
-            const float difference=100.f*folded*folded*(2-folded);
-            const float upper=distance<100.2f ? (500.f+difference)*.5f : distance>499.8f ? distance*300.f/499.8f : 300.f;
-            const float lower=distance<100.2f ? (500.f-difference)*.5f : distance>499.8f ? distance*200.f/499.8f : 200.f;
-            Check(std::fabs(firstperson::Length(Sub(solved[1].origin,solved[0].origin))-upper*scale)<.04f &&
-                  std::fabs(firstperson::Length(Sub(solved[2].origin,solved[1].origin))-lower*scale)<.04f,
-                  "connected arms retain anatomical lengths inside reach and use only the required adjustment outside it");
-            Check(nearVec(solved[0].origin,chain[0].origin),"tracked shoulder remains attached even beyond reach");
+            Check(std::fabs(firstperson::Length(Sub(solved[1].origin,solved[0].origin))-300*scale)<.04f &&
+                  std::fabs(firstperson::Length(Sub(solved[2].origin,solved[1].origin))-200*scale)<.04f,
+                  "upper arm and forearm retain native lengths even beyond reach");
+            if(distance>100 && distance<500) Check(nearVec(solved[0].origin,chain[0].origin),"reachable tracked arms keep shoulder anchored");
+            if(distance>500) Check(std::fabs(Dot(Sub(solved[0].origin,chain[0].origin),direction)-(distance-499.8f)*scale)<.04f,
+                                  "overreach moves shoulder only by the excess reach");
             if(havePrevious && distance>1) {
                 Check(firstperson::Length(Sub(solved[0].origin,previous[0].origin))<1.01f*scale,
                       "shoulder translation is continuous across reach limits");
@@ -613,8 +622,13 @@ void TestUnarmedIK() {
             Check(physics && capturedCount==count && !std::memcmp(physics,baseline,count*12*sizeof(float)),
                   "controller IK cannot change the captured jiggle-physics skeleton");
             const auto* render=FirstPersonRenderBodyPalette(mask,capturedCount);
-            Check(render && render!=physics && !std::memcmp(render,palette,count*12*sizeof(float)),
-                  "shader uploads IK palette instead of overwriting it with physics skeleton");
+            Check(render && render!=physics,"render and physics palettes remain separate");
+            int chest=0;while(chest<count && mapping[chest]!=7) ++chest;
+            for(int i=0;i<count;++i) {
+                const bool hiddenNeck=mapping[i]==14 && !(mask&(uint64_t(1)<<i)) && chest<count && (mask&(uint64_t(1)<<chest));
+                Check(!std::memcmp(render+i*12,palette+(hiddenNeck?chest:i)*12,12*sizeof(float)),
+                      "upload retains the solved IK palette with only hidden collar weights following the chest");
+            }
             Check(FirstPersonTrackedHandJoint()==-1,"IK body does not enable rigid gun skinning shader");
             for(int i=0;i<count;++i) {
                 const int joint=mapping[i];
@@ -691,8 +705,8 @@ void TestUnarmedIK() {
                             float dot=0;
                             for(int k=0;k<3;++k) dot+=change.basis.r[k][r]*change.basis.r[k][c];
                             Check(std::isfinite(dot),"production arm reach remains finite at every controller distance");
-                            if(joint==10 || joint==13) Check(std::fabs(dot-(r==c ? 1.f : 0.f))<.003f,
-                                  "production connected reach preserves rigid tracked hands and weapon dimensions");
+                            Check(std::fabs(dot-(r==c ? 1.f : 0.f))<.003f,
+                                  "production tracked reach preserves rigid arms, hands and weapon dimensions");
                         }
                     }
                 }

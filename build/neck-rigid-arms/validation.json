@@ -1,0 +1,20 @@
+{
+  "ReleaseBuildsPassed": [
+    "123",
+    "456"
+  ],
+  "RegressionChecks": {
+    "456": 2699590,
+    "123": 1760075
+  },
+  "Coverage": [
+    "restored historical rigid-reach length, transform and minimum shoulder-shift assertions",
+    "mirrored, scaled, near and far arms, wrist rolls and repeated stereo draws",
+    "production crouch-to-stand uploads keep hidden head skin weights on the final chest matrix",
+    "mixed collar vertices across 15/33-slot TR4-5 and 15/32-slot TR1-3 mappings",
+    "visible head and arms-only exclusions, unchanged camera and native physics palettes",
+    "existing body calibration, roomscale turn, airborne body fit and spring stability regressions"
+  ],
+  "InHeadsetTested": false,
+  "Compromise": "Out-of-reach controllers translate the shoulder by the minimum excess instead of stretching bones; extreme reach can show a shoulder seam."
+}

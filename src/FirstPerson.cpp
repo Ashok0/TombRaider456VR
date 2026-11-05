@@ -2666,7 +2666,10 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
         }
         if(!solved) stabilization::OffsetBodyPalette(joints,count,BodyMeshOffset(item));
         if(solved && g_pistolBodyScope) PistolBodyArmPose(item,joints,count,pass,true);
-        if (g_bodySkinReady) std::memcpy(g_bodyRenderPalette,joints,count*12*sizeof(float));
+        if (g_bodySkinReady) {
+            std::memcpy(g_bodyRenderPalette,joints,count*12*sizeof(float));
+            firstperson::StabilizeHiddenNeck(g_bodyRenderPalette,count,MirrorJointMapping(item,count),g_bodySkinMask);
+        }
         if(solved) TraceArmGlance(item,joints,count,pass);
         if (captureHolsters) CaptureHolsterAnchors(item,joints,count,holsterCamera);
         if(g_floatingHand>=0) CaptureSealedHand(item,joints,count,g_floatingHand ? 10 : 13);

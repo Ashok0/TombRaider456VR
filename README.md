@@ -89,13 +89,17 @@ looking around. Hand gestures alone do not turn the body. Without reliable
 matching hand movement, the usual head-turn slack remains; this is an inference,
 not waist tracking. `FirstPersonBodyHandYawWeight=0` disables this assistance.
 
-Tracked shoulders remain attached to the rendered torso, including through jump
-and landing transitions. Hands and weapons retain their controller positions and
-rotations. Reachable poses keep their normal proportions. Beyond Lara's natural
-reach, the arm bones extend only as needed, with a small bend allowance; hand size,
-weapon size and arm thickness remain unchanged. Very close reaches fold smoothly.
-This prioritizes connected shoulders and accurate hand placement over perfectly
-rigid arm lengths at extreme reaches.
+Tracked arms preserve upper-arm and forearm lengths, including during jump and
+landing transitions. Hands and weapons retain their controller positions and
+rotations. Reachable poses keep the shoulder anchored. Outside Lara's natural
+reach, the visual shoulder moves only by the excess needed to keep the hand
+tracked, rather than stretching the arm mesh. Extreme reaches can expose a
+shoulder seam; this restores the earlier rigid-arm compromise.
+
+With the head hidden, shared collar vertices follow the final chest pose so
+crouch-to-stand recovery cannot pull neck triangles toward the headset. The
+correction changes only the rendered palette; camera motion, body fitting,
+native shadows and the chest-physics input remain unchanged.
 
 Sidearm equip and unequip animations visibly move the arms to and from the
 holsters, with smooth transitions back to controller tracking. Physical holster
