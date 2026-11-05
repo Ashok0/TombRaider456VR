@@ -168,7 +168,88 @@ void TestBodyCenterReference() {
     }
 }
 
+void TestPhysicalBodyTurn() {
+    using namespace tr::firstperson;
+    const tr::firstperson::Vec left{-.2f,0,.35f},right{.2f,0,.35f},foot{0,0,-.15f};
+    tr::firstperson::BodyFollowSettings settings;
+    for(float direction:{-1.f,1.f}) for(float glance:{0.f,.4f}) {
+        PhysicalBodyTurn signal;BodyFollower physical,analog,mixed;
+        physical.Update(1,1,0,0,0,foot,{},false,settings,{},false,true);
+        analog=physical;mixed=physical;
+        signal.Observe(1,1,glance,left,right,true);
+        float angle=0;
+        for(int frame=2;frame<1400;++frame) {
+            const float step=(frame<700 ? direction : -direction)*.012f;
+            angle+=step;const double now=1+double(frame-1)/90;
+            const float observed=signal.Observe(frame,now,BodyAngle(angle+glance),YawVector(left,angle),YawVector(right,angle),true);
+            Check(std::fabs(observed-step)<.00001f,"coherent physical turn crosses wrap and reverses without losing heading");
+            physical.Update(frame,now,0,BodyAngle(angle+glance),0,YawVector(foot,physical.yaw),{},false,settings,{},false,true,observed);
+            analog.Update(frame,now,angle,BodyAngle(angle+glance),0,YawVector(foot,analog.yaw),{},false,settings,{},false,true);
+            mixed.Update(frame,now,angle*.5f,BodyAngle(angle*1.5f+glance),0,YawVector(foot,mixed.yaw),{},false,settings,{},false,true,observed);
+            Check(std::fabs(BodyAngle(physical.yaw-analog.yaw))<.00005f && Length(Sub(physical.root,analog.root))<.00005f,
+                  "roomscale and analog turns keep identical body heading and centered footprint");
+            Check(std::fabs(BodyAngle(physical.yaw-angle))<.00005f,"physical turn retains the existing head-only glance");
+            Check(std::fabs(BodyAngle(mixed.yaw-angle*1.5f))<.0001f,"simultaneous physical and analog turns each apply once");
+            const auto root=physical.root;const float yaw=physical.yaw;
+            physical.Update(frame,now,0,angle+glance,0,root,{},false,settings,{},false,true,observed);
+            Check(physical.yaw==yaw && Length(Sub(root,physical.root))==0,"stereo and accessory passes cannot repeat a physical turn");
+        }
+    }
+    for(int mode=0;mode<8;++mode) {
+        PhysicalBodyTurn signal;signal.Observe(1,1,0,left,right,true);
+        float head=.1f;tr::firstperson::Vec a=YawVector(left,.1f),b=YawVector(right,.1f);double now=1.01;bool tracked=true;
+        if(mode==0) {a=left;b=right;} // Head-only glance.
+        if(mode==1) head=0; // Hands-only gesture.
+        if(mode==2) b=right; // One hand follows the head.
+        if(mode==3) tracked=false;
+        if(mode==4) now=1.5;
+        if(mode==5) {head=1;a=YawVector(left,1);b=YawVector(right,1);}
+        if(mode==6) a={0,0,.01f};
+        if(mode==7) a=Scale(a,2);
+        Check(signal.Observe(2,now,head,a,b,tracked)==0,"glances, gestures and tracking discontinuities do not drag the body");
+    }
+    PhysicalBodyTurn lost;lost.Observe(1,1,0,left,right,true);
+    lost.Observe(2,1.01,0,left,right,false);
+    Check(lost.Observe(3,1.02,1,YawVector(left,1),YawVector(right,1),true)==0,"tracking recovery seeds without replaying a turn");
+    Check(std::fabs(lost.Observe(4,1.03,1.1f,YawVector(left,1.1f),YawVector(right,1.1f),true)-.1f)<.00001f,"physical following resumes after tracking recovery");
+    BodyFollower moving;moving.Update(1,1,0,0,0,{}, {},false,settings);
+    moving.Update(2,1.01,0,.1f,.2f,{}, {},true,settings,{},false,true,.1f);
+    Check(std::fabs(moving.yaw-.2f)<.00001f,"travel heading remains authoritative while moving");
+}
+
+void TestForwardJumpTorso() {
+    using namespace tr::firstperson;using Vec=tr::motiongun::Vec;
+    const Vec points[15]={{0,-380,0},{-45,-380,0},{-45,-200,50},{-45,0,0},
+        {45,-380,0},{45,-200,50},{45,0,0},{0,-428,14},
+        {90,-580,0},{125,-460,20},{90,-320,50},{-90,-580,0},{-125,-460,20},{-90,-320,50},{0,-650,0}};
+    Frame standing[15]{};for(int j=0;j<15;++j) standing[j]={IdentityBasis(),points[j]};
+    int model=0;GroundTorso reference;
+    Check(reference.Apply(&model,standing,IdentityBasis(),{0,-682,140},423,0,true),"capture grounded torso for forward-jump collar protection");
+    for(float yaw:{0.f,.7f,-2.4f}) for(float pitch:{-.9f,-.3f,-.1f,0.f,.1f,.3f,.7f,.9f}) {
+        const Basis turn=RotationMatrix(AxisRotation({0,1,0},yaw));
+        Frame pose[15]{},before[15]{};
+        for(int j=0;j<15;++j) pose[j]=Multiply({turn,{100,0,200}},standing[j]);
+        const auto bow=TorsoClearance::Bend(pose[0].origin,{std::cos(yaw),0,-std::sin(yaw)},pitch);
+        for(int j=7;j<15;++j) pose[j]=Multiply(bow,pose[j]);
+        std::memcpy(before,pose,sizeof(pose));
+        Check(reference.HoldForwardJump(&model,pose,turn,423),"forward-jump upright reference accepts live animation");
+        Frame inverse{};Inverse({turn,{}},inverse);
+        const auto q=RotationOf(Multiply(inverse.basis,pose[7].basis));
+        const float angle=2*std::atan2(Length(q.v),std::fabs(q.w));
+        Check(angle<=.0001f,"forward jump cannot bow the exposed collar far away from the upright reference");
+        for(int j:{0,1,2,3,4,5,6,14}) Check(!std::memcmp(&pose[j],&before[j],sizeof(Frame)),"collar protection leaves native legs and hidden head unchanged");
+        Check(std::fabs(Length(Sub(pose[7].origin,pose[0].origin))-Length(Sub(before[7].origin,before[0].origin)))<.001f,
+              "jump torso protection preserves spine length");
+        for(int shoulder:{8,11}) Check(std::fabs(Length(Sub(pose[shoulder].origin,pose[7].origin))-Length(Sub(before[shoulder].origin,before[7].origin)))<.001f,
+              "forward-jump shoulder sockets follow the same rigid torso correction");
+        if(pitch==0) for(int j=7;j<14;++j) Check(Length(Sub(pose[j].origin,before[j].origin))<.001f,
+              "an already upright jump torso remains unmodified");
+    }
+}
+
 void TestUprightTorsoFit() {
+    TestPhysicalBodyTurn();
+    TestForwardJumpTorso();
     using namespace tr::firstperson;using Vec=tr::motiongun::Vec;
     const Vec points[15]={{0,-380,0},{-45,-380,0},{-45,-200,50},{-45,0,0},
         {45,-380,0},{45,-200,50},{45,0,0},{0,-428,14},
@@ -251,6 +332,35 @@ void TestStandingCalibration(uint8_t* objectInfo) {
         for(int j=0;j<15;++j) ReadIKJoint(objectInfo,palette,15,0,nullptr,nullptr,j,result[j]);
         return result;
     };
+    {
+        const auto savedVR=VR();
+        auto setTracking=[&](float yaw) {
+            Head(yaw);
+            for(int hand=0;hand<2;++hand) {
+                const auto offset=firstperson::YawVector({hand ? .2f : -.2f,0,.35f},yaw);
+                VR().m_rawControllerPose[hand]=VR().m_rawHeadPose;
+                VR().m_rawControllerPose[hand].m[0][3]+=offset.x;
+                VR().m_rawControllerPose[hand].m[1][3]-=.3f;
+                VR().m_rawControllerPose[hand].m[2][3]-=offset.z;
+            }
+        };
+        const float savedHandWeight=config.firstPersonBodyHandYawWeight;
+        for(float weight:{0.f,.15f}) {
+            config.firstPersonBodyHandYawWeight=weight;
+            setTracking(0);ResetBodyFollower();render();
+            for(int frame=1;frame<=60;++frame) {
+                const float yaw=frame*.005f;setTracking(yaw);
+                g_bodyFollower.physicalTurn.time=TurnTime()-1./90;
+                const auto camera=g_scenePose;
+                render();
+                Check(std::fabs(firstperson::BodyAngle(g_bodyFollower.yaw-(weight>0 ? yaw : 0.f)))<.0001f,
+                      "production mesh follows physical turns and respects disabled controller support");
+                Check(!std::memcmp(&camera,&g_scenePose,sizeof(camera)),"physical mesh heading never rotates or translates the camera");
+            }
+        }
+        config.firstPersonBodyHandYawWeight=savedHandWeight;
+        VR()=savedVR;
+    }
     ResetBodyFollower();
     const auto upright=render();
     for(float drop:{.03f,.06f,-.04f,0.f}) {
@@ -367,11 +477,17 @@ void TestStandingCalibration(uint8_t* objectInfo) {
     bool correctedAir=false;
     config.firstPersonBodyForwardCm=11;
     *reinterpret_cast<uint32_t*>(itemMemory+0x1820)|=8;
-    for(int jump:{3,15,28,25,26,27}) for(float drop:{0.f,.1f,.2f}) {
+    for(int jump:{3,9,15,28,25,26,27}) for(float drop:{0.f,.1f,.2f}) {
         *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=int16_t(jump);
         VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-drop;
         ++VR().m_poseSerial;
         Check(CanFitAirborneBody(itemMemory),"jump fixture enters airborne visual fitting");
+        float nativeBefore[180]{};std::memcpy(nativeBefore,fixture,sizeof(nativeBefore));
+        if(jump==3 || jump==9) {
+            Frame hip{};ReadIKJoint(objectInfo,fixture,15,0,nullptr,nullptr,0,hip);
+            const auto bow=firstperson::TorsoClearance::Bend(hip.origin,{1,0,0},.9f);
+            for(int j=7;j<15;++j) WriteRows(Multiply(bow,ReadRows(fixture+j*12)),fixture+j*12);
+        }
         const auto sceneBefore=g_scenePose;
         const auto itemBefore=std::string(reinterpret_cast<const char*>(itemMemory),sizeof(itemMemory));
         Detour_GetJoints(itemMemory,palette,0);
@@ -413,6 +529,13 @@ void TestStandingCalibration(uint8_t* objectInfo) {
         for(int shoulder:{8,11}) Check(firstperson::Length(Sub(shown[shoulder].origin,Transform(chestChange,native[shoulder].origin)))<.1f,
               "airborne shoulders remain attached after body scaling and torso clearance");
         Check(g_bodySize.factor==fixedSize,"jump never recalibrates visual size");
+        if(jump==3 || jump==9) {
+            Frame inverse{};Inverse({firstperson::RotationMatrix(firstperson::RotationOf(g_groundTorso.chest)),{}},inverse);
+            const auto delta=firstperson::RotationOf(Multiply(inverse.basis,shown[7].basis));
+            Check(2*std::atan2(firstperson::Length(delta.v),std::fabs(delta.w))<.21f,
+                  "actual forward-jump render bounds collar tilt plus the existing clearance correction");
+        }
+        std::memcpy(fixture,nativeBefore,sizeof(nativeBefore));
     }
     Check(correctedAir,"airborne fixture actually exercises a chest intrusion correction");
     *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=savedFlags;

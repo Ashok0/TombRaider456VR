@@ -1,0 +1,34 @@
+{
+  "Changes": [
+    "Remove the TR4/5 forward/preparation-jump exception that allowed hair through head hiding.",
+    "Recognize alternate head-only geometry whenever TR4/5 head hiding is active.",
+    "In TR1-5 forward/reaching jumps, carry the grounded torso orientation into the scaled airborne pose before the existing clearance guard and tracked arm solve."
+  ],
+  "Evidence": [
+    "The hair exception explicitly selected states 3 and 15.",
+    "The production render regression now supplies a 0.9-radian native upper-body bow; the corrected final torso stays within the existing clearance bend while hips and legs retain the native scaled pose."
+  ],
+  "Verification": {
+    "TR45Checks": 2477536,
+    "TR123Checks": 1670094,
+    "Builds": "Both Release/x64 builds passed. Pre-existing TR4/5 C4310 warning remains.",
+    "Coverage": [
+      "Hair hidden in first-person forward/preparation/up jumps and retained in third person",
+      "Alternate head-only geometry skipped during forward jumps",
+      "Ground-reference rotation across multiple headings and native bow angles",
+      "Actual forward/reach jump render with 0,10,20 cm downward eye offsets",
+      "Measured clearance restored; shoulders connected; wrists exact",
+      "Native lower-body animation, spine length, gameplay state, camera and physics palette preserved",
+      "Existing standing, walking, jump centering, landing and chest spring checks"
+    ]
+  },
+  "Compromise": "Forward/reaching jumps use a steadier upright upper torso instead of the native forward bow; native leg articulation remains.",
+  "Preserved": [
+    "Calibrated body size",
+    "Standing and walking fixes",
+    "Chest spring parameters and integration",
+    "INI settings",
+    "Native shadow/reflection paths"
+  ],
+  "InHeadsetTested": false
+}

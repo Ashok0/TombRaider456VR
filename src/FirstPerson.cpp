@@ -841,12 +841,6 @@ bool IsNativeAirborneBodyState(const uint8_t* item) {
     return state==3 || state==9 || state==15 || (state>=25 && state<=29);
 }
 
-bool ShowJumpHair(const uint8_t* item) {
-    if(!g_active || !item || !g_boundDll || !g_boundBase ||
-       item!=*Ptr<uint8_t*>(g_boundDll->laraItem)) return false;
-    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
-    return state==3 || state==15;
-}
 
 bool CanUseCrouchCamera(const uint8_t* item) {
     return IsCrouchState(item) && LaraWaterStatus()==0 &&
@@ -1924,7 +1918,10 @@ bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
     if(bones>0 && (bones!=count || !mapping || !poses)) return false;
     const float size=AirborneBodyScale(item);
     const bool measured=g_torsoSurface.valid && g_torsoSurface.owner==obj;
-    if(size==1.f && !measured) { g_torsoClearance.Reset();return true; }
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    const bool forwardReference=(state==3 || state==9) && g_groundTorso.valid && g_groundTorso.owner==obj &&
+        std::fabs(g_groundTorso.units-LiveWorldUnitsPerMetre())<.01f;
+    if(size==1.f && !measured && !forwardReference) { g_torsoClearance.Reset();return true; }
     Frame native[15]{},posed[15]{},bind[15]{},correction[15]{};
     for(int j=0;j<15;++j) {
         if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,j,native[j]) ||
@@ -1941,6 +1938,12 @@ bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
     for(int j=0;j<15;++j) {
         posed[j]=native[j];posed[j].origin=Add(Add(pivot,Scale(Sub(native[j].origin,pivot),size)),meshOffset);
         for(auto& row:posed[j].basis.r) for(auto& value:row) value*=size;
+    }
+    if(forwardReference) {
+        const float nativeYaw=Radians(previous.y_rot)+firstperson::BodyAngle(
+            Radians(current.y_rot)-Radians(previous.y_rot))*fraction;
+        const auto yaw=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},nativeYaw));
+        if(!g_groundTorso.HoldForwardJump(obj,posed,yaw,LiveWorldUnitsPerMetre())) return false;
     }
     const float units=LiveWorldUnitsPerMetre();
     locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
@@ -2065,8 +2068,11 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     bool handsForward=false;
     float r[2]{},d[2]{},f[2]{},headR=0,headF=0;
     VR().FirstPersonViewOffset(headR,headF);
-    if(VR().FirstPersonControllerOffset(0,r[0],d[0],f[0]) &&
-       VR().FirstPersonControllerOffset(1,r[1],d[1],f[1])) {
+    const bool turnHandsTracked=VR().FirstPersonControllerOffset(0,r[0],d[0],f[0]) &&
+        VR().FirstPersonControllerOffset(1,r[1],d[1],f[1]);
+    const float physicalTurn=g_bodyFollower.physicalTurn.Observe(VR().PoseSerial(),TurnTime(),VR().HeadYawRadians(),
+        {r[0]-headR,0,f[0]-headF},{r[1]-headR,0,f[1]-headF},turnHandsTracked && !grip && Cfg().firstPersonBodyHandYawWeight>0);
+    if(turnHandsTracked) {
         const Vec leftHint=motiongun::HandInWorld({},r[0]-headR,0,f[0]-headF,g_headingBase,1);
         const Vec rightHint=motiongun::HandInWorld({},r[1]-headR,0,f[1]-headF,g_headingBase,1);
         const Vec handHint=Scale(Add(leftHint,rightHint),.5f);
@@ -2101,7 +2107,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     if(grip) g_bodyFollower.Reset();
     else g_bodyFollower.Update(VR().PoseSerial(),TurnTime(),g_headingBase,headYaw,facing,
         Scale(followerGoal,1/scale),Scale(followerNative,1/scale),moving,BodyFollowSettings(),Scale(physicalEye,1/scale),handsForward,
-        Cfg().firstPersonMovementStabilization && g_groundEye.valid);
+        Cfg().firstPersonMovementStabilization && g_groundEye.valid,physicalTurn);
     const float heading=grip || !g_bodyFollower.valid ? nativeHeading : g_bodyFollower.yaw;
     const Basis body{{{std::cos(heading),0,std::sin(heading)},{0,1,0},{-std::sin(heading),0,std::cos(heading)}}};
     Frame inverseBody{};Inverse({body,{}},inverseBody);
@@ -4988,7 +4994,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
         *reinterpret_cast<const int16_t*>(item+off::item_anim_state),g_bodyVisibility.mask);
     const bool hideHead=Cfg().firstPersonHideHead || landingHead;
     if (lara && (hideHead || armsOnly || handsOnly || MotionReady()) &&
-        DrawingLaraHead(item,landingHead || armsOnly || handsOnly)) {
+        DrawingLaraHead(item,hideHead || armsOnly || handsOnly)) {
         ++g_faceSkips;
         return;
     }
@@ -5119,7 +5125,7 @@ void __cdecl Detour_DrawHair(int32_t argument) {
     }
     const auto* item=g_boundDll && g_boundBase ? *Ptr<uint8_t*>(g_boundDll->laraItem) : nullptr;
     const uint32_t bodyMask=!DrawingNativeShadow() && g_active ? FirstPersonBodyMask(item) : UINT32_MAX;
-    if (!DrawingNativeShadow() && g_active && (!ShowJumpHair(item) || bodyMask==firstperson::HandMeshBits) && (HideLandingHead(item) || g_headHidden || g_rollHidden || g_crouchHidden || g_underwaterHidden || bodyMask==firstperson::ArmMeshBits || bodyMask==firstperson::HandMeshBits || IsHandsOnlyBodyState(item) || MotionReady())) {
+    if (!DrawingNativeShadow() && g_active && (HideLandingHead(item) || g_headHidden || g_rollHidden || g_crouchHidden || g_underwaterHidden || bodyMask==firstperson::ArmMeshBits || bodyMask==firstperson::HandMeshBits || IsHandsOnlyBodyState(item) || MotionReady())) {
         ++g_hairSkips;
         return;
     }

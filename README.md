@@ -82,6 +82,13 @@ torso, hips and limbs; additional body trackers are not required. Standing feet
 use the animated foot targets, while airborne legs retain the native animation.
 Unarmed hands keep their relaxed hand shape through running and jumping.
 
+Physical turns use coordinated headset and both-hand movement to turn the body
+around the same eye-relative pivot as stick turns. This keeps the mesh closer to
+your facing when you turn your whole body, while retaining head-turn freedom for
+looking around. Hand gestures alone do not turn the body. Without reliable
+matching hand movement, the usual head-turn slack remains; this is an inference,
+not waist tracking. `FirstPersonBodyHandYawWeight=0` disables this assistance.
+
 Tracked shoulders remain attached to the rendered torso, including through jump
 and landing transitions. Hands and weapons retain their controller positions and
 rotations. Reachable poses keep their normal proportions. Beyond Lara's natural
@@ -128,6 +135,9 @@ Ordinary jumps retain that calibrated visual size and the measured torso
 clearance check. Native airborne leg poses scale with the body instead of
 switching back to the larger mesh; standing foot planting stays off in flight.
 Tracked hands remain connected, and the camera and gameplay jump path are unchanged.
+Forward and reaching jumps keep the calibrated upright torso orientation to
+avoid exposing the open collar; the hips and legs retain their native jump
+animation. First-person head hiding also keeps the braid hidden during jumps.
 
 Full-body IK measures the rendered torso mesh and checks clearance after
 applying Body Position. The check includes the short space below the eyes, where

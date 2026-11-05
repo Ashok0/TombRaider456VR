@@ -89,7 +89,41 @@ inline float StandingPostureWeight(float drop) {
 }
 // World positions are metres. Update once per tracked pose, independent of
 // skin/hand/holster passes and stereo eyes. Artificial turns are applied whole.
+// Recognize a physical body turn from the HEAD and BOTH hand positions.
+// Inputs stay in tracking space: artificial yaw must never enter this signal.
+// Head-only glances, aiming one hand, tracking loss and pose discontinuities
+// retain the ordinary neck slack instead of dragging the body around.
+struct PhysicalBodyTurn {
+    bool valid=false;
+    uint64_t serial=0;
+    double time=0;
+    float head=0,hand[2]{},radius[2]{},turn=0;
+    void Reset() { *this={}; }
+    float Observe(uint64_t frame,double now,float headYaw,Vec left,Vec right,bool tracked) {
+        const Vec hands[2]={Flat(left),Flat(right)};
+        float angles[2]{},lengths[2]{};
+        if(!tracked || !std::isfinite(now+headYaw) || !Finite({IdentityBasis(),left}) || !Finite({IdentityBasis(),right})) {Reset();return 0;}
+        for(int i=0;i<2;++i) {
+            lengths[i]=Length(hands[i]);
+            if(lengths[i]<.12f || lengths[i]>1.5f) {Reset();return 0;}
+            angles[i]=std::atan2(hands[i].x,hands[i].z);
+        }
+        if(valid && serial==frame) return turn;
+        const float delta=BodyAngle(headYaw-head);
+        bool coherent=valid && now>time && now-time<=.1 && std::fabs(delta)>.00001f && std::fabs(delta)<.35f;
+        for(int i=0;i<2;++i) {
+            const float movement=BodyAngle(angles[i]-hand[i]);
+            coherent=coherent && std::fabs(movement-delta)<=std::fabs(delta)*.65f &&
+                lengths[i]>radius[i]*.8f && lengths[i]<radius[i]*1.25f;
+        }
+        turn=coherent ? delta : 0.f;
+        valid=true;serial=frame;time=now;head=headYaw;
+        for(int i=0;i<2;++i) {hand[i]=angles[i];radius[i]=lengths[i];}
+        return turn;
+    }
+};
 struct BodyFollower {
+    PhysicalBodyTurn physicalTurn;
     bool valid=false,turning=false,stepping=false,supportedHands=false;
     uint64_t serial=0;
     double time=0;
@@ -98,7 +132,7 @@ struct BodyFollower {
     void Reset() { *this={}; }
     void Update(uint64_t frame,double now,float artificialYaw,float headYaw,float travelYaw,
                 Vec goal,Vec native,bool moving,const BodyFollowSettings& s,Vec turnPivot={},bool handsForward=false,
-                bool pivotFootprint=false) {
+                bool pivotFootprint=false,float trackedTurn=0) {
         if(!std::isfinite(now+artificialYaw+headYaw+travelYaw) ||
            !Finite({IdentityBasis(),goal}) || !Finite({IdentityBasis(),native})) { Reset();return; }
         if(!valid || now<time || now-time>.25 || Length(Sub(native,nativeRoot))>2) {
@@ -120,6 +154,15 @@ struct BodyFollower {
         // not count the same HMD displacement a second time.
         if(moving) root=Add(root,Flat(Sub(native,nativeRoot)));
         nativeRoot=native;
+        // Corroborated roomscale turning follows the same pivot as a stick
+        // turn. Preserve any existing head-only glance rather than snapping
+        // the torso to the current gaze when the whole body starts turning.
+        const float physical=!moving && std::isfinite(trackedTurn) ? std::clamp(trackedTurn,-.35f,.35f) : 0.f;
+        yaw=BodyAngle(yaw+physical);
+        if(pivotFootprint && physical!=0) {
+            root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),physical));
+            goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),physical));
+        }
         const float delta=BodyAngle(headYaw-yaw);
         // Angular slack, without a timed chase: every degree beyond the
         // boundary is carried in this pose. Stopping the head stops the body.
@@ -144,7 +187,7 @@ struct BodyFollower {
             const float excess=std::max(0.f,distance-(moving ? 0.f : settleRadius));
             move=Scale(offset,std::min(excess,s.followSpeed*dt)/distance);root=Add(root,move);
         }
-        const float stride=Length(move)+std::fabs(change)*.12f;
+        const float stride=Length(move)+std::fabs(change+physical)*.12f;
         phase=std::fmod(phase+stride*15.f,6.28318530718f);
         const float weight=!moving && stride>.0001f ? 1.f : 0.f;
         stepWeight+=(weight-stepWeight)*(1-std::exp(-12*dt));

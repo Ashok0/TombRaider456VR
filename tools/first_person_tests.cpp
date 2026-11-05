@@ -3431,8 +3431,8 @@ int main() {
                   "forward vertical and sideways jumps retain body under the normal head visibility setting");
             const int before=draws,beforeHair=hairs;
             Detour_DrawCreatureHD(itemMemory,0,0);Detour_DrawHair(0);
-            Check(draws==before+1 && (drawnUseBits==0 || (drawnBodyBits&0x7f)==0x7f) && hairs==beforeHair+1,
-                  "visible jumps retain hips legs and hair even when first-person head hiding is enabled");
+            Check(draws==before+1 && (drawnUseBits==0 || (drawnBodyBits&0x7f)==0x7f) && hairs==beforeHair+(hideHead ? 0 : 1),
+                  "visible jumps retain hips and legs while hair follows the head-hiding setting");
             state=25;UpdateSceneCamera(camera);
             const int backHair=hairs;Detour_DrawHair(0);
             Check(bits==(baseBits&firstperson::HandMeshBits) && hairs==backHair,

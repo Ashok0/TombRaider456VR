@@ -1,0 +1,20 @@
+{
+  "ReleaseBuildsPassed": [
+    "123",
+    "456"
+  ],
+  "RegressionChecks": {
+    "456": 2534202,
+    "123": 1699151
+  },
+  "Coverage": [
+    "coherent physical turns vs analog footprint across wrapping and reversal",
+    "head-only glances, hands-only and one-hand gestures",
+    "tracking loss, recovery, jumps in tracking and frame gaps",
+    "stereo repeat and mixed stick plus physical turning",
+    "production render hook heading, unchanged camera and config opt-out for TR1-5",
+    "existing torso, jump, arms and chest spring regression suites"
+  ],
+  "InHeadsetTested": false,
+  "Limitation": "Three tracked devices infer body rotation; mismatched or unavailable hand motion retains normal head-turn slack."
+}

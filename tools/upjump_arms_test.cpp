@@ -215,6 +215,7 @@ int main() {
     dll.objects=rva(objectInfo);
     MotionDll motion{};motion.app=rva(&motionApp);g_motionDll=&motion;g_motionHooksReady=true;
     g_hDrawCreatureHD.m_trampoline=reinterpret_cast<void*>(&FakeDraw);
+    g_hDrawHair.m_trampoline=reinterpret_cast<void*>(&FakeHair);
     auto& state=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state);
     auto& status=*reinterpret_cast<int16_t*>(laraMemory+2);
     auto& bits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
@@ -283,6 +284,27 @@ int main() {
         TestJumpArmPalettes(objectInfo);
     }
     for(int which:{0,1}) for(bool fullBody:{false,true}) {
+        reset(which,fullBody);
+        for(int jump:{3,15,28}) {
+            state=int16_t(jump);SetMeshVisibility(true,false,false,false,false,false,true);
+            const int before=hairs;Detour_DrawHair(0);
+            Check(hairs==before,"forward and vertical jumps cannot override first-person hair hiding");
+            g_active=false;Detour_DrawHair(0);g_active=true;
+            Check(hairs==before+1,"third-person jump retains native hair");
+        }
+        // A separate head/neck-only mesh must not bypass head hiding merely
+        // because its descriptor differs from the usual face table.
+        state=3;config.firstPersonHideHead=true;
+        uint8_t savedObject[off::object_stride];std::memcpy(savedObject,objectInfo,sizeof(savedObject));
+        const auto savedHeads=dll.gLaraHeads;dll.gLaraHeads=0;
+        std::memset(objectInfo,0,sizeof(savedObject));int32_t headOnly=14;
+        auto* geom=objectInfo+off::object_geom;
+        *reinterpret_cast<void**>(geom+off::geom_mesh)=objectInfo+128;
+        *reinterpret_cast<int32_t*>(geom+28)=1;
+        *reinterpret_cast<int32_t**>(geom+48)=&headOnly;
+        const int headDraws=draws;Detour_DrawCreatureHD(itemMemory,0,0);
+        Check(draws==headDraws,"forward jump excludes alternate head/neck-only geometry under head hiding");
+        std::memcpy(objectInfo,savedObject,sizeof(savedObject));dll.gLaraHeads=savedHeads;
         reset(which,fullBody);TestUpJumpCamera();
         reset(which,fullBody);TestJumpTurnCentering(objectInfo);
         reset(which,fullBody);TestBodyTransitions(objectInfo);

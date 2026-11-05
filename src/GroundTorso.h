@@ -12,6 +12,22 @@ struct GroundTorso {
     Basis hip{},chest{};
     Vec chestOffset{};
     void Reset() { *this={}; }
+    // The native forward-jump bow exposes the open collar in first person.
+    // Keep the calibrated upright torso orientation while the native hips and
+    // legs carry the jump. Rotate the coherent upper body about the pelvis;
+    // shoulders and spine length stay intact. Clearance and hand IK run next.
+    bool HoldForwardJump(const void* model,Frame (&pose)[15],const Basis& yaw,float scale) const {
+        if(!valid || owner!=model || std::fabs(units-scale)>.01f) return true;
+        const Basis reference=RotationMatrix(RotationOf(Multiply(yaw,chest)));
+        const Basis current=RotationMatrix(RotationOf(pose[7].basis));
+        Frame inverseCurrent{};
+        if(!Inverse({current,{}},inverseCurrent)) return false;
+        const Basis correction=Multiply(reference,inverseCurrent.basis);
+        const Vec pivot=pose[0].origin;
+        const Frame change{correction,Sub(pivot,Transform(correction,pivot))};
+        for(int j=7;j<14;++j) pose[j]=Multiply(change,pose[j]);
+        return true;
+    }
     bool Apply(const void* model,Frame (&pose)[15],const Basis& yaw,Vec eye,float scale,float drop,bool solvedPosture=false) {
         Frame inverse{};
         if(!Inverse({yaw,pose[0].origin},inverse) || scale<=1) return false;
