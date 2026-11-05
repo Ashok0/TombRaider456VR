@@ -1,0 +1,20 @@
+﻿[
+    {
+        "Collection":  "456",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+        "SHA256":  "5E05E03B08432C14D765C365E45B63EE6B120541EE7AD2CF2A25D1AE8A74B75D",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\gun-pair-collision\\before-install-20261104-232345\\456",
+        "INIUnchanged":  true,
+        "RenderChecks":  2700426,
+        "InHeadsetTested":  false
+    },
+    {
+        "Collection":  "123",
+        "Installed":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+        "SHA256":  "B8EC381BDCCD62DACC153630C7D48B7FCF40EB34B2E85595025F1C8C97B44326",
+        "Backup":  "C:\\dev\\TombRaider456VR\\build\\gun-pair-collision\\before-install-20261104-232345\\123",
+        "INIUnchanged":  true,
+        "RenderChecks":  1761920,
+        "InHeadsetTested":  false
+    }
+]

@@ -12,7 +12,7 @@ struct GroundTorso {
     Basis hip{},chest{};
     Vec chestOffset{};
     void Reset() { *this={}; }
-    // The native forward-jump bow exposes the open collar in first person.
+    // Native forward and vertical jump bows expose the open collar in first person.
     // Keep the calibrated upright torso orientation while the native hips and
     // legs carry the jump. Rotate the coherent upper body about the pelvis;
     // shoulders and spine length stay intact. Clearance and hand IK run next.

@@ -167,6 +167,18 @@ aimed and fired independently with the two hands; single weapons use the right
 controller. Native ammunition, reload/animation timing and weapon availability
 remain in effect. Gunfire provides controller haptics.
 
+Ordinary jumps clear any leftover body-hiding delay from an earlier landing or
+ledge transition, preventing the torso from suddenly reappearing during flight.
+The reaching animation keeps the same stabilized jump eye until Lara catches
+the ledge. Forward, reaching and straight-up jumps retain the calibrated mesh
+size through the contact frame where native collision clears gravity, avoiding
+a brief switch to the larger native mesh. Temporary controller-tracking loss or
+a hands-busy flag also keeps the airborne torso fit and its small near-eye trim;
+hand tracking resumes when available. Hanging still hides the torso.
+Straight-up jumps also keep the calibrated upright torso orientation through
+ascent and descent, matching forward jumps so the open neck cannot tip toward
+the eyes. The camera, native jump arc, leg motion and tracked wrists are preserved.
+
 Weapons can be drawn with LT and holstered with Y, or handled through supported
 physical holster zones. Sidearms use the thigh/hip holsters; long weapons use the
 back location. The rendered holsters follow Lara's fitted body.

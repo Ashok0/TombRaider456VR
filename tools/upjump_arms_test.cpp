@@ -15,7 +15,7 @@ void TestUpJumpCamera() {
     auto& state=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state);
     auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
     for(bool stable:{false,true}) for(bool calibrated:{false,true})
-    for(float heading:{0.f,.7f,1.5707963f,-2.6f}) for(int jump:{3,15,28}) {
+    for(float heading:{0.f,.7f,1.5707963f,-2.6f}) for(int jump:{3,9,15,28}) {
         ResetMovementStabilization();config.firstPersonMovementStabilization=stable;
         pos=prev={};state=2;flags=0;fraction=256;gaitSway={};g_headingBase=0;
         g_previousBody={};g_haveHeading=true;g_headingItem=itemMemory;
@@ -55,6 +55,39 @@ void TestUpJumpCamera() {
     }
     dll.getJointAbsPositionLerp=oldJoint;gaitSway={};
 }
+void TestJumpVisibilityRecovery() {
+    using namespace tr;
+    auto* item=itemMemory;
+    const auto savedState=*reinterpret_cast<int16_t*>(item+off::item_anim_state);
+    const auto savedFlags=*reinterpret_cast<uint32_t*>(item+0x1820);
+    const auto savedVisibility=g_bodyVisibility;
+    const bool savedRecovery=g_torsoPose.recovering;
+    for(int jump:{3,9,15,28}) for(bool fromHang:{false,true}) for(bool recovering:{false,true}) {
+        *reinterpret_cast<int16_t*>(item+off::item_anim_state)=int16_t(jump);
+        *reinterpret_cast<uint32_t*>(item+0x1820)=8;
+        g_torsoPose.recovering=recovering;
+        const double now=TurnTime();g_bodyVisibility={};
+        g_bodyVisibility.Update(item,AppState(drva::app_off::level),now,fromHang,!fromHang,false);
+        Check(g_bodyVisibility.mask!=UINT32_MAX,"fixture starts with a real traversal or landing visibility restriction");
+        Check(CanFitAirborneBody(item),"jump visibility fixture uses the calibrated airborne body");
+        const auto camera=g_scenePose;
+        for(int eye=0;eye<2;++eye) Check(FirstPersonBodyMask(item)==UINT32_MAX,
+            "new normal jump immediately clears stale hide timers in both eyes");
+        g_bodyVisibility.until=now-1;
+        Check(FirstPersonBodyMask(item)==UINT32_MAX,"expiry cannot reveal the body partway through a jump");
+        Check(!std::memcmp(&camera,&g_scenePose,sizeof(camera)),"visibility correction cannot alter the jump camera");
+    }
+    for(int state:{10,25,26,27}) {
+        *reinterpret_cast<int16_t*>(item+off::item_anim_state)=int16_t(state);
+        *reinterpret_cast<uint32_t*>(item+0x1820)=state==10?0:8;
+        g_bodyVisibility={};
+        Check(FirstPersonBodyMask(item)!=(uint32_t)UINT32_MAX,"hanging and protective directional jump visibility remain restricted");
+    }
+    *reinterpret_cast<int16_t*>(item+off::item_anim_state)=savedState;
+    *reinterpret_cast<uint32_t*>(item+0x1820)=savedFlags;
+    g_bodyVisibility=savedVisibility;g_torsoPose.recovering=savedRecovery;
+}
+
 void TestJumpArmPalettes(uint8_t* objectInfo) {
     using namespace tr;using namespace tr::motiongun;
     const auto identity=firstperson::IdentityBasis();
@@ -71,6 +104,7 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
     auto& flags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
     g_scenePose={0,-850,0,0,0,0,0};worldCameraValid=true;
     g_bodyVisualOffset=g_bodyWallOffset={};g_groundEye.valid=true;g_groundEye.local={0,-850,0};
+    TestJumpVisibilityRecovery();
     for(int count:{15,33}) {
         ResetBodyFollower();
         float fixture[33*12]{},poses[33*12]{},palette[33*12]{},repeat[33*12]{};
@@ -129,8 +163,8 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
                                   "jump shoulder adjustment retains rigid arm geometry in both eyes");
                         }
                     }
-                    if(state==28 && j<8) Check(!std::memcmp(palette+i*12,fixture+i*12,12*sizeof(float)),
-                                              "airborne torso and legs retain their native animation");
+                    if(state==28 && j<7) Check(!std::memcmp(palette+i*12,fixture+i*12,12*sizeof(float)),
+                                              "airborne legs retain their native animation while the collar keeps its upright reference");
                     if(j==10 || j==13) {
                         Frame target{};Basis basis{};BuildControllerWrist(j==10 ? 1 : 0,target,basis);
                         Check(firstperson::Length(Sub(actual.origin,target.origin))<.04f,

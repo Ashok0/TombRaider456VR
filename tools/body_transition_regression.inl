@@ -419,6 +419,7 @@ void TestStandingCalibration(uint8_t* objectInfo) {
     }
     ResetBodyFollower();
     const auto upright=render();
+
     for(float drop:{.03f,.06f,-.04f,0.f}) {
         VR().m_rawHeadPose.m[1][3]=initialHeight-drop;
         const auto pose=render();
@@ -533,13 +534,15 @@ void TestStandingCalibration(uint8_t* objectInfo) {
     bool correctedAir=false;
     config.firstPersonBodyForwardCm=11;
     *reinterpret_cast<uint32_t*>(itemMemory+0x1820)|=8;
-    for(int jump:{3,9,15,28,25,26,27}) for(float drop:{0.f,.1f,.2f}) {
+    for(int jump:{3,9,15,28,25,26,27}) for(float drop:{0.f,.1f,.2f}) for(bool gravity:{true,false}) {
+        if(!gravity && jump!=3 && jump!=9 && jump!=28) continue;
+        *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=gravity ? 8 : 0;
         *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=int16_t(jump);
         VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-drop;
         ++VR().m_poseSerial;
         Check(CanFitAirborneBody(itemMemory),"jump fixture enters airborne visual fitting");
         float nativeBefore[180]{};std::memcpy(nativeBefore,fixture,sizeof(nativeBefore));
-        if(jump==3 || jump==9) {
+        if(jump==3 || jump==9 || jump==15 || jump==28) {
             Frame hip{};ReadIKJoint(objectInfo,fixture,15,0,nullptr,nullptr,0,hip);
             const auto bow=firstperson::TorsoClearance::Bend(hip.origin,{1,0,0},.9f);
             for(int j=7;j<15;++j) WriteRows(Multiply(bow,ReadRows(fixture+j*12)),fixture+j*12);
@@ -588,13 +591,35 @@ void TestStandingCalibration(uint8_t* objectInfo) {
             CheckRigidTrackedReach(reference,actual);
         }
         Check(g_bodySize.factor==fixedSize,"jump never recalibrates visual size");
-        if(jump==3 || jump==9) {
+        if(jump==3 || jump==9 || jump==15 || jump==28) {
             Frame inverse{};Inverse({firstperson::RotationMatrix(firstperson::RotationOf(g_groundTorso.chest)),{}},inverse);
             const auto delta=firstperson::RotationOf(Multiply(inverse.basis,shown[7].basis));
             Check(2*std::atan2(firstperson::Length(delta.v),std::fabs(delta.w))<.21f,
-                  "actual forward-jump render bounds collar tilt plus the existing clearance correction");
+                  "forward and straight-up jump render bounds collar tilt plus the existing clearance correction");
         }
         std::memcpy(fixture,nativeBefore,sizeof(nativeBefore));
+    }
+
+    // Temporary hand tracking loss or a hands-busy flag must not resize a
+    // body that is already calibrated and flying through the same jump.
+    {
+        auto& status=*Ptr<int16_t>(dll.lara+2);const auto oldStatus=status;
+        const bool left=VR().m_controllerPoseValid[0],right=VR().m_controllerPoseValid[1];
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=3;*reinterpret_cast<uint32_t*>(itemMemory+0x1820)|=8;
+        for(int condition:{0,1,2,3,0}) {
+            status=condition==1 ? 1 : 0;
+            VR().m_controllerPoseValid[0]=condition!=2;VR().m_controllerPoseValid[1]=condition!=3;
+            ++VR().m_poseSerial;
+            Detour_GetJoints(itemMemory,palette,0);
+            Frame chest{};
+            Check(ReadIKJoint(objectInfo,palette,15,0,nullptr,nullptr,7,chest),"airborne tracking fixture resolves chest");
+            Check(std::fabs(firstperson::Length(Transform(chest.basis,{1,0,0}))-fixedSize)<.001f,
+                  "mid-flight controller loss or hands-busy state cannot restore the larger native torso");
+            float sphere[4]{};uint64_t visible=0;
+            Check(FirstPersonBodyClearance(sphere,visible) && sphere[3]<LiveWorldUnitsPerMetre()*.031f,
+                  "temporary hand loss cannot expand the body clipping sphere from three to twenty centimeters");
+        }
+        status=oldStatus;VR().m_controllerPoseValid[0]=left;VR().m_controllerPoseValid[1]=right;
     }
     Check(correctedAir,"airborne fixture actually exercises a chest intrusion correction");
     *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=savedFlags;

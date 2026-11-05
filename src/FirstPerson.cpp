@@ -939,10 +939,14 @@ bool CanFitStandingBody(const uint8_t* item) {
 bool CanFitAirborneBody(const uint8_t* item) {
     if(!g_active || !g_haveHeading || !Cfg().firstPersonMovementStabilization ||
        !Cfg().positionalTracking || !Cfg().firstPersonHeadTranslation ||
-       !VR().poseValid() || !g_groundEye.valid || !GroundBodyAvailable(item) ||
-       !(*reinterpret_cast<const uint32_t*>(item+0x1820)&8u)) return false;
+       !VR().poseValid() || !g_groundEye.valid || !GroundBodyAvailable(item)) return false;
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
-    return state==3 || state==9 || state==15 || (state>=25 && state<=29);
+    // Render ownership follows the active jump clip. Native collision can
+    // clear gravity before it replaces that clip; dropping the fit in between
+    // briefly restores the larger, unfitted mesh at the stable first-person eye.
+    if(state==3 || state==9 || state==28) return true;
+    return (*reinterpret_cast<const uint32_t*>(item+0x1820)&8u) &&
+        (state==15 || (state>=25 && state<=29));
 }
 
 bool CanSteerMonkeyBars(const uint8_t* item) {
@@ -978,7 +982,8 @@ uint32_t FirstPersonBodyMask(const uint8_t* item) {
     const auto mask=g_bodyVisibility.Update(item,AppState(drva::app_off::level),TurnTime(),
         locomotion::IsTraversalGripState(state),
         UseLandingCamera(item),g_mountBodyTransition.active || g_torsoPose.recovering || g_mountEyeTransition.active ||
-        g_traversalArms[0].current.releasing || g_traversalArms[1].current.releasing);
+        g_traversalArms[0].current.releasing || g_traversalArms[1].current.releasing,
+        CanFitAirborneBody(item) && (state==3 || state==9 || state==15 || state==28));
     return IsHandsOnlyBodyState(item) || firstperson::TraversalTransitionHandsOnly(state,mask)
         ? firstperson::HandMeshBits : mask;
 }
@@ -1374,6 +1379,7 @@ bool TrackedControllerWrist(int hand, motiongun::Frame& out, GunBasis& controlle
     motiongun::Frame inverse{};
     return motiongun::Inverse(out,inverse); // Reject invalid tracked rotations too.
 }
+
 
 bool BuildControllerWrist(int hand, motiongun::Frame& out, GunBasis& controller, GunVec* gripLocal=nullptr) {
     if (hand < 0 || hand > 1) return false;
@@ -1919,9 +1925,12 @@ bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
     const float size=AirborneBodyScale(item);
     const bool measured=g_torsoSurface.valid && g_torsoSurface.owner==obj;
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
-    const bool forwardReference=(state==3 || state==9) && g_groundTorso.valid && g_groundTorso.owner==obj &&
+    // Vertical takeoff/ascent/descent can bow the collar toward the eye too.
+    // Share the forward-jump torso reference; grounded compression stays on
+    // the existing standing solver and hand/leg animation remains independent.
+    const bool uprightJumpReference=(state==3 || state==9 || state==15 || state==28) && g_groundTorso.valid && g_groundTorso.owner==obj &&
         std::fabs(g_groundTorso.units-LiveWorldUnitsPerMetre())<.01f;
-    if(size==1.f && !measured && !forwardReference) { g_torsoClearance.Reset();return true; }
+    if(size==1.f && !measured && !uprightJumpReference) { g_torsoClearance.Reset();return true; }
     Frame native[15]{},posed[15]{},bind[15]{},correction[15]{};
     for(int j=0;j<15;++j) {
         if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,j,native[j]) ||
@@ -1939,7 +1948,7 @@ bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
         posed[j]=native[j];posed[j].origin=Add(Add(pivot,Scale(Sub(native[j].origin,pivot),size)),meshOffset);
         for(auto& row:posed[j].basis.r) for(auto& value:row) value*=size;
     }
-    if(forwardReference) {
+    if(uprightJumpReference) {
         const float nativeYaw=Radians(previous.y_rot)+firstperson::BodyAngle(
             Radians(current.y_rot)-Radians(previous.y_rot))*fraction;
         const auto yaw=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},nativeYaw));
@@ -1971,7 +1980,12 @@ bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
 
 bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
-    if(!FullBodyIKReady()) { g_torsoClearance.Reset();g_groundGait.Reset();return false; }
+    // Calibrated airborne torso fitting needs the HMD, not two valid hands.
+    // Losing a controller (or entering hands-busy reach) must not replace the
+    // fitted torso with native size or switch its near-eye trim to 20 cm.
+    const bool airborneFit=Cfg().firstPersonFullBodyIK && !ControllerTrackingBlockedReason() &&
+        CanFitAirborneBody(item);
+    if(!FullBodyIKReady() && !airborneFit) { g_torsoClearance.Reset();g_groundGait.Reset();return false; }
     if(count<15 || count>33) return false;
     const bool preparingJump=StandingJumpPreparation(item);
     if(IsNativeAirborneBodyState(item) && !preparingJump) {
@@ -4724,9 +4738,10 @@ bool Anchor(PHD_3DPOS& pose) {
         pose.x_pos=int32_t(std::lround(body[0]+flat.x));
         pose.z_pos=int32_t(std::lround(body[2]+flat.z));
     } else if (Cfg().firstPersonMovementStabilization &&
-               (state==3 || state==28 || (state>=25 && state<=27) ||
+               (state==3 || state==9 || state==28 || (state>=25 && state<=27) ||
                 (state==15 && (*reinterpret_cast<const uint32_t*>(item+0x1820)&8u))) &&
                LaraWaterStatus()==0 && g_groundEye.valid) {
+        // Reaching for a ledge retains the same jump eye until actual contact.
         // Jump neck animation sways sideways or rises again after
         // the physics apex. Keep that authored motion out of the view. Follow the
         // interpolated collision root with the existing standing eye offset.

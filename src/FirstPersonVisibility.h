@@ -33,9 +33,12 @@ struct BodyVisibilityRecovery {
     uint32_t mask=UINT32_MAX;
     double until=0,last=0;
     uint32_t Update(const void* item,int currentLevel,double now,bool armsOnly,
-                    bool landing,bool recovering) {
+                    bool landing,bool recovering,bool freeJump=false) {
         if(owner!=item || level!=currentLevel || now<last) *this={};
         owner=item;level=currentLevel;last=now;
+        // A new ordinary flight supersedes the previous mount/landing mask.
+        // Letting that timer expire in midair makes the torso blink back on.
+        if(freeJump && !armsOnly && !landing) { mask=UINT32_MAX;until=0; }
         if(armsOnly || landing) {
             mask=armsOnly ? ArmMeshBits : ~(1u<<7); // Chest mesh.
             until=now+.35;
