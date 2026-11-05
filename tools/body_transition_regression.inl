@@ -359,6 +359,65 @@ void TestStandingCalibration(uint8_t* objectInfo) {
               "physical crouch lowers the fitted body once, without adding the neck arc again");
     }
     VR().m_rawHeadPose=savedHead;VR().m_firstPersonNeutralEyeNeckY=savedNeck;
+    // Jump rendering must retain the successful standing size without running
+    // standing leg IK, and must keep physics on the untouched native palette.
+    const auto savedFlags=*reinterpret_cast<uint32_t*>(itemMemory+0x1820);
+    const float savedForward=config.firstPersonBodyForwardCm;
+    const float fixedSize=g_bodySize.factor;
+    bool correctedAir=false;
+    config.firstPersonBodyForwardCm=11;
+    *reinterpret_cast<uint32_t*>(itemMemory+0x1820)|=8;
+    for(int jump:{3,15,28,25,26,27}) for(float drop:{0.f,.1f,.2f}) {
+        *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=int16_t(jump);
+        VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-drop;
+        ++VR().m_poseSerial;
+        Check(CanFitAirborneBody(itemMemory),"jump fixture enters airborne visual fitting");
+        const auto sceneBefore=g_scenePose;
+        const auto itemBefore=std::string(reinterpret_cast<const char*>(itemMemory),sizeof(itemMemory));
+        Detour_GetJoints(itemMemory,palette,0);
+        Check(!std::memcmp(&sceneBefore,&g_scenePose,sizeof(sceneBefore)) &&
+              itemBefore==std::string(reinterpret_cast<const char*>(itemMemory),sizeof(itemMemory)),
+              "jump visual correction cannot move the camera or change native gameplay state");
+        uint64_t mask=0;int count=0;const float* physics=FirstPersonBodyPalette(mask,count);
+        Check(physics && count==15,"airborne physics capture remains available");
+        Frame native[15]{},shown[15]{};
+        for(int j=0;j<15;++j) {
+            ReadIKJoint(objectInfo,physics,15,0,nullptr,nullptr,j,native[j]);
+            ReadIKJoint(objectInfo,palette,15,0,nullptr,nullptr,j,shown[j]);
+        }
+        const auto camera=BodyPaletteCameraOrigin(itemMemory,native[14]);
+        const auto& current=*reinterpret_cast<const PHD_3DPOS*>(itemMemory+off::item_pos);
+        const auto& previous=*reinterpret_cast<const PHD_3DPOS*>(itemMemory+off::item_pos_prev);
+        const float t=std::clamp(*Ptr<int32_t>(dll.frameFrac),0,256)/256.f;
+        const Vec pivot{native[0].origin.x,previous.y_pos+(current.y_pos-previous.y_pos)*t-camera.y,native[0].origin.z};
+        const auto offset=BodyMeshOffset(itemMemory);
+        for(int j=0;j<7;++j) {
+            const Vec expected=Add(Add(pivot,Scale(Sub(native[j].origin,pivot),fixedSize)),{offset.x,0,offset.z});
+            Check(firstperson::Length(Sub(shown[j].origin,expected))<.1f,
+                  "jump hips and legs retain scaled native articulation without foot planting or eye anchoring");
+            Check(std::fabs(firstperson::Length(Transform(shown[j].basis,{1,0,0}))-fixedSize)<.001f,
+                  "airborne body does not revert to the larger native mesh");
+            Check(std::fabs(firstperson::Length(Transform(native[j].basis,{1,0,0}))-1)<.001f,
+                  "chest physics keeps the unscaled native animation palette");
+        }
+        correctedAir=correctedAir || g_torsoClearance.before<1;
+        Check(g_torsoClearance.valid && g_torsoClearance.measured && g_torsoClearance.after>=.999f,
+              "measured torso clearance stays active and clears the downward jump view");
+        for(int hand=0;hand<2;++hand) {
+            Frame wrist{};Basis basis{};BuildControllerWrist(hand,wrist,basis);
+            Check(firstperson::Length(Sub(Add(shown[hand?10:13].origin,camera),wrist.origin))<.1f,
+                  "airborne visual fit retains exact tracked wrists");
+        }
+        Frame inverseChest{};Inverse(native[7],inverseChest);
+        const auto chestChange=Multiply(shown[7],inverseChest);
+        for(int shoulder:{8,11}) Check(firstperson::Length(Sub(shown[shoulder].origin,Transform(chestChange,native[shoulder].origin)))<.1f,
+              "airborne shoulders remain attached after body scaling and torso clearance");
+        Check(g_bodySize.factor==fixedSize,"jump never recalibrates visual size");
+    }
+    Check(correctedAir,"airborne fixture actually exercises a chest intrusion correction");
+    *reinterpret_cast<uint32_t*>(itemMemory+0x1820)=savedFlags;
+    *reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=2;
+    VR().m_rawHeadPose=savedHead;config.firstPersonBodyForwardCm=savedForward;
     const float heldFactor=g_bodySize.factor,heldReserve=g_bodySize.eyeGap;
     VR().m_rawHeadPose.m[1][3]-=.05f;render();
     Check(g_bodySize.factor==heldFactor && g_bodySize.eyeGap==heldReserve,

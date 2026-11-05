@@ -1,0 +1,38 @@
+{
+  "Cause": "Native-airborne fallback bypassed the calibrated visual body scale and reset torso clearance, restoring the larger native mesh when jumping.",
+  "Changes": [
+    "Retain the captured visual body size in ordinary jump/fall states, scaling the native animation around the interpolated collision root.",
+    "Run measured upper-torso clearance before tracked-arm IK, preserving native lower-body articulation.",
+    "Apply the same airborne size to pistol arm references so shoulders remain attached.",
+    "Allow TR1-3 native-airborne rendering to reach this visual fitting path before falling through to arm IK."
+  ],
+  "Verification": {
+    "TR45Checks": 2476636,
+    "TR123Checks": 1669463,
+    "Builds": "Both Release/x64 builds passed; pre-existing TR4/5 C4310 warning remains.",
+    "Coverage": [
+      "Forward, straight-up, reach, backward and sideways jump states",
+      "Downward eye offsets of 0, 10 and 20 cm",
+      "Actual chest intrusion correction exercised and measured clearance restored",
+      "Calibrated size preserved with no airborne recalibration",
+      "Native scaled leg articulation retained; no standing foot planting",
+      "Connected shoulders and exact controller wrists",
+      "Native gameplay memory and scene camera unchanged",
+      "Chest physics reads the original unscaled palette",
+      "Existing turning, roomscale, landing, sidearm, standing and walking regressions"
+    ],
+    "Whitespace": "git diff --check passed"
+  },
+  "Preserved": [
+    "Standing/walking posture corrections",
+    "Successful standing body size",
+    "Chest spring solver and region correction",
+    "INI settings",
+    "Native jump trajectory and full head tracking"
+  ],
+  "Limitations": [
+    "Torso clearance retains the existing 12-degree bound; extreme leaning may exceed it.",
+    "No in-headset verification performed."
+  ],
+  "InHeadsetTested": false
+}

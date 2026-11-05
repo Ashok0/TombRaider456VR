@@ -124,6 +124,10 @@ An explicit `FirstPersonBodyScale` value bypasses this automatic refinement.
 Looking down uses the same neck-arc compensation while standing, running and
 crouching, so the moving torso does not sink by the headset's neck-rotation arc.
 Real crouching still lowers the body.
+Ordinary jumps retain that calibrated visual size and the measured torso
+clearance check. Native airborne leg poses scale with the body instead of
+switching back to the larger mesh; standing foot planting stays off in flight.
+Tracked hands remain connected, and the camera and gameplay jump path are unchanged.
 
 Full-body IK measures the rendered torso mesh and checks clearance after
 applying Body Position. The check includes the short space below the eyes, where

@@ -1901,17 +1901,81 @@ bool BlendSidearmPose(uint8_t* item,motiongun::Frame (&pose)[15]) {
     return wasBlending || g_pistolAnimation.blending;
 }
 
+// Keep the calibrated visual size through native jump animation. This is a
+// render-only similarity transform; no standing IK or foot planting runs here.
+float AirborneBodyScale(const uint8_t* item) {
+    if(!Cfg().firstPersonFullBodyIK || !CanFitAirborneBody(item)) return 1.f;
+    if(Cfg().firstPersonBodyScale>0) return Cfg().firstPersonBodyScale;
+    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
+    return g_bodySize.valid && g_bodySizeObject==object &&
+        std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
+}
+
+bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
+    using namespace motiongun;
+    if(!CanFitAirborneBody(item) || DrawingNativeShadow()) return false;
+    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
+    if(object<0) return false;
+    const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+    const auto* geom=obj+off::object_geom;
+    const int bones=*reinterpret_cast<const int32_t*>(geom+28);
+    const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+    const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+    if(bones>0 && (bones!=count || !mapping || !poses)) return false;
+    const float size=AirborneBodyScale(item);
+    const bool measured=g_torsoSurface.valid && g_torsoSurface.owner==obj;
+    if(size==1.f && !measured) { g_torsoClearance.Reset();return true; }
+    Frame native[15]{},posed[15]{},bind[15]{},correction[15]{};
+    for(int j=0;j<15;++j) {
+        if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,j,native[j]) ||
+           !ReadIKBind(obj,count,bones,mapping,poses,j,bind[j])) return false;
+    }
+    const Vec camera=BodyPaletteCameraOrigin(item,native[14]);
+    const auto& current=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const auto& previous=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
+    const float fraction=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256)/256.f;
+    // Scale around Lara's interpolated collision root, never a swinging foot
+    // or the headset. Native takeoff/flight/tuck motion stays proportional.
+    const Vec pivot{native[0].origin.x,previous.y_pos+(current.y_pos-previous.y_pos)*fraction-camera.y,native[0].origin.z};
+    const auto offset=BodyMeshOffset(item);const Vec meshOffset{offset.x,0,offset.z};
+    for(int j=0;j<15;++j) {
+        posed[j]=native[j];posed[j].origin=Add(Add(pivot,Scale(Sub(native[j].origin,pivot),size)),meshOffset);
+        for(auto& row:posed[j].basis.r) for(auto& value:row) value*=size;
+    }
+    const float units=LiveWorldUnitsPerMetre();
+    locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+    view=locomotion::Rotate(view,g_headingBase)*units;
+    const Vec eye{g_scenePose.x_pos+view.x,g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*units,g_scenePose.z_pos+view.z};
+    const bool mainBody=g_bodySkinScope && (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49;
+    if(measured) {
+        if(!g_torsoClearance.Apply(obj,posed,bind,Sub(eye,camera),BodyPlacementHeading(item),units,
+            VR().PoseSerial(),TurnTime(),mainBody,&g_torsoSurface)) return false;
+    } else if(mainBody) g_torsoClearance.Reset();
+    for(int j=0;j<15;++j) {
+        // Arm-only IK adds the user offset after this helper. Avoid applying
+        // it twice while still evaluating clearance at the final mesh position.
+        posed[j].origin=Sub(posed[j].origin,meshOffset);
+        Frame inverse{};if(!Inverse(native[j],inverse)) return false;
+        correction[j]=Multiply(posed[j],inverse);
+        if(!firstperson::Finite(correction[j])) return false;
+    }
+    for(int i=0;i<count;++i) {
+        const int j=mapping ? mapping[i] : i;
+        if(j>=0 && j<15) WriteRows(Multiply(correction[j],ReadRows(joints+i*12)),joints+i*12);
+    }
+    return true;
+}
+
 bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
     if(!FullBodyIKReady()) { g_torsoClearance.Reset();g_groundGait.Reset();return false; }
     if(count<15 || count>33) return false;
     const bool preparingJump=StandingJumpPreparation(item);
     if(IsNativeAirborneBodyState(item) && !preparingJump) {
-        g_torsoClearance.Reset();
-        // Airborne feet must follow this frame's native animation. Standing
-        // body fitting and mount-recovery filtering can otherwise pull them
-        // toward a headset-relative pose or ease them out over several frames.
-        // Fall through to arm-only IK, which leaves hips/legs/chest untouched.
+        // Keep native jump articulation and the calibrated visual size.
+        // Clearance only bends the upper torso; arm-only IK reconnects the
+        // shoulders to exact controller wrists after this visual correction.
+        if(!FitAirborneVisualBody(item,joints,count)) g_torsoClearance.Reset();
         g_bodyFollower.Reset();g_torsoPose.Reset();g_groundGait.Reset();g_bodyLanding=false; // Arm-only fallback owns its animation blend.
         return false;
     }
@@ -2357,7 +2421,7 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
             if(ReadIKJoint(obj,joints,count,bones,mapping,poses,7,torso) &&
                ReadIKBind(obj,count,bones,mapping,poses,7,torsoBind)) {
                 if(!ReadIKBind(obj,count,bones,mapping,poses,first,bind[0]) ||
-                   !firstperson::PistolArmReference(torso,torsoBind,bind,1.f,chain)) return false;
+                   !firstperson::PistolArmReference(torso,torsoBind,bind,shadow ? 1.f : AirborneBodyScale(item),chain)) return false;
                 bindReference[hand]=true;
             }
         }
