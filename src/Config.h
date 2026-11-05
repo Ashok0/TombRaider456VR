@@ -416,10 +416,9 @@ struct Config {
     // R3 is the modifier rather than L3 because L3 is Sprint, and sprint in
     // this game is held WHILE running forward -- so "hold L3, push the stick
     // forward" is already a gesture in play, and reusing it for D-pad up would
-    // mean choosing between them. R3 is the only spare input on the pad: it
-    // emitted RIGHT_THUMB and nothing else. A plain R3 click still emits
-    // RIGHT_THUMB, so nothing that relied on it is lost -- the D-pad only
-    // appears once the left stick is actually deflected.
+    // mean choosing between them. R3 + LS remains D-pad navigation. With a
+    // ready TR4/5 ammo-switching weapon, a short R3 tap cycles ammo on release;
+    // a hold longer than 350 ms retains native look/zoom. Chords cancel taps.
     // Hold Y + LT for this long to send the Xbox Menu button (XInput START).
     //
     // Touch has no Start or Back of its own, so both have to come from
@@ -445,7 +444,7 @@ struct Config {
     bool  dpadShift        = true;
 
     // Touch X opens a paused, tracking-space anchored native inventory in
-    // TR4/5. Native X ammo switching is preserved. Requires stereo VR.
+    // TR4/5, including while armed. R3 taps cycle ammo. Requires stereo VR.
     bool  worldInventory   = true;
 
     // How far the left stick must travel before a shifted press registers.

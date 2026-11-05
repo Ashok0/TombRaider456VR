@@ -84,7 +84,11 @@ const Build* build=nullptr;
 uint64_t base=0,failedBase=0,queuedAt=0;
 int queuedGun=0;
 uint8_t* queuedItem=nullptr;
-bool held=false,consumeHold=false;
+bool held=false,consumeHold=false,touchPress=false;
+uint64_t pressedAt=0;
+int pressedGun=0;
+uint8_t* pressedItem=nullptr;
+bool touchR3Down=false,touchR3Valid=false;
 
 bool Bound() { return dll && base && dll==GameDllBound() && base==GameDllBase(); }
 bool Gameplay() {
@@ -116,7 +120,7 @@ void __cdecl Hotkeys() {
     std::memset(app+0x89c,0,6);app[0x89c+key]=1;app[0x8f2]=0;
     original();
     std::memcpy(app+0x89c,saved,6);app[0x8f2]=modifier;
-    LogF("ammo: X routed to native weapon hotkey (game=%d weapon=%d)",dll->game,gun);
+    LogF("ammo: R3 tap routed to native weapon hotkey (game=%d weapon=%d)",dll->game,gun);
 }
 void Reset() {
     hotkeysHook.Remove();dll=nullptr;build=nullptr;base=0;
@@ -133,28 +137,33 @@ void Update() {
             failedBase=address;Log("ammo: native hotkey hook verification failed");return;
         }
         dll=current;base=address;build=&row;
-        Log("ammo: armed X routing to native ammo hotkeys ready");return;
+        Log("ammo: R3 tap routing to native ammo hotkeys ready");return;
     }
 }
-void Apply(XGamepad& pad) {
-    const bool down=(pad.wButtons&XB_BACK)!=0;
+void Apply(XGamepad& pad,bool touchDown=false,bool touchValid=true) {
+    // D-pad mapping omits RIGHT_THUMB while a direction is held. Observe the
+    // physical click too, so returning LS to centre cannot invent a new tap.
+    const bool down=touchDown || (pad.wButtons&XB_RIGHT_THUMB)!=0;
     if(!Gameplay()) { held=down;consumeHold=false;queuedGun=0;return; }
-    const bool armed=Gun()>=1 && Gun()<=6 && Status()>=2 && Status()<=4;
+    const uint64_t now=GetTickCount64();
+    const bool eligible=Status()==4 && hotkeysHook.installed() && AmmoKey(Gun())>=0;
+    const bool chord=(pad.wButtons&(XB_LEFT_THUMB|0xf|XB_BACK|XB_START))!=0;
     if(down && !held) {
-        consumeHold=armed;
-        if(armed && Status()==4 && hotkeysHook.installed() && AmmoKey(Gun())>=0) {
-            queuedGun=Gun();queuedItem=Item();queuedAt=GetTickCount64();
-        }
+        consumeHold=eligible && !chord;pressedAt=now;
+        pressedGun=Gun();pressedItem=Item();touchPress=touchDown;
     }
+    if(chord || !eligible || Gun()!=pressedGun || Item()!=pressedItem ||
+       (touchPress && !touchValid) || now-pressedAt>350) consumeHold=false;
+    if(!down && held && consumeHold) {
+        queuedGun=pressedGun;queuedItem=pressedItem;queuedAt=now;
+    }
+    // Short clicks belong to ammo; a sustained hold still reaches native
+    // look/zoom. Photo Mode and D-pad chords retain their original buttons.
+    if(down && consumeHold) pad.wButtons &= uint16_t(~XB_RIGHT_THUMB);
     if(!down) consumeHold=false;
-    // Keep swallowing the SAME press if holstering completes while X is held.
-    if(down && (consumeHold || armed)) {
-        consumeHold=true;
-        pad.wButtons &= uint16_t(~XB_BACK);
-        g_worldInventory.pending=false;
-    }
     held=down;
 }
+
 } // namespace ammoinput
 
 bool WorldInventoryAllowed() {
@@ -172,7 +181,7 @@ bool ApplyWorldInventory(XGamepad& pad,bool& shifted) {
     if(g_worldInventory.Update(in,WorldInventoryAllowed(),InInventory(),CurrentGame(),
         GetTickCount64(),Cfg().dpadShiftDeadzone,owned)) {
         VR().LevelHeadPose(g_inventoryAnchor);
-        Log("inventory: unarmed X prepared level eye-height anchor with horizontal facing");
+        Log("inventory: X prepared level eye-height anchor with horizontal facing");
     }
     if(owned) {
         pad.wButtons=in.buttons;
@@ -342,6 +351,7 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
 
     const VRSystem::HandState& L = h[0];
     const VRSystem::HandState& R = h[1];
+    ammoinput::touchR3Down=R.valid && R.stickClick;ammoinput::touchR3Valid=R.valid;
     const unsigned holsterGrips=FirstPersonHolsterGrips(L.grip>.5f,R.grip>.5f,L.valid,R.valid,
         gameplay && !L.btnUpper);
     touchGripAction = gameplay && !holsterGrips && L.grip > 0.5f && R.grip > 0.5f;
@@ -374,8 +384,8 @@ void BuildStateFromHands(const VRSystem::HandState h[2], XState& out,
     // inventory, where a diagonal reads as two navigation events and moves the
     // selection twice for one flick.
     //
-    // A plain R3 click -- held with the stick centred -- still emits
-    // RIGHT_THUMB exactly as before, so whatever the game binds it to survives.
+    // The ammo router distinguishes short R3 taps from look/zoom holds after
+    // merging physical-pad input. Keep the original Photo Mode chord intact.
     const bool photoChord = L.stickClick && R.stickClick;
     uint16_t dpad = 0;
     if (Cfg().dpadShift && R.stickClick && !photoChord) {
@@ -568,7 +578,7 @@ uint32_t __stdcall Detour_XInputGetState(uint32_t userIndex, XState* state) {
         }
     }
 
-    ammoinput::Apply(mine.Gamepad);
+    ammoinput::Apply(mine.Gamepad,ammoinput::touchR3Down,ammoinput::touchR3Valid);
     const bool inventoryOwned=ApplyWorldInventory(mine.Gamepad,shifted);
     if(!inventoryOwned) ApplyMergedChords(mine.Gamepad, gameplay, touchGripAction, shifted);
     else {

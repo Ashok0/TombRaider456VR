@@ -265,7 +265,7 @@ of the physical Touch buttons.
 | Mount a ledge physically | Pull both controllers down together | TR4/5 first person, while hanging |
 | Photo Mode | L3 + R3 | Opens the game's native Photo Mode |
 | D-pad input | Hold R3 and move LS | Used for directional menu/Photo Mode selections; does not also move Lara |
-| Look / zoom command | R3 without moving LS | Context-dependent native look/zoom action |
+| Look / zoom command | Hold R3 without moving LS | With ammo-switching weapons, hold longer than 350 ms; short taps change ammo |
 | Adjust camera pitch manually | Hold RT + RG and move RS vertically | Temporarily releases decoupled pitch; Shoot/Walk remain active |
 | Sneak | RG + Y | TR6 |
 
@@ -311,7 +311,7 @@ mode**. Classic graphics and third person use the native/head-aim weapon path.
 | Continue firing | Hold the appropriate trigger; native fire rate still applies |
 | Equip in third person | Hold LT with the default native control setup |
 | Shoot in third person | RT |
-| Change ammunition | X while a weapon is equipped, where the weapon/game supports it |
+| Change ammunition | Tap and release R3 with a ready weapon that supports ammo types (TR4/5) |
 | Draw from a physical holster | Reach to a supported holster, squeeze that hand's grip, and pull away while holding it |
 | Stow in a physical holster | Grip the weapon, return the hand to its matching holster and release the grip there |
 | Throw a held lit flare | Swing the left controller; no release button |
@@ -326,7 +326,7 @@ available as the normal equip/holster controls.
 
 | Action | Input |
 |---|---|
-| Open inventory/menu | X; holster weapons first to avoid the ammunition shortcut |
+| Open inventory/menu | X, including with weapons drawn or during equip/holster animations |
 | Navigate the spatial inventory | Release the opening button, then use LS |
 | Select / use an inventory item | A |
 | Back / close a menu | B |
@@ -680,7 +680,7 @@ the [recent updates](#recent-updates) above describe subsequent changes.
 | Controls and flares | First person uses Modern Controls even when third person uses Tank Controls. VR controller polling survives desktop focus changes. Held flares and their lights follow the left controller; dropped flares cannot enter creature hit-testing and crash gun targeting. |
 | Jump input and presentation | Brief A presses take priority over ordinary gait transitions. Holding A while moving forward queues the running ledge-jump assist. Unarmed side/back takeoffs retain the intended direction; backjumps use the collision-root arc, and airborne legs use native animation. Only backpedal jumps hide the body/hair. |
 | Body transitions | Landing, drawing/holstering and the inventory background retain consistent first-person body placement. Button sidearm transfers animate to/from the holsters with a smooth 160 ms handoff; physical grabs stay tracked. Empty hands retain their resting finger pose. |
-| Inventory and calibration | Unarmed X opens the level, eye-height spatial ring; armed X cycles native ammo. LT+Y view changes recalibrate the shared tracking frame. |
+| Inventory and calibration | X opens the level, eye-height spatial ring even while armed; a short R3 tap cycles supported ammo types. LT+Y view changes recalibrate the shared tracking frame. |
 | Roomscale and cameras | Physical steps can cross a ledge and start a native fall. The base first-person camera stops at crates/walls while physical head leaning can pass through them by default. Third-person startup waits for a loaded level before capturing tracking neutral; water exits use constrained climb handling. |
 | Weapon aiming | Attached revolver, Desert Eagle and crossbow sights project collision-tested world beams. Mesh-calibrated firing remains aligned with attached sights or bare barrels. The HK retains its scope and firing calibration but has no world beam. |
 | Shadows and costumes | Unarmed controller arms now update the shadow pose. Armed costume wrists preserve blended cuff surfaces instead of showing transparent gaps. |
@@ -1000,19 +1000,17 @@ remains pending.
 
 ### Spatial inventory shortcut (2026-10-25)
 
-In TR4/5 stereo VR, X with weapons holstered opens the native paused inventory
-at the headset's current eye height and horizontal heading, with pitch/roll
-removed so the ring and text remain level. Release X, then
-use LS left/right to cycle items, LS up/down for native categories/options, A to
-select/use, and B to back out or close. Native item actions, ammo selection and
-submenus remain in charge. With weapons active, X is consumed before the menu
-path and routed once per press to the equipped weapon's native ammo hotkey.
-This uses the game's ammo order, cooldown and feedback. Weapons with no ammo
-variants do nothing on X. Drawing/holstering also blocks the menu, and holding
-an armed X press through holstering cannot open inventory. Movement and firing
-remain available. The previous BACK passthrough was incorrect: BACK opens
-inventory even while armed in these builds. R3 + LS down
-returns to ordinary D-pad navigation and no longer opens spatial inventory.
+In TR4/5 stereo VR, X opens the native paused inventory with weapons holstered,
+drawn, or transitioning. The ring appears at the headset's current eye height
+and horizontal heading, with pitch/roll removed so it stays level. Release X,
+then use LS to navigate, A to select/use, and B to back out or close.
+
+Ammo switching now uses a short R3 tap (release within 350 ms) while a supported
+weapon is ready. The game's native ammo order, cooldown and feedback still apply.
+Holding R3 longer retains native look/zoom; using R3 with LS for D-pad input or
+with L3 for Photo Mode cancels the ammo tap. Opening a menu or changing weapons
+also prevents a pending tap from acting on the wrong state. TR1-3 have no
+alternate ammo types and retain their existing X menu controls.
 
 The 3D item carousel and menu text stay anchored as the headset turns or leans.
 Recenter places them in front again. The level is rendered freshly in stereo

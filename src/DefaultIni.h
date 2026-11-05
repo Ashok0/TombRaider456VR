@@ -631,9 +631,9 @@ WorldLaserSight=1
 ; gesture in play, so reusing it for D-pad up would mean choosing between them.
 ; R3 was the only spare input on the pad.
 ;
-; A plain R3 click, with the stick centred, still emits RIGHT_THUMB exactly as
-; before -- the D-pad only appears once the left stick is actually deflected,
-; so nothing that relied on R3 is lost. The left stick's movement axes are
+; With a ready TR4/5 weapon that supports ammo types, a short R3 tap cycles
+; ammo on release. Holding R3 longer than 350 ms retains native look/zoom.
+; D-pad and Photo Mode chords never cycle ammo. The left stick's axes are
 ; zeroed while shifted, so you do not walk and press a direction at once.
 ;
 ; Only the dominant axis fires, so a flick cannot emit up and left together and
@@ -641,8 +641,8 @@ WorldLaserSight=1
 DpadShift=1
 
 ; TR4/5 stereo VR: X opens the paused native inventory in front of the
-; headset, anchored there until closed. With weapons active X retains native
-; ammo switching. Release X, then LS navigates, A selects/uses, B backs out.
+; headset, anchored there until closed, including with weapons active. Tap R3
+; to cycle supported ammo types. Release X, then LS navigates, A uses, B exits.
 ; Native 3D items over the live head-tracked level; gameplay remains paused.
 WorldInventory=1
 

@@ -34,38 +34,85 @@ void TestArmedInventoryButton() {
         ammoinput::held=ammoinput::consumeHold=false;ammoinput::queuedGun=0;g_worldInventory.Reset();
         XGamepad pad{};pad.wButtons=XB_BACK|XB_X|XB_A;
         pad.bLeftTrigger=240;pad.bRightTrigger=250;pad.sThumbLX=17000;pad.sThumbRX=-13000;
-        auto expected=pad;if(state) expected.wButtons &= uint16_t(~XB_BACK);
-        ammoinput::Apply(pad);
-        Check(!std::memcmp(&pad,&expected,sizeof(pad)),"armed X removes only menu input, retaining shooting movement Walk and jump");
-        const int key=gun==4 ? 1 : which==0 && gun==5 ? 4 : which==0 && gun==6 ? 5 : which==1 && gun==5 ? 0 : -1;
-        Check(ammoinput::queuedGun==(state==4 && key>=0 ? gun : 0),"only ready weapons with ammo variants queue a native hotkey");
+        const auto expected=pad;ammoinput::Apply(pad);
+        Check(!std::memcmp(&pad,&expected,sizeof(pad)) && !ammoinput::queuedGun,
+              "X remains menu input in every equip state without changing ammo or other controls");
         bool shifted=false;ApplyWorldInventory(pad,shifted);
-        Check(g_worldInventory.pending==(state==0),"armed X never prepares or opens world inventory");
+        Check(g_worldInventory.pending,"X prepares world inventory with weapons drawn, holstered or transitioning");
+        g_worldInventory.Reset();
+        const int key=gun==4 ? 1 : which==0 && gun==5 ? 4 : which==0 && gun==6 ? 5 : which==1 && gun==5 ? 0 : -1;
+        const bool eligible=state==4 && key>=0;
+        pad={};pad.wButtons=XB_RIGHT_THUMB;ammoinput::Apply(pad);
+        Check(!ammoinput::queuedGun && pad.wButtons==(eligible?0:XB_RIGHT_THUMB),
+              "R3 press waits for release before switching ammo and preserves unsupported native clicks");
+        pad={};ammoinput::Apply(pad);
+        Check(ammoinput::queuedGun==(eligible?gun:0),"one short R3 tap queues only the ready weapon's native ammo key");
         for(int k=0;k<6;++k) appMemory[0x89c+k]=uint8_t(2+k);
         appMemory[0x8f2]=7;
-        ammoExpectedKey=state==4 ? key : -1;const int calls=ammoHotkeyCalls;
+        ammoExpectedKey=eligible ? key : -1;const int calls=ammoHotkeyCalls;
         ammoinput::Hotkeys();
-        Check(ammoHotkeyCalls==calls+1 && ammoinput::queuedGun==0,"one native hotkeys call consumes queued ammo press");
+        Check(ammoHotkeyCalls==calls+1 && !ammoinput::queuedGun,"one native hotkeys call consumes the R3 tap");
         for(int k=0;k<6;++k) Check(appMemory[0x89c+k]==2+k,"keyboard hotkeys restored after native ammo call");
         Check(appMemory[0x8f2]==7,"native pad modifier restored after ammo call");
-        pad.wButtons=XB_BACK;ammoinput::Apply(pad);
-        Check(!ammoinput::queuedGun,"holding X cannot repeatedly cycle ammo");
-        if(state) {
-            status=0;pad.wButtons=XB_BACK;ammoinput::Apply(pad);
-            Check(!pad.wButtons,"same armed press cannot open inventory when holstering completes");
-        }
+        ammoinput::Apply(pad);Check(!ammoinput::queuedGun,"repeated released polls cannot cycle ammo again");
+        pad.wButtons=XB_RIGHT_THUMB;ammoinput::Apply(pad);ammoinput::pressedAt-=400;
+        pad.wButtons=XB_RIGHT_THUMB;ammoinput::Apply(pad);
+        Check(pad.wButtons==XB_RIGHT_THUMB && !ammoinput::queuedGun,"sustained R3 retains native look/zoom");
+        pad={};ammoinput::Apply(pad);Check(!ammoinput::queuedGun,"releasing a long R3 hold cannot change ammo");
+    }
+    game=dll.game=0;status=4;weapon=4;
+    for(int chord:{XB_DPAD_UP,XB_DPAD_DOWN,XB_DPAD_LEFT,XB_DPAD_RIGHT,XB_LEFT_THUMB,XB_BACK,XB_START}) {
+        ammoinput::held=ammoinput::consumeHold=false;ammoinput::queuedGun=0;
+        XGamepad pad{};pad.wButtons=XB_RIGHT_THUMB;ammoinput::Apply(pad,true);
+        pad.wButtons=uint16_t(chord | (chord<16 ? 0 : XB_RIGHT_THUMB));
+        const auto before=pad.wButtons;ammoinput::Apply(pad,true);
+        Check(pad.wButtons==before && !ammoinput::queuedGun,"D-pad, Photo Mode and menu chords retain their input and cancel ammo taps");
+        pad.wButtons=XB_RIGHT_THUMB;ammoinput::Apply(pad,true);
         pad={};ammoinput::Apply(pad);
-        status=0;pad.wButtons=XB_BACK;ammoinput::Apply(pad);
-        Check(pad.wButtons==XB_BACK,"fresh unarmed X still opens native inventory");
+        Check(!ammoinput::queuedGun,"returning the shifted stick to centre cannot rearm an ammo tap");
+    }
+    // Feed actual Touch mapping through the router, including D-pad's omitted
+    // RIGHT_THUMB bit, so these assertions cover more than synthetic button masks.
+    config.dpadShift=true;config.gamepadMenuUsesBack=true;
+    for(int gesture=0;gesture<4;++gesture) {
+        ammoinput::held=ammoinput::consumeHold=false;ammoinput::queuedGun=0;g_worldInventory.Reset();
+        VRSystem::HandState hands[2]{};hands[0].valid=hands[1].valid=true;
+        hands[1].stickClick=true;
+        XState mapped{};bool shifted=false,grip=false;
+        auto poll=[&] {
+            BuildStateFromHands(hands,mapped,shifted,false,grip);
+            ammoinput::Apply(mapped.Gamepad,ammoinput::touchR3Down,ammoinput::touchR3Valid);
+        };
+        poll();Check(!ammoinput::queuedGun,"mapped Touch R3 down does not yet change ammo");
+        if(gesture==1) { hands[0].stickY=-1;poll();Check(mapped.Gamepad.wButtons&XB_DPAD_DOWN,"R3 plus LS retains D-pad output");hands[0].stickY=0;poll(); }
+        if(gesture==2) { hands[0].stickClick=true;poll();Check((mapped.Gamepad.wButtons&(XB_LEFT_THUMB|XB_RIGHT_THUMB))==(XB_LEFT_THUMB|XB_RIGHT_THUMB),"Photo Mode retains both click buttons"); }
+        if(gesture==3) { hands[1].valid=false;poll(); }
+        hands[0].stickClick=hands[1].stickClick=false;poll();
+        Check(ammoinput::queuedGun==(gesture==0?4:0),"only a clean tracked Touch tap changes ammo");
+        ammoinput::queuedGun=0;hands[0].btnLower=true;poll();
+        Check(mapped.Gamepad.wButtons&XB_BACK,"physical Touch X opens menu while shotgun is ready");
+    }
+    for(int guard=0;guard<5;++guard) {
+        game=dll.game=0;weapon=4;status=4;ammoinput::held=false;ammoinput::queuedGun=0;
+        XGamepad press{};press.wButtons=XB_RIGHT_THUMB;ammoinput::Apply(press);
+        auto* savedItem=laraItem;
+        if(guard==0) weapon=6;
+        if(guard==1) status=3;
+        if(guard==2) laraItem=nullptr;
+        if(guard==3) *reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=1;
+        if(guard==4) config.enabled=false;
+        press={};ammoinput::Apply(press);
+        Check(!ammoinput::queuedGun,"weapon, equip, item, menu and disable changes cancel an in-progress ammo tap");
+        laraItem=savedItem;config.enabled=true;*reinterpret_cast<int32_t*>(appMemory+drva::app_off::InventoryActive)=0;
     }
     game=dll.game=1;status=4;weapon=5;ammoTestLevel=1;
     ammoinput::held=false;ammoinput::queuedGun=0;
-    XGamepad pad{};pad.wButtons=XB_BACK;ammoinput::Apply(pad);
-    Check(!pad.wButtons && !ammoinput::queuedGun,"TR5 chapter-specific HK key cannot equip pistols in an earlier chapter");
+    XGamepad pad{};pad.wButtons=XB_RIGHT_THUMB;ammoinput::Apply(pad);pad={};ammoinput::Apply(pad);
+    Check(!ammoinput::queuedGun,"TR5 chapter-specific HK key cannot equip pistols in an earlier chapter");
     for(int guard=0;guard<4;++guard) {
         game=dll.game=0;weapon=4;status=4;ammoinput::held=false;
-        pad.wButtons=XB_BACK;ammoinput::Apply(pad);
-        Check(ammoinput::queuedGun==4,"guard test starts with a queued shotgun press");
+        pad.wButtons=XB_RIGHT_THUMB;ammoinput::Apply(pad);pad={};ammoinput::Apply(pad);
+        Check(ammoinput::queuedGun==4,"guard test starts with a queued shotgun tap");
         if(guard==0) weapon=1;
         if(guard==1) status=3;
         if(guard==2) ammoinput::queuedAt-=1000;
@@ -89,7 +136,7 @@ void TestWorldInventory() {
         const Input opening{XB_BACK,moving ? .7f : 0,0};
         auto in=opening;
         Check(s.Update(in,true,false,which,100,.5f,owned) && !owned && in.buttons==XB_BACK && in.x==opening.x,
-              "X/BACK passes unchanged to native menu/ammo handling while anchor is prepared");
+              "X/BACK passes unchanged to native menu handling while anchor is prepared");
         for(uint64_t now:{110,150,250,300}) {
             in=opening;
             Check(!s.Update(in,true,false,which,now,.5f,owned) && !owned &&

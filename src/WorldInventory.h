@@ -45,10 +45,8 @@ struct Session {
         deadzone=std::clamp(deadzone,.2f,.9f);
         const uint16_t direction=Direction(in.x,in.y,deadzone);
         const bool photo=(in.buttons&(L3|R3))==(L3|R3);
-        // Touch X is mapped to XInput BACK (XInput X is Walk). Observe this
-        // unarmed menu input without synthesizing it. Gamepad's armed-X
-        // router removes BACK before this observer and invokes native ammo
-        // hotkeys separately; BACK alone is NOT a native ammo-change command.
+        // Touch X maps to XInput BACK (XInput X is Walk). Pass it through
+        // for native inventory regardless of weapon state; ammo uses R3 taps.
         const bool pressed=(in.buttons&Back)!=0;
         const bool neutral=!(in.buttons & uint16_t(0xf0ff)) &&
             std::fabs(in.x)<deadzone*.5f && std::fabs(in.y)<deadzone*.5f &&
