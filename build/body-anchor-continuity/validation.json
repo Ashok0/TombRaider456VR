@@ -1,0 +1,30 @@
+{
+  "Targeted456": "PASS: 3340270 straight-up jump arm checks",
+  "Targeted123": "PASS: 2085991 locomotion, gun-control and camera hook checks",
+  "ReleaseBuilds": "Both passed",
+  "InHeadsetTested": false,
+  "Implementation": [
+    "Separate accepted position frame from angular origin and fresh hand-geometry evidence",
+    "Remove hand-midpoint anchor assignment; preserve existing body-to-neck offset using corroborated physical movement",
+    "Account for translation only in neck-space and preserve pending rotation in translation fallback",
+    "Keep live HMD position out of angular blending",
+    "Stronger rigid-pose agreement permits asymmetric hand travel during a confirmed curved step"
+  ],
+  "NewCoverage": [
+    "64 reach-change trajectories: extend/retract arms, idle/turn/walk transitions, both turn directions, four travel directions",
+    "8 articulated-turn trajectories with four physical pivot radii and both turn directions",
+    "Existing production leg, standing, neck, jump, glancing, and locomotion checks retained"
+  ],
+  "Reproducer": {
+    "BeforeMaxExcessJumpMm": 304.9,
+    "BeforeFinalOffsetMm": [
+      220,
+      299.9
+    ],
+    "AfterMaxExcessJumpMm": 29.7,
+    "AfterWorstOffsetMm": 33.5,
+    "AfterMaxFinalOffsetMm": 10.6,
+    "Meaning": "Synthetic reach-change replay, not live headset measurements; conservative position checkpoints retain centimeter-scale residuals"
+  },
+  "KnownBaselineFailure": "Unrelated legacy full first_person_tests calibrated HMD height can request native crouch reproduced before this work in build/roomscale-stance/baseline-full.log; this run used focused TR4-6 suite plus full TR1-3 locomotion selftest."
+}

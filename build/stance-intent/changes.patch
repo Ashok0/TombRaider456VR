@@ -1,0 +1,260 @@
+--- before/src/ControllerBodyAnchor.h
++++ after/src/ControllerBodyAnchor.h
+@@ -4,8 +4,34 @@
+ // Controller POSITIONS, not their aim. Require coordinated head/hand travel.
+ // A fixed reference and separate entry/continuation thresholds reject noise without
+ // mistaking a slow cumulative physical step for stationary hands.
++// A physical step needs repeated directional agreement, not one frame where
++// headset sway happens to coincide with controller noise. This state is separate
++// from facing and keeps its own observation references across detector resets.
++struct PhysicalStepIntent {
++    bool valid=false,moving=false;int samples=0;
++    Vec neck{},hands[2]{},direction{};
++    double began=0,last=0;
++    void Capture(Vec eye,Vec left,Vec right,double now) {
++        valid=true;moving=false;samples=0;neck=eye;hands[0]=left;hands[1]=right;
++        direction={};began=last=now;
++    }
++    bool Observe(Vec eye,Vec left,Vec right,double now,bool coherent) {
++        if(!valid || now<last || now-last>.12) Capture(eye,left,right,now);
++        const Vec travel=Flat(Sub(eye,neck));const float distance=Length(travel);
++        if(coherent && distance>=.006f &&
++           Length(Flat(Sub(left,hands[0])))>=.001f && Length(Flat(Sub(right,hands[1])))>=.001f) {
++            const Vec next=Scale(travel,1/distance);
++            if(samples==0 || Dot(next,direction)<.85f) {samples=1;began=now;moving=false;}
++            else ++samples;
++            direction=next;neck=eye;hands[0]=left;hands[1]=right;last=now;
++            if(samples>=2 && now-began>=.04) moving=true;
++        }
++        return moving;
++    }
++};
+ struct ControllerBodyAnchor {
+     RoomscaleHeadingRecovery heading;
++    PhysicalStepIntent stepIntent;
+     float turnOutput=0; // Facing is supplied exclusively as an absolute target.
+     bool valid=false,held=false,rotating=false,translating=false;
+     uint64_t serial=0;
+@@ -34,11 +60,12 @@
+         if(valid && serial==frame && artificial==base) return;
+         const bool turn=valid && std::fabs(BodyAngle(artificial-base))>1.e-6f;
+         if(!valid || now<time || now-time>.5 || turn) {
+-            *this={};valid=true;serial=frame;time=moved=referenceTime=rotated=now;base=artificial;
++            *this={};valid=true;held=true;serial=frame;time=moved=referenceTime=rotated=now;base=artificial;
+             motionSampleHands[0]=sampleHands[0]=hands[0]=left;
+             motionSampleHands[1]=sampleHands[1]=hands[1]=right;handMotionTime=now;
+             head=eye;motionEye=walkEye;motionYaw=headYaw;yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
+             CapturePlacement(eye,walkEye,left,right,headYaw);
++            stepIntent.Capture(walkEye,left,right,now);
+             heading.Update(eye,left,right,bodyYaw,headYaw,now,head);return;
+         }
+         // Evidence may span several frames, but a new head pose cannot spend
+@@ -81,12 +108,19 @@
+         // Fit the shared displacement with no rotation, controller rotation,
+         // or corroborated head rotation. Opposite arm swing must not corrupt
+         // the turn estimate used to recognize a real shared step.
+-        candidate(0);bool headLeading=false;
++        candidate(0);
++        // A gaze/body mismatch persists after the short movement window is
++        // refreshed. A sideways glance must not become an ordinary step just
++        // because its next few degrees are small.
++        const float controllerFacing=heading.valid && afterSpan>.05f ?
++            BodyAngle(heading.bodyOrigin+std::atan2(afterPair.x,afterPair.z)-heading.facingOrigin) : bodyYaw;
++        bool headLeading=std::fabs(BodyAngle(headYaw-controllerFacing))>.35f;
+         if(beforeSpan>.05f && afterSpan>.05f) {
+             const float pairTurn=BodyAngle(std::atan2(afterPair.x,afterPair.z)-std::atan2(beforePair.x,beforePair.z));
+-            headLeading=std::fabs(headTurn)>.06f && std::fabs(pairTurn)<std::fabs(headTurn)*.5f;
+-            if(!headLeading && std::fabs(BodyAngle(pairTurn-headTurn))<.15f) candidate(pairTurn);
+-            if(!headLeading && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
++            const bool headLedIncrement=std::fabs(headTurn)>.06f && std::fabs(pairTurn)<std::fabs(headTurn)*.5f;
++            headLeading=headLeading || headLedIncrement;
++            if(!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.15f) candidate(pairTurn);
++            if(!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
+         }
+         const float c=Length(common);
+         const float rawTravel[2]={Length(Flat(Sub(left,hands[0]))),Length(Flat(Sub(right,hands[1])))};
+@@ -102,7 +136,10 @@
+             Length(Sub(common,headDelta))<std::max(.012f,h*.25f) &&
+             Length(Sub(delta[0],headDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f)) &&
+             Length(Sub(delta[1],headDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f));
+-        const bool translation=freshHands && !quietHands && translationCoherent && c>=threshold && h>=threshold &&
++        const bool stepConfirmed=stepIntent.Observe(walkEye,left,right,now,
++            freshHands && !quietHands && translationCoherent);
++        if(!walking && !stepConfirmed && !held) {held=true;height=eye.y;yaw=bodyYaw;}
++        const bool translation=stepConfirmed && freshHands && !quietHands && translationCoherent && c>=threshold && h>=threshold &&
+             rawTravel[0]>=threshold*.35f && rawTravel[1]>=threshold*.35f &&
+             Length(Flat(Scale(Add(Sub(left,hands[0]),Sub(right,hands[1])),.5f)))>=std::max(threshold*.8f,h*.5f);
+         if(translation) {translating=true;translated=now;}
+--- before/tools/body_transition_regression.inl
++++ after/tools/body_transition_regression.inl
+@@ -262,7 +262,10 @@
+         release.Update(2,.2,head,left,right,0,0,true,false);
+         const tr::motiongun::Vec lean{.30f,0,0},step{.03f,0,0};
+         release.Update(3,.21,Add(head,lean),left,right,0,0,true,false);
+-        release.Update(4,.22,Add(head,step),Add(left,step),Add(right,step),0,0,true,false);
++        for(int i=1;i<=20;++i) {
++            const auto delta=Scale(step,i/20.f);
++            release.Update(i+3,.21+i/90.,Add(head,delta),Add(left,delta),Add(right,delta),0,0,true,false);
++        }
+         BodyFollower facing;
+         facing.Update(1,0,0,0,0,{}, {},false,tr::firstperson::BodyFollowSettings());
+         facing.Update(2,.02,0,1.5f,0,step,{},false,tr::firstperson::BodyFollowSettings(),{},false,true,0,false,true);
+@@ -270,11 +273,11 @@
+         facing.Update(3,.03,0,1.6f,0,step,{},false,tr::firstperson::BodyFollowSettings(),{},false,true,.1f,false,true);
+         Check(std::fabs(facing.yaw-.1f)<.00001f,"controller-owned facing still accepts corroborated physical turns");
+         const auto footprint=Sub(Add(head,step),release.offset);
+-        Check(Length(Flat(Sub(footprint,Add(head,step))))<.00001f,
++        Check(Length(Flat(Sub(footprint,Add(head,step))))<.004f,
+               "physical release carries only controller movement, never accumulated head lean");
+-        for(int frame=5;frame<20;++frame) {
+-            const auto eye=Add(head,{.15f+frame*.01f,0,0});
+-            release.Update(frame,.22+(frame-4)/90.,eye,Add(left,step),Add(right,step),0,0,true,false);
++        for(int frame=24;frame<40;++frame) {
++            const auto eye=Add(head,{.15f+(frame-23)*.01f,0,0});
++            release.Update(frame,.44+(frame-23)/90.,eye,Add(left,step),Add(right,step),0,0,true,false);
+             Check(Length(Flat(Sub(Sub(eye,release.offset),footprint)))<.00001f,
+                   "head-only motion stays excluded during physical-release settling");
+         }
+@@ -336,14 +339,17 @@
+               "recorded controller-scale jitter cannot release the body to head translation");
+     }
+     a.Update(100,2.4,head,left,right,0,0,true,false); // Settle the glance before a real step.
+-    a.Update(101,2.41,Add(head,{.04f,0,0}),Add(left,{.04f,0,0}),Add(right,{.04f,0,0}),0,0,true,false);
++    for(int i=1;i<=20;++i) {
++        const Vec step{.002f*i,0,0};
++        a.Update(100+i,2.4+i/90.,Add(head,step),Add(left,step),Add(right,step),0,0,true,false);
++    }
+     Check(!a.held,"coordinated physical head and controller translation releases the hold");
+-    a.Update(102,2.6,Add(head,{.04f,0,0}),Add(left,{.04f,0,0}),Add(right,{.04f,0,0}),0,0,true,false);
++    a.Update(121,2.85,Add(head,{.04f,0,0}),Add(left,{.04f,0,0}),Add(right,{.04f,0,0}),0,0,true,false);
+     Check(a.held,"controllers can settle again after motion");
+-    a.Update(103,2.61,head,left,right,.4f,0,true,false);
+-    Check(!a.held && Length(a.offset)==0,"stick turning discards the physical hold without stale correction");
+-    a.Update(104,2.8,head,left,right,.4f,0,true,false);
+-    a.Update(105,2.81,head,left,right,.4f,0,true,true);
++    a.Update(122,2.86,head,left,right,.4f,0,true,false);
++    Check(Length(a.offset)==0 && a.reason==4,"stick turning discards the physical hold without stale correction");
++    a.Update(123,3.1,head,left,right,.4f,0,true,false);
++    a.Update(124,3.11,head,left,right,.4f,0,true,true);
+     Check(!a.held,"stick travel remains available with physically stationary controllers");
+     ControllerBodyAnchor turning;BodyFollower follower;PhysicalBodyTurn signal;
+     turning.Update(1,0,head,left,right,0,0,true,false);
+@@ -702,11 +708,26 @@
+                 "forward backward and sideways steps remain responsive while the head glances independently");
+         }
+     }
++    // Recorded failure pattern: a settled sideways gaze with unequal hand
++    // adjustments must not masquerade as a physical step. The short-window
++    // head yaw can be zero even though the player is clearly looking aside.
++    for(float gaze:{-1.2f,1.2f}) for(int direction=0;direction<4;++direction) {
++        ControllerBodyAnchor planted;
++        planted.Update(1,0,head,left,right,0,0,true,false,gaze);
++        planted.Update(2,.2,head,left,right,0,0,true,false,gaze);
++        for(int i=1;i<=20;++i) {
++            const Vec axis=YawVector(Vec{i/20.f,0,0},direction*1.5707963f);
++            planted.Update(i+2,.2+i/90.,Add(head,Scale(axis,.03f)),
++                Add(left,Scale(axis,.041f)),Add(right,Scale(axis,.010f)),0,0,true,false,gaze);
++            Check(planted.held && Length(Flat(Sub(planted.head,head)))<.00001f,
++                "a settled sideways gaze and unequal small hand adjustments leave the inferred feet planted");
++        }
++    }
+     ControllerBodyAnchor slow;slow.Update(1,0,head,left,right,0,0,true,false);
+     for(int i=1;i<=90;++i) {
+         const tr::motiongun::Vec shift{.002f*i,0,0};
+         slow.Update(i+1,i/90.,Add(head,shift),Add(left,shift),Add(right,shift),0,0,true,false);
+-        Check(!slow.held,"slow cumulative controller translation is not mistaken for stationary tracking noise");
++        if(i>=15) Check(!slow.held,"slow cumulative controller translation is not mistaken for stationary tracking noise");
+     }
+     a.Update(106,2.82,head,left,right,.4f,0,false,false);
+     Check(!a.valid && !a.held && Length(a.offset)==0,"tracking loss cannot retain a stale body anchor");
+@@ -838,6 +859,7 @@
+ }
+ 
+ void TestConfirmedRoomscaleSteps() {
++    trackingtest::Clock trackingClock;
+     using namespace tr;
+     const auto settings=config;const auto savedVR=VR();const auto layout=dll;
+     const auto savedAnchor=g_controllerBodyAnchor;const auto savedFollow=g_roomscaleFollower;
+@@ -868,11 +890,14 @@
+         g_controllerBodyAnchor.moved=TurnTime()-.2;++VR().m_poseSerial;UpdateControllerBodyAnchor();
+         Check(BodyControllersStationary(),"roomscale fixture begins with planted tracked controllers");
+         const auto travel=locomotion::Rotate({.03f,0},direction*1.5707963f);
+-        Head(.3f);
+-        VR().m_rawHeadPose.m[0][3]=eye.m[0][3]+.15f*std::sin(.3f)+travel.x;
+-        VR().m_rawHeadPose.m[2][3]=eye.m[2][3]-.15f*(std::cos(.3f)-1)-travel.z;
+-        VR().m_rawControllerPose[0]=left;VR().m_rawControllerPose[1]=right;
+-        for(auto& controller:VR().m_rawControllerPose) {controller.m[0][3]+=travel.x;controller.m[2][3]-=travel.z;}
++        for(int i=1;i<=20;++i) {
++            const float t=i/20.f,angle=.3f*t;Head(angle);
++            VR().m_rawHeadPose.m[0][3]=eye.m[0][3]+.15f*std::sin(angle)+travel.x*t;
++            VR().m_rawHeadPose.m[2][3]=eye.m[2][3]-.15f*(std::cos(angle)-1)-travel.z*t;
++            VR().m_rawControllerPose[0]=left;VR().m_rawControllerPose[1]=right;
++            for(auto& controller:VR().m_rawControllerPose) {controller.m[0][3]+=travel.x*t;controller.m[2][3]-=travel.z*t;}
++            trackingClock.Advance(1./90);++VR().m_poseSerial;UpdateControllerBodyAnchor();
++        }
+         ++VR().m_poseSerial;tick();const auto movement=DragBody(itemMemory);
+         Check(g_controllerBodyAnchor.translating && locomotion::Length(movement)>.005f && collisionCalls>0,
+             "confirmed three-centimetre steps reach native collision movement without a second fifteen-centimetre deadzone");
+@@ -1016,6 +1041,7 @@
+         }
+         trackingClock.End();
+         for(int holdGunStatus:{0,4}) {
++        trackingtest::Clock holdClock;
+         *Ptr<int16_t>(dll.lara+2)=int16_t(holdGunStatus);
+         setTracking(0);VR().m_firstPersonNeutral[1]=1.7f;VR().m_firstPersonNeutralEyeNeckY=.08f;ResetBodyFollower();render();
+         g_controllerBodyAnchor.moved=TurnTime()-.2;
+@@ -1023,6 +1049,21 @@
+         Check(BodyControllersStationary(),"render fixture holds actual stationary controller positions");
+         const auto heldLeft=VR().m_rawControllerPose[0],heldRight=VR().m_rawControllerPose[1];
+         const auto sceneBefore=g_scenePose;
++        const auto heldHead=VR().m_rawHeadPose;
++        for(int i=1;i<=20;++i) {
++            Head(1.2f);VR().m_rawHeadPose.m[0][3]=heldHead.m[0][3]+.03f*i/20;
++            VR().m_rawHeadPose.m[1][3]=heldHead.m[1][3];VR().m_rawHeadPose.m[2][3]=heldHead.m[2][3];
++            VR().m_rawControllerPose[0]=heldLeft;VR().m_rawControllerPose[1]=heldRight;
++            VR().m_rawControllerPose[0].m[0][3]+=.041f*i/20;
++            VR().m_rawControllerPose[1].m[0][3]+=.010f*i/20;
++            holdClock.Advance(1./90);const auto pose=render();
++            for(int joint:{0,7}) Check(firstperson::Length(firstperson::Flat(Sub(pose[joint].origin,heldPose[joint].origin)))<.1f,
++                "final rendered pelvis and torso remain stationary through a sideways glance and unequal hand drift");
++            Check(!std::memcmp(&sceneBefore,&g_scenePose,sizeof(sceneBefore)),"planted inference leaves the camera untouched");
++        }
++        Head(0);VR().m_rawHeadPose=heldHead;
++        VR().m_rawControllerPose[0]=heldLeft;VR().m_rawControllerPose[1]=heldRight;
++        ResetControllerBodyAnchor();UpdateControllerBodyAnchor();
+         for(int frame=0;frame<180;++frame) {
+             const float yaw=1.5f*std::sin(frame*.4f),dx=.35f*std::sin(frame*.04f),dz=.25f*std::cos(frame*.04f);
+             Head(yaw,-1.f);VR().m_rawHeadPose.m[1][3]-=.25f;VR().m_rawHeadPose.m[0][3]+=dx;VR().m_rawHeadPose.m[2][3]-=dz;
+@@ -1122,9 +1163,11 @@
+     for(float drop:{.05f,.08f,.09f}) for(int frame=0;frame<40;++frame) {
+         VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-drop;
+         g_torsoClearance.time-=1./90;
+-        // Exercise released-body clearance explicitly. The stationary-hold
+-        // fixture above tests the frozen correction; CPU load must not choose.
+-        ResetControllerBodyAnchor();
++        // Exercise clearance in an explicitly confirmed moving stance.
++        // Initialization now starts planted, so resetting is not a release.
++        UpdateControllerBodyAnchor();g_controllerBodyAnchor.held=false;
++        g_controllerBodyAnchor.moved=TurnTime();
++        g_controllerBodyAnchor.stepIntent.moving=true;g_controllerBodyAnchor.stepIntent.last=TurnTime();
+         const auto pose=render();largest=std::max(largest,std::fabs(g_torsoClearance.angle));
+         for(int j:{0,3,6}) Check(firstperson::Length(Sub(pose[j].origin,neutral[j].origin))<.1f,
+               "live torso clearance preserves standing hip height, body offset and planted feet");
+--- before/README.md
++++ after/README.md
+@@ -163,8 +163,13 @@
+ When both motion controllers stay in the same tracked positions, Lara's
+ horizontal body position and physical facing are held while you move or turn
+ your head. The view and controller hands remain fully tracked. Small independent controller drift does not release the hold. Coordinated
+-head and both-controller travel of roughly 2.5 cm releases the positional
+-hold; a lower continuation threshold preserves slow movement.
++head and both-controller travel of roughly 2.5 cm can release the positional
++hold after repeated directional evidence. Initialization starts planted; a
++single coincident head/hand adjustment is insufficient. While looking aside,
++the detector compares gaze with the controller-facing reference and requires
++stricter agreement between the hands. It returns to the planted state when
++step confidence expires or direction becomes ambiguous. A lower continuation
++threshold preserves confirmed slow movement.
+ After 120 ms without that movement the body holds again.
+ Both controllers must travel together by comparable amounts, and physical
+ turns must rotate the line between them along with the headset. Unrelated

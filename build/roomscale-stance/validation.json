@@ -1,0 +1,17 @@
+{
+  "TargetedChecks": {
+    "456": 3122784,
+    "123": 1977248
+  },
+  "Before": {
+    "FootprintDriftCm": 112.85,
+    "LostTravelCm": 29.8
+  },
+  "After": {
+    "FootprintDriftCm": 0,
+    "LostTravelCm": 0.2
+  },
+  "HeadsetTested": false,
+  "LegacySuiteFailure": "calibrated HMD height can request native crouch",
+  "LegacyFailureReproducedOnUnchangedBaseline": true
+}

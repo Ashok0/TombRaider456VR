@@ -1,0 +1,22 @@
+{
+  "scope": "Intermittent sudden body-position release during planted glances; TR1-5 first person. TR6 remains third person.",
+  "tests456": 5389576,
+  "tests123": 3116563,
+  "baselineCapture": "Fails after 219 checks",
+  "fixedCaptureChecks": 3052,
+  "approximateReplay": {
+    "samples": 466,
+    "beforeMaxSingleFrameMillimetres": 303.4,
+    "afterMaxSingleFrameMillimetres": 34.8,
+    "limitation": "Sparse position samples; head yaw reconstructed from render observations. Approximate regression trajectory, not frame-exact runtime replay."
+  },
+  "builds": "Both Release x64 succeeded",
+  "inHeadsetTested": false,
+  "unchanged": "Height calibration, posture, camera tracking, motion controller targets and INI settings",
+  "sources456": {
+    "src/ControllerBodyAnchor.h": "A247DA8F5E905D726A1DB2D77FB081666D365079F0E35CF1A9D1009E88F46B3C",
+    "tools/body_transition_regression.inl": "2A22C12C3BCAC2FF5391999D9B574658126EF9C9F9E0644298B0190065EF89FA",
+    "tools/body_anchor_capture.inl": "A072C2CF75F2DD0B6D381D316C0E4AF707ED84CDEC26AA2695D15A5A6BE62627",
+    "README.md": "AF450B7C7DD5BD9F8AAFD1CCC72861FF7219DA1BA971F663903B8AD609995932"
+  }
+}

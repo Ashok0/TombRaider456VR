@@ -1,0 +1,15 @@
+{
+  "purpose": "Diagnostic only: identify final mesh/view transform mismatch during stationary glances. No locomotion, IK, height or INI changes.",
+  "nativeReleaseBuild": "passed",
+  "realOpenGLChecks": 19,
+  "headsetValidation": false,
+  "previousDLL": "360DE527AF90C3A98FEC58E03D8470BC441BFF906100E22632CB7C6EBD597D67",
+  "builtDLL": "63D0B25FF3AF4D743E8DDCE844F34D4DFDFC251E2FE6E5F6538BCA8883A96649",
+  "collection": "TR4-6 (reported TR5 issue)",
+  "otherCollection": "TR1-3 installation unchanged",
+  "files": {
+    "src/BoneSkin.cpp": "201193B7108F6EA4C2C94748CF814E1C0E452F58A094A05A4D19C0423DC4ABE6",
+    "src/RenderAuditReadback.h": "ED2C7327E1FF659979FDF4C0691C29073E7A15E38F0C229B352B106CE40A88E0",
+    "tools/body_render_audit_gl_test.cpp": "0BD9D71AC7EF9E0178D9EA1945110D2A7BB3875132E526296C6FB6E9265E6366"
+  }
+}

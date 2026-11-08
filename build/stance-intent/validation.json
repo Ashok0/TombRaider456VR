@@ -1,0 +1,35 @@
+{
+  "Targeted456": "PASS: 3615104 straight-up jump arm checks",
+  "Targeted123": "PASS: 2223567 locomotion, gun-control and camera hook checks",
+  "ReleaseBuilds": "Both passed",
+  "Installed": true,
+  "InHeadsetTested": false,
+  "Changes": [
+    "Initialize planted rather than temporarily releasing body after reset",
+    "Require repeated coherent translation checkpoints and directional agreement over at least 40ms; expire step confidence after 120ms without supporting progress",
+    "Replant immediately when step confidence is absent or direction reverses; preserve independent accepted physical turning",
+    "Assess sideways gaze against controller-facing reference, not only incremental head yaw or smoothed rendered-body yaw; require stronger bilateral hand agreement while looking aside"
+  ],
+  "SessionEvidence": "Session log includes translation releases with wide head/body yaw mismatch and unequal controller travel; e.g. 41.4mm versus 10.4mm at body -6.7 degrees and head +78.3 degrees. Log is sparse and does not directly measure feet.",
+  "Reproducer": {
+    "Cases": 8,
+    "HeadYawRadians": [
+      -1.2,
+      1.2
+    ],
+    "HeadTravelMm": 30,
+    "LeftTravelMm": 41,
+    "RightTravelMm": 10,
+    "BeforeDriftMm": [
+      19.41,
+      41.14
+    ],
+    "AfterDriftMm": 0,
+    "FinalRender": "Pelvis/chest remain stationary within 0.1 world unit through the new glance fixture, holstered and drawn; camera unchanged"
+  },
+  "ExistingCoverage": "Slow/curved movement in all four directions, natural arm swing, changing reach, multi-turn centering, jumps, standing calibration, physical root/native walls/falls preserved.",
+  "TestFixtureUpdates": "Single-frame teleports no longer stand in for confirmed walking. Fixtures use synthetic time and multi-frame steps, retain collision assertions, explicitly seed moving state only for isolated torso-clearance integration.",
+  "Height": "Camera, torso-size/height calibration and native physics code unchanged. Existing INIs preserved.",
+  "KnownBaselineFailure": "Previously reproduced unrelated legacy full first_person_tests calibrated HMD height can request native crouch; focused TR4-6 suite and TR1-3 locomotion suite used here.",
+  "Deployment": "deployment.json"
+}

@@ -163,14 +163,84 @@ height. Full-body IK and positional tracking are required for this feature.
 When both motion controllers stay in the same tracked positions, Lara's
 horizontal body position and physical facing are held while you move or turn
 your head. The view and controller hands remain fully tracked. Small independent controller drift does not release the hold. Coordinated
-head and both-controller travel of roughly 2.5 cm, or a corroborated physical
-turn, releases it; a lower continuation threshold preserves slow movement.
+head and both-controller travel of roughly 2.5 cm can release the positional
+hold after repeated directional evidence. Initialization starts planted; a
+single coincident head/hand adjustment is insufficient. While looking aside,
+the detector compares gaze with the controller-facing reference and requires
+stricter agreement between the hands. It returns to the planted state when
+step confidence expires or direction becomes ambiguous. A lower continuation
+threshold preserves confirmed slow movement.
 After 120 ms without that movement the body holds again.
 Both controllers must travel together by comparable amounts, and physical
 turns must rotate the line between them along with the headset. Unrelated
 hand gestures and sideways head glances do not count as body movement.
-The movement detector refreshes after unrelated motion so old hand drift
-cannot later be mistaken for a step.
+The step detector discards incoherent displacement immediately. A confirmed
+step consumes only its own neck-space travel; it cannot release a pending turn's
+position reference. Position references that differ from the refreshed neck
+observation by more than 8 cm are retired without moving the held mesh.
+Accepted turn-position corrections are consumed continuously, limited to current
+head travel plus 1.35 metres per second of catch-up. Unconsumed turn progress
+remains in its original frame so limiting a correction does not redefine the
+remaining displacement as an intentional lean. Capture-derived regression
+inputs cover the intermittent large position jumps; in-headset confirmation
+is still required.
+A turn's pending body-position adjustment also needs fresh movement evidence.
+A new head glance cannot combine with controller motion left over from a turn
+or step to slide the mesh. Head-only travel retires the stale position sample;
+real steps retain their separate movement test. Standing-height calibration and
+normal headset tracking are unchanged.
+
+Looking down around Lara's holsters also lowers your head as you lean around
+your hips. Visual posture uses the calibrated torso length and the head's
+horizontal displacement from the held body anchor to account for that arc,
+so a side lean does not automatically lower the pelvis as though you crouched.
+A vertical crouch retains its height change; camera tracking and standing-height
+calibration remain independent of this visual correction.
+
+Roomscale turning estimates whether your stance is planted using the headset
+and both controller positions. Small hand adjustments during a head glance are
+not enough to turn Lara. Starting a turn requires repeated coordinated samples,
+at least 120 ms of evidence, roughly 13 degrees of controller-frame rotation,
+and at least 7 cm of travel from each hand. Head movement must agree with that
+rotation and the three tracked positions must remain consistent with a shared
+body turn. The conservative onset deliberately favors a stable planted mesh.
+Once a turn is established, facing blends each hand's calibrated bearing around
+an estimated body center with the accepted controller-frame heading. Hand reach
+sets the relative influence of the two arm hints. This reduces the effect of
+asymmetric arm motion on torso facing. Head movement validates turn intent;
+live gaze does not enter the facing blend during an established hold.
+The lower body uses an angular lock: an accepted error exceeding 6 degrees
+releases it, then elapsed-time smoothing follows the target continuously.
+A short motion history tolerates a missed turn sample during arm articulation.
+Unchanged controller samples end that permission promptly, and expired motion
+cannot be revived by a later glance. Head-led glances with smaller hand motion
+can also end a turn. Fresh coordinated evidence is required to begin again.
+Hands closer than 5 cm still cannot authorize a new controller-frame turn;
+turn detection can reacquire when they separate.
+Walking has its own observation window, independent of turn updates. It compares
+shared headset/controller travel after accounting for rotation, so a real step
+can continue while turning and with modest opposing arm swing. Head-led glances
+use stricter agreement checks. A combined turn and step applies shared travel
+once. These devices cannot directly measure feet, so stance remains an estimate
+rather than foot tracking.
+Facing and body position use separate movement references. Changing arm reach
+cannot replay an old hand position as a forward or backward body jump when a
+turn resumes. Once fresh headset/controller movement agrees, placement carries
+the existing body-to-neck offset through the accepted turn and step, without
+accumulating hand-fitting errors. During a confirmed curved step, stronger
+three-device agreement allows one hand to travel less near the turning pivot.
+The facing blend cannot reposition the body or inherit head-only sway.
+The camera and tracked hand targets remain unchanged. Ordinary head motion
+never transports that anchor. Physical steps and stick locomotion still release
+the positional hold, independently of the angular stance decision.
+The leg solver's footprint is transported with that accepted anchor before
+rotation, keeping the feet and pelvis in the same frame through repeated turns.
+The step detector compensates the headset's yaw-related neck arc so genuine
+forward, backward and sideways travel remains available while looking around.
+Once the controllers confirm a step, gameplay movement uses the configured
+roomscale deadzone rather than adding the body's larger lean deadzone. Native
+wall, floor and ledge collision still owns the movement; initialization or a
+head-only glance does not grant permission to move the gameplay root.
 Physical movement carries only the detected travel; it does not pull the body
 across an accumulated head lean. While held, horizontal posture and chest
 clearance corrections also stay anchored, so looking down and around Lara

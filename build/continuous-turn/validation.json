@@ -1,0 +1,8 @@
+{
+  "Targeted456": "PASS: 3156384 straight-up jump arm checks",
+  "Targeted123": "PASS: 1994048 locomotion, gun-control and camera hook checks",
+  "ReleaseBuilds": "Both passed",
+  "InHeadsetTested": false,
+  "Scope": "Roomscale turn reacquisition and cadence blending; includes existing glance/leg/centering/translation regressions",
+  "KnownBaselineFailure": "Legacy full first_person_tests calibrated HMD height can request native crouch, reproduced before these changes in build/roomscale-stance/baseline-full.log; unrelated and unchanged."
+}

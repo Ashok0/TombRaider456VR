@@ -1,0 +1,238 @@
+--- before/src/FirstPerson.cpp
++++ after/src/FirstPerson.cpp
+@@ -1993,6 +1993,20 @@
+     return true;
+ }
+ 
++float VisualBodyPostureDrop(uint8_t* item) {
++    const float drop=VR().FirstPersonPostureDrop();
++    if(!Cfg().firstPersonMovementStabilization || !g_groundTorso.valid ||
++       !CanFitStandingBody(item) || !HasControllerBodyAnchor()) return drop;
++    const float units=LiveWorldUnitsPerMetre();
++    if(units<=1 || std::fabs(g_groundTorso.units-units)>.01f) return drop;
++    // The upright fit supplies this length once; never derive it from the
++    // currently bent pelvis (that would feed the correction back into itself).
++    // PostureDrop already removes the eye's own 8 cm vertical neck offset.
++    const float hipToNeck=std::clamp(g_groundTorso.hipBelowEye/units-.08f,.45f,.95f);
++    const float lean=std::hypot(g_controllerBodyAnchor.offset.x,g_controllerBodyAnchor.offset.z);
++    return firstperson::PlantedPostureDrop(drop,lean,hipToNeck);
++}
++
+ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
+     using namespace motiongun;
+     // Calibrated airborne torso fitting needs the HMD, not two valid hands.
+@@ -2194,7 +2208,7 @@
+             Vec rootOffset=Add(Sub(Scale(g_bodyFollower.root,scale),nativeRoot),wallShift);rootOffset.y=0;
+             const bool grounded=CanFitStandingBody(item) || CanUseCrouchCamera(item);
+             const bool standing=preparingJump || ordinaryLanding || ((state==2 || state==12) && !UseLandingCamera(item));
+-            const float upright=standing ? firstperson::StandingPostureWeight(VR().FirstPersonPostureDrop()) : 0;
++            const float upright=standing ? firstperson::StandingPostureWeight(VisualBodyPostureDrop(item)) : 0;
+             // The eyes lower around the neck while looking down. The standing
+             // leg constraint already rejects this as crouch; moving and bent
+             // poses must use the same posture height without moving the view.
+@@ -2203,7 +2217,7 @@
+                 firstperson::BodyChestTwist(Wrap(headYaw-heading),BodyControllersStationary() || g_bodyFollower.supportedHands),
+                 grounded,g_bodyFollower.phase,standing ? 0.f : g_bodyFollower.stepWeight,posed,upright,
+                 (Cfg().firstPersonBodyScale==0 ? g_bodySize.eyeGap : 0.f)-
+-                std::max(0.f,VR().FirstPersonHeightDrop()-VR().FirstPersonPostureDrop())*scale,Sub(postureEye,eye))) return false;
++                std::max(0.f,VR().FirstPersonHeightDrop()-VisualBodyPostureDrop(item))*scale,Sub(postureEye,eye))) return false;
+         } else if(!firstperson::SolveBodyAtEye(native,joint,anchorInPalette,Add(anchorInPalette,headDelta),
+             Wrap(heading-nativeHeading),headRotation,forward,posed)) return false;
+     }
+@@ -2224,10 +2238,10 @@
+         firstperson::YawVector(Scale(Sub(native[3].origin,animationRoot),1/scale),-nativeHeading),
+         firstperson::YawVector(Scale(Sub(native[6].origin,animationRoot),1/scale),-nativeHeading)};
+     if(!g_torsoPose.Update(VR().PoseSerial(),TurnTime(),reference,eyeReference,quiet,grip,filtered,forward,
+-        quiet,VR().FirstPersonPostureDrop(),contacts)) return false;
++        quiet,VisualBodyPostureDrop(item),contacts)) return false;
+     for(int j=0;j<15;++j) { posed[j]=filtered[j];posed[j].origin=Scale(filtered[j].origin,scale); }
+     if(Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item) &&
+-       !g_groundTorso.Apply(obj,posed,body,Sub(eye,cameraOffset),scale,VR().FirstPersonPostureDrop(),true)) return false;
++       !g_groundTorso.Apply(obj,posed,body,Sub(eye,cameraOffset),scale,VisualBodyPostureDrop(item),true)) return false;
+     // Offset the visible body after posture filtering, before exact hand IK.
+     // Camera, collision, calibration and the native physics palette stay fixed.
+     const auto meshOffset=BodyMeshOffset(item);
+@@ -2247,13 +2261,13 @@
+             nextPlacementTrace=now+100;
+             vr::HmdMatrix34_t h{},l{},r{};
+             const bool ht=VR().HeadPose(h),lt=VR().ControllerPose(0,l),rt=VR().ControllerPose(1,r);
+-            LogF("body-placement: pose=%llu held=%d move=%d turn=%d tracking=%d state=%d yaw=%.4f posture=%.4f head=(%.4f,%.4f,%.4f) left=(%.4f,%.4f,%.4f) right=(%.4f,%.4f,%.4f) anchor=(%.4f,%.4f) scene=(%d,%d) hip=(%.3f,%.3f) chest=(%.3f,%.3f)",
++            LogF("body-placement: pose=%llu held=%d move=%d turn=%d tracking=%d state=%d yaw=%.4f posture=%.4f raw-posture=%.4f head=(%.4f,%.4f,%.4f) left=(%.4f,%.4f,%.4f) right=(%.4f,%.4f,%.4f) anchor=(%.4f,%.4f) scene=(%d,%d) hip=(%.3f,%.3f,%.3f) chest=(%.3f,%.3f,%.3f)",
+                 VR().PoseSerial(),g_controllerBodyAnchor.held,g_controllerBodyAnchor.translating,
+-                g_controllerBodyAnchor.rotating,int(ht)*4+int(lt)*2+int(rt),state,heading,VR().FirstPersonPostureDrop(),
++                g_controllerBodyAnchor.rotating,int(ht)*4+int(lt)*2+int(rt),state,heading,VisualBodyPostureDrop(item),VR().FirstPersonPostureDrop(),
+                 h.m[0][3],h.m[1][3],h.m[2][3],l.m[0][3],l.m[1][3],l.m[2][3],r.m[0][3],r.m[1][3],r.m[2][3],
+                 g_controllerBodyAnchor.head.x,g_controllerBodyAnchor.head.z,g_scenePose.x_pos,g_scenePose.z_pos,
+-                posed[0].origin.x+cameraOffset.x,posed[0].origin.z+cameraOffset.z,
+-                posed[7].origin.x+cameraOffset.x,posed[7].origin.z+cameraOffset.z);
++                posed[0].origin.x+cameraOffset.x,posed[0].origin.y+cameraOffset.y,posed[0].origin.z+cameraOffset.z,
++                posed[7].origin.x+cameraOffset.x,posed[7].origin.y+cameraOffset.y,posed[7].origin.z+cameraOffset.z);
+         }
+     }
+     static uint64_t nextStanceLog=0;
+@@ -2266,13 +2280,13 @@
+         LogF("firstperson: fixed body state=%d offset=%.0fcm locked=%d hip=(%.2f,%.2f,%.2f)cm chest=(%.2f,%.2f,%.2f)cm",
+             state,Cfg().firstPersonBodyForwardCm,g_groundTorso.valid,hipLocal.x,hipLocal.y,hipLocal.z,chestLocal.x,chestLocal.y,chestLocal.z);
+         LogF("firstperson: body world held=%d hip=(%.2f,%.2f) chest=(%.2f,%.2f) anchor=(%.3f,%.3f)m",
+-            BodyControllersStationary(),posed[0].origin.x+cameraOffset.x,posed[0].origin.z+cameraOffset.z,
++            BodyControllersStationary(),posed[0].origin.x+cameraOffset.x,posed[0].origin.y+cameraOffset.y,posed[0].origin.z+cameraOffset.z,
+             posed[7].origin.x+cameraOffset.x,posed[7].origin.z+cameraOffset.z,
+             g_controllerBodyAnchor.offset.x,g_controllerBodyAnchor.offset.z);
+         LogF("firstperson: torso clearance measured=%d bend=%.2fdeg before=%.3f after=%.3f (clear>=1)",
+             g_torsoClearance.measured,g_torsoClearance.angle*57.2957795f,g_torsoClearance.before,g_torsoClearance.after);
+         LogF("firstperson: body stance state=%d posture=%.3fm idle=%d recovery=%d hands=%d planted=%d follow=%.2f gait=%.2f knee-bend=(%.1f,%.1f)deg",
+-            state,VR().FirstPersonPostureDrop(),quiet,g_torsoPose.recovering,g_bodyFollower.supportedHands,g_torsoPose.planted,g_bodyFollower.stepWeight,
++            state,VisualBodyPostureDrop(item),quiet,g_torsoPose.recovering,g_bodyFollower.supportedHands,g_torsoPose.planted,g_bodyFollower.stepWeight,
+             quiet ? 0.f : g_bodyFollower.stepWeight,
+             firstperson::KneeBendDegrees(posed,1),firstperson::KneeBendDegrees(posed,4));
+     }
+--- before/src/FirstPersonBodyIK.h
++++ after/src/FirstPersonBodyIK.h
+@@ -5,6 +5,15 @@
+ 
+ namespace tr::firstperson {
+ inline float Length(Vec v) { return std::sqrt(Dot(v,v)); }
++// Looking around a planted torso lowers the neck along an arc even without
++// bending the knees. Remove that geometric component from visual crouch only.
++// A vertical squat has no horizontal lean and retains its complete height drop.
++inline float PlantedPostureDrop(float drop,float lean,float hipToNeck) {
++    if(!std::isfinite(drop+lean+hipToNeck) || hipToNeck<=0 || drop<=0) return drop;
++    const float horizontal=std::clamp(lean,0.f,hipToNeck*.8f);
++    const float arc=hipToNeck-std::sqrt(std::max(0.f,hipToNeck*hipToNeck-horizontal*horizontal));
++    return std::max(0.f,drop-arc);
++}
+ inline Vec LimitLength(Vec v,float limit) {
+     const float n=Length(v);return n>limit ? Scale(v,limit/n) : v;
+ }
+--- before/src/BoneSkin.cpp
++++ after/src/BoneSkin.cpp
+@@ -13,8 +13,6 @@
+ #include "KeypadLightShader.h"
+ #include "WristCap.h"
+ #include "GameDll.h"
+-#include "VRSystem.h"
+-#include "RenderAuditReadback.h"
+ 
+ #include <windows.h>
+ #include <cmath>
+@@ -1050,61 +1048,7 @@
+     return PathPossible() && g_bodyOnPatched;
+ }
+ 
+-namespace {
+-void TraceBodyRenderUpload() {
+-    // Temporary capture: five frames/second for the first 90 seconds of FP.
+-    // Inspect final uniforms, after body skin and physics uploads. Never bind,
+-    // upload, or change a camera/pose while diagnosing the rendered position.
+-    if(!Cfg().firstPersonDriftLog || !FirstPersonActive() || !IsWorldPass() ||
+-       FirstPersonShadowPass() || MirrorReflectionCapturing() || FirstPersonDrawingTrackedHands()) return;
+-    static uint64_t started=0,next=0,serial=0;
+-    static bool seen[202][2]{};
+-    static unsigned worldCount=0,bodyCount=0;
+-    static uint64_t bodyMasks[6]{};static int bodyCounts[6]{};static float bodyKeys[6][24]{};
+-    const auto now=GetTickCount64(),frame=VR().PoseSerial();
+-    if(!started) started=now;
+-    if(now-started>90000) return;
+-    if(frame!=serial) {
+-        if(now<next) return;
+-        serial=frame;next=now+200;worldCount=bodyCount=0;std::memset(seen,0,sizeof(seen));
+-    }
+-    const auto& state=VidState();
+-    if(state.shader<0 || state.shader>=202) return;
+-    uint64_t mask=0;int count=0;
+-    const float* palette=FirstPersonRenderBodyPalette(mask,count);
+-    const bool body=palette && count>=8 && count<=33;
+-    if((!body && seen[state.shader][0]) || (body ? bodyCount>=6 : worldCount>=4)) return;
+-    float key[24]{};
+-    if(body) {
+-        std::memcpy(key,palette,12*sizeof(float));std::memcpy(key+12,palette+84,12*sizeof(float));
+-        for(unsigned i=0;i<bodyCount;++i)
+-            if(bodyMasks[i]==mask && bodyCounts[i]==count && std::memcmp(key,bodyKeys[i],sizeof(key))==0) return;
+-    }
+-    const auto program=Shaders()[state.shader].id;
+-    GLint bound=0;glGetIntegerv(GL_CURRENT_PROGRAM,&bound);
+-    renderaudit::Draw draw{};
+-    if(!renderaudit::Read(program,body,draw)) return;
+-    seen[state.shader][body]=true;
+-    if(body) {
+-        bodyMasks[bodyCount]=mask;bodyCounts[bodyCount]=count;
+-        std::memcpy(bodyKeys[bodyCount],key,sizeof(key));++bodyCount;
+-    } else ++worldCount;
+-    float nativeRotation[3][3]{},native[3]{};CameraViewFrame(nativeRotation,native);
+-    float error=0;
+-    if(body) for(int i=0;i<24;++i)
+-        error=std::max(error,std::fabs(draw.skin[i]-palette[i<12 ? i : 84+i-12]));
+-    const auto& v=draw.view;const auto& p=draw.projection;const auto& j=draw.skin;
+-    LogF("render-audit: pose=%llu shader=%d program=%u bound=%d body=%d count=%d mask=%llx palette-error=%.6f native=(%.3f,%.3f,%.3f) view=(%.6f,%.6f,%.6f,%.3f;%.6f,%.6f,%.6f,%.3f;%.6f,%.6f,%.6f,%.3f) proj=(%.6f,%.6f,%.6f,%.6f;%.6f,%.6f,%.6f,%.6f;%.6f,%.6f,%.6f,%.6f;%.6f,%.6f,%.6f,%.6f) skin0=(%.6f,%.6f,%.6f,%.3f;%.6f,%.6f,%.6f,%.3f;%.6f,%.6f,%.6f,%.3f) skin7=(%.6f,%.6f,%.6f,%.3f;%.6f,%.6f,%.6f,%.3f;%.6f,%.6f,%.6f,%.3f)",
+-        frame,state.shader,program,bound,body,count,static_cast<unsigned long long>(mask),error,native[0],native[1],native[2],
+-        v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[9],v[10],v[11],
+-        p[0],p[1],p[2],p[3],p[4],p[5],p[6],p[7],p[8],p[9],p[10],p[11],p[12],p[13],p[14],p[15],
+-        j[0],j[1],j[2],j[3],j[4],j[5],j[6],j[7],j[8],j[9],j[10],j[11],
+-        j[12],j[13],j[14],j[15],j[16],j[17],j[18],j[19],j[20],j[21],j[22],j[23]);
+-}
+-}
+-
+ void BoneSkinAfterValidate() {
+-    struct AuditAtExit { ~AuditAtExit() { TraceBodyRenderUpload(); } } auditAtExit;
+     // One summary, on the first draw after the programs are built. shader_init
+     // runs once per program, so a line per call would be 202 of them.
+     if (!g_summaryLogged && Cfg().dynamicBonesShader == 1) {
+--- before/tools/body_transition_regression.inl
++++ after/tools/body_transition_regression.inl
+@@ -204,6 +204,14 @@
+ }
+ 
+ void TestControllerBodyAnchor() {
++    for(float drop:{0.f,.1f,.3f,.6f}) for(float radius:{.45f,.7f,.95f}) {
++        Check(tr::firstperson::PlantedPostureDrop(drop,0,radius)==drop,
++            "an actual vertical crouch retains its complete posture drop");
++        const float lean=radius*.6f; // A 3-4-5 triangle lowers the neck by one fifth of its radius.
++        Check(std::fabs(tr::firstperson::PlantedPostureDrop(drop+radius*.2f,lean,radius)-drop)<.000001f,
++            "a real crouch combined with a planted side bend retains only the true crouch component");
++    }
++
+     using namespace tr::firstperson;
+     // The facing blend reduces the false yaw caused by changing one arm's
+     // reach, and stays well defined across angular wrap and close hand spacing.
+@@ -1085,6 +1093,25 @@
+         Head(0);VR().m_rawHeadPose=heldHead;
+         VR().m_rawControllerPose[0]=heldLeft;VR().m_rawControllerPose[1]=heldRight;
+         ResetControllerBodyAnchor();UpdateControllerBodyAnchor();
++        const float hipToNeck=std::clamp(g_groundTorso.hipBelowEye/LiveWorldUnitsPerMetre()-.08f,.45f,.95f);
++        for(int frame=1;frame<=360;++frame) {
++            const float side=hipToNeck*.8f*std::sin(frame*.025f);
++            Head(.7f*std::sin(frame*.025f),-1.f);
++            VR().m_rawHeadPose.m[0][3]=heldHead.m[0][3]+side;
++            VR().m_rawHeadPose.m[2][3]=heldHead.m[2][3];
++            const float neckDrop=std::max(0.f,.08f-(.08f*VR().m_rawHeadPose.m[1][1]-.12f*VR().m_rawHeadPose.m[1][2]));
++            VR().m_rawHeadPose.m[1][3]=heldHead.m[1][3]-neckDrop-
++                (hipToNeck-std::sqrt(hipToNeck*hipToNeck-side*side));
++            VR().m_rawControllerPose[0]=heldLeft;VR().m_rawControllerPose[1]=heldRight;
++            holdClock.Advance(1./90);const auto tracked=VR().m_rawHeadPose;const auto pose=render();
++            for(int joint:{0,7}) Check(firstperson::Length(Sub(pose[joint].origin,heldPose[joint].origin))<.5f,
++                "looking down around either holster holds the rendered pelvis and torso in all three world axes");
++            Check(!std::memcmp(&tracked,&VR().m_rawHeadPose,sizeof(tracked)) &&
++                !std::memcmp(&sceneBefore,&g_scenePose,sizeof(sceneBefore)),"posture inference never modifies headset tracking or scene camera");
++        }
++        Head(0);VR().m_rawHeadPose=heldHead;
++        VR().m_rawControllerPose[0]=heldLeft;VR().m_rawControllerPose[1]=heldRight;
++        ResetControllerBodyAnchor();UpdateControllerBodyAnchor();
+         for(int frame=0;frame<180;++frame) {
+             const float yaw=1.5f*std::sin(frame*.4f),dx=.35f*std::sin(frame*.04f),dz=.25f*std::cos(frame*.04f);
+             Head(yaw,-1.f);VR().m_rawHeadPose.m[1][3]-=.25f;VR().m_rawHeadPose.m[0][3]+=dx;VR().m_rawHeadPose.m[2][3]-=dz;
+--- before/README.md
++++ after/README.md
+@@ -181,6 +181,13 @@
+ or step to slide the mesh. Head-only travel retires the stale position sample;
+ real steps retain their separate movement test. Standing-height calibration and
+ normal headset tracking are unchanged.
++
++Looking down around Lara's holsters also lowers your head as you lean around
++your hips. Visual posture uses the calibrated torso length and the head's
++horizontal displacement from the held body anchor to account for that arc,
++so a side lean does not automatically lower the pelvis as though you crouched.
++A vertical crouch retains its height change; camera tracking and standing-height
++calibration remain independent of this visual correction.
+ 
+ Roomscale turning estimates whether your stance is planted using the headset
+ and both controller positions. Small hand adjustments during a head glance are

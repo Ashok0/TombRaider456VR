@@ -1,0 +1,26 @@
+[
+  {
+    "Relative": "src/ControllerBodyAnchor.h",
+    "OriginalHash": "FFB0EC1C784729F6BA9245EB2C6BBB8E70E00D8B4777B9C140FBA60E40C35F08",
+    "ModifiedHash": "A247DA8F5E905D726A1DB2D77FB081666D365079F0E35CF1A9D1009E88F46B3C",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/body_transition_selftest.h",
+    "OriginalHash": "529E3EF60DDC5184A5AAC70A66A9D7CD3A428C17EE291527B9A2B1EB1FD75E3B",
+    "ModifiedHash": "6EA439FE71244A23B81FDAF2A95D5C4E3397071383DA28871FA14DEFDA456ADD",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/body_anchor_capture.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "A072C2CF75F2DD0B6D381D316C0E4AF707ED84CDEC26AA2695D15A5A6BE62627",
+    "Deleted": false
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "4F177B5DD064DD7472FEDD26E768FACAE102F91E3EDB100C7549686CF4943BFE",
+    "ModifiedHash": "EEDFF4226EA37F3F76C8634CD3C246E99940C903CA3453D4F4C3A4AA06670132",
+    "Deleted": false
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "Status": "installed-both-collections",
+  "Checks": {
+    "456": 5377664,
+    "123": 3104847
+  },
+  "NativeBuilds": "Both Release builds passed",
+  "HeightCalibrationChanged": false,
+  "HeadsetTested": false,
+  "ControllerLossCandidateIncluded": false,
+  "Regression": "Fully tracked smooth hand drift after a turn; fast and slow glances at 60 and 90 Hz retain exact body anchor",
+  "Baseline": "New regression failed on previous source; standalone example moved 39.38mm with 2mm hand drift",
+  "Session": "Tracking valid during active gameplay; stale rotation path investigated",
+  "Deployment": "deployment.json"
+}

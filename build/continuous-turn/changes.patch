@@ -1,0 +1,164 @@
+--- before/src/BodyFollower.h
++++ src/BodyFollower.h
+@@ -148,9 +148,9 @@
+     float target=0,headReference=0,lastHeading=0,lastHead=0;
+     float facingOrigin=0,bodyOrigin=0;Vec anchorOrigin{},midOrigin{};
+     Vec eyeReference{},anchorTarget{},hands[2]{},lastHands[2]{},quietHands[2]{};
+-    double referenceTime=0,quietSince=0;int coherentSamples=0;Vec evaluatedHands[2]{};
++    double referenceTime=0,quietSince=0,geometryRejectedSince=-1;int coherentSamples=0;Vec evaluatedHands[2]{};
+     void Capture(Vec eye,Vec left,Vec right,float headYaw,double now) {
+-        headReference=lastHead=headYaw;
++        headReference=lastHead=headYaw;geometryRejectedSince=-1;
+         eyeReference=eye;hands[0]=lastHands[0]=quietHands[0]=left;
+         hands[1]=lastHands[1]=quietHands[1]=right;lastHeading=0;referenceTime=quietSince=now;turning=false;coherentSamples=0;evaluatedHands[0]=left;evaluatedHands[1]=right;
+     }
+@@ -164,7 +164,7 @@
+             valid=true;target=bodyYaw;anchorTarget=anchor;
+             Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;
+         }
+-        if(active && std::fabs(BodyAngle(target-bodyYaw))<.005f) active=false;
++        if(active && std::fabs(BodyAngle(target-bodyYaw))<.00001f) active=false;
+         if(Length(Flat(Sub(left,quietHands[0])))>.02f || Length(Flat(Sub(right,quietHands[1])))>.02f) {
+             quietHands[0]=left;quietHands[1]=right;quietSince=now;
+         }
+@@ -173,7 +173,13 @@
+         if(now-quietSince>.65) {Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;}
+         const Vec beforePair=Flat(Sub(hands[1],hands[0])),afterPair=Flat(Sub(right,left));
+         const float beforeSpan=Length(beforePair),afterSpan=Length(afterPair);
+-        if(beforeSpan<.14f || afterSpan<.14f || afterSpan<beforeSpan*.65f || afterSpan>beforeSpan*1.5f) return;
++        // Hand spacing is a pose choice, not evidence that feet stopped.
++        // Refresh unusable geometry so one changed pose cannot latch us out.
++        if(beforeSpan<.05f || afterSpan<.05f) {
++            if(geometryRejectedSince<0) geometryRejectedSince=now;
++            else if(now-geometryRejectedSince>.25) Capture(eye,left,right,headYaw,now);
++            return;
++        }
+         const float heading=BodyAngle(std::atan2(afterPair.x,afterPair.z)-std::atan2(beforePair.x,beforePair.z));
+         const float headTurn=BodyAngle(headYaw-headReference);
+         const float step=BodyAngle(heading-lastHeading),headStep=BodyAngle(headYaw-lastHead);
+@@ -187,7 +193,14 @@
+         const Vec predictedEye=Add(afterMid,YawVector(Sub(eyeReference,beforeMid),heading));
+         // Reject gestures that deform the tracked triangle instead of carrying
+         // head and hands together. Allow modest elbow articulation during turns.
+-        if(Length(Flat(Sub(predictedEye,eye)))>.10f) return;
++        if(Length(Flat(Sub(predictedEye,eye)))>.10f) {
++            // Keep absolute facing/anchor origins, but learn the new elbow
++            // posture. Reacquisition still requires fresh bilateral travel.
++            if(geometryRejectedSince<0) geometryRejectedSince=now;
++            else if(now-geometryRejectedSince>.25) Capture(eye,left,right,headYaw,now);
++            return;
++        }
++        geometryRejectedSince=-1;
+         if(!turning) {
+             if(Length(Flat(Sub(left,evaluatedHands[0])))<.025f || Length(Flat(Sub(right,evaluatedHands[1])))<.025f) return;
+             evaluatedHands[0]=left;evaluatedHands[1]=right;
+@@ -218,8 +231,9 @@
+     PhysicalBodyTurn physicalTurn;
+     bool valid=false,turning=false,stepping=false,supportedHands=false;
+     uint64_t serial=0;
+-    double time=0;
++    double time=0,physicalTargetTime=0;
+     float yaw=0,base=0,phase=0,stepWeight=0,pendingPhysicalTurn=0;
++    float previousPhysicalTarget=NAN,physicalBlendRemaining=0;
+     Vec root{},nativeRoot{},lastPivot{};
+     void Reset() { *this={}; }
+     void Update(uint64_t frame,double now,float artificialYaw,float headYaw,float travelYaw,
+@@ -230,7 +244,7 @@
+         if(!valid || now<time || now-time>.25 || Length(Sub(native,nativeRoot))>2) {
+             valid=true;turning=stepping=false;serial=frame;time=now;
+             yaw=headYaw;base=artificialYaw;root=Flat(goal);nativeRoot=native;lastPivot=Flat(turnPivot);stepWeight=0;pendingPhysicalTurn=0;
+-            supportedHands=handsForward;return;
++            supportedHands=handsForward;previousPhysicalTarget=NAN;physicalBlendRemaining=0;physicalTargetTime=now;return;
+         }
+         // Transport the IK footprint with the accepted body anchor before
+         // rotating it. Orbiting the old root around a newly moved pivot makes
+@@ -241,7 +255,7 @@
+         }
+         const float turn=BodyAngle(artificialYaw-base);
+         if(turn!=0) {
+-            pendingPhysicalTurn=0;
++            pendingPhysicalTurn=0;previousPhysicalTarget=NAN;physicalBlendRemaining=0;physicalTargetTime=now;
+             yaw=BodyAngle(yaw+turn);
+             root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),turn));
+             if(pivotFootprint) goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),turn));
+@@ -260,8 +274,23 @@
+         const bool recoveringHeading=std::isfinite(physicalTarget) && !moving;
+         if(moving || recoveringHeading) pendingPhysicalTurn=0;
+         else if(std::isfinite(trackedTurn)) pendingPhysicalTurn=BodyAngle(pendingPhysicalTurn+trackedTurn);
+-        const float physical=recoveringHeading ? std::clamp(BodyAngle(physicalTarget-yaw),-3.14159265f*dt,3.14159265f*dt) :
++        // Controller evidence arrives in distance-gated checkpoints. Spread
++        // each accepted interval over its measured cadence instead of racing
++        // to the target and waiting motionless for the next checkpoint.
++        if(recoveringHeading) {
++            if(!std::isfinite(previousPhysicalTarget) || std::fabs(BodyAngle(physicalTarget-previousPhysicalTarget))>1.e-6f) {
++                const float interval=float(now-physicalTargetTime);
++                const float distance=std::fabs(BodyAngle(physicalTarget-previousPhysicalTarget));
++                const bool slow=std::isfinite(previousPhysicalTarget) && interval>0 && distance<.12f && distance/interval<.4f;
++                physicalBlendRemaining=std::isfinite(previousPhysicalTarget) && interval<.65f ?
++                    std::clamp(interval,.025f,slow ? .5f : .15f) : .025f;
++                previousPhysicalTarget=physicalTarget;physicalTargetTime=now;
++            }
++        } else if(moving) {previousPhysicalTarget=NAN;physicalBlendRemaining=0;physicalTargetTime=now;}
++        const float blend=physicalBlendRemaining>dt ? dt/physicalBlendRemaining : 1.f;
++        const float physical=recoveringHeading ? std::clamp(BodyAngle(physicalTarget-yaw)*blend,-3.14159265f*dt,3.14159265f*dt) :
+             (!holdPhysical || allowHeldTurn) && !moving ? std::clamp(pendingPhysicalTurn,-.35f,.35f) : 0.f;
++        physicalBlendRemaining=std::max(0.f,physicalBlendRemaining-dt);
+         if(!recoveringHeading) pendingPhysicalTurn-=physical;
+         yaw=BodyAngle(yaw+physical);
+         if(pivotFootprint && physical!=0) {
+--- before/tools/body_transition_regression.inl
++++ tools/body_transition_regression.inl
+@@ -441,6 +441,39 @@
+                 anchor.turnOutput,anchor.held,true,anchor.heading.active ? anchor.heading.target : NAN,anchor.rotating);
+         }
+     };
++    // Reproduce the in-session stall after hand spacing/reach changes, plus
++    // the stop/start cadence of an otherwise perfectly steady physical turn.
++    for(float speed:{.002f,.008f,.02f}) for(float sign:{-1.f,1.f}) for(int scenario=0;scenario<4;++scenario) {
++        TurnRig rig;
++        for(int i=0;i<=720;++i) {
++            const float angle=sign*i*speed;
++            const float span=scenario==1 || (scenario==2 && i>100) ? .075f : .4f;
++            const float reach=.3f+(scenario==3 && i>100 ? .16f : 0.f);
++            const auto l=YawVector(Vec{-span*.5f,1,reach},angle);
++            const auto r=YawVector(Vec{ span*.5f,1,reach},angle);
++            const float before=rig.body.yaw;
++            rig.Step(i+1,head,l,r,angle);
++            if(i>400) {
++                Check(std::fabs(BodyAngle(rig.body.yaw-angle))<.12f,
++                    "physical turn reacquires changed arm geometry and close hands without becoming stuck facing backward");
++                const float step=sign*BodyAngle(rig.body.yaw-before);
++                Check(step>speed*.65f && step<speed*1.35f,
++                    "steady physical turns render continuously instead of stopping between controller checkpoints");
++            }
++        }
++    }
++    for(float span:{.075f,.12f}) {
++        TurnRig rig;const Vec l{-span*.5f,1,.3f},r{span*.5f,1,.3f};
++        rig.Step(1,head,l,r,0);
++        for(int i=1;i<=720;++i) {
++            const float glance=1.5f*std::sin(i*.03f);
++            const auto eye=Add(head,{.12f*std::sin(i*.027f),0,.08f*std::sin(i*.019f)});
++            rig.Step(i+1,eye,Add(l,{.0065f*std::sin(i*1.7f),0,.0065f*std::cos(i*1.3f)}),
++                Add(r,{.0065f*std::cos(i*1.1f),0,.0065f*std::sin(i*1.9f)}),glance);
++            Check(std::fabs(rig.body.yaw)<.00001f && Length(Flat(Sub(rig.anchor.head,head)))<.00001f,
++                "closely spaced controller noise cannot authorize head-only mesh movement");
++        }
++    }
+     for(float sign:{-1.f,1.f}) for(int stop=20;stop<=400;stop+=10) for(float noise:{0.f,.002f,.0065f}) {
+         TurnRig glance;
+         Vec l=left,r=right;
+--- before/README.md
++++ README.md
+@@ -178,6 +178,11 @@
+ and at least 7 cm of travel from each hand. Head movement must agree with that
+ rotation and the three tracked positions must remain consistent with a shared
+ body turn. The conservative onset deliberately favors a stable planted mesh.
++Accepted turn updates are blended at their measured cadence to avoid stop/start
++rotation. Changing hand spacing no longer locks out turning, and a sustained
++change of arm reach refreshes the pose reference before requiring fresh turn
++evidence. Hands closer than 5 cm cannot provide a reliable facing line; turning
++can reacquire when they separate.
+ Once a turn is established, smaller coordinated updates follow it; a head-led
+ glance or settled hands replant the stance. Previous turn permission cannot
+ permanently lower the threshold. These devices cannot directly measure feet,

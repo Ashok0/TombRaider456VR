@@ -1,0 +1,33 @@
+{
+  "Targeted456": "PASS: 3614446 straight-up jump arm checks",
+  "Targeted123": "PASS: 2223079 locomotion, gun-control and camera hook checks",
+  "ReleaseBuilds": "Both passed",
+  "Installed": true,
+  "InHeadsetTested": false,
+  "Changes": [
+    "Require fresh controller samples for position updates; unchanged samples cannot spend old step/turn evidence",
+    "Retire positional evidence after 100ms without cumulative hand motion beyond 6mm; preserve existing body position and pending rotation"
+  ],
+  "Reproducer": {
+    "FixedHandsBeforeWorstMm": 7.28,
+    "FixedHandsAfterWorstMm": 0,
+    "NoisyHandsBeforeWorstMm": 27.42,
+    "NoisyHandsAfterWorstMm": 7.3,
+    "NoiseSettledAfter12FramesDriftMm": 0,
+    "Note": "Noisy case retains up to 7.3mm of immediate continuation on the first sample after stopping; no later revival. Synthetic replay, not live headset testing."
+  },
+  "ExistingCoverage": "Previous roomscale turning, slow walking, arm-reach discontinuity, four-direction travel, neck/jump, production torso and foot tests pass.",
+  "HeightInvestigation": "FirstPerson.cpp byte-identical to previous two releases. Height calibration sections in BodyFollower unchanged. Installed INI byte-identical to previous installation backup. No height modification made pending session log and whether user means relative to torso or floor.",
+  "Pending": [
+    "Clarify whether higher viewpoint is relative to the floor or Lara's shoulders/chest before changing height"
+  ],
+  "KnownBaselineFailure": "Legacy full first_person_tests calibrated HMD height can request native crouch is a previously reproduced unrelated failure; used focused TR4-6 suite and TR1-3 locomotion suite.",
+  "HeightSessionFindings": {
+    "CurrentTorsoScale": 0.846,
+    "PreviousSessionFinalTorsoScale": 0.867,
+    "CurrentEyeReserveCm": 20.6,
+    "PreviousSessionFinalEyeReserveCm": 18.0,
+    "MeasuredTorsoBounds": "Identical between sessions",
+    "Interpretation": "Smaller fitted torso and approximately 2.6cm larger visual reserve may explain a higher viewpoint relative to body; does not prove world camera rose. Camera-height code and INIs unchanged. No height adjustment installed."
+  }
+}

@@ -1,0 +1,332 @@
+--- before/src/BodyFollower.h
++++ src/BodyFollower.h
+@@ -145,14 +145,19 @@
+ // sufficient evidence to move the inferred stance.
+ struct RoomscaleHeadingRecovery {
+     bool valid=false,active=false,established=false,turning=false,sampleAccepted=false;
+-    float target=0,headReference=0,lastHeading=0,lastHead=0;
++    float target=0,headReference=0;
+     float facingOrigin=0,bodyOrigin=0;Vec anchorOrigin{},midOrigin{};
+     Vec eyeReference{},anchorTarget{},hands[2]{},lastHands[2]{},quietHands[2]{};
+     double referenceTime=0,quietSince=0,geometryRejectedSince=-1;int coherentSamples=0;Vec evaluatedHands[2]{};
++    Vec filteredHands[2]{},windowHands[2]{};
++    double filterTime=0,windowTime=0,continuousUntil=0;
++    float windowHead=0;
+     void Capture(Vec eye,Vec left,Vec right,float headYaw,double now) {
+-        headReference=lastHead=headYaw;geometryRejectedSince=-1;
++        headReference=headYaw;geometryRejectedSince=-1;
++        filteredHands[0]=windowHands[0]=left;filteredHands[1]=windowHands[1]=right;
++        filterTime=windowTime=now;windowHead=headYaw;continuousUntil=0;
+         eyeReference=eye;hands[0]=lastHands[0]=quietHands[0]=left;
+-        hands[1]=lastHands[1]=quietHands[1]=right;lastHeading=0;referenceTime=quietSince=now;turning=false;coherentSamples=0;evaluatedHands[0]=left;evaluatedHands[1]=right;
++        hands[1]=lastHands[1]=quietHands[1]=right;referenceTime=quietSince=now;turning=false;coherentSamples=0;evaluatedHands[0]=left;evaluatedHands[1]=right;
+     }
+     void Replant(Vec left,Vec right,Vec anchor,float bodyYaw) {
+         const Vec pair=Sub(right,left);facingOrigin=std::atan2(pair.x,pair.z);
+@@ -164,6 +169,13 @@
+             valid=true;target=bodyYaw;anchorTarget=anchor;
+             Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;
+         }
++        // Expired turn evidence is discarded BEFORE examining another head
++        // pose. Old hand motion cannot be revived by the next glance.
++        if(turning && now>continuousUntil) {Capture(eye,left,right,headYaw,now);return;}
++        const float filterWeight=1-std::exp(-25*float(std::clamp(now-filterTime,0.,.1)));
++        filterTime=now;
++        filteredHands[0]=Add(filteredHands[0],Scale(Sub(left,filteredHands[0]),filterWeight));
++        filteredHands[1]=Add(filteredHands[1],Scale(Sub(right,filteredHands[1]),filterWeight));
+         if(active && std::fabs(BodyAngle(target-bodyYaw))<.00001f) active=false;
+         if(Length(Flat(Sub(left,quietHands[0])))>.02f || Length(Flat(Sub(right,quietHands[1])))>.02f) {
+             quietHands[0]=left;quietHands[1]=right;quietSince=now;
+@@ -180,20 +192,14 @@
+             else if(now-geometryRejectedSince>.25) Capture(eye,left,right,headYaw,now);
+             return;
+         }
++        if(turning && Length(Flat(Sub(left,lastHands[0])))<1.e-6f && Length(Flat(Sub(right,lastHands[1])))<1.e-6f) return;
+         const float heading=BodyAngle(std::atan2(afterPair.x,afterPair.z)-std::atan2(beforePair.x,beforePair.z));
+         const float headTurn=BodyAngle(headYaw-headReference);
+-        const float step=BodyAngle(heading-lastHeading),headStep=BodyAngle(headYaw-lastHead);
+-        // Head leading a largely stationary controller frame is a glance,
+-        // even if that frame has drifted enough to cross a positional gate.
+-        if(turning && std::fabs(headStep)>.10f &&
+-           (headStep*step<=0 || std::fabs(BodyAngle(headStep-step))>std::max(.04f,std::fabs(headStep)*.4f))) {
+-            Capture(eye,left,right,headYaw,now);return;
+-        }
+         const Vec beforeMid=Scale(Add(hands[0],hands[1]),.5f),afterMid=Scale(Add(left,right),.5f);
+         const Vec predictedEye=Add(afterMid,YawVector(Sub(eyeReference,beforeMid),heading));
+         // Reject gestures that deform the tracked triangle instead of carrying
+         // head and hands together. Allow modest elbow articulation during turns.
+-        if(Length(Flat(Sub(predictedEye,eye)))>.10f) {
++        if(!turning && Length(Flat(Sub(predictedEye,eye)))>.10f) {
+             // Keep absolute facing/anchor origins, but learn the new elbow
+             // posture. Reacquisition still requires fresh bilateral travel.
+             if(geometryRejectedSince<0) geometryRejectedSince=now;
+@@ -210,21 +216,44 @@
+             ++coherentSamples;
+             if(coherentSamples<2 || now-referenceTime<.12 || std::fabs(heading)<.22f ||
+                Length(Flat(Sub(left,hands[0])))<.07f || Length(Flat(Sub(right,hands[1])))<.07f) return;
++            filteredHands[0]=windowHands[0]=left;filteredHands[1]=windowHands[1]=right;
++            windowHead=headYaw;windowTime=now;continuousUntil=now+.23;
+         } else {
+-            if(Length(Flat(Sub(left,lastHands[0])))<.025f || Length(Flat(Sub(right,lastHands[1])))<.025f ||
+-               std::fabs(step)<.04f) return;
++            // Once intent is established, follow a filtered controller frame
++            // continuously. A short history sustains intent through tracking
++            // noise; it expires when bilateral motion stops.
++            if(now-windowTime>=.18) {
++                const auto before=Sub(windowHands[1],windowHands[0]),after=Sub(filteredHands[1],filteredHands[0]);
++                const float turn=BodyAngle(std::atan2(after.x,after.z)-std::atan2(before.x,before.z));
++                const float head=BodyAngle(headYaw-windowHead);
++                const bool support=Length(Flat(Sub(filteredHands[0],windowHands[0])))>.005f &&
++                    Length(Flat(Sub(filteredHands[1],windowHands[1])))>.005f &&
++                    std::fabs(turn)>.012f;
++                // A head-led glance with modest hand drift terminates the
++                // intent, including its unfinished blend. It cannot convert
++                // old controller momentum into more mesh rotation.
++                if(support && std::fabs(head)>.20f && std::fabs(head)>std::fabs(turn)*2.2f) {
++                    target=bodyYaw;active=false;anchorTarget=anchor;
++                    Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;
++                }
++                if(support) continuousUntil=now+.23;
++                windowHands[0]=filteredHands[0];windowHands[1]=filteredHands[1];windowHead=headYaw;windowTime=now;
++            }
++            if(now>continuousUntil) return;
+         }
+         // Preserve absolute progress across rejected articulated samples.
+         // Only a newly planted stance establishes a new orientation origin.
+-        const float absolute=BodyAngle(std::atan2(afterPair.x,afterPair.z)-facingOrigin);
++        const Vec renderPair=Sub(filteredHands[1],filteredHands[0]);
++        const Vec renderMid=Scale(Add(filteredHands[0],filteredHands[1]),.5f);
++        const float absolute=BodyAngle(std::atan2(renderPair.x,renderPair.z)-facingOrigin);
+         target=BodyAngle(bodyOrigin+absolute);
+         // Transport the held eye with the SAME rigid controller transform as
+         // facing, about its actual inferred pivot. Keeping it fixed in tracking
+         // space creates an orbit error which happens to vanish after 360 degrees.
+-        anchorTarget=Add(afterMid,YawVector(Sub(anchorOrigin,midOrigin),absolute));
++        anchorTarget=Add(renderMid,YawVector(Sub(anchorOrigin,midOrigin),absolute));
+         anchorTarget.y=anchor.y;
+         active=established=turning=sampleAccepted=true;
+-        lastHeading=heading;lastHead=headYaw;lastHands[0]=left;lastHands[1]=right;
++        lastHands[0]=left;lastHands[1]=right;
+     }
+ };
+ struct BodyFollower {
+--- before/src/ControllerBodyAnchor.h
++++ src/ControllerBodyAnchor.h
+@@ -12,7 +12,7 @@
+     double time=0,moved=0,referenceTime=0,rotated=0,translated=0;
+     float base=0,yaw=0,height=0,motionYaw=0;
+     int reason=0;float handTravel[2]{};
+-    Vec hands[2]{},offset{},head{},motionEye{};
++    Vec hands[2]{},offset{},head{},motionEye{},consumedTravel{};
+     void Reset() { *this={}; }
+     void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f) {
+         if(!tracked || !Finite({IdentityBasis(),eye}) || !Finite({IdentityBasis(),left}) ||
+@@ -34,34 +34,64 @@
+         if(heading.sampleAccepted) head=heading.anchorTarget;
+         rotating=heading.turning;
+         if(heading.established || rotating) yaw=bodyYaw;
+-        const Vec delta[2]={Flat(Sub(left,hands[0])),Flat(Sub(right,hands[1]))};
+-        const Vec headDelta=Flat(Sub(walkEye,motionEye)),common=Scale(Add(delta[0],delta[1]),.5f);
+-        const float h=Length(headDelta),c=Length(common),a=Length(delta[0]),b=Length(delta[1]);
+-        handTravel[0]=a;handTravel[1]=b;
+-        // Releasing an established hold needs substantial, coordinated motion.
+-        // Small independent hand drift is not evidence that the torso moved.
+-        // Once moving, a lower continuation threshold preserves slow roomscale.
++        // Walking owns an independent observation window. Remove the rigid
++        // turn around the neck before comparing travel; curved walking does
++        // not produce parallel raw controller displacements.
++        const Vec beforePair=Flat(Sub(hands[1],hands[0])),afterPair=Flat(Sub(right,left));
++        const float beforeSpan=Length(beforePair),afterSpan=Length(afterPair);
++        const Vec headDelta=Flat(Sub(walkEye,motionEye));
++        const float h=Length(headDelta),headTurn=BodyAngle(headYaw-motionYaw);
++        Vec delta[2]{},common{};float best=INFINITY;
++        auto candidate=[&](float angle) {
++            if(std::fabs(angle)>.7f) return;
++            const Vec d[2]={Flat(Sub(left,Add(motionEye,YawVector(Sub(hands[0],motionEye),angle)))),
++                            Flat(Sub(right,Add(motionEye,YawVector(Sub(hands[1],motionEye),angle))))};
++            const Vec shared=Scale(Add(d[0],d[1]),.5f);
++            const float error=Length(Sub(shared,headDelta));
++            if(error<best) {best=error;common=shared;delta[0]=d[0];delta[1]=d[1];}
++        };
++        // Fit the shared displacement with no rotation, controller rotation,
++        // or corroborated head rotation. Opposite arm swing must not corrupt
++        // the turn estimate used to recognize a real shared step.
++        candidate(0);bool headLeading=false;
++        if(beforeSpan>.05f && afterSpan>.05f) {
++            const float pairTurn=BodyAngle(std::atan2(afterPair.x,afterPair.z)-std::atan2(beforePair.x,beforePair.z));
++            headLeading=std::fabs(headTurn)>.06f && std::fabs(pairTurn)<std::fabs(headTurn)*.5f;
++            if(!headLeading && std::fabs(BodyAngle(pairTurn-headTurn))<.15f) candidate(pairTurn);
++            if(!headLeading && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
++        }
++        const float c=Length(common);
++        const float rawTravel[2]={Length(Flat(Sub(left,hands[0]))),Length(Flat(Sub(right,hands[1])))};
++        handTravel[0]=rawTravel[0];handTravel[1]=rawTravel[1];
+         const float threshold=held ? .025f : .003f;
+-        // Two hands must describe the same rigid motion. Averaging unrelated
+-        // drift (e.g. 40 cm on one hand and 3 cm on the other) invents a step.
+-        const bool translationCoherent=a>0 && b>0 && h>0 && c>0 &&
+-            Dot(delta[0],delta[1])>.95f*a*b && Dot(common,headDelta)>.95f*c*h &&
+-            Length(Sub(delta[0],delta[1]))<std::max(.008f,c*.25f) &&
+-            Length(Sub(common,headDelta))<std::max(.012f,h*.25f);
+-        const bool translation=translationCoherent && a>=threshold && b>=threshold && c>=threshold && h>=threshold;
++        // Both real controllers must travel; removing a head rotation from
++        // fixed hands is never sufficient evidence. Allow modest arm swing
++        // around the common step, but reject large asymmetric gestures.
++        const bool translationCoherent=h>0 && c>0 &&
++            (!headLeading || (Dot(delta[0],delta[1])>.95f*Length(delta[0])*Length(delta[1]) &&
++                Length(Sub(delta[0],delta[1]))<std::max(.008f,c*.25f))) &&
++            Dot(common,headDelta)>.95f*c*h &&
++            Length(Sub(common,headDelta))<std::max(.012f,h*.25f) &&
++            Length(Sub(delta[0],headDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f)) &&
++            Length(Sub(delta[1],headDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f));
++        const bool translation=translationCoherent && c>=threshold && h>=threshold &&
++            rawTravel[0]>=threshold*.35f && rawTravel[1]>=threshold*.35f &&
++            Length(Flat(Scale(Add(Sub(left,hands[0]),Sub(right,hands[1])),.5f)))>=std::max(threshold*.8f,h*.5f);
+         if(translation) {translating=true;translated=now;}
+         else if(now-translated>=.12) translating=false;
+         // There is only one authority for physical facing: the planted-stance
+         // classifier. Fine head/hand correlation cannot bypass its confidence.
+         const bool rotation=!walking && heading.sampleAccepted;
+-        if(rotation) rotated=now;
++        if(rotation) {rotated=now;consumedTravel=common;}
+         if(walking || translation || rotation) {
+             // Move the body by corroborated travel, never erase an existing
+             // head-only lean merely because a hand-motion gate released.
+             // A confirmed turn transports the anchor above as a rigid pose;
+             // it does not release the positional/posture hold to headset sway.
+-            if(translation && !walking && !rotation) head=Add(head,common);
+-            hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;referenceTime=now;
++            if(translation && !walking && !rotation) head=Add(head,Sub(common,consumedTravel));
++            if(walking || translation) {
++                hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;referenceTime=now;consumedTravel={};
++            }
+             if(walking || translation) {moved=now;held=false;}
+             reason=walking ? 3 : rotation ? 2 : 1;
+         }
+@@ -71,8 +101,8 @@
+         // Refresh only the movement detector after unrelated head/hand motion.
+         // Keep the held body anchor untouched. Old gestures cannot accumulate
+         // for seconds and become a body step when the head happens to pass by.
+-        if(!walking && !translationCoherent && !rotation && now-referenceTime>=.25) {
+-            hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;referenceTime=now;
++        if(!walking && !translationCoherent && now-referenceTime>=.25) {
++            hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;referenceTime=now;consumedTravel={};
+         }
+         if(!walking) offset=Flat(Sub(eye,head));
+         else {
+--- before/tools/body_transition_regression.inl
++++ tools/body_transition_regression.inl
+@@ -425,8 +425,8 @@
+             sway.Update(i+2,now,eye,l,r,0,angle,true,false,angle);
+             Check(sway.held && Length(Flat(Sub(sway.head,eye)))<.08f,
+                   "whole-body rotation carries the held anchor around the neck without cumulative orbit error");
+-            if(sway.heading.sampleAccepted) Check(Length(Flat(Sub(sway.head,eye)))<.00001f,
+-                  "accepted rigid controller motion carries the body anchor to the same head arc");
++            if(sway.heading.sampleAccepted) Check(Length(Flat(Sub(sway.head,eye)))<.015f,
++                  "filtered rigid controller motion carries the body anchor along the head arc within 15 mm");
+         }
+     }
+     // Compare identical controller streams with and without head movement,
+@@ -441,6 +441,30 @@
+                 anchor.turnOutput,anchor.held,true,anchor.heading.active ? anchor.heading.target : NAN,anchor.rotating);
+         }
+     };
++    // Straight and curved walking must survive natural opposing arm swing.
++    // Rotation samples must not consume the separate movement observation.
++    for(float speed:{0.f,.002f,.008f}) for(float swing:{0.f,.01f,.025f}) for(int direction=0;direction<4;++direction) {
++        TurnRig rig;int permitted=0;float previousStep=0;
++        for(int i=0;i<480;++i) {
++            const float angle=i*speed;
++            const Vec shift=YawVector(Vec{0,0,i*.002f},direction*1.5707963f),neck{0,1.7f,-.15f};
++            const Vec eye=Add(Add(neck,YawVector(Vec{0,0,.15f},angle)),shift);
++            const Vec l=Add(Add(neck,YawVector(Vec{-.2f,-.7f,.45f+swing*std::sin(i*.13f)},angle)),shift);
++            const Vec r=Add(Add(neck,YawVector(Vec{ .2f,-.7f,.45f-swing*std::sin(i*.13f)},angle)),shift);
++            const float before=rig.body.yaw;
++            rig.Step(i+1,eye,l,r,angle);
++            const float step=BodyAngle(rig.body.yaw-before);
++            if(i>120 && rig.anchor.translating) ++permitted;
++            if(i>220) {
++                Check(Length(Flat(Sub(rig.anchor.head,eye)))<.055f,
++                    "combined turn and translation cannot double-count travel or leave the mesh far from the player");
++                if(speed==.008f && swing==.01f) Check(std::fabs(step-previousStep)<.011f,
++                    "natural small arm swings cannot turn sustained body rotation into stop-start angular bursts");
++            }
++            previousStep=step;
++        }
++        Check(permitted>340,"forward backward left and right walking remains responsive during turns and modest arm swing");
++    }
+     // Reproduce the in-session stall after hand spacing/reach changes, plus
+     // the stop/start cadence of an otherwise perfectly steady physical turn.
+     for(float speed:{.002f,.008f,.02f}) for(float sign:{-1.f,1.f}) for(int scenario=0;scenario<4;++scenario) {
+@@ -799,6 +823,13 @@
+                 VR().m_rawControllerPose[hand].m[2][3]-=offset.z;
+             }
+         };
++        auto advanceTrackingClock=[]() {
++            constexpr double dt=1./90;
++            auto& heading=g_controllerBodyAnchor.heading;
++            heading.filterTime=TurnTime()-dt;heading.windowTime-=dt;
++            heading.continuousUntil-=dt;heading.quietSince-=dt;
++            g_bodyFollower.physicalTargetTime-=dt;
++        };
+         const float savedHandWeight=config.firstPersonBodyHandYawWeight;
+         for(float weight:{0.f,.15f}) {
+             config.firstPersonBodyHandYawWeight=weight;
+@@ -806,7 +837,7 @@
+             for(int frame=1;frame<=60;++frame) {
+                 const float yaw=frame*.005f;setTracking(yaw);
+                 g_controllerBodyAnchor.heading.referenceTime=TurnTime()-frame/90.;
+-                g_bodyFollower.time=TurnTime()-1./90;
++                g_bodyFollower.time=TurnTime()-1./90;advanceTrackingClock();
+                 const auto camera=g_scenePose;
+                 render();
+                 Check(std::fabs(firstperson::BodyAngle(g_bodyFollower.yaw-(weight>0 ? yaw : 0.f)))<(weight>0 ? .30f : .0001f),
+@@ -831,7 +862,7 @@
+                 VR().m_rawControllerPose[hand].m[2][3]-=std::cos(angle)*flex;
+             }
+             g_controllerBodyAnchor.heading.referenceTime=TurnTime()-frame/90.;
+-            g_bodyFollower.time=TurnTime()-1./90;
++            g_bodyFollower.time=TurnTime()-1./90;advanceTrackingClock();
+             g_bodyFollower.physicalTurn.time=TurnTime()-1./90;
+             const auto camera=g_scenePose;const auto turnPose=render();
+             for(int first:{1,4}) {
+@@ -863,7 +894,7 @@
+                 VR().m_rawControllerPose[hand].m[0][3]+=.0065f*std::sin(frame*(hand ? 1.1f : 1.7f));
+                 VR().m_rawControllerPose[hand].m[2][3]+=.0065f*std::cos(frame*(hand ? 1.9f : 1.3f));
+             }
+-            g_bodyFollower.time=TurnTime()-1./90;
++            g_bodyFollower.time=TurnTime()-1./90;advanceTrackingClock();
+             if(frame==60) g_bodyFollower.Reset(); // Jump/stance restarts must retain controller-owned facing.
+             const auto camera=g_scenePose;render();
+             Check(std::fabs(firstperson::BodyAngle(g_bodyFollower.yaw-stoppedYaw))<.00001f,
+--- before/README.md
++++ README.md
+@@ -178,15 +178,19 @@
+ and at least 7 cm of travel from each hand. Head movement must agree with that
+ rotation and the three tracked positions must remain consistent with a shared
+ body turn. The conservative onset deliberately favors a stable planted mesh.
+-Accepted turn updates are blended at their measured cadence to avoid stop/start
+-rotation. Changing hand spacing no longer locks out turning, and a sustained
+-change of arm reach refreshes the pose reference before requiring fresh turn
+-evidence. Hands closer than 5 cm cannot provide a reliable facing line; turning
+-can reacquire when they separate.
+-Once a turn is established, smaller coordinated updates follow it; a head-led
+-glance or settled hands replant the stance. Previous turn permission cannot
+-permanently lower the threshold. These devices cannot directly measure feet,
+-so this remains an estimate rather than foot tracking.
++Once a turn is established, filtered controller positions continuously drive
++facing and placement. A short motion history sustains the turn through modest
++tracking variation, then expires when the hands stop; a later glance cannot
++revive that old motion. Head-led glances with smaller hand movement can end the
++turn early. Fresh turn evidence is required to start again. Changing hand
++spacing no longer locks out turning. Hands closer than 5 cm cannot provide a
++reliable facing line; turning can reacquire when they separate.
++Walking has its own observation window, independent of turn updates. It compares
++shared headset/controller travel after accounting for rotation, so a real step
++can continue while turning and with modest opposing arm swing. Head-led glances
++use stricter agreement checks. A combined turn and step applies shared travel
++once. These devices cannot directly measure feet, so stance remains an estimate
++rather than foot tracking.
+ Facing and placement use the same accepted controller transform. A real turn
+ carries the held body anchor around the inferred physical pivot, preventing the
+ orbit error that otherwise disappears only after a full 360-degree turn.

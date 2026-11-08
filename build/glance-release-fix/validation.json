@@ -1,0 +1,47 @@
+{
+  "status": "installed both collections; source/DLL hashes verified; INIs unchanged",
+  "fix": "Distinguish planted torso lean from vertical crouch using calibrated torso length and controller-held horizontal head offset; apply one corrected visual posture signal to standing legs, IK posture, torso filtering and torso normalization.",
+  "evidence": "Final GL readback shows fixed horizontal pelvis but up to about 15 cm of vertical pelvis movement during recorded planted side glances. New full XYZ production regression fails previous solver.",
+  "baselineRegression": "FAIL: looking down around either holster holds the rendered pelvis and torso in all three world axes",
+  "TR456Checks": 5383472,
+  "TR123Checks": 3113511,
+  "releaseBuilds": "both passed",
+  "inHeadsetValidated": false,
+  "unchanged": [
+    "ControllerBodyAnchor.h",
+    "BodyFollower.h",
+    "height calibration",
+    "camera tracking",
+    "native physical crouch threshold",
+    "INI options"
+  ],
+  "diagnostic": "Temporary GPU readback removed; existing CPU body-placement log now includes Y and raw/corrected posture.",
+  "discardedExperiments": "All translation/rotation detector experiments from this task were reverted and are excluded from deployment.",
+  "files": {
+    "src/FirstPerson.cpp": "285864E92DDA05FAF6372AF32E6A46FF9C16C84518359FB6C4C20DE7C74E7F43",
+    "src/FirstPersonBodyIK.h": "DDFC38CD5769A4C791EA8E6DCF9B12B4F0E4BC48A2E857327994361998F3AF91",
+    "src/BoneSkin.cpp": "DA7EF03FFE88D28754B7980D8A318B97808AE8E99442454B6239207F787D111C",
+    "tools/body_transition_regression.inl": "5D37E77B9CD4B63B15FDF943D1AE7FE041FB63C25CAB808F5141860C3CB9FC06",
+    "README.md": "ABE4EF5A2A815676983FEEB5B25F2936A7E6DEAB62DBBC8088C6F58C2BF542F0"
+  },
+  "deployment": [
+    {
+      "Collection": "456",
+      "Installed": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered\\TombRaiderVR.dll",
+      "SHA256": "60E6F436D160CF8C921483BCBD72EB8FAF5AA0DFE17AA683AF2F259872AC8CD5",
+      "Backup": "C:\\dev\\TombRaider456VR\\build\\glance-release-fix\\before-install-20261107-202350\\456",
+      "INIUnchanged": true,
+      "RenderChecks": 5383472,
+      "InHeadsetTested": false
+    },
+    {
+      "Collection": "123",
+      "Installed": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered\\TombRaiderVR.dll",
+      "SHA256": "B09140D334F1D7CABCDDF9C0953655D04AEB6173A1D54CA699EEF755E1581D20",
+      "Backup": "C:\\dev\\TombRaider456VR\\build\\glance-release-fix\\before-install-20261107-202350\\123",
+      "INIUnchanged": true,
+      "RenderChecks": 3113511,
+      "InHeadsetTested": false
+    }
+  ]
+}

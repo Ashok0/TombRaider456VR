@@ -5,6 +5,15 @@
 
 namespace tr::firstperson {
 inline float Length(Vec v) { return std::sqrt(Dot(v,v)); }
+// Looking around a planted torso lowers the neck along an arc even without
+// bending the knees. Remove that geometric component from visual crouch only.
+// A vertical squat has no horizontal lean and retains its complete height drop.
+inline float PlantedPostureDrop(float drop,float lean,float hipToNeck) {
+    if(!std::isfinite(drop+lean+hipToNeck) || hipToNeck<=0 || drop<=0) return drop;
+    const float horizontal=std::clamp(lean,0.f,hipToNeck*.8f);
+    const float arc=hipToNeck-std::sqrt(std::max(0.f,hipToNeck*hipToNeck-horizontal*horizontal));
+    return std::max(0.f,drop-arc);
+}
 inline Vec LimitLength(Vec v,float limit) {
     const float n=Length(v);return n>limit ? Scale(v,limit/n) : v;
 }

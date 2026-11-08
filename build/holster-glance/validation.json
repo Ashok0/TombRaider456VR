@@ -1,0 +1,11 @@
+{
+  "status": "set-aside-not-installed",
+  "TR456": 3623744,
+  "TR123": 2236527,
+  "Before": "Regression failed: missing controllers cannot supply physical step or turn evidence",
+  "After": "Occlusion and reacquisition preserve body offset and rendered torso",
+  "LiveCauseConfirmed": false,
+  "HeadsetTested": false,
+  "HeightCalibrationChanged": false,
+  "Reason": "User confirms sliding while both controllers are tracked; tracking-loss fix does not address reported case."
+}

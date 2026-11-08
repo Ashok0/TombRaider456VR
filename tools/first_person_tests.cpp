@@ -20,7 +20,10 @@
 #include "../src/VRSystem.h"
 #include "../src/InlineHook.h"
 #undef private
+#include "TrackingTestClock.h"
+#define QueryPerformanceCounter trackingtest::Counter
 #include "../src/FirstPerson.cpp"
+#undef QueryPerformanceCounter
 #include "../src/VRSystem.cpp"
 #include "../src/Gamepad.cpp"
 

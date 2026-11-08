@@ -1,0 +1,16 @@
+{
+  "Targeted456": "PASS: 3178302 straight-up jump arm checks",
+  "Targeted123": "PASS: 2005007 locomotion, gun-control and camera hook checks",
+  "ReleaseBuilds": "Both passed",
+  "InHeadsetTested": false,
+  "Changes": [
+    "Independent rotation-compensated walking observation",
+    "Continuously filtered controller transform during sustained turns",
+    "Short-lived turn intent expires before a new sample can revive old motion",
+    "Head-led glance uses stricter translation agreement and may cancel turn intent"
+  ],
+  "NewCoverage": "36 combinations of walking direction, turn speed and opposing arm swing; shared translation remains available in >340/359 measured poses; anchor error <55 mm; small-swing angular step change <0.011 rad. Existing glance/noise, leg footprint, centering, collision and jump checks retained.",
+  "TestAdjustment": "Rigid turn anchor test allows up to 15 mm of filtering lag instead of requiring instantaneous raw-pose equality. Production test clocks now advance the new filter/history timers.",
+  "KnownBaselineFailure": "Legacy full first_person_tests calibrated HMD height can request native crouch, reproduced before these changes in build/roomscale-stance/baseline-full.log; unrelated and unchanged.",
+  "Reference": "https://www.nexusmods.com/skyrimspecialedition/mods/23416?tab=description; documented behavior only, no VRIK source port."
+}

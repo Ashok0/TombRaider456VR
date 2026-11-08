@@ -1,0 +1,95 @@
+--- before/src/ControllerBodyAnchor.h
++++ after/src/ControllerBodyAnchor.h
+@@ -12,9 +12,10 @@
+     double time=0,moved=0,referenceTime=0,rotated=0,translated=0;
+     float base=0,yaw=0,height=0,motionYaw=0;
+     int reason=0;float handTravel[2]{};
+-    Vec hands[2]{},offset{},head{},motionEye{},consumedTravel{};
++    Vec hands[2]{},sampleHands[2]{},offset{},head{},motionEye{},consumedTravel{};
+     Vec placementHands[2]{},placementEye{},placementNeck{},placementAnchor{};
+     float placementFacing=0,placementHeadYaw=0;
++    Vec motionSampleHands[2]{};double handMotionTime=0;bool placementQuiet=false;
+     void CapturePlacementEvidence(Vec eye,Vec left,Vec right,float headYaw) {
+         placementHands[0]=left;placementHands[1]=right;placementEye=eye;placementHeadYaw=headYaw;
+     }
+@@ -34,10 +35,27 @@
+         const bool turn=valid && std::fabs(BodyAngle(artificial-base))>1.e-6f;
+         if(!valid || now<time || now-time>.5 || turn) {
+             *this={};valid=true;serial=frame;time=moved=referenceTime=rotated=now;base=artificial;
+-            hands[0]=left;hands[1]=right;head=eye;motionEye=walkEye;motionYaw=headYaw;yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
++            motionSampleHands[0]=sampleHands[0]=hands[0]=left;
++            motionSampleHands[1]=sampleHands[1]=hands[1]=right;handMotionTime=now;
++            head=eye;motionEye=walkEye;motionYaw=headYaw;yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
+             CapturePlacement(eye,walkEye,left,right,headYaw);
+             heading.Update(eye,left,right,bodyYaw,headYaw,now,head);return;
+         }
++        // Evidence may span several frames, but a new head pose cannot spend
++        // old controller travel after both controllers have stopped.
++        const bool freshHands=Length(Flat(Sub(left,sampleHands[0])))>1.e-6f ||
++            Length(Flat(Sub(right,sampleHands[1])))>1.e-6f;
++        sampleHands[0]=left;sampleHands[1]=right;
++        // Position confidence also expires when only millimetre tracking noise
++        // remains. Retire the pending geometry, without changing the held body
++        // or consuming any unapplied turn. Cumulative real motion renews it.
++        if(Length(Flat(Sub(left,motionSampleHands[0])))>.006f ||
++           Length(Flat(Sub(right,motionSampleHands[1])))>.006f) {
++            motionSampleHands[0]=left;motionSampleHands[1]=right;handMotionTime=now;
++        }
++        const bool quietHands=now-handMotionTime>=.10;
++        if(quietHands && !placementQuiet) CapturePlacementEvidence(eye,left,right,headYaw);
++        placementQuiet=quietHands;
+         const float dt=float(std::clamp(now-time,0.,.05));serial=frame;time=now;turnOutput=0;
+         if(now-rotated>=.12 || walking) rotating=false;
+         if(walking) heading={};
+@@ -84,14 +102,14 @@
+             Length(Sub(common,headDelta))<std::max(.012f,h*.25f) &&
+             Length(Sub(delta[0],headDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f)) &&
+             Length(Sub(delta[1],headDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f));
+-        const bool translation=translationCoherent && c>=threshold && h>=threshold &&
++        const bool translation=freshHands && !quietHands && translationCoherent && c>=threshold && h>=threshold &&
+             rawTravel[0]>=threshold*.35f && rawTravel[1]>=threshold*.35f &&
+             Length(Flat(Scale(Add(Sub(left,hands[0]),Sub(right,hands[1])),.5f)))>=std::max(threshold*.8f,h*.5f);
+         if(translation) {translating=true;translated=now;}
+         else if(now-translated>=.12) translating=false;
+         // There is only one authority for physical facing: the planted-stance
+         // classifier. Fine head/hand correlation cannot bypass its confidence.
+-        const bool rotation=!walking && heading.sampleAccepted;
++        const bool rotation=freshHands && !quietHands && !walking && heading.sampleAccepted;
+         if(rotation) rotated=now;
+         // Position has one reference, independent of the long-lived facing
+         // origin. Moving arms in/out must not be replayed as body translation
+--- before/tools/body_transition_regression.inl
++++ after/tools/body_transition_regression.inl
+@@ -535,6 +535,32 @@
+         // The 25 mm position checkpoint can leave a small unconsumed arc.
+         Check(Length(Flat(Sub(rig.anchor.head,eye)))<.035f,
+             "translation fallback preserves pending rotation through arm articulation");
++    }
++    // A glance immediately after stopping must not spend the last turn/step's
++    // unconsumed controller movement. Include small positional tracking noise.
++    for(float speed:{.002f,.008f,.02f}) for(float step:{0.f,.002f})
++        for(float noise:{0.f,.002f}) for(int stop=30;stop<500;stop+=7) {
++        TurnRig rig;Vec eye{},l{},r{};float angle=0;
++        for(int i=1;i<=stop;++i) {
++            angle=i*speed;
++            const Vec neck{step*i,1.7f,-.15f};
++            eye=Add(neck,YawVector(Vec{0,0,.15f},angle));
++            l=Add(neck,YawVector(Vec{-.2f,-.7f,.5f},angle));
++            r=Add(neck,YawVector(Vec{ .2f,-.7f,.5f},angle));
++            rig.Step(i,eye,l,r,angle);
++        }
++        const Vec stopped=rig.anchor.head;Vec settled{};
++        for(int i=1;i<=90;++i) {
++            const Vec glance=Add(eye,Vec{.03f*std::sin(i*.12f),0,.03f*std::sin(i*.05f)});
++            rig.Step(stop+i,glance,
++                Add(l,Vec{noise*std::sin(i*.8f),0,noise*std::cos(i*.7f)}),
++                Add(r,Vec{noise*std::cos(i*.6f),0,noise*std::sin(i*.9f)}),angle+.3f*std::sin(i*.1f));
++            Check(Length(Flat(Sub(rig.anchor.head,stopped)))<(noise==0 ? .00001f : .009f),
++                "head-only glance cannot reuse stale turn or walking evidence after hands stop");
++            if(i==12) settled=rig.anchor.head;
++            if(i>12) Check(Length(Flat(Sub(rig.anchor.head,settled)))<.00001f,
++                "settled controller noise cannot revive pending motion during sideways glances");
++        }
+     }
+     // Straight and curved walking must survive natural opposing arm swing.
+     // Rotation samples must not consume the separate movement observation.

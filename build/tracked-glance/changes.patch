@@ -1,0 +1,165 @@
+--- before/README.md
++++ README.md
+@@ -176,6 +176,12 @@
+ hand gestures and sideways head glances do not count as body movement.
+ The movement detector refreshes after unrelated motion so old hand drift
+ cannot later be mistaken for a step.
++A turn's pending body-position adjustment also needs fresh movement evidence.
++A new head glance cannot combine with controller motion left over from a turn
++or step to slide the mesh. Head-only travel retires the stale position sample;
++real steps retain their separate movement test. Standing-height calibration and
++normal headset tracking are unchanged.
++
+ Roomscale turning estimates whether your stance is planted using the headset
+ and both controller positions. Small hand adjustments during a head glance are
+ not enough to turn Lara. Starting a turn requires repeated coordinated samples,
+--- before/src\ControllerBodyAnchor.h
++++ src\ControllerBodyAnchor.h
+@@ -38,7 +38,8 @@
+     double time=0,moved=0,referenceTime=0,rotated=0,translated=0;
+     float base=0,yaw=0,height=0,motionYaw=0;
+     int reason=0;float handTravel[2]{};
+-    Vec hands[2]{},sampleHands[2]{},offset{},head{},motionEye{},consumedTravel{};
++    Vec hands[2]{},sampleHands[2]{},sampleEye{},offset{},head{},motionEye{},consumedTravel{};
++    float sampleHeadYaw=0;double headOnlySince=-1;
+     Vec placementHands[2]{},placementEye{},placementNeck{},placementAnchor{};
+     float placementFacing=0,placementHeadYaw=0;
+     Vec motionSampleHands[2]{};double handMotionTime=0;bool placementQuiet=false;
+@@ -66,12 +67,43 @@
+             head=eye;motionEye=walkEye;motionYaw=headYaw;yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
+             CapturePlacement(eye,walkEye,left,right,headYaw);
+             stepIntent.Capture(walkEye,left,right,now);
++            sampleEye=eye;sampleHeadYaw=headYaw;
+             heading.Update(eye,left,right,bodyYaw,headYaw,now,head);return;
+         }
+         // Evidence may span several frames, but a new head pose cannot spend
+         // old controller travel after both controllers have stopped.
+         const bool freshHands=Length(Flat(Sub(left,sampleHands[0])))>1.e-6f ||
+             Length(Flat(Sub(right,sampleHands[1])))>1.e-6f;
++        const Vec previousPair=Flat(Sub(sampleHands[1],sampleHands[0])),currentPair=Flat(Sub(right,left));
++        const float handMotion[2]={Length(Flat(Sub(left,sampleHands[0]))),Length(Flat(Sub(right,sampleHands[1])))};
++        const float currentHandTravel=std::max(handMotion[0],handMotion[1]);
++        const float currentHeadTravel=Length(Flat(Sub(eye,sampleEye)));
++        const float signedHeadTurn=BodyAngle(headYaw-sampleHeadYaw);
++        const float currentHeadTurn=std::fabs(signedHeadTurn);
++        const float signedHandTurn=Length(previousPair)>.05f && Length(currentPair)>.05f ?
++            BodyAngle(std::atan2(currentPair.x,currentPair.z)-std::atan2(previousPair.x,previousPair.z)) : 0;
++        const float currentHandTurn=std::fabs(signedHandTurn);
++        // A pending turn checkpoint is not fresh evidence for this head pose.
++        // If the headset moves independently now, retire that positional
++        // checkpoint instead of applying the new glance to the old turn.
++        const bool headOnlyTravel=currentHeadTravel>std::max(.0015f,currentHandTravel*2.f);
++        const bool headOnlyMotion=headOnlyTravel ||
++            (currentHandTravel<.003f && currentHeadTurn>.002f && currentHeadTurn>currentHandTurn*2.2f);
++        if(headOnlyMotion) {if(headOnlySince<0) headOnlySince=now;}
++        else headOnlySince=-1;
++        const bool retirePlacement=headOnlyTravel && (now-headOnlySince>=.05 ||
++            currentHeadTravel>std::max(.003f,currentHandTravel*2.f));
++        const bool currentTurn=signedHeadTurn*signedHandTurn>0 &&
++            std::fabs(signedHeadTurn-signedHandTurn)<std::max(.008f,currentHeadTurn*.5f);
++        const Vec previousNeck=Sub(sampleEye,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},sampleHeadYaw));
++        const Vec neckStep=Flat(Sub(walkEye,previousNeck));const float neckDistance=Length(neckStep);
++        const Vec handStep[2]={Flat(Sub(left,sampleHands[0])),Flat(Sub(right,sampleHands[1]))};
++        const bool currentStep=neckDistance>.0001f &&
++            Dot(handStep[0],neckStep)>.95f*Length(handStep[0])*neckDistance &&
++            Dot(handStep[1],neckStep)>.95f*Length(handStep[1])*neckDistance &&
++            Length(Sub(handStep[0],neckStep))<std::max(.0005f,neckDistance*.35f) &&
++            Length(Sub(handStep[1],neckStep))<std::max(.0005f,neckDistance*.35f);
++        sampleEye=eye;sampleHeadYaw=headYaw;
+         sampleHands[0]=left;sampleHands[1]=right;
+         // Position confidence also expires when only millimetre tracking noise
+         // remains. Retire the pending geometry, without changing the held body
+@@ -139,7 +171,7 @@
+         const bool stepConfirmed=stepIntent.Observe(walkEye,left,right,now,
+             freshHands && !quietHands && translationCoherent);
+         if(!walking && !stepConfirmed && !held) {held=true;height=eye.y;yaw=bodyYaw;}
+-        const bool translation=stepConfirmed && freshHands && !quietHands && translationCoherent && c>=threshold && h>=threshold &&
++        const bool translation=(!(headOnlyTravel || (currentHeadTurn>.025f && currentHeadTurn>currentHandTurn*2.2f)) || currentStep) && stepConfirmed && freshHands && !quietHands && translationCoherent && c>=threshold && h>=threshold &&
+             rawTravel[0]>=threshold*.35f && rawTravel[1]>=threshold*.35f &&
+             Length(Flat(Scale(Add(Sub(left,hands[0]),Sub(right,hands[1])),.5f)))>=std::max(threshold*.8f,h*.5f);
+         if(translation) {translating=true;translated=now;}
+@@ -169,7 +201,7 @@
+         const bool freshPlacement=std::max(placementTravel[0],placementTravel[1])>=.025f &&
+             (std::min(placementTravel[0],placementTravel[1])>=.025f || rigidTravel);
+         bool placed=false;
+-        if((rotation || translation) && pairUsable && (freshPlacement || translation) && placementCoherent) {
++        if(((rotation && (currentTurn || (currentHeadTravel<1.e-6f && currentHeadTurn<1.e-6f) || (std::min(handMotion[0],handMotion[1])>.003f && currentHandTravel>.008f))) || translation) && !headOnlyMotion && pairUsable && (freshPlacement || translation) && placementCoherent) {
+             // Fresh bilateral movement and the headset agree on this frame.
+             // Carry the existing intentional lean, rather than integrating
+             // small arm-pose fitting errors into a permanent body displacement.
+@@ -188,7 +220,7 @@
+             // positional frame and advance only the translation component.
+             CapturePlacementEvidence(eye,left,right,headYaw);
+         }
+-        if(placed) CapturePlacement(eye,walkEye,left,right,headYaw);
++        if(placed || retirePlacement) CapturePlacement(eye,walkEye,left,right,headYaw);
+         else if(freshPlacement && !placementCoherent) {
+             // Learn changed arm geometry without discarding unconsumed body
+             // rotation. The positional frame advances only when the body does.
+--- before/src\FirstPerson.cpp
++++ src\FirstPerson.cpp
+@@ -2240,6 +2240,22 @@
+         if(!g_torsoClearance.Apply(obj,posed,bind,Sub(eye,cameraOffset),heading,scale,
+             VR().PoseSerial(),TurnTime(),mainBody,&g_torsoSurface,BodyControllersStationary())) return false;
+     } else if(mainBody) g_torsoClearance.Reset();
++    if(mainBody && Cfg().firstPersonDriftLog) {
++        static uint64_t nextPlacementTrace=0;
++        const auto now=GetTickCount64();
++        if(now>=nextPlacementTrace) {
++            nextPlacementTrace=now+100;
++            vr::HmdMatrix34_t h{},l{},r{};
++            const bool ht=VR().HeadPose(h),lt=VR().ControllerPose(0,l),rt=VR().ControllerPose(1,r);
++            LogF("body-placement: pose=%llu held=%d move=%d turn=%d tracking=%d state=%d yaw=%.4f posture=%.4f head=(%.4f,%.4f,%.4f) left=(%.4f,%.4f,%.4f) right=(%.4f,%.4f,%.4f) anchor=(%.4f,%.4f) scene=(%d,%d) hip=(%.3f,%.3f) chest=(%.3f,%.3f)",
++                VR().PoseSerial(),g_controllerBodyAnchor.held,g_controllerBodyAnchor.translating,
++                g_controllerBodyAnchor.rotating,int(ht)*4+int(lt)*2+int(rt),state,heading,VR().FirstPersonPostureDrop(),
++                h.m[0][3],h.m[1][3],h.m[2][3],l.m[0][3],l.m[1][3],l.m[2][3],r.m[0][3],r.m[1][3],r.m[2][3],
++                g_controllerBodyAnchor.head.x,g_controllerBodyAnchor.head.z,g_scenePose.x_pos,g_scenePose.z_pos,
++                posed[0].origin.x+cameraOffset.x,posed[0].origin.z+cameraOffset.z,
++                posed[7].origin.x+cameraOffset.x,posed[7].origin.z+cameraOffset.z);
++        }
++    }
+     static uint64_t nextStanceLog=0;
+     if(g_bodySkinScope && Cfg().firstPersonDriftLog && GetTickCount64()>=nextStanceLog &&
+        (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49) {
+--- before/tools\body_transition_regression.inl
++++ tools\body_transition_regression.inl
+@@ -479,9 +479,9 @@
+     // immediately after turns stop. A settled-idle-only test missed both stale
+     // movement checkpoints and the incremental/absolute double application.
+     struct TurnRig {
+-        ControllerBodyAnchor anchor;BodyFollower body;
++        ControllerBodyAnchor anchor;BodyFollower body;double rate=90;
+         void Step(int frame,Vec eye,Vec l,Vec r,float yaw) {
+-            const double now=frame/90.;
++            const double now=frame/rate;
+             anchor.Update(frame,now,eye,l,r,0,body.yaw,true,false,yaw);
+             body.Update(frame,now,0,anchor.yaw,0,{}, {},false,tr::firstperson::BodyFollowSettings(),{},false,true,
+                 anchor.turnOutput,anchor.held,true,anchor.heading.active ? anchor.heading.target : NAN,anchor.rotating);
+@@ -541,6 +541,27 @@
+         // The 25 mm position checkpoint can leave a small unconsumed arc.
+         Check(Length(Flat(Sub(rig.anchor.head,eye)))<.035f,
+             "translation fallback preserves pending rotation through arm articulation");
++    }
++    // A smooth millimetre hand drift can cross an OLD placement checkpoint
++    // just after a turn stops. It must not spend the newer headset glance.
++    for(double hz:{60.,90.}) for(float tempo:{.1f,1.f}) for(float noise:{.002f,.0065f}) for(float glance:{.03f,.15f,.30f})
++        for(float speed:{.002f,.008f,.02f}) for(int stop=30;stop<500;stop+=7) {
++        TurnRig rig;rig.rate=hz;Vec eye{},l{},r{};float angle=0;
++        for(int i=1;i<=stop;++i) {
++            angle=i*speed;const Vec neck{0,1.7f,-.15f};
++            eye=Add(neck,YawVector(Vec{0,0,.15f},angle));
++            l=Add(neck,YawVector(Vec{-.2f,-.7f,.5f},angle));
++            r=Add(neck,YawVector(Vec{ .2f,-.7f,.5f},angle));
++            rig.Step(i,eye,l,r,angle);
++        }
++        const Vec stopped=rig.anchor.head;
++        for(int i=1;i<=180;++i) {
++            rig.Step(stop+i,Add(eye,Vec{glance*std::sin(i*.08f*tempo),0,glance*.3f*std::sin(i*.04f*tempo)}),
++                Add(l,Vec{noise*std::sin(i*.1f),0,noise*(tempo<1 ? std::sin(i*.07f) : std::cos(i*.07f))}),
++                Add(r,Vec{noise*(tempo<1 ? std::sin(i*.06f) : std::cos(i*.06f)),0,noise*std::sin(i*.09f)}),angle+.7f*std::sin(i*.1f*tempo));
++            Check(Length(Flat(Sub(rig.anchor.head,stopped)))<.00001f,
++                "smooth tracked hand drift after a turn cannot spend a newer holster-side head glance");
++        }
+     }
+     // A glance immediately after stopping must not spend the last turn/step's
+     // unconsumed controller movement. Include small positional tracking noise.

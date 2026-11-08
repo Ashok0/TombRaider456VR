@@ -1,0 +1,27 @@
+{
+  "package": "C:\\dev\\VRIK\\VRIK Player Avatar 23416 0.8.8 2026-10-14T11-28Z GkqKVM9b7",
+  "method": "Read distributed INI/Papyrus scripts and analyze supplied DLL with matching PDB symbols in Ghidra. Decompiled output is evidence of the compiled implementation, not original C++ source.",
+  "functions": {
+    "VrikBody::updateRoot": "0x180015970",
+    "VrikBody::updateWalk": "0x1800180D0",
+    "VrikBody::updatePosture": "0x180013D40",
+    "VrikBody::setupState": "0x18000F4C0",
+    "angleWeightedAverage": "0x180007650"
+  },
+  "observations": [
+    "updateRoot derives separate hand angular hints relative to a pelvis-based reference, limits the hints about HMD yaw, and combines the two hints with HMD yaw using angleWeightedAverage.",
+    "HMD weighting increases with root-to-head angular discrepancy. Hand weights depend on player arm-length fields relative to configured arm scale/length; the upstream exact definition of those arm-length fields was not traced.",
+    "bodyRotationAngleLimit defaults to 6 degrees. The compiled unlock decision also considers player speed and input weights; 6 degrees alone is not the full algorithm.",
+    "When rotation is unlocked and ordinary nonseated behavior applies, updateRoot moves current root yaw toward the estimated target using frameTime * 5 times angular error, then can lock again within the configured angle limit.",
+    "The routine stores half the estimated target-to-root angular error as m_playerSpineTwist and transforms stored foot positions/rotations when changing the root.",
+    "INI smoothAmount and smoothStopMultiplier describe vertical movement smoothing, not this root yaw update.",
+    "The inspected root routine estimates facing rather than directly measuring whether real feet moved."
+  ],
+  "comparison": [
+    "TR RoomscaleHeadingRecovery derives absolute facing primarily from the inter-controller line and recent-motion windows. VRIK uses separate body-relative hand hints and a persistent rotation lock.",
+    "TR already has independent rotation-compensated walking evidence and stable root/foot pivot handling; retain those while evaluating a new facing estimator.",
+    "Potential next experiment: body-relative weighted facing with geometric lock/unlock and time-based convergence. Preserve TR's stronger fixed-controller glance constraint; VRIK's HMD weighting could otherwise turn the body on large head-only glances.",
+    "Do not transplant camera height, body size or vertical bobbing settings; those are separate from the current task."
+  ],
+  "productChanges": "None during this review."
+}

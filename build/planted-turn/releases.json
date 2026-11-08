@@ -1,0 +1,18 @@
+[
+  {
+    "Id": "456",
+    "Process": "tomb456",
+    "Directory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider IV-VI Remastered",
+    "Previous": "CD7A396C00326E59F5E1E94885D1E040A6D919E7CA1759617C8C8728902DEA47",
+    "Expected": "7B8B95E01B8341F51CF42A19A2F2A78D69573F23048E3EE947741C9FF04CC740",
+    "RenderChecks": 3113872
+  },
+  {
+    "Id": "123",
+    "Process": "tomb123",
+    "Directory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tomb Raider I-III Remastered",
+    "Previous": "1A34F83A6B05387B8AF1B9F2A75F316EDBA6185770F5BCD63B918C9012A3A7D0",
+    "Expected": "BD417870DEAF7D477677F0FCA593A86D7A54E32995D5044896CB5DB01A5BD99D",
+    "RenderChecks": 1969604
+  }
+]

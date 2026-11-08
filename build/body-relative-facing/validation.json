@@ -1,0 +1,23 @@
+{
+  "Targeted456": "PASS: 3180366 straight-up jump arm checks",
+  "Targeted123": "PASS: 2006039 locomotion, gun-control and camera hook checks",
+  "ReleaseBuilds": "Both passed",
+  "InHeadsetTested": false,
+  "Implementation": [
+    "Calibrated separate hand bearings about an estimated body center; reach-weighted combination with accepted facing guide",
+    "Live HMD yaw continues to validate motion intent, but cannot directly change the active facing blend; accepted controller motion carries the guide",
+    "6 degree lower-body unlock threshold and frame-time angular convergence replace checkpoint-cadence rendering",
+    "Motion history tolerates an isolated failed sample; unchanged controller poses expire permission promptly",
+    "Stable placement/footprint and independent roomscale walking retained"
+  ],
+  "NewCoverage": [
+    "Asymmetric arm reach reduces yaw error versus hand-line estimate",
+    "Close hand bearings remain finite and stable",
+    "Guide-relative angular averaging across +/-180 degrees, including opposite facing",
+    "Geometric lower-body lock and convergence at 72/90/120 Hz"
+  ],
+  "ExistingCoverage": "Head-only glances, noisy controllers, arm articulation, turn-plus-walk all four directions, body centering, leg footprint, jump and native collision regressions passed.",
+  "TestInfrastructure": "Scoped synthetic performance-counter clock for the production turn-render fixture; removed wall-clock-dependent timestamp aging. No product clock changes.",
+  "KnownBaselineFailure": "Legacy full first_person_tests calibrated HMD height can request native crouch, reproduced before these changes in build/roomscale-stance/baseline-full.log; unrelated and unchanged.",
+  "Reference": "Local VRIK 0.8.8 DLL/PDB behavioral analysis in build/vrik-reference/findings.json. Independently implemented adaptation; no Skyrim assets or binary routines incorporated."
+}

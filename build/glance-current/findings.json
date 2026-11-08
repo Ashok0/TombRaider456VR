@@ -1,0 +1,77 @@
+{
+  "status": "diagnosis unresolved; no source changes or installation this turn",
+  "evidence": [
+    {
+      "poses": [
+        1532,
+        1625
+      ],
+      "samples": 15,
+      "tracked_head_span_metres": [
+        0.23099999999999998,
+        0.06609999999999983,
+        0.1459
+      ],
+      "solved_hip_span_world_units": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "solved_chest_span_world_units": [
+        0.008000000001629815,
+        0.02600000000001046,
+        0.014999999999417923
+      ],
+      "all_three_devices_tracked": true
+    },
+    {
+      "poses": [
+        1677,
+        1808
+      ],
+      "samples": 21,
+      "tracked_head_span_metres": [
+        0.4468,
+        0.054400000000000004,
+        0.06709999999999999
+      ],
+      "solved_hip_span_world_units": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "solved_chest_span_world_units": [
+        0.004000000000814907,
+        0.03899999999998727,
+        0.021000000000640284
+      ],
+      "all_three_devices_tracked": true
+    },
+    {
+      "poses": [
+        1894,
+        1999
+      ],
+      "samples": 17,
+      "tracked_head_span_metres": [
+        0.355,
+        0.0869000000000002,
+        0.0992
+      ],
+      "solved_hip_span_world_units": [
+        0.0,
+        0.002999999999985903,
+        0.0
+      ],
+      "solved_chest_span_world_units": [
+        0.0,
+        0.10200000000003229,
+        0.0
+      ],
+      "all_three_devices_tracked": true
+    }
+  ],
+  "confirmed_separate_issue": "Abrupt horizontal anchor shifts when motion classification changes; e.g. poses 1808-1815 about 29.6 cm.",
+  "unknown": "Whether reported sliding is continuous through held intervals, or matches discrete position releases. Pelvis/chest logs do not establish every weighted mesh vertex or attachment is stationary.",
+  "pending_user_question": "Continuous with every head motion, delayed sudden shifts, or both?"
+}
