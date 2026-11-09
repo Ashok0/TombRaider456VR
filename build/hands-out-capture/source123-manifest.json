@@ -1,0 +1,32 @@
+[
+  {
+    "Relative": "src/ControllerBodyAnchor.h",
+    "OriginalHash": "7E266C5101468BBBE02C0E8049F4E5DBCB0048A689296E535B9DCE2B8FE5A151",
+    "ModifiedHash": "2C510425EE5B45D4DA2EE3D309CF2632B1B6194939CDFB76F4097FB3B1B48D42",
+    "Deleted": false
+  },
+  {
+    "Relative": "src/PlantedSwivel.h",
+    "OriginalHash": null,
+    "ModifiedHash": "4796CB60C0E06A58EAD932ADF0FC8E22CC0D12CE148C6B655F3E65DCB99BC1F9",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/body_transition_selftest.h",
+    "OriginalHash": "882C2627D78FADC70460B1DE57C39CB556824AFBBB73C1332F994DFF8305A38D",
+    "ModifiedHash": "929C832FD0FA68E0AA723B63283BBB660E5458092B4F04693DD994B09F512D4E",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/recorded_hands_out_regression.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "44EDE8884763F17FF763FE77867538FC1348721F189231EA136EB5DDF2CDCB45",
+    "Deleted": false
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "0208F308CD1404F8CA8621C3F76FA9F32D449E7B65484C8A99A66C5CA99BBABC",
+    "ModifiedHash": "F7404210CC73ED83DEB8720E1DC5B3A526A7602948CD6F8341932D979BD1AF09",
+    "Deleted": false
+  }
+]

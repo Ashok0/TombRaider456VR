@@ -1,0 +1,295 @@
+--- before/src/ControllerBodyAnchor.h
++++ after/src/ControllerBodyAnchor.h
+@@ -41,23 +41,29 @@
+     Vec hands[2]{},sampleHands[2]{},sampleEye{},offset{},head{},motionEye{},consumedTravel{};
+     float sampleHeadYaw=0;double headOnlySince=-1;
+     Vec placementHands[2]{},placementEye{},placementNeck{},placementAnchor{};
++    Vec sampleNeckOffset{},placementNeckOffset{};
+     float placementFacing=0,placementHeadYaw=0;
+     Vec motionSampleHands[2]{};double handMotionTime=0;bool placementQuiet=false;
+-    void CapturePlacementEvidence(Vec eye,Vec left,Vec right,float headYaw) {
++    void CapturePlacementEvidence(Vec eye,Vec left,Vec right,float headYaw,Vec neckOffset) {
++        placementNeckOffset=neckOffset;
+         placementHands[0]=left;placementHands[1]=right;placementEye=eye;placementHeadYaw=headYaw;
+     }
+-    void CapturePlacement(Vec eye,Vec neck,Vec left,Vec right,float headYaw) {
+-        CapturePlacementEvidence(eye,left,right,headYaw);
++    void CapturePlacement(Vec eye,Vec neck,Vec left,Vec right,float headYaw,Vec neckOffset) {
++        CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
+         placementNeck=neck;placementAnchor=head;
+         const Vec pair=Sub(right,left);placementFacing=std::atan2(pair.x,pair.z);
+     }
+     void Reset() { *this={}; }
+-    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f) {
++    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f,Vec headForward={}) {
+         if(!tracked || !Finite({IdentityBasis(),eye}) || !Finite({IdentityBasis(),left}) ||
+-           !Finite({IdentityBasis(),right}) || !std::isfinite(now+artificial+bodyYaw+headYaw+neckMetres)) {Reset();return;}
+-        // Remove the ordinary eye-around-neck arc from the step evidence.
+-        // Looking aside while walking must not veto a real shared translation.
+-        const Vec walkEye=Sub(eye,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},headYaw));
++           !Finite({IdentityBasis(),right}) || !Finite({IdentityBasis(),headForward}) || !std::isfinite(now+artificial+bodyYaw+headYaw+neckMetres)) {Reset();return;}
++        // The forward eye-to-neck offset shrinks horizontally when looking
++        // down. Normalizing its XZ projection invents lateral neck travel in
++        // a downward glance. Preserve the tracked forward vector's pitch;
++        // zero supplies the legacy level-head model for yaw-only callers.
++        const Vec neckOffset=Scale(Length(headForward)>.1f ? Flat(headForward) :
++            YawVector({0,0,1},headYaw),std::clamp(neckMetres,0.f,.4f));
++        const Vec walkEye=Sub(eye,neckOffset);
+         if(valid && serial==frame && artificial==base) return;
+         const bool turn=valid && std::fabs(BodyAngle(artificial-base))>1.e-6f;
+         if(!valid || now<time || now-time>.5 || turn) {
+@@ -65,9 +71,9 @@
+             motionSampleHands[0]=sampleHands[0]=hands[0]=left;
+             motionSampleHands[1]=sampleHands[1]=hands[1]=right;handMotionTime=now;
+             head=eye;motionEye=walkEye;motionYaw=headYaw;yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
+-            CapturePlacement(eye,walkEye,left,right,headYaw);
++            CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+             stepIntent.Capture(walkEye,left,right,now);
+-            sampleEye=eye;sampleHeadYaw=headYaw;
++            sampleEye=eye;sampleHeadYaw=headYaw;sampleNeckOffset=neckOffset;
+             heading.Update(eye,left,right,bodyYaw,headYaw,now,head);return;
+         }
+         // Evidence may span several frames, but a new head pose cannot spend
+@@ -95,7 +101,7 @@
+             currentHeadTravel>std::max(.003f,currentHandTravel*2.f));
+         const bool currentTurn=signedHeadTurn*signedHandTurn>0 &&
+             std::fabs(signedHeadTurn-signedHandTurn)<std::max(.008f,currentHeadTurn*.5f);
+-        const Vec previousNeck=Sub(sampleEye,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},sampleHeadYaw));
++        const Vec previousNeck=Sub(sampleEye,sampleNeckOffset);
+         const Vec neckStep=Flat(Sub(walkEye,previousNeck));const float neckDistance=Length(neckStep);
+         const Vec handStep[2]={Flat(Sub(left,sampleHands[0])),Flat(Sub(right,sampleHands[1]))};
+         const bool currentStep=neckDistance>.0001f &&
+@@ -103,7 +109,7 @@
+             Dot(handStep[1],neckStep)>.95f*Length(handStep[1])*neckDistance &&
+             Length(Sub(handStep[0],neckStep))<std::max(.0005f,neckDistance*.35f) &&
+             Length(Sub(handStep[1],neckStep))<std::max(.0005f,neckDistance*.35f);
+-        sampleEye=eye;sampleHeadYaw=headYaw;
++        sampleEye=eye;sampleHeadYaw=headYaw;sampleNeckOffset=neckOffset;
+         sampleHands[0]=left;sampleHands[1]=right;
+         // Position confidence also expires when only millimetre tracking noise
+         // remains. Retire the pending geometry, without changing the held body
+@@ -113,7 +119,7 @@
+             motionSampleHands[0]=left;motionSampleHands[1]=right;handMotionTime=now;
+         }
+         const bool quietHands=now-handMotionTime>=.10;
+-        if(quietHands && !placementQuiet) CapturePlacementEvidence(eye,left,right,headYaw);
++        if(quietHands && !placementQuiet) CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
+         placementQuiet=quietHands;
+         const float dt=float(std::clamp(now-time,0.,.05));serial=frame;time=now;turnOutput=0;
+         if(now-rotated>=.12 || walking) rotating=false;
+@@ -209,9 +215,9 @@
+         // Allow small pivot-model error during articulated turns, but retire
+         // an origin over 8 cm away from the refreshed neck observation.
+         // Retirement preserves the held mesh position; it is not recentering.
+-        const Vec observedNeck=Sub(placementEye,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},placementHeadYaw));
++        const Vec observedNeck=Sub(placementEye,placementNeckOffset);
+         const bool stalePlacement=Length(Flat(Sub(observedNeck,placementNeck)))>.08f;
+-        if(stalePlacement) CapturePlacement(eye,walkEye,left,right,headYaw);
++        if(stalePlacement) CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+         bool placed=false,placementPending=false;
+         if(!stalePlacement && (rotation && (currentTurn || (currentHeadTravel<1.e-6f && currentHeadTurn<1.e-6f) || (std::min(handMotion[0],handMotion[1])>.003f && currentHandTravel>.008f))) && !headOnlyMotion && pairUsable && (freshPlacement || translation) && placementCoherent) {
+             // Fresh bilateral movement and the headset agree on this frame.
+@@ -238,7 +244,7 @@
+             placementAnchor=Add(placementAnchor,travel);placementNeck=Add(placementNeck,travel);
+             // A step alone cannot consume the pending rotation. Keep its
+             // positional frame and advance only the translation component.
+-            CapturePlacementEvidence(eye,left,right,headYaw);
++            CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
+         }
+         // Discard incoherent translation immediately. Waiting for the
+         // old timeout lets a later coincidental hand sample release a lean.
+@@ -246,11 +252,11 @@
+             hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;
+             referenceTime=now;consumedTravel={};
+         }
+-        if((placed && !placementPending) || retirePlacement) CapturePlacement(eye,walkEye,left,right,headYaw);
++        if((placed && !placementPending) || retirePlacement) CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+         else if(freshPlacement && !placementCoherent) {
+             // Learn changed arm geometry without discarding unconsumed body
+             // rotation. The positional frame advances only when the body does.
+-            CapturePlacementEvidence(eye,left,right,headYaw);
++            CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
+         }
+         if(walking || translation || rotation) {
+             // Move the body by corroborated travel, never erase an existing
+@@ -271,7 +277,7 @@
+         // for seconds and become a body step when the head happens to pass by.
+         if(!walking && !translationCoherent && now-referenceTime>=.25) {
+             hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;referenceTime=now;consumedTravel={};
+-            if(!rotation && std::fabs(placementTurn)<.02f) CapturePlacement(eye,walkEye,left,right,headYaw);
++            if(!rotation && std::fabs(placementTurn)<.02f) CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+         }
+         if(!walking) offset=Flat(Sub(eye,head));
+         else {
+@@ -280,7 +286,7 @@
+             const float length=Length(offset);
+             if(length>0) offset=Scale(offset,std::max(0.f,1-dt/length));
+             head=Sub(eye,offset);height=eye.y;yaw=bodyYaw;
+-            CapturePlacement(eye,walkEye,left,right,headYaw);
++            CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+         }
+     }
+ };
+--- before/src/ControllerBodyAnchor.inl
++++ after/src/ControllerBodyAnchor.inl
+@@ -1,16 +1,32 @@
+ firstperson::ControllerBodyAnchor g_controllerBodyAnchor;
+-void ResetControllerBodyAnchor() { g_controllerBodyAnchor.Reset(); }
++void ResetControllerBodyAnchor() {
++    if(g_controllerBodyAnchor.valid && Cfg().firstPersonDriftLog) Log("body-input-reset");
++    g_controllerBodyAnchor.Reset();
++}
+ void UpdateControllerBodyAnchor() {
+     vr::HmdMatrix34_t head{},left{},right{};
+     const bool tracked=Cfg().firstPersonFullBodyIK && Cfg().firstPersonMovementStabilization &&
+         g_active && g_haveHeading && VR().HeadPose(head) &&
+         VR().ControllerPose(0,left) && VR().ControllerPose(1,right);
+     const bool walking=g_haveManualInput && !g_shifted && locomotion::Length(g_manualLocal)>.05f;
+-    g_controllerBodyAnchor.Update(VR().PoseSerial(),TurnTime(),
++    const auto frame=VR().PoseSerial();const double time=TurnTime();
++    const float headYaw=VR().HeadYawRadians();
++    const float bodyYaw=g_bodyFollower.valid ? firstperson::BodyAngle(g_bodyFollower.yaw-g_headingBase) :
++        g_controllerBodyAnchor.valid ? g_controllerBodyAnchor.yaw : headYaw;
++    const bool trace=Cfg().firstPersonDriftLog &&
++        ((tracked && (!g_controllerBodyAnchor.valid || g_controllerBodyAnchor.serial!=frame || g_controllerBodyAnchor.base!=g_headingBase)) ||
++         (!tracked && g_controllerBodyAnchor.valid));
++    g_controllerBodyAnchor.Update(frame,time,
+         {head.m[0][3],head.m[1][3],-head.m[2][3]},
+         {left.m[0][3],left.m[1][3],-left.m[2][3]},
+         {right.m[0][3],right.m[1][3],-right.m[2][3]},g_headingBase,
+-        g_bodyFollower.valid ? firstperson::BodyAngle(g_bodyFollower.yaw-g_headingBase) : g_controllerBodyAnchor.valid ? g_controllerBodyAnchor.yaw : VR().HeadYawRadians(),tracked,walking,VR().HeadYawRadians(),Cfg().firstPersonRoomscaleNeckMetres);
++        bodyYaw,tracked,walking,headYaw,Cfg().firstPersonRoomscaleNeckMetres,{-head.m[0][2],-head.m[1][2],head.m[2][2]});
++    if(trace) LogF("body-input: %llu %.17g %.9g %.9g %d %d %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g -> %.9g %.9g %d %d %d",
++        frame,time,g_headingBase,bodyYaw,int(tracked),int(walking),headYaw,Cfg().firstPersonRoomscaleNeckMetres,
++        head.m[0][3],head.m[1][3],-head.m[2][3],left.m[0][3],left.m[1][3],-left.m[2][3],
++        right.m[0][3],right.m[1][3],-right.m[2][3],-head.m[0][2],-head.m[1][2],head.m[2][2],
++        g_controllerBodyAnchor.head.x,g_controllerBodyAnchor.head.z,int(g_controllerBodyAnchor.held),
++        int(g_controllerBodyAnchor.rotating),int(g_controllerBodyAnchor.translating));
+     if(Cfg().firstPersonDriftLog) {
+         static uint64_t next=0;static bool lastHeld=false;
+         const auto now=GetTickCount64();
+--- before/tools/body_transition_regression.inl
++++ after/tools/body_transition_regression.inl
+@@ -1,3 +1,4 @@
++#include "pitched_glance_regression.inl"
+ #include "extended_arm_glance_regression.inl"
+ #include "body_anchor_capture.inl"
+ 
+@@ -207,6 +208,7 @@
+ }
+ 
+ void TestControllerBodyAnchor() {
++    TestPitchedGlanceTracking();
+     TestExtendedArmGlances();
+     TestCapturedBodyAnchorTransitions();
+     for(float drop:{0.f,.1f,.3f,.6f}) for(float radius:{.45f,.7f,.95f}) {
+--- before/README.md
++++ after/README.md
+@@ -240,8 +240,18 @@
+ the positional hold, independently of the angular stance decision.
+ The leg solver's footprint is transported with that accepted anchor before
+ rotation, keeping the feet and pelvis in the same frame through repeated turns.
+-The step detector compensates the headset's yaw-related neck arc so genuine
+-forward, backward and sideways travel remains available while looking around.
++The step detector compensates the eye-to-neck arc using the tracked headset's
++horizontal forward-vector projection, including pitch. Looking down shortens
++that horizontal offset; treating it as a level-head offset would manufacture
++sideways movement during a downward glance. Each movement reference retains
++its own neck projection so changes in pitch cannot rewrite an older sample.
++Camera tracking and height calibration remain unchanged. Forward, backward and
++sideways physical travel still use the shared head/controller displacement.
++With `FirstPersonDriftLog` enabled, `body-input` records each processed tracked
++pose's full anchor inputs and result; `body-input-reset` marks explicit resets.
++These records support direct replay instead of reconstructing tracking from
++sparse render samples. `tools/body_anchor_replay.cpp` replays a captured log
++and checks the recorded anchor positions and movement flags.
+ Once the controllers confirm a step, gameplay movement uses the configured
+ roomscale deadzone rather than adding the body's larger lean deadzone. Native
+ wall, floor and ledge collision still owns the movement; initialization or a
+--- before/tools/pitched_glance_regression.inl
++++ after/tools/pitched_glance_regression.inl
+@@ -0,0 +1,45 @@
++// A downward glance rotates the eyes through a shorter horizontal arc.
++// Ordinary small hand drift must not validate the fictitious translation
++// produced by subtracting a level-head neck offset from that pitched pose.
++void TestPitchedGlanceTracking() {
++    using namespace tr::firstperson;
++    auto update=[](ControllerBodyAnchor& a,int frame,double now,tr::motiongun::Vec eye,
++            tr::motiongun::Vec left,tr::motiongun::Vec right,float yaw,tr::motiongun::Vec forward) {
++#ifdef LEGACY_NECK_PROJECTION
++        a.Update(frame,now,eye,left,right,0,0,true,false,yaw,.15f);
++#else
++        a.Update(frame,now,eye,left,right,0,0,true,false,yaw,.15f,forward);
++#endif
++    };
++    for(float hz:{60.f,90.f}) for(float pitch:{.35f,.7f,1.05f,1.4f})
++        for(float drift:{.01f,.02f,.04f,.06f}) for(float reach:{.15f,.5f}) {
++        ControllerBodyAnchor a;tr::motiongun::Vec initial{};
++        for(int i=0;i<int(8*hz);++i) {
++            const float t=std::max(0.f,i/hz-1)*2.5f,yaw=1.1f*std::sin(t);
++            const auto forward=YawVector({0,-std::sin(pitch),std::cos(pitch)},yaw);
++            const auto eye=Add({0,1.7f,-.15f},Scale(forward,.15f));
++            const tr::motiongun::Vec sway{-drift*std::sin(t),0,.003f*std::sin(t*.7f)};
++            update(a,i+1,i/double(hz),eye,Add({-.2f,1.3f,reach},sway),Add({.2f,1.3f,reach},sway),yaw,forward);
++            if(i==0) initial=a.head;
++            Check(Length(Flat(Sub(a.head,initial)))<.00001f,
++                "pitched planted glances cannot invent neck translation when raised hands drift");
++        }
++    }
++    // The same pitched glance during actual walking still follows the shared
++    // physical displacement; no additional roomscale deadzone is introduced.
++    for(float pitch:{0.f,.7f,1.4f}) for(int direction=0;direction<4;++direction) {
++        ControllerBodyAnchor a;tr::motiongun::Vec initial{},travel{};int permitted=0;
++        for(int i=0;i<600;++i) {
++            const float t=std::max(0,i-90)/90.f,yaw=.8f*std::sin(t*1.5f);
++            const auto forward=YawVector({0,-std::sin(pitch),std::cos(pitch)},yaw);
++            travel=YawVector({0,0,t*.2f},direction*1.5707963f);
++            const auto eye=Add(travel,Add({0,1.7f,-.15f},Scale(forward,.15f)));
++            update(a,i+1,i/90.,eye,Add(travel,{-.2f,1.3f,.5f}),Add(travel,{.2f,1.3f,.5f}),yaw,forward);
++            if(i==0) initial=a.head;
++            if(i>120 && a.translating) ++permitted;
++        }
++        Check(permitted>400,"looking down preserves responsive physical walking in all four directions");
++        Check(Length(Flat(Sub(Sub(a.head,initial),travel)))<.04f,
++            "pitched roomscale walking keeps the body centered on accepted travel");
++    }
++}
+--- before/tools/body_anchor_replay.cpp
++++ after/tools/body_anchor_replay.cpp
+@@ -0,0 +1,36 @@
++// Build with cl /std:c++17 /EHsc /Isrc tools/body_anchor_replay.cpp
++// Usage: body_anchor_replay.exe path\to\TombRaiderVR.log
++#include "ControllerBodyAnchor.h"
++#include <cstdio>
++#include <cstring>
++#include <algorithm>
++int main(int argc,char** argv) {
++    if(argc!=2) {std::fprintf(stderr,"Usage: body_anchor_replay.exe session.log\n");return 2;}
++    FILE* file=nullptr;if(fopen_s(&file,argv[1],"r") || !file) return 2;
++    tr::firstperson::ControllerBodyAnchor anchor;
++    char line[4096]{};int samples=0,errors=0,lineNumber=0;float worst=0;
++    while(std::fgets(line,sizeof(line),file)) {
++        ++lineNumber;
++        if(!std::strncmp(line,"body-input-reset",16)) {anchor.Reset();continue;}
++        if(std::strncmp(line,"body-input: ",12)) continue;
++        unsigned long long frame=0;double time=0;float base=0,body=0,yaw=0,neck=0,x=0,z=0;
++        int tracked=0,walking=0,held=0,turn=0,move=0;
++        tr::motiongun::Vec eye{},left{},right{},forward{};
++        const int read=std::sscanf(line+12,
++            "%llu %lf %f %f %d %d %f %f %f %f %f %f %f %f %f %f %f %f %f %f -> %f %f %d %d %d",
++            &frame,&time,&base,&body,&tracked,&walking,&yaw,&neck,
++            &eye.x,&eye.y,&eye.z,&left.x,&left.y,&left.z,&right.x,&right.y,&right.z,
++            &forward.x,&forward.y,&forward.z,&x,&z,&held,&turn,&move);
++        if(read!=25) {std::fprintf(stderr,"Incomplete input at line %d\n",lineNumber);++errors;continue;}
++        anchor.Update(frame,time,eye,left,right,base,body,tracked!=0,walking!=0,yaw,neck,forward);
++        const float error=std::hypot(anchor.head.x-x,anchor.head.z-z);worst=std::max(worst,error);++samples;
++        if(error>.00001f || anchor.held!=(held!=0) || anchor.rotating!=(turn!=0) || anchor.translating!=(move!=0)) {
++            if(errors<8) std::printf("Mismatch at line %d pose %llu: position %.4f mm, flags %d/%d/%d expected %d/%d/%d\n",
++                lineNumber,frame,error*1000,int(anchor.held),int(anchor.rotating),int(anchor.translating),held,turn,move);
++            ++errors;
++        }
++    }
++    std::fclose(file);
++    std::printf("Replayed %d poses; %d mismatches; maximum position error %.6f mm\n",samples,errors,worst*1000);
++    return samples==0 ? 2 : errors ? 1 : 0;
++}

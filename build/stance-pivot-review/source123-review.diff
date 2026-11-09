@@ -1,0 +1,70 @@
+--- src/ControllerBodyAnchor.h
++++ src/ControllerBodyAnchor.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include "BodyFollower.h"
++#include "PlantedPivotEvidence.h"
+ namespace tr::firstperson {
+ // Controller POSITIONS, not their aim. Require coordinated head/hand travel.
+ // A fixed reference and separate entry/continuation thresholds reject noise without
+@@ -32,6 +33,7 @@
+ struct ControllerBodyAnchor {
+     RoomscaleHeadingRecovery heading;
+     PhysicalStepIntent stepIntent;
++    PlantedPivotEvidence pivotEvidence;
+     float turnOutput=0; // Facing is supplied exclusively as an absolute target.
+     bool valid=false,held=false,rotating=false,translating=false;
+     uint64_t serial=0;
+@@ -130,6 +132,10 @@
+         const float dt=float(std::clamp(now-time,0.,.05));serial=frame;time=now;turnOutput=0;
+         if(now-rotated>=.12 || walking) rotating=false;
+         if(walking) heading={};
++        // Entry evidence must not revoke an established step or body turn.
++        // Only fresh, independently corroborated inspection arcs hold a stance.
++        const bool plantedPivot=pivotEvidence.Update(eye,left,right,headForward,now) && !walking && !heading.turning && !translating;
++        if(plantedPivot) { heading={};stepIntent.Capture(walkEye,left,right,now);translating=false; }
+         heading.Update(eye,left,right,bodyYaw,headYaw,now,head);
+         rotating=heading.turning;
+         if(heading.established || rotating) yaw=bodyYaw;
+@@ -187,7 +193,7 @@
+         // Both real controllers must travel; removing a head rotation from
+         // fixed hands is never sufficient evidence. Allow modest arm swing
+         // around the common step, but reject large asymmetric gestures.
+-        const bool translationCoherent=h>0 && c>0 &&
++        const bool translationCoherent=!plantedPivot && h>0 && c>0 &&
+             (!headLeading || (Dot(delta[0],delta[1])>.95f*Length(delta[0])*Length(delta[1]) &&
+                 Length(Sub(delta[0],delta[1]))<std::max(.008f,c*.25f))) &&
+             Dot(common,stepDelta)>.95f*c*h &&
+--- tests/body_transition_selftest.h
++++ tests/body_transition_selftest.h
+@@ -1,3 +1,5 @@
++#include "close_hands_motion_regression.inl"
++#include "recorded_hands_out_regression.inl"
+ #include "recorded_planted_glance_regression.inl"
+ #include "pitched_glance_regression.inl"
+ #include "extended_arm_glance_regression.inl"
+@@ -72,6 +74,8 @@
+ 
+ void TestControllerBodyAnchor() {
+     TestRecordedPlantedGlances();
++    TestRecordedHandsOutSwivels();
++    TestCloseHandsRecordedMotion();
+     TestPitchedGlanceTracking();
+     TestExtendedArmGlances();
+     TestCapturedBodyAnchorTransitions();
+--- README.md
++++ README.md
+@@ -89,6 +89,13 @@
+ unrelated angles. Confirmed walking and whole-body turns retain their existing
+ movement transport, distance thresholds and timing checks. Lowered-hand
+ movement detection retains its previous behavior.
++When looking steeply down with both hands raised, the detector also checks
++whether their shared motion fits a torso lean around a point behind the head.
++That evidence can keep the body planted when the hands are held closer to the
++chest. A fitted pivot beside or in front of the head cannot block a step;
++fresh shared translation releases the hold. This admission check does not
++cancel an established roomscale step or turn. Recorded close-hand glances,
++forward/backward steps, sidesteps and turns are covered by regression tests.
+ A combined turn and step applies shared travel once. These devices cannot directly measure feet, so stance remains an estimate
+ rather than foot tracking.
+ Facing and body position use separate movement references. Changing arm reach

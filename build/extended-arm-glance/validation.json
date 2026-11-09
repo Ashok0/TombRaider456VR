@@ -1,0 +1,25 @@
+{
+  "scope": "Extended-arm aiming drift misclassified as a physical step during planted head glances; shared TR1-5 first-person code. TR6 remains third person.",
+  "tests456": 6541624,
+  "tests123": 3692587,
+  "extendedArmChecks": 576024,
+  "baselineResult": "Installed tracker fails new planted-glance test after 89365 checks",
+  "candidateResult": "All new and existing checks pass",
+  "coverage": [
+    "Hands low, extended forward and spread outward",
+    "60 and 90 Hz tracking",
+    "Small aiming angles and 5/12 mm bilateral hand drift",
+    "Sideways glances at varying speeds and phases",
+    "Real walking in four directions while looking aside",
+    "Existing articulated turns, curved walking, jump arms and body centering regressions"
+  ],
+  "changes": "During a head-led glance only observed controller-pair rotation may be removed from hand travel. Do not ignore this rotation or substitute HMD yaw to fit the head lean. Alternate fits remain available when head/body agree.",
+  "inHeadsetTested": false,
+  "unchanged": "Prior stale-reference fix, height, posture, arm solving, camera tracking and INI settings",
+  "sources456": {
+    "src/ControllerBodyAnchor.h": "6B4873DB2336D8C21955C6E935A67A5E9F7259BB2C1283409D98B6CB88743AEA",
+    "tools/body_transition_regression.inl": "8EED2AFD450F99D3B74D6846839EF9F05D5B1F03793FC48F6CF931938B5519F5",
+    "tools/extended_arm_glance_regression.inl": "9161A9A6A37F545FE465BA7D70651E3AAE4A52D209C8C629E7661B9D908761B3",
+    "README.md": "017C2F386FF949BB5D895CBE4C98FC3E872EBF09957153302A56DADCE8E25C23"
+  }
+}

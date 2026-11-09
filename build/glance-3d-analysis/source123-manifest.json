@@ -1,0 +1,26 @@
+[
+  {
+    "Relative": "src/ControllerBodyAnchor.h",
+    "OriginalHash": "691514A20C2F060C0345E38C7A9333E9AD336E134A234A60868B37258FE973D7",
+    "ModifiedHash": "7E266C5101468BBBE02C0E8049F4E5DBCB0048A689296E535B9DCE2B8FE5A151",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/body_transition_selftest.h",
+    "OriginalHash": "755ABB2ED3B14BD0C6A8F92D8A451CE812B5CDD875A2CEF861154FCE6D1C7964",
+    "ModifiedHash": "882C2627D78FADC70460B1DE57C39CB556824AFBBB73C1332F994DFF8305A38D",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/recorded_planted_glance_regression.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "000A44A23470C2EAD8A1E490E91E4969795F8DA413E604350E330BF7DF5974FF",
+    "Deleted": false
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "076C68D09BCCA674713A0B8FAE713CB55F303792DE7257FA3E31DD8A7C57FD3A",
+    "ModifiedHash": "0208F308CD1404F8CA8621C3F76FA9F32D449E7B65484C8A99A66C5CA99BBABC",
+    "Deleted": false
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "Relative": "src/ControllerBodyAnchor.h",
+    "OriginalHash": "7E266C5101468BBBE02C0E8049F4E5DBCB0048A689296E535B9DCE2B8FE5A151",
+    "ModifiedHash": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "Deleted": false
+  },
+  {
+    "Relative": "src/PlantedPivotEvidence.h",
+    "OriginalHash": null,
+    "ModifiedHash": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/body_transition_selftest.h",
+    "OriginalHash": "882C2627D78FADC70460B1DE57C39CB556824AFBBB73C1332F994DFF8305A38D",
+    "ModifiedHash": "A775AC22C7E098B9033E3B672622F91FCC7F6C6BAD7999D5782435AB2F1D920A",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/close_hands_motion_regression.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "49FF03F8C31604735E238F548011843F095C055DA4B1132B9F15AD79319B6EAC",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/recorded_hands_out_regression.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "44EDE8884763F17FF763FE77867538FC1348721F189231EA136EB5DDF2CDCB45",
+    "Deleted": false
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "0208F308CD1404F8CA8621C3F76FA9F32D449E7B65484C8A99A66C5CA99BBABC",
+    "ModifiedHash": "B0F61E851547C65E12CC1ACE5925F53BC170E1F38321A7DE6E20342AF834BCFA",
+    "Deleted": false
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "installedAlgorithm": "Unmodified restored release; no experiment installed",
+  "rejected": [
+    {
+      "name": "3D tracked triangle decomposition",
+      "reason": "Still under-follows recorded forward/back walking; captured glances retain measurable drift"
+    },
+    {
+      "name": "Yaw/torso-lever decomposition",
+      "reason": "Reduces repeated glance path but still loses recorded walking travel; fixed lever and missing controller orientation are not sufficient"
+    }
+  ],
+  "next": "Capture synchronized raw controller orientations and calibrated posture, then compare hand aim rotation to controller-pair rotation on separately labelled glance/step/turn sequences"
+}

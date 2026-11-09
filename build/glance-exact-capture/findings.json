@@ -1,0 +1,27 @@
+{
+  "status": "Investigation complete for this capture; no new build installed. Candidate edits restored to the installed source.",
+  "capture": "session.log",
+  "exactReplay": {
+    "poses": 2144,
+    "mismatches": 0,
+    "maximumPositionErrorMillimetres": 0
+  },
+  "observations": [
+    "Raised-hand phase: frames 1675-2093 repeatedly authorize translation during side glances. Lowered-hand phase 2094-2846 holds the body anchor exactly still.",
+    "Stable locomotion yaw freezes during near-vertical glances; raw HMD forward direction continues changing.",
+    "Correcting the gaze signal alone reduces but does not eliminate translation. The tracked hands and head also share genuine horizontal travel.",
+    "A gaze-correlated sway veto reduces this capture further, but fails the existing pitched real-walking centering regression. Rejected rather than installed."
+  ],
+  "candidates": {
+    "rawGazeOnly": {
+      "raisedPhaseAnchorPathMillimetres": 846,
+      "baselinePathMillimetres": 985
+    },
+    "gazeSwayVeto": {
+      "raisedPhaseAnchorPathMillimetres": 491,
+      "failed": "pitched roomscale walking keeps the body centered on accepted travel"
+    }
+  },
+  "pending": "User clarification of intentional feet movement during capture and acceptable stability/responsiveness tradeoff.",
+  "installedUnchanged": true
+}

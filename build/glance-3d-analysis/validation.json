@@ -1,0 +1,69 @@
+{
+  "scope": "Raised-hand planted-glance movement admission in TR1-5. TR6 remains third person.",
+  "tests456": 6624804,
+  "tests123": 3734177,
+  "recordedChecks": 3166,
+  "exactBaselineReplay": {
+    "poses": 2144,
+    "mismatches": 0
+  },
+  "recordedRegression": {
+    "frames": [
+      1268,
+      2846
+    ],
+    "poses": 1579,
+    "installedBaseline": "Fails after 815 checks at the first observed false step",
+    "candidate": "Zero anchor translation, zero turn releases, zero gameplay-step permission",
+    "walkingAfterward": "All four directions release within the existing 25-frame test limit at 90 Hz and retain physical travel within 15 mm"
+  },
+  "changes": "Raw gaze evidence for raised, held hands; independent stable/raw yaw observation references; step fitting around the held stance pivot during a head-led glance. Existing neck-space movement transport retained.",
+  "constructedMixedWalkingStress": {
+    "description": "0.25 m/s shared translation added to recorded upper-body motion, four directions. This is a constructed stress test, not recorded walking. Both versions under-follow some mixed motions; projected travel is approximately preserved by limiting the new rule to raised hands.",
+    "installedFinalXZ": [
+      [
+        4.3057127,
+        0.26537481
+      ],
+      [
+        -3.75196075,
+        -0.0996641666
+      ],
+      [
+        0.59839797,
+        3.52480984
+      ],
+      [
+        0.0284175426,
+        -3.35941482
+      ]
+    ],
+    "candidateFinalXZ": [
+      [
+        4.30621147,
+        0.24552168
+      ],
+      [
+        -3.74525356,
+        -0.105196655
+      ],
+      [
+        0.528428495,
+        3.55869532
+      ],
+      [
+        0.111513272,
+        -3.44228411
+      ]
+    ]
+  },
+  "diagnosticsReplay": "900 generated records replay exactly with the current algorithm",
+  "inHeadsetTested": false,
+  "unchanged": "Camera/heading control, height calibration, body posture, arm poses, INIs, lower-hand detector and existing movement thresholds.",
+  "sources456": {
+    "src/ControllerBodyAnchor.h": "7E266C5101468BBBE02C0E8049F4E5DBCB0048A689296E535B9DCE2B8FE5A151",
+    "tools/body_transition_regression.inl": "B1FCE35FF9A9DA38F848A607EDBFFED45DE2109FC20F5D2AF9D9CEE37D89E6FA",
+    "tools/recorded_planted_glance_regression.inl": "000A44A23470C2EAD8A1E490E91E4969795F8DA413E604350E330BF7DF5974FF",
+    "README.md": "5A4E282DAD4CE7E23E12C13B54DBA10F067F0938BC1567F73584DD860D4D6DDB"
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "change": "Recognize raised-hand downward inspection arcs behind the eye without revoking established steps or turns",
+  "build": "Both x64 Release builds passed; DeployToGame=false",
+  "tr456Checks": 6637210,
+  "tr123Checks": 3737982,
+  "additionalChecks": {
+    "pitchedTracking": 38424,
+    "extendedArmStance": 576024,
+    "curvedWalking": "passed",
+    "pitchedPhysicalTurns": "passed"
+  },
+  "recordedCloseHands": {
+    "poses": 2122,
+    "baselineExactReplayMismatches": 0,
+    "closedLoopFollower": true,
+    "plantedFirst10Seconds": {
+      "baselineAnchorSpanMetres": [
+        0.489,
+        0.108
+      ],
+      "candidateAnchorSpanMetres": [
+        0,
+        0
+      ],
+      "finalPaletteHipAndChestHorizontalTravelGameUnits": 0,
+      "renderCases": "TR4 and TR5, unarmed and dual pistols"
+    },
+    "forwardBackwardSpanMetres": 0.474,
+    "sidestepSpanMetres": 0.349,
+    "establishedTurnSamples": 539
+  },
+  "recordedLoweredHands": {
+    "poses": 1851,
+    "baselineExactReplayMismatches": 0,
+    "plantedAnchorTravelMetres": 0,
+    "forwardBackwardSpanMetres": 0.51,
+    "sidestepSpanMetres": 0.286,
+    "turnSamplesBaseline": 299,
+    "turnSamplesCandidate": 280,
+    "limitation": "About 0.32 seconds later initial turn admission in this recording; established turning continues"
+  },
+  "earlierRaisedHands": {
+    "plantedPoses": 647,
+    "anchorTravelMetres": 0,
+    "walkingAfterHoldFirstPermitFrames90Hz": [
+      17,
+      24,
+      24,
+      17
+    ],
+    "maximumFinalWalkingErrorMetres": 0.0105
+  },
+  "previousWalkingFreeze": {
+    "isolated55to60SecondsSpanMetres": [
+      0.29,
+      0.209
+    ],
+    "isolated75to85SecondsSpanMetres": [
+      0.322,
+      0.697
+    ],
+    "comparison": "Isolated actual walking inputs match the restored walking algorithm",
+    "limitation": "Full legacy capture contains analog movement/reset history that cannot be reconstructed from this log. Full-history 75-80s Z span differs (.250 candidate vs .467 restored); no candidate hold active there. Do not treat isolated agreement as full-session equivalence."
+  },
+  "syntheticWalkingDuringRecordedGlances": {
+    "baselineFinalDistancesMetres": [
+      2.461,
+      2.455,
+      2.495,
+      2.706
+    ],
+    "candidateFinalDistancesMetres": [
+      2.461,
+      2.455,
+      2.495,
+      2.702
+    ],
+    "translationAddedMetres": 2.698,
+    "limitation": "Constructed mixed motion, not an independent real walking capture"
+  },
+  "productionHashes": {
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835",
+    "src/BodyFollower.h": "82CE19C5FFC8B71B6A385D39E8D5B6FF3A9D6704758B50BE86A8ACED558F7A7E",
+    "src/ControllerBodyAnchor.inl": "618E9BB08904650B96BAE428A05DFD70C93973EF774817B3C8592033E7BAFC22",
+    "src/FirstPerson.cpp": "285864E92DDA05FAF6372AF32E6A46FF9C16C84518359FB6C4C20DE7C74E7F43"
+  },
+  "testHashes": {
+    "tools/body_transition_regression.inl": "88089483AAD04EDBC1D741030265AE2790D8B456E73839B4E5CD6D36956F07B5",
+    "tools/close_hands_motion_regression.inl": "49FF03F8C31604735E238F548011843F095C055DA4B1132B9F15AD79319B6EAC",
+    "tools/recorded_hands_out_regression.inl": "44EDE8884763F17FF763FE77867538FC1348721F189231EA136EB5DDF2CDCB45"
+  },
+  "inHeadsetTested": false
+}

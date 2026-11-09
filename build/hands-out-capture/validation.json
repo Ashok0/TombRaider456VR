@@ -1,0 +1,57 @@
+{
+  "capture": {
+    "poses": 13554,
+    "exactReplayMismatches": 0,
+    "originalDLL": "CB1935603F649214F9AA25FE70FB62A746FDD2426F58F5B90F529BF200671FFE"
+  },
+  "regression": {
+    "poses": 647,
+    "frames": [
+      1554,
+      2200
+    ],
+    "beforeCumulativeAnchorTravelMetres": 3.245,
+    "afterCumulativeAnchorTravelMetres": 0,
+    "afterTurns": 0,
+    "afterSteps": 0,
+    "walkingAfterwardFirstFrameAt90Hz": 24,
+    "walkingAfterwardMaxErrorMetres": 0.012,
+    "recordedAndFixedBodyYaw": true
+  },
+  "tests456": 6630012,
+  "tests123": 3736781,
+  "releaseBuilds": "Both x64 Release builds passed",
+  "syntheticMixedWalking": {
+    "description": "0.25 m/s shared travel added to the captured swivel; not an actual walking recording",
+    "expectedMetres": 2.698,
+    "beforeFinalDistanceMetres": [
+      2.461,
+      2.455,
+      2.495,
+      2.706
+    ],
+    "afterFinalDistanceMetres": [
+      2.206,
+      1.935,
+      2.104,
+      2.099
+    ],
+    "limitation": "Simultaneous deep lean/swivel/walking can lag more than ordinary steps; conservative inference still under-follows this constructed stress test."
+  },
+  "initialCaptureLimit": "Before the repeated-glance regression, the first second of transitioning into the inspection pose still has about 95 mm cumulative movement in replay; this change targets the sustained hands-out sliding.",
+  "unchanged": [
+    "INI settings",
+    "height calibration",
+    "arm solver",
+    "camera pose",
+    "accepted locomotion transport"
+  ],
+  "inHeadsetTested": false,
+  "productionHashes": {
+    "src/ControllerBodyAnchor.h": "2C510425EE5B45D4DA2EE3D309CF2632B1B6194939CDFB76F4097FB3B1B48D42",
+    "src/PlantedSwivel.h": "4796CB60C0E06A58EAD932ADF0FC8E22CC0D12CE148C6B655F3E65DCB99BC1F9",
+    "src/ControllerBodyAnchor.inl": "EB4E5633B1134BA82EC28BE3B657B33F49733463D6F6DF156F3165F76F5EE371",
+    "src/FirstPerson.cpp": "285864E92DDA05FAF6372AF32E6A46FF9C16C84518359FB6C4C20DE7C74E7F43",
+    "src/BodyFollower.h": "82CE19C5FFC8B71B6A385D39E8D5B6FF3A9D6704758B50BE86A8ACED558F7A7E"
+  }
+}

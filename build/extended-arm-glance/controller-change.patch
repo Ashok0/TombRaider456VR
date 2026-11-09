@@ -1,0 +1,35 @@
+--- installed
++++ candidate
+@@ -137,10 +137,10 @@
+             const float error=Length(Sub(shared,headDelta));
+             if(error<best) {best=error;common=shared;delta[0]=d[0];delta[1]=d[1];}
+         };
+-        // Fit the shared displacement with no rotation, controller rotation,
+-        // or corroborated head rotation. Opposite arm swing must not corrupt
+-        // the turn estimate used to recognize a real shared step.
+-        candidate(0);
++        // Fit body travel after removing rotation of the controller frame.
++        // While head and body agree, alternate fits tolerate opposing arm
++        // swing. A head-led glance must not choose a different fit merely
++        // because an aiming arc happens to match the headset's side lean.
+         // A gaze/body mismatch persists after the short movement window is
+         // refreshed. A sideways glance must not become an ordinary step just
+         // because its next few degrees are small.
+@@ -151,9 +151,14 @@
+             const float pairTurn=BodyAngle(std::atan2(afterPair.x,afterPair.z)-std::atan2(beforePair.x,beforePair.z));
+             const bool headLedIncrement=std::fabs(headTurn)>.06f && std::fabs(pairTurn)<std::fabs(headTurn)*.5f;
+             headLeading=headLeading || headLedIncrement;
+-            if(!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.15f) candidate(pairTurn);
+-            if(!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
+-        }
++            if(headLeading || (!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.15f)) candidate(pairTurn);
++            if(!headLeading && !headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
++        }
++        // Extended arms magnify tiny aiming angles into lateral hand travel.
++        // During a glance, retain the observed controller rotation; neither
++        // ignoring that rotation nor substituting head yaw can authorize a
++        // step. Without a usable pair, retain the ordinary bilateral test.
++        if(!headLeading || beforeSpan<=.05f || afterSpan<=.05f) candidate(0);
+         const float c=Length(common);
+         const float rawTravel[2]={Length(Flat(Sub(left,hands[0]))),Length(Flat(Sub(right,hands[1])))};
+         handTravel[0]=rawTravel[0];handTravel[1]=rawTravel[1];

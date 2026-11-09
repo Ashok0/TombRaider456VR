@@ -1,0 +1,22 @@
+{
+  "scope": "Pitch-aware neck projection in the shared first-person body anchor; exact diagnostic input replay. TR1-5 first person; TR6 remains third person.",
+  "tests456": 6618472,
+  "tests123": 3731011,
+  "pitchedGlanceChecks": 38424,
+  "baselineResult": "Installed tracker fails pitched planted-glance regression after 10700 checks",
+  "candidateResult": "All new and existing suites pass",
+  "turnChecks": "Full turns both directions at 0, 0.7 and 1.4 rad downward pitch: final position error 0 to 5.24 mm, yaw error 1.32 to 1.37 degrees",
+  "replay": "900 generated input records reproduce anchors/flags with zero error; deliberately corrupted output is detected",
+  "fixtureCorrections": "TR123 heading-only mocks now rotate their raw HMD matrices to match reported yaw; assertions retained",
+  "inHeadsetTested": false,
+  "limitation": "Latest user session contained sparse tracking/render logs. The mathematical pitch defect is reproduced, but whether it accounts for all reported sliding needs headset confirmation. New body-input logs capture exact tracker inputs for that follow-up.",
+  "unchanged": "Camera tracking, height calibration, body posture, arm solving and INI settings",
+  "sources456": {
+    "src/ControllerBodyAnchor.h": "691514A20C2F060C0345E38C7A9333E9AD336E134A234A60868B37258FE973D7",
+    "src/ControllerBodyAnchor.inl": "EB4E5633B1134BA82EC28BE3B657B33F49733463D6F6DF156F3165F76F5EE371",
+    "tools/body_transition_regression.inl": "8C9DCE6AE4489682603AEB21454AF1FBBCE31EE0BA05133395C54443EF19847B",
+    "tools/pitched_glance_regression.inl": "0AE85C73A98D6AD359609649D34892F4476A07426B6881224791D11EC63BDE06",
+    "tools/body_anchor_replay.cpp": "42323687F9BDADA26D9939A682855B6A82D48F85F2E25651CF49DBB4A1E16376",
+    "README.md": "1F5D3A29FC0D278CC82E3113FE20F08F4DAA9B178B0B4BC34248172472C4C2AE"
+  }
+}

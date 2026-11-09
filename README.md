@@ -220,8 +220,32 @@ turn detection can reacquire when they separate.
 Walking has its own observation window, independent of turn updates. It compares
 shared headset/controller travel after accounting for rotation, so a real step
 can continue while turning and with modest opposing arm swing. Head-led glances
-use stricter agreement checks. A combined turn and step applies shared travel
-once. These devices cannot directly measure feet, so stance remains an estimate
+use stricter agreement checks. During a head-led glance, step estimation removes
+the observed rotation of the controller pair before comparing translation.
+It cannot ignore that aiming rotation or substitute headset yaw to obtain a
+closer fit. This prevents small aiming arcs with extended arms from being
+mistaken for sideways steps. With head and body facing together, alternate
+fits still accommodate opposing arm swing during walking and turning.
+For a planted, head-led glance with both hands raised, movement admission
+compares the compensated
+neck and both hands around the held body pivot. A torso swivel around that
+stance does not automatically become a sideways step merely because the neck
+moved. Residual shared displacement still permits a step in any direction.
+The gaze evidence uses the raw headset forward vector even when locomotion yaw
+is held near vertical; camera/body heading retains its stabilized yaw. Separate
+raw-gaze and stabilized-yaw references prevent switching modes from combining
+unrelated angles. Confirmed walking and whole-body turns retain their existing
+movement transport, distance thresholds and timing checks. Lowered-hand
+movement detection retains its previous behavior.
+When looking steeply down with both hands raised, the detector also checks
+whether their shared motion fits a torso lean around a point behind the head.
+That evidence can keep the body planted when the hands are held closer to the
+chest. A fitted pivot beside or in front of the head cannot block a step;
+fresh shared translation releases the hold. This admission check does not
+cancel an established roomscale step or turn. Recorded close-hand glances,
+forward/backward steps, sidesteps and turns are covered by regression tests,
+including final pelvis/chest placement in the TR4/5 renderer.
+A combined turn and step applies shared travel once. These devices cannot directly measure feet, so stance remains an estimate
 rather than foot tracking.
 Facing and body position use separate movement references. Changing arm reach
 cannot replay an old hand position as a forward or backward body jump when a
@@ -235,8 +259,18 @@ never transports that anchor. Physical steps and stick locomotion still release
 the positional hold, independently of the angular stance decision.
 The leg solver's footprint is transported with that accepted anchor before
 rotation, keeping the feet and pelvis in the same frame through repeated turns.
-The step detector compensates the headset's yaw-related neck arc so genuine
-forward, backward and sideways travel remains available while looking around.
+The step detector compensates the eye-to-neck arc using the tracked headset's
+horizontal forward-vector projection, including pitch. Looking down shortens
+that horizontal offset; treating it as a level-head offset would manufacture
+sideways movement during a downward glance. Each movement reference retains
+its own neck projection so changes in pitch cannot rewrite an older sample.
+Camera tracking and height calibration remain unchanged. Forward, backward and
+sideways physical travel still use the shared head/controller displacement.
+With `FirstPersonDriftLog` enabled, `body-input` records each processed tracked
+pose's full anchor inputs and result; `body-input-reset` marks explicit resets.
+These records support direct replay instead of reconstructing tracking from
+sparse render samples. `tools/body_anchor_replay.cpp` replays a captured log
+and checks the recorded anchor positions and movement flags.
 Once the controllers confirm a step, gameplay movement uses the configured
 roomscale deadzone rather than adding the body's larger lean deadzone. Native
 wall, floor and ledge collision still owns the movement; initialization or a

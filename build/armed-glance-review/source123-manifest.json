@@ -1,0 +1,44 @@
+[
+  {
+    "Relative": "src/ControllerBodyAnchor.h",
+    "OriginalHash": "6B4873DB2336D8C21955C6E935A67A5E9F7259BB2C1283409D98B6CB88743AEA",
+    "ModifiedHash": "691514A20C2F060C0345E38C7A9333E9AD336E134A234A60868B37258FE973D7",
+    "Deleted": false
+  },
+  {
+    "Relative": "src/ControllerBodyAnchor.inl",
+    "OriginalHash": "95BA249DB1239754661524B600520690D6F061DF02D51B59B512123466368B34",
+    "ModifiedHash": "FB7AE5F7E1726A06AC38ECE587A791FD583839C766A0EE4129C73432C7D9BFED",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/body_transition_selftest.h",
+    "OriginalHash": "C5E49787A293DA53BADC42736F2671FDB613AC59CACDA46D2C2D51D07119FA54",
+    "ModifiedHash": "755ABB2ED3B14BD0C6A8F92D8A451CE812B5CDD875A2CEF861154FCE6D1C7964",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/collection_integration_selftest.h",
+    "OriginalHash": "6DA1FB801E678F7F5CA883C6B3E22591BB9D6E2A9E9EA58648FF2CB8EA3406BF",
+    "ModifiedHash": "0DE703208F0FFA27C1622573749757DC017C4756396BF453C103BABE6FDF2805",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/pitched_glance_regression.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "0AE85C73A98D6AD359609649D34892F4476A07426B6881224791D11EC63BDE06",
+    "Deleted": false
+  },
+  {
+    "Relative": "tools/body_anchor_replay.cpp",
+    "OriginalHash": null,
+    "ModifiedHash": "42323687F9BDADA26D9939A682855B6A82D48F85F2E25651CF49DBB4A1E16376",
+    "Deleted": false
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "1D436FA63FFC16C053D474B21268F20CA2504E3F6DC519D92FB0111C30C17CF4",
+    "ModifiedHash": "076C68D09BCCA674713A0B8FAE713CB55F303792DE7257FA3E31DD8A7C57FD3A",
+    "Deleted": false
+  }
+]

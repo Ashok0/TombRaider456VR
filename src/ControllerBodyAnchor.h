@@ -1,5 +1,6 @@
 #pragma once
 #include "BodyFollower.h"
+#include "PlantedPivotEvidence.h"
 namespace tr::firstperson {
 // Controller POSITIONS, not their aim. Require coordinated head/hand travel.
 // A fixed reference and separate entry/continuation thresholds reject noise without
@@ -32,6 +33,7 @@ struct PhysicalStepIntent {
 struct ControllerBodyAnchor {
     RoomscaleHeadingRecovery heading;
     PhysicalStepIntent stepIntent;
+    PlantedPivotEvidence pivotEvidence;
     float turnOutput=0; // Facing is supplied exclusively as an absolute target.
     bool valid=false,held=false,rotating=false,translating=false;
     uint64_t serial=0;
@@ -39,35 +41,47 @@ struct ControllerBodyAnchor {
     float base=0,yaw=0,height=0,motionYaw=0;
     int reason=0;float handTravel[2]{};
     Vec hands[2]{},sampleHands[2]{},sampleEye{},offset{},head{},motionEye{},consumedTravel{};
-    float sampleHeadYaw=0;double headOnlySince=-1;
+    float sampleHeadYaw=0,sampleGazeYaw=0;double headOnlySince=-1;
     Vec placementHands[2]{},placementEye{},placementNeck{},placementAnchor{};
+    Vec sampleNeckOffset{},placementNeckOffset{},motionPivot{};float motionGazeYaw=0;
     float placementFacing=0,placementHeadYaw=0;
     Vec motionSampleHands[2]{};double handMotionTime=0;bool placementQuiet=false;
-    void CapturePlacementEvidence(Vec eye,Vec left,Vec right,float headYaw) {
+    void CapturePlacementEvidence(Vec eye,Vec left,Vec right,float headYaw,Vec neckOffset) {
+        placementNeckOffset=neckOffset;
         placementHands[0]=left;placementHands[1]=right;placementEye=eye;placementHeadYaw=headYaw;
     }
-    void CapturePlacement(Vec eye,Vec neck,Vec left,Vec right,float headYaw) {
-        CapturePlacementEvidence(eye,left,right,headYaw);
+    void CapturePlacement(Vec eye,Vec neck,Vec left,Vec right,float headYaw,Vec neckOffset) {
+        CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
         placementNeck=neck;placementAnchor=head;
         const Vec pair=Sub(right,left);placementFacing=std::atan2(pair.x,pair.z);
     }
     void Reset() { *this={}; }
-    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f) {
+    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f,Vec headForward={}) {
         if(!tracked || !Finite({IdentityBasis(),eye}) || !Finite({IdentityBasis(),left}) ||
-           !Finite({IdentityBasis(),right}) || !std::isfinite(now+artificial+bodyYaw+headYaw+neckMetres)) {Reset();return;}
-        // Remove the ordinary eye-around-neck arc from the step evidence.
-        // Looking aside while walking must not veto a real shared translation.
-        const Vec walkEye=Sub(eye,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},headYaw));
+           !Finite({IdentityBasis(),right}) || !Finite({IdentityBasis(),headForward}) || !std::isfinite(now+artificial+bodyYaw+headYaw+neckMetres)) {Reset();return;}
+        // The forward eye-to-neck offset shrinks horizontally when looking
+        // down. Normalizing its XZ projection invents lateral neck travel in
+        // a downward glance. Preserve the tracked forward vector's pitch;
+        // zero supplies the legacy level-head model for yaw-only callers.
+        const Vec neckOffset=Scale(Length(headForward)>.1f ? Flat(headForward) :
+            YawVector({0,0,1},headYaw),std::clamp(neckMetres,0.f,.4f));
+        const Vec walkEye=Sub(eye,neckOffset);
+        // Locomotion yaw freezes near vertical to avoid turning the camera.
+        // Planted-glance evidence still needs the raw gaze direction. Keep
+        // separate references so returning to walking never mixes the two.
+        const float gazeYaw=std::hypot(headForward.x,headForward.z)>.05f ? std::atan2(headForward.x,headForward.z) : headYaw;
+        const bool raisedHands=left.y>eye.y-.5f && right.y>eye.y-.5f;
         if(valid && serial==frame && artificial==base) return;
         const bool turn=valid && std::fabs(BodyAngle(artificial-base))>1.e-6f;
         if(!valid || now<time || now-time>.5 || turn) {
             *this={};valid=true;held=true;serial=frame;time=moved=referenceTime=rotated=now;base=artificial;
             motionSampleHands[0]=sampleHands[0]=hands[0]=left;
             motionSampleHands[1]=sampleHands[1]=hands[1]=right;handMotionTime=now;
-            head=eye;motionEye=walkEye;motionYaw=headYaw;yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
-            CapturePlacement(eye,walkEye,left,right,headYaw);
+            head=eye;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
+            motionPivot=Sub(head,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},bodyYaw));yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
+            CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
             stepIntent.Capture(walkEye,left,right,now);
-            sampleEye=eye;sampleHeadYaw=headYaw;
+            sampleEye=eye;sampleHeadYaw=headYaw;sampleGazeYaw=gazeYaw;sampleNeckOffset=neckOffset;
             heading.Update(eye,left,right,bodyYaw,headYaw,now,head);return;
         }
         // Evidence may span several frames, but a new head pose cannot spend
@@ -78,7 +92,7 @@ struct ControllerBodyAnchor {
         const float handMotion[2]={Length(Flat(Sub(left,sampleHands[0]))),Length(Flat(Sub(right,sampleHands[1])))};
         const float currentHandTravel=std::max(handMotion[0],handMotion[1]);
         const float currentHeadTravel=Length(Flat(Sub(eye,sampleEye)));
-        const float signedHeadTurn=BodyAngle(headYaw-sampleHeadYaw);
+        const float signedHeadTurn=BodyAngle(raisedHands && held && !heading.turning ? gazeYaw-sampleGazeYaw : headYaw-sampleHeadYaw);
         const float currentHeadTurn=std::fabs(signedHeadTurn);
         const float signedHandTurn=Length(previousPair)>.05f && Length(currentPair)>.05f ?
             BodyAngle(std::atan2(currentPair.x,currentPair.z)-std::atan2(previousPair.x,previousPair.z)) : 0;
@@ -95,7 +109,7 @@ struct ControllerBodyAnchor {
             currentHeadTravel>std::max(.003f,currentHandTravel*2.f));
         const bool currentTurn=signedHeadTurn*signedHandTurn>0 &&
             std::fabs(signedHeadTurn-signedHandTurn)<std::max(.008f,currentHeadTurn*.5f);
-        const Vec previousNeck=Sub(sampleEye,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},sampleHeadYaw));
+        const Vec previousNeck=Sub(sampleEye,sampleNeckOffset);
         const Vec neckStep=Flat(Sub(walkEye,previousNeck));const float neckDistance=Length(neckStep);
         const Vec handStep[2]={Flat(Sub(left,sampleHands[0])),Flat(Sub(right,sampleHands[1]))};
         const bool currentStep=neckDistance>.0001f &&
@@ -103,7 +117,7 @@ struct ControllerBodyAnchor {
             Dot(handStep[1],neckStep)>.95f*Length(handStep[1])*neckDistance &&
             Length(Sub(handStep[0],neckStep))<std::max(.0005f,neckDistance*.35f) &&
             Length(Sub(handStep[1],neckStep))<std::max(.0005f,neckDistance*.35f);
-        sampleEye=eye;sampleHeadYaw=headYaw;
+        sampleEye=eye;sampleHeadYaw=headYaw;sampleGazeYaw=gazeYaw;sampleNeckOffset=neckOffset;
         sampleHands[0]=left;sampleHands[1]=right;
         // Position confidence also expires when only millimetre tracking noise
         // remains. Retire the pending geometry, without changing the held body
@@ -113,11 +127,15 @@ struct ControllerBodyAnchor {
             motionSampleHands[0]=left;motionSampleHands[1]=right;handMotionTime=now;
         }
         const bool quietHands=now-handMotionTime>=.10;
-        if(quietHands && !placementQuiet) CapturePlacementEvidence(eye,left,right,headYaw);
+        if(quietHands && !placementQuiet) CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
         placementQuiet=quietHands;
         const float dt=float(std::clamp(now-time,0.,.05));serial=frame;time=now;turnOutput=0;
         if(now-rotated>=.12 || walking) rotating=false;
         if(walking) heading={};
+        // Entry evidence must not revoke an established step or body turn.
+        // Only fresh, independently corroborated inspection arcs hold a stance.
+        const bool plantedPivot=pivotEvidence.Update(eye,left,right,headForward,now) && !walking && !heading.turning && !translating;
+        if(plantedPivot) { heading={};stepIntent.Capture(walkEye,left,right,now);translating=false; }
         heading.Update(eye,left,right,bodyYaw,headYaw,now,head);
         rotating=heading.turning;
         if(heading.established || rotating) yaw=bodyYaw;
@@ -127,33 +145,47 @@ struct ControllerBodyAnchor {
         const Vec beforePair=Flat(Sub(hands[1],hands[0])),afterPair=Flat(Sub(right,left));
         const float beforeSpan=Length(beforePair),afterSpan=Length(afterPair);
         const Vec headDelta=Flat(Sub(walkEye,motionEye));
-        const float h=Length(headDelta),headTurn=BodyAngle(headYaw-motionYaw);
-        Vec delta[2]{},common{};float best=INFINITY;
+        float h=Length(headDelta);const float headTurn=BodyAngle(raisedHands && held && !heading.turning ? gazeYaw-motionGazeYaw : headYaw-motionYaw);
+        const float glanceTurn=raisedHands && held ? BodyAngle(gazeYaw-motionGazeYaw) : headTurn;
+        // A planted torso can swivel over its stance without taking a step.
+        // Test that motion around the held body pivot, not around the moving
+        // neck. Established turns/walking retain their previous fit/transport.
+        Vec stepDelta=headDelta;
+        Vec delta[2]{},common{};float best=INFINITY;bool usePlantedPivot=false;
         auto candidate=[&](float angle) {
             if(std::fabs(angle)>.7f) return;
-            const Vec d[2]={Flat(Sub(left,Add(motionEye,YawVector(Sub(hands[0],motionEye),angle)))),
-                            Flat(Sub(right,Add(motionEye,YawVector(Sub(hands[1],motionEye),angle))))};
+            const Vec pivot=usePlantedPivot ? motionPivot : motionEye;
+            const Vec d[2]={Flat(Sub(left,Add(pivot,YawVector(Sub(hands[0],pivot),angle)))),
+                            Flat(Sub(right,Add(pivot,YawVector(Sub(hands[1],pivot),angle))))};
+            const Vec step=usePlantedPivot ? Flat(Sub(walkEye,Add(pivot,YawVector(Sub(motionEye,pivot),angle)))) : headDelta;
             const Vec shared=Scale(Add(d[0],d[1]),.5f);
-            const float error=Length(Sub(shared,headDelta));
-            if(error<best) {best=error;common=shared;delta[0]=d[0];delta[1]=d[1];}
+            const float error=Length(Sub(shared,step));
+            if(error<best) {best=error;common=shared;delta[0]=d[0];delta[1]=d[1];stepDelta=step;h=Length(step);}
         };
-        // Fit the shared displacement with no rotation, controller rotation,
-        // or corroborated head rotation. Opposite arm swing must not corrupt
-        // the turn estimate used to recognize a real shared step.
-        candidate(0);
+        // Fit body travel after removing rotation of the controller frame.
+        // While head and body agree, alternate fits tolerate opposing arm
+        // swing. A head-led glance must not choose a different fit merely
+        // because an aiming arc happens to match the headset's side lean.
         // A gaze/body mismatch persists after the short movement window is
         // refreshed. A sideways glance must not become an ordinary step just
         // because its next few degrees are small.
         const float controllerFacing=heading.valid && afterSpan>.05f ?
             BodyAngle(heading.bodyOrigin+std::atan2(afterPair.x,afterPair.z)-heading.facingOrigin) : bodyYaw;
-        bool headLeading=std::fabs(BodyAngle(headYaw-controllerFacing))>.35f;
+        bool headLeading=std::fabs(BodyAngle((raisedHands && held ? gazeYaw : headYaw)-controllerFacing))>.35f;
+        usePlantedPivot=headLeading && raisedHands && held && !heading.turning;
         if(beforeSpan>.05f && afterSpan>.05f) {
             const float pairTurn=BodyAngle(std::atan2(afterPair.x,afterPair.z)-std::atan2(beforePair.x,beforePair.z));
-            const bool headLedIncrement=std::fabs(headTurn)>.06f && std::fabs(pairTurn)<std::fabs(headTurn)*.5f;
+            const bool headLedIncrement=std::fabs(glanceTurn)>.06f && std::fabs(pairTurn)<std::fabs(glanceTurn)*.5f;
             headLeading=headLeading || headLedIncrement;
-            if(!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.15f) candidate(pairTurn);
-            if(!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
+            usePlantedPivot=headLeading && raisedHands && held && !heading.turning;
+            if(headLeading || (!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.15f)) candidate(pairTurn);
+            if(!headLeading && !headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
         }
+        // Extended arms magnify tiny aiming angles into lateral hand travel.
+        // During a glance, retain the observed controller rotation; neither
+        // ignoring that rotation nor substituting head yaw can authorize a
+        // step. Without a usable pair, retain the ordinary bilateral test.
+        if(!headLeading || beforeSpan<=.05f || afterSpan<=.05f) candidate(0);
         const float c=Length(common);
         const float rawTravel[2]={Length(Flat(Sub(left,hands[0]))),Length(Flat(Sub(right,hands[1])))};
         handTravel[0]=rawTravel[0];handTravel[1]=rawTravel[1];
@@ -161,13 +193,16 @@ struct ControllerBodyAnchor {
         // Both real controllers must travel; removing a head rotation from
         // fixed hands is never sufficient evidence. Allow modest arm swing
         // around the common step, but reject large asymmetric gestures.
-        const bool translationCoherent=h>0 && c>0 &&
+        const bool translationCoherent=!plantedPivot && h>0 && c>0 &&
             (!headLeading || (Dot(delta[0],delta[1])>.95f*Length(delta[0])*Length(delta[1]) &&
                 Length(Sub(delta[0],delta[1]))<std::max(.008f,c*.25f))) &&
-            Dot(common,headDelta)>.95f*c*h &&
-            Length(Sub(common,headDelta))<std::max(.012f,h*.25f) &&
-            Length(Sub(delta[0],headDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f)) &&
-            Length(Sub(delta[1],headDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f));
+            Dot(common,stepDelta)>.95f*c*h &&
+            Length(Sub(common,stepDelta))<std::max(.012f,h*.25f) &&
+            Length(Sub(delta[0],stepDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f)) &&
+            Length(Sub(delta[1],stepDelta))<std::max(headLeading ? .012f : .035f,h*(headLeading ? .25f : .5f));
+        // Only admission uses the stance-relative residual. Existing accepted
+        // movement transport stays in neck coordinates to preserve turn/step
+        // consumption and avoid double-counting pending angular progress.
         const bool stepConfirmed=stepIntent.Observe(walkEye,left,right,now,
             freshHands && !quietHands && translationCoherent);
         if(!walking && !stepConfirmed && !held) {held=true;height=eye.y;yaw=bodyYaw;}
@@ -204,9 +239,9 @@ struct ControllerBodyAnchor {
         // Allow small pivot-model error during articulated turns, but retire
         // an origin over 8 cm away from the refreshed neck observation.
         // Retirement preserves the held mesh position; it is not recentering.
-        const Vec observedNeck=Sub(placementEye,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},placementHeadYaw));
+        const Vec observedNeck=Sub(placementEye,placementNeckOffset);
         const bool stalePlacement=Length(Flat(Sub(observedNeck,placementNeck)))>.08f;
-        if(stalePlacement) CapturePlacement(eye,walkEye,left,right,headYaw);
+        if(stalePlacement) CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
         bool placed=false,placementPending=false;
         if(!stalePlacement && (rotation && (currentTurn || (currentHeadTravel<1.e-6f && currentHeadTurn<1.e-6f) || (std::min(handMotion[0],handMotion[1])>.003f && currentHandTravel>.008f))) && !headOnlyMotion && pairUsable && (freshPlacement || translation) && placementCoherent) {
             // Fresh bilateral movement and the headset agree on this frame.
@@ -233,19 +268,20 @@ struct ControllerBodyAnchor {
             placementAnchor=Add(placementAnchor,travel);placementNeck=Add(placementNeck,travel);
             // A step alone cannot consume the pending rotation. Keep its
             // positional frame and advance only the translation component.
-            CapturePlacementEvidence(eye,left,right,headYaw);
+            CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
         }
         // Discard incoherent translation immediately. Waiting for the
         // old timeout lets a later coincidental hand sample release a lean.
         if(!translation && !rotation && !translationCoherent) {
-            hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;
+            hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
+            motionPivot=Sub(head,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},bodyYaw));
             referenceTime=now;consumedTravel={};
         }
-        if((placed && !placementPending) || retirePlacement) CapturePlacement(eye,walkEye,left,right,headYaw);
+        if((placed && !placementPending) || retirePlacement) CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
         else if(freshPlacement && !placementCoherent) {
             // Learn changed arm geometry without discarding unconsumed body
             // rotation. The positional frame advances only when the body does.
-            CapturePlacementEvidence(eye,left,right,headYaw);
+            CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
         }
         if(walking || translation || rotation) {
             // Move the body by corroborated travel, never erase an existing
@@ -253,7 +289,8 @@ struct ControllerBodyAnchor {
             // Accepted placement above owns the position change. Neither
             // this bookkeeping nor facing can assign a second body position.
             if(walking || translation) {
-                hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;referenceTime=now;consumedTravel={};
+                hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
+            motionPivot=Sub(head,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},bodyYaw));referenceTime=now;consumedTravel={};
             }
             if(walking || translation) {moved=now;held=false;}
             reason=walking ? 3 : rotation ? 2 : 1;
@@ -265,8 +302,9 @@ struct ControllerBodyAnchor {
         // Keep the held body anchor untouched. Old gestures cannot accumulate
         // for seconds and become a body step when the head happens to pass by.
         if(!walking && !translationCoherent && now-referenceTime>=.25) {
-            hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;referenceTime=now;consumedTravel={};
-            if(!rotation && std::fabs(placementTurn)<.02f) CapturePlacement(eye,walkEye,left,right,headYaw);
+            hands[0]=left;hands[1]=right;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
+            motionPivot=Sub(head,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},bodyYaw));referenceTime=now;consumedTravel={};
+            if(!rotation && std::fabs(placementTurn)<.02f) CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
         }
         if(!walking) offset=Flat(Sub(eye,head));
         else {
@@ -275,7 +313,7 @@ struct ControllerBodyAnchor {
             const float length=Length(offset);
             if(length>0) offset=Scale(offset,std::max(0.f,1-dt/length));
             head=Sub(eye,offset);height=eye.y;yaw=bodyYaw;
-            CapturePlacement(eye,walkEye,left,right,headYaw);
+            CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
         }
     }
 };

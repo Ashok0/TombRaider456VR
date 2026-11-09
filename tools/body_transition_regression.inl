@@ -1,3 +1,8 @@
+#include "close_hands_motion_regression.inl"
+#include "recorded_hands_out_regression.inl"
+#include "recorded_planted_glance_regression.inl"
+#include "pitched_glance_regression.inl"
+#include "extended_arm_glance_regression.inl"
 #include "body_anchor_capture.inl"
 
 void TestHiddenNeckSkin() {
@@ -206,6 +211,11 @@ void TestBodyCenterReference() {
 }
 
 void TestControllerBodyAnchor() {
+    TestRecordedPlantedGlances();
+    TestRecordedHandsOutSwivels();
+    TestCloseHandsRecordedMotion();
+    TestPitchedGlanceTracking();
+    TestExtendedArmGlances();
     TestCapturedBodyAnchorTransitions();
     for(float drop:{0.f,.1f,.3f,.6f}) for(float radius:{.45f,.7f,.95f}) {
         Check(tr::firstperson::PlantedPostureDrop(drop,0,radius)==drop,
@@ -989,6 +999,52 @@ void TestStandingCalibration(uint8_t* objectInfo) {
         for(int j=0;j<15;++j) ReadIKJoint(objectInfo,palette,15,0,nullptr,nullptr,j,result[j]);
         return result;
     };
+    {
+        // Exercise the final palette, not just the classifier: replay all three
+        // recorded device bases and positions from the failing planted section.
+        const auto savedVR=VR();const auto savedSettings=config;
+        const auto savedHeading=g_headingBase;
+        trackingtest::Clock clock;
+        const auto& samples=CloseHandsCapture();
+        for(int status:{0,4}) {
+            ResetBodyFollower();g_autoBodyCalibration={};
+            *reinterpret_cast<int16_t*>(laraMemory+2)=int16_t(status);
+            config.firstPersonBodyHandYawWeight=.15f;
+            VR().m_poseValid=VR().m_firstPersonNeutralValid=true;
+            VR().m_controllerPoseValid[0]=VR().m_controllerPoseValid[1]=true;
+            VR().m_headingYawValid=VR().m_headingYawVertical=false;
+            VR().m_firstPersonNeutral[0]=samples[0].eye.x;
+            VR().m_firstPersonNeutral[1]=samples[0].neutralY;
+            VR().m_firstPersonNeutral[2]=-samples[0].eye.z;
+            VR().m_firstPersonNeutralEyeNeckY=.08f*samples[0].basis[0][4]-.12f*samples[0].basis[0][5];
+            std::array<Frame,15> first{};
+            float hipTravel=0,chestTravel=0;
+            for(const auto& s:samples) {
+                if(s.time-samples[0].time>=10) break;
+                trackingtest::time=s.time;g_headingBase=s.base;
+                const Vec positions[]={s.eye,s.left,s.right};
+                vr::HmdMatrix34_t* poses[]={&VR().m_rawHeadPose,&VR().m_rawControllerPose[0],&VR().m_rawControllerPose[1]};
+                for(int device=0;device<3;++device) {
+                    for(int row=0;row<3;++row) for(int col=0;col<3;++col)
+                        poses[device]->m[row][col]=s.basis[device][row*3+col];
+                    poses[device]->m[0][3]=positions[device].x;
+                    poses[device]->m[1][3]=positions[device].y;
+                    poses[device]->m[2][3]=-positions[device].z;
+                }
+                VR().m_headFromTracking=InvertRigid(FromHmd(VR().m_rawHeadPose));
+                const auto camera=g_scenePose;const auto body=render();
+                if(s.frame==samples[0].frame) first=body;
+                hipTravel=std::max(hipTravel,firstperson::Length(firstperson::Flat(Sub(body[0].origin,first[0].origin))));
+                chestTravel=std::max(chestTravel,firstperson::Length(firstperson::Flat(Sub(body[7].origin,first[7].origin))));
+                Check(!std::memcmp(&camera,&g_scenePose,sizeof(camera)),"recorded close-hand glances leave the camera untouched");
+            }
+            std::printf("close-hand palette status=%d hip=%.6f chest=%.6f game units\n",status,hipTravel,chestTravel);
+            Check(hipTravel<.1f && chestTravel<.1f,"recorded close-hand glances keep the rendered pelvis and chest planted");
+        }
+        config=savedSettings;VR()=savedVR;g_headingBase=savedHeading;
+        *reinterpret_cast<int16_t*>(laraMemory+2)=0;
+        ResetBodyFollower();g_autoBodyCalibration={};
+    }
     {
         const auto savedVR=VR();
         auto setTracking=[&](float yaw) {

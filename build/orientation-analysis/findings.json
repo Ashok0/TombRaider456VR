@@ -1,0 +1,50 @@
+{
+  "capture": "session.log",
+  "exactReplay": {
+    "poses": 1851,
+    "mismatches": 0
+  },
+  "completeOrientationAndHeightPoses": 1851,
+  "sectionsSeconds": {
+    "glancing": [
+      1,
+      10
+    ],
+    "forwardBackward": [
+      10.5,
+      15
+    ],
+    "sideSteps": [
+      16,
+      19.5
+    ],
+    "bodyTurn": [
+      20,
+      25
+    ]
+  },
+  "glancing": {
+    "anchorHorizontalSpanMetres": [
+      0,
+      0
+    ],
+    "hipHorizontalSpanGameUnits": [
+      0,
+      0
+    ],
+    "chestHorizontalSpanGameUnits": [
+      0.004,
+      0.044
+    ],
+    "headHorizontalSpanMetresOverFiveSecondBins": "up to 0.611",
+    "controllerHeightMetres": "about 0.69 to 0.81; head about 1.25 to 1.4",
+    "visualReproductionConfirmed": null
+  },
+  "walking": {
+    "forwardBackwardAnchorZSpanMetres": 0.5098,
+    "sideStepAnchorXSpanMetres": 0.2864
+  },
+  "orientationFinding": "During the large planted glances, head and both controllers rotate together about world up; orientations alone do not uniquely distinguish these torso swivels from actual body turns. No stationary-hand-aim assumption is supported by this capture.",
+  "changesInstalled": false,
+  "pendingQuestion": "Did Lara visibly slide during the first feet-planted glancing part? Logged hip was fixed; need answer before treating this as a reproduction."
+}

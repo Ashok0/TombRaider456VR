@@ -1,0 +1,110 @@
+--- before/src/ControllerBodyAnchor.h
++++ after/src/ControllerBodyAnchor.h
+@@ -137,10 +137,10 @@
+             const float error=Length(Sub(shared,headDelta));
+             if(error<best) {best=error;common=shared;delta[0]=d[0];delta[1]=d[1];}
+         };
+-        // Fit the shared displacement with no rotation, controller rotation,
+-        // or corroborated head rotation. Opposite arm swing must not corrupt
+-        // the turn estimate used to recognize a real shared step.
+-        candidate(0);
++        // Fit body travel after removing rotation of the controller frame.
++        // While head and body agree, alternate fits tolerate opposing arm
++        // swing. A head-led glance must not choose a different fit merely
++        // because an aiming arc happens to match the headset's side lean.
+         // A gaze/body mismatch persists after the short movement window is
+         // refreshed. A sideways glance must not become an ordinary step just
+         // because its next few degrees are small.
+@@ -151,9 +151,14 @@
+             const float pairTurn=BodyAngle(std::atan2(afterPair.x,afterPair.z)-std::atan2(beforePair.x,beforePair.z));
+             const bool headLedIncrement=std::fabs(headTurn)>.06f && std::fabs(pairTurn)<std::fabs(headTurn)*.5f;
+             headLeading=headLeading || headLedIncrement;
+-            if(!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.15f) candidate(pairTurn);
+-            if(!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
+-        }
++            if(headLeading || (!headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.15f)) candidate(pairTurn);
++            if(!headLeading && !headLedIncrement && std::fabs(BodyAngle(pairTurn-headTurn))<.08f) candidate(headTurn);
++        }
++        // Extended arms magnify tiny aiming angles into lateral hand travel.
++        // During a glance, retain the observed controller rotation; neither
++        // ignoring that rotation nor substituting head yaw can authorize a
++        // step. Without a usable pair, retain the ordinary bilateral test.
++        if(!headLeading || beforeSpan<=.05f || afterSpan<=.05f) candidate(0);
+         const float c=Length(common);
+         const float rawTravel[2]={Length(Flat(Sub(left,hands[0]))),Length(Flat(Sub(right,hands[1])))};
+         handTravel[0]=rawTravel[0];handTravel[1]=rawTravel[1];
+--- before/tools/body_transition_regression.inl
++++ after/tools/body_transition_regression.inl
+@@ -1,3 +1,4 @@
++#include "extended_arm_glance_regression.inl"
+ #include "body_anchor_capture.inl"
+ 
+ void TestHiddenNeckSkin() {
+@@ -206,6 +207,7 @@
+ }
+ 
+ void TestControllerBodyAnchor() {
++    TestExtendedArmGlances();
+     TestCapturedBodyAnchorTransitions();
+     for(float drop:{0.f,.1f,.3f,.6f}) for(float radius:{.45f,.7f,.95f}) {
+         Check(tr::firstperson::PlantedPostureDrop(drop,0,radius)==drop,
+--- before/README.md
++++ after/README.md
+@@ -220,8 +220,13 @@
+ Walking has its own observation window, independent of turn updates. It compares
+ shared headset/controller travel after accounting for rotation, so a real step
+ can continue while turning and with modest opposing arm swing. Head-led glances
+-use stricter agreement checks. A combined turn and step applies shared travel
+-once. These devices cannot directly measure feet, so stance remains an estimate
++use stricter agreement checks. During a head-led glance, step estimation removes
++the observed rotation of the controller pair before comparing translation.
++It cannot ignore that aiming rotation or substitute headset yaw to obtain a
++closer fit. This prevents small aiming arcs with extended arms from being
++mistaken for sideways steps. With head and body facing together, alternate
++fits still accommodate opposing arm swing during walking and turning.
++A combined turn and step applies shared travel once. These devices cannot directly measure feet, so stance remains an estimate
+ rather than foot tracking.
+ Facing and body position use separate movement references. Changing arm reach
+ cannot replay an old hand position as a forward or backward body jump when a
+--- before/tools/extended_arm_glance_regression.inl
++++ after/tools/extended_arm_glance_regression.inl
+@@ -0,0 +1,39 @@
++// Raised pistols amplify small aiming rotations at the hands. A planted
++// head glance plus this arm motion must not become shared body translation.
++void TestExtendedArmGlances() {
++    using namespace tr::firstperson;
++    for(float hz:{60.f,90.f}) for(float reach:{.15f,.4f,.65f})
++        for(float halfSpan:{.2f,.5f}) for(float aim:{.01f,.03f}) for(float drift:{.005f,.012f})
++        for(float lean:{.02f,.05f}) for(float speed:{1.35f,5.4f}) for(float phase:{0.f,1.f}) {
++        ControllerBodyAnchor anchor;
++        for(int frame=0;frame<int(10*hz);++frame) {
++            const float seconds=frame/hz,t=std::max(0.f,seconds-1)*speed;
++            const float yaw=.8f*std::sin(t),shift=drift*(std::sin(t+phase)-std::sin(phase));
++            const float handYaw=aim*(std::sin(t*.7f+phase)-std::sin(phase));
++            const tr::motiongun::Vec eye=Add({lean*std::sin(t),1.7f,-.15f},YawVector({0,0,.15f},yaw));
++            const auto left=Add({shift,0,0},YawVector({-halfSpan,1.3f,reach},handYaw));
++            const auto right=Add({shift,0,0},YawVector({halfSpan,1.3f,reach},handYaw));
++            anchor.Update(frame+1,seconds,eye,left,right,0,0,true,false,yaw);
++            Check(Length(Flat(anchor.head))<.00001f,
++                "small extended-arm aiming drift during a planted glance cannot translate the mesh");
++            Check(!anchor.heading.sampleAccepted,
++                "small extended-arm aiming drift does not establish a physical body turn");
++        }
++    }
++    // Armed roomscale walking remains available in every direction while the
++    // player looks aside; a head turn must not disable genuine shared travel.
++    for(float reach:{.15f,.4f,.65f}) for(int direction=0;direction<4;++direction) {
++        ControllerBodyAnchor anchor;int permitted=0;tr::motiongun::Vec travel{};
++        for(int frame=0;frame<600;++frame) {
++            const float t=std::max(0,frame-90)/90.f,yaw=.8f*std::sin(t*1.5f);
++            travel=YawVector({0,0,t*.2f},direction*1.5707963f);
++            const auto eye=Add(travel,Add({0,1.7f,-.15f},YawVector({0,0,.15f},yaw)));
++            anchor.Update(frame+1,frame/90.,eye,Add(travel,{-.2f,1.3f,reach}),
++                Add(travel,{.2f,1.3f,reach}),0,0,true,false,yaw);
++            if(frame>120 && anchor.translating) ++permitted;
++        }
++        Check(permitted>400,"extended-arm walking remains responsive in all four directions during head glances");
++        Check(Length(Flat(Sub(anchor.head,travel)))<.04f,
++            "extended-arm walking does not leave the mesh behind the player");
++    }
++}

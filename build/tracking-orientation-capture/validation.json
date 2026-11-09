@@ -1,0 +1,17 @@
+{
+  "change": "Supplementary diagnostic logging only; restored movement and rendering algorithms unchanged",
+  "build": "Both x64 Release builds passed",
+  "behavioralTestsRerun": false,
+  "baselineCaptureReplay": {
+    "poses": 2375,
+    "mismatches": 0
+  },
+  "newFields": "Raw 3x3 orientation bases for head/left/right, calibrated standing head height, compensated posture drop; keyed by pose serial",
+  "productionHashes": {
+    "src/ControllerBodyAnchor.h": "7E266C5101468BBBE02C0E8049F4E5DBCB0048A689296E535B9DCE2B8FE5A151",
+    "src/BodyFollower.h": "82CE19C5FFC8B71B6A385D39E8D5B6FF3A9D6704758B50BE86A8ACED558F7A7E",
+    "src/ControllerBodyAnchor.inl": "618E9BB08904650B96BAE428A05DFD70C93973EF774817B3C8592033E7BAFC22",
+    "src/FirstPerson.cpp": "285864E92DDA05FAF6372AF32E6A46FF9C16C84518359FB6C4C20DE7C74E7F43"
+  },
+  "inHeadsetTested": false
+}
