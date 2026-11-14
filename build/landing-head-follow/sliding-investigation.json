@@ -1,0 +1,19 @@
+{
+  "status": "awaiting labelled real walking/turning capture with raised hands",
+  "productionStanceChanged": false,
+  "labelledStationarySegmentSeconds": [
+    0,
+    25
+  ],
+  "candidateEliminatedCapturedRaisedHandDrift": true,
+  "candidateRejectedBecause": "Shared translation fitting still loses additional forward/back travel in synthesized walking plus the new recorded glances. Real raised-hand turns looking down are not covered by the older labelled turn capture.",
+  "files": {
+    "capture": "session.log",
+    "inputs": "inputs.json",
+    "candidate": "candidate/PlantedPivotEvidence.h",
+    "candidateReplay": "replay-new.log",
+    "baselineMixed": "base-forward.log",
+    "candidateMixed": "mixed-forward.log"
+  },
+  "nextCapture": "5 sec planted glances, physical forward/back steps, 90-degree physical turn, all with the same raised-hand posture and downward gaze; user closes game afterward"
+}

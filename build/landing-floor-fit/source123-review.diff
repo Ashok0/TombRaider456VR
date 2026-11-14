@@ -1,0 +1,122 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -2334,19 +2334,20 @@
+     return wasBlending || g_pistolAnimation.blending;
+ }
+ 
+-// Keep the calibrated visual size through native jump animation. This is a
++// Keep the calibrated visual size through native jump/landing animation. This is a
+ // render-only similarity transform; no standing IK or foot planting runs here.
+-float AirborneBodyScale(const uint8_t* item) {
+-    if(!Cfg().firstPersonFullBodyIK || !CanFitAirborneBody(item)) return 1.f;
++float AnimatedBodyScale(const uint8_t* item) {
++    if(!Cfg().firstPersonFullBodyIK || (!CanFitAirborneBody(item) && !UseLandingCamera(item))) return 1.f;
+     if(Cfg().firstPersonBodyScale>0) return Cfg().firstPersonBodyScale;
+     const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
+     return g_bodySize.valid && g_bodySizeObject==object &&
+         std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
+ }
+ 
+-bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
++bool FitAnimatedVisualBody(uint8_t* item,float* joints,int count) {
+     using namespace motiongun;
+-    if(!CanFitAirborneBody(item) || DrawingNativeShadow()) return false;
++    const bool landing=UseLandingCamera(item);
++    if((!CanFitAirborneBody(item) && !landing) || DrawingNativeShadow()) return false;
+     const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
+     if(object<0) return false;
+     const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+@@ -2355,8 +2356,8 @@
+     const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+     const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+     if(bones>0 && (bones!=count || !mapping || !poses)) return false;
+-    const float size=AirborneBodyScale(item);
+-    const bool measured=g_torsoSurface.valid && g_torsoSurface.owner==obj;
++    const float size=AnimatedBodyScale(item);
++    const bool measured=!landing && g_torsoSurface.valid && g_torsoSurface.owner==obj;
+     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+     // Vertical takeoff/ascent/descent can bow the collar toward the eye too.
+     // Share the forward-jump torso reference; grounded compression stays on
+@@ -2427,12 +2428,12 @@
+ 
+ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
+     using namespace motiongun;
+-    // Calibrated airborne torso fitting needs the HMD, not two valid hands.
++    // Calibrated jump/landing fitting needs the HMD, not two valid hands.
+     // Losing a controller (or entering hands-busy reach) must not replace the
+     // fitted torso with native size or switch its near-eye trim to 20 cm.
+-    const bool airborneFit=Cfg().firstPersonFullBodyIK && !ControllerTrackingBlockedReason() && Gate() &&
+-        CanFitAirborneBody(item);
+-    if(!FullBodyIKReady() && !airborneFit) {
++    const bool animatedFit=Cfg().firstPersonFullBodyIK && !ControllerTrackingBlockedReason() && Gate() &&
++        (CanFitAirborneBody(item) || (VR().poseValid() && UseLandingCamera(item)));
++    if(!FullBodyIKReady() && !animatedFit) {
+         g_torsoClearance.Reset();
+         g_bodyFollower.Reset();g_torsoPose.Reset();g_groundGait.Reset();g_bodyLanding=false; // Arm-only fallback owns its animation blend.
+         return false;
+@@ -2443,11 +2444,21 @@
+         // Keep native jump articulation and the calibrated visual size.
+         // Clearance only bends the upper torso; arm-only IK reconnects the
+         // shoulders to exact controller wrists after this visual correction.
+-        if(!FitAirborneVisualBody(item,joints,count)) g_torsoClearance.Reset();
++        if(!FitAnimatedVisualBody(item,joints,count)) g_torsoClearance.Reset();
+         g_bodyFollower.Reset();g_torsoPose.Reset();g_groundGait.Reset();g_bodyLanding=false; // Arm-only fallback owns its animation blend.
+         return false;
+     }
+     const bool landing=UseLandingCamera(item);
++    if(landing) {
++        // Impact kneels are authored asymmetric leg poses, not physical HMD
++        // crouches. Standing IK's forward knee pole can fold the shin through
++        // the floor as the animated eye drops. Keep the coherent native legs
++        // at the calibrated size; the arm-only path still solves tracked hands.
++        // Scaling about the collision root preserves the animation's floor.
++        if(!FitAnimatedVisualBody(item,joints,count)) g_torsoClearance.Reset();
++        g_bodyFollower.Reset();g_torsoPose.Reset();g_groundGait.Reset();g_bodyLanding=true;
++        return false;
++    }
+     if(g_bodyLanding && !landing) {
+         // The camera has returned from the animated landing neck to the
+         // standing eye. A cached kneeling torso belongs to the old frame;
+@@ -2795,7 +2806,7 @@
+     const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+     const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+     if (bones>0 && (bones!=count || !mapping || !poses)) return false;
+-    if(!shadow && Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item)) {
++    if(!shadow && !UseLandingCamera(item) && Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item)) {
+         using namespace motiongun;
+         Frame original[15]{},stable[15]{},correction[15]{};
+         bool complete=true;
+@@ -2919,7 +2930,7 @@
+             if(ReadIKJoint(obj,joints,count,bones,mapping,poses,7,torso) &&
+                ReadIKBind(obj,count,bones,mapping,poses,7,torsoBind)) {
+                 if(!ReadIKBind(obj,count,bones,mapping,poses,first,bind[0]) ||
+-                   !firstperson::PistolArmReference(torso,torsoBind,bind,shadow ? 1.f : AirborneBodyScale(item),chain)) return false;
++                   !firstperson::PistolArmReference(torso,torsoBind,bind,shadow ? 1.f : AnimatedBodyScale(item),chain)) return false;
+                 bindReference[hand]=true;
+             }
+         }
+--- README.md
++++ README.md
+@@ -1,4 +1,9 @@
+ ## Tomb Raider I-III Remastered VR Mod
++
++Fall landings retain the native leg animation at the calibrated first-person
++body size until standing IK resumes. This prevents the impact kneel from
++folding the shins through the floor. Tracked hands remain active; the landing
++camera, collision, damage and recovery timing remain native.
+ 
+ Ordinary jumps clear any leftover body-hiding delay from an earlier landing or
+ ledge transition, preventing the torso from suddenly reappearing during flight.
+--- tests/collection_integration_selftest.h
++++ tests/collection_integration_selftest.h
+@@ -165,8 +165,10 @@
+         *reinterpret_cast<int*>(geom+28)=0;g_pistolBodyScope=false;
+     }
+ }
++#include "landing_floor_selftest.h"
+ void TestCollectionIntegration() {
+     using namespace tr;
++    TestNativeLandingFloors();
+     TestGaitArmStability();
+     TestRoomscaleLedge();
+     for(int game:{1,2,3}) {

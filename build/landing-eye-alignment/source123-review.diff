@@ -1,0 +1,54 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -855,6 +855,12 @@
+         return false;
+     }
+ 
++    if(Cfg().firstPersonMovementStabilization && joint==14 && UseLandingCamera(item)) {
++        // Impact pitch must not turn forward eye clearance into a downward
++        // camera offset. Retain the animated head dip and live HMD tracking.
++        const int32_t neckY=body[1]+(Lerp(jPrev[7],jCur[7],frac)>>kFixedShift);
++        head[1]=std::min(head[1],neckY+std::min(0,Cfg().firstPersonAnchorY));
++    }
+     if (IsLadder(item)) {
+         int32_t neck[3]{};
+         for (int row=0;row<3;++row) {
+--- tests/landing_support_selftest.h
++++ tests/landing_support_selftest.h
+@@ -32,6 +32,21 @@
+             g_scenePose={int32_t(eye.x),int32_t(eye.y),int32_t(eye.z)};
+             for(int j=0;j<15;++j) WriteRows(Multiply(s.joints[j],inverseBind[j]),ikNative+j*12);
+             clock.Advance(1./30);++testVR.m_poseSerial;
++            // Feed the real fixed-point head query used by the collection's
++            // camera; a camera-only change must also preserve fitted contacts.
++            for(auto offset:{off::item_joints_prev,off::item_joints_cur}) {
++                auto* joint=reinterpret_cast<int32_t*>(item+offset+14*off::joint_stride);
++                for(int row=0;row<3;++row) {
++                    for(int col=0;col<3;++col) joint[row*4+col]=int32_t(std::lround(s.joints[14].basis.r[row][col]*16384));
++                    const float value=row==0?s.joints[14].origin.x:row==1?s.joints[14].origin.y:s.joints[14].origin.z;
++                    joint[row*4+3]=int32_t(std::lround(value*16384));
++                }
++            }
++            if(s.clip!=103) {
++                Check(Anchor(g_scenePose),"supported landing uses actual collection camera");
++                Check(g_scenePose.y_pos<=s.joints[14].origin.y-31.f,
++                    "landing eye stays above the animated neck without rotating forward clearance down");
++            }
+             const auto camera=g_scenePose;
+             const auto simulationBefore=std::string(reinterpret_cast<char*>(item),off::item_stride);
+             const float size=factor==0?.845f:factor;
+--- README.md
++++ README.md
+@@ -3608,6 +3608,12 @@
+ 
+ ### Supported first-person fall landings (2026-11-13)
+ 
++The landing camera follows the animated head's height. Its forward eye clearance
++can no longer rotate downward into Lara's legs as her head pitches on impact.
++This adjusts only the downward vertical offset during hard-fall recovery;
++horizontal animation and live physical headset translation remain intact. The
++supported leg solve below is unchanged.
++
+ Hard falls keep the native camera dip and rise and the complete tracked torso/arm
+ solve. During that impact pose, the standing chest-height reserve and extra
+ walking gait no longer add a second crouch. Additional tracked hip movement is

@@ -1,0 +1,279 @@
+--- src/FirstPersonBodyIK.h
++++ src/FirstPersonBodyIK.h
+@@ -203,10 +203,28 @@
+ // Lazy pelvis/footprint with a hard eye target. Preserve the authored torso
+ // shape with bounded leaning; sparse neck joints absorb small head movement.
+ // Hands are solved separately.
++// Choose the nearest knee bend on the two-bone circle that does not pass
++// below its authored kneeling support (or ankle height for an upright leg).
++// Only the bend direction changes: thigh/shin lengths and foot target stay fixed.
++inline Vec SupportedKneePole(const Frame (&chain)[3],Vec foot,Vec preferred,float limitY) {
++    const Vec delta=Sub(foot,chain[0].origin);Vec axis{};
++    const float distance=Length(delta);if(distance<.001f || !Unit(delta,axis)) return preferred;
++    const float a=Length(Sub(chain[1].origin,chain[0].origin)),b=Length(Sub(chain[2].origin,chain[1].origin));
++    const float along=(a*a-b*b+distance*distance)/(2*distance);
++    const float radius=std::sqrt(std::max(0.f,a*a-along*along));
++    Vec bend{};if(!Unit(Sub(preferred,Scale(axis,Dot(preferred,axis))),bend)) return preferred;
++    const float centreY=chain[0].origin.y+axis.y*along;
++    if(centreY+radius*bend.y<=limitY || radius<.001f) return preferred;
++    const Vec projected=Sub(Vec{0,-1,0},Scale(axis,-axis.y));Vec up{};
++    if(!Unit(projected,up)) return preferred;
++    const float required=std::clamp((centreY-limitY)/(radius*Length(projected))+.00001f,0.f,1.f);
++    Vec side{};if(!Unit(Sub(bend,Scale(up,Dot(bend,up))),side)) Unit(Cross(axis,up),side);
++    return Add(Scale(up,required),Scale(side,std::sqrt(std::max(0.f,1-required*required))));
++}
+ inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,float yawDelta,
+                                const Basis& headRotation,Vec forward,float scale,Vec rootOffset,
+                                float headTwist,bool grounded,float stepPhase,float stepWeight,
+-                               Frame (&posed)[15],float standingWeight=0,float postureEyeOffset=0,Vec horizontalPostureOffset={}) {
++                               Frame (&posed)[15],float standingWeight=0,float postureEyeOffset=0,Vec horizontalPostureOffset={},bool authoredKnees=false) {
+     if(!std::isfinite(scale) || scale<=1 || !Finite({headRotation,eye}) ||
+        !Finite({IdentityBasis(),rootOffset})) return false;
+     for(const auto& joint:native) { Frame inverse{};if(!Finite(joint) || !Inverse(joint,inverse)) return false; }
+@@ -245,6 +263,36 @@
+     const float residualLength=Length(residual);
+     if(residualLength>neckSlack) pelvisShift=Add(pelvisShift,
+         Scale(residual,(residualLength-neckSlack)/residualLength));
++    if(authoredKnees && grounded) {
++        // The authored impact pose already supplies the deepest supported
++        // crouch. A headset dip must not drive the pelvis through its feet.
++        pelvisShift.y=std::min(0.f,pelvisShift.y);
++        float highest=-INFINITY;
++        for(int first:{1,4}) {
++            const float a=Length(Sub(footprint[first+1].origin,footprint[first].origin));
++            const float b=Length(Sub(footprint[first+2].origin,footprint[first+1].origin));
++            const Vec delta=Sub(footprint[first].origin,footprint[first+2].origin);
++            const float reach=a+b-.001f,horizontal=delta.x*delta.x+delta.z*delta.z;
++            if(horizontal<reach*reach) highest=std::max(highest,
++                -std::sqrt(reach*reach-horizontal)-delta.y);
++        }
++        pelvisShift.y=std::max(pelvisShift.y,std::min(0.f,highest));
++        // Keep both animated contacts reachable. Limit only the extra tracked
++        // lean, not the authored pelvis motion or the camera's impact bounce.
++        const Vec horizontal{pelvisShift.x,0,pelvisShift.z};
++        const double travel=Dot(horizontal,horizontal);
++        float fraction=1;
++        if(travel>1.e-8) for(int first:{1,4}) {
++            const float a=Length(Sub(footprint[first+1].origin,footprint[first].origin));
++            const float b=Length(Sub(footprint[first+2].origin,footprint[first+1].origin));
++            const Vec delta=Add(Sub(footprint[first].origin,footprint[first+2].origin),{0,pelvisShift.y,0});
++            const double reach=a+b-.001f,along=Dot(delta,horizontal);
++            const double c=Dot(delta,delta)-reach*reach;
++            fraction=std::min(fraction,float(std::clamp(
++                (-along+std::sqrt(std::max(0.,along*along-travel*c)))/travel,0.,1.)));
++        }
++        pelvisShift.x*=fraction;pelvisShift.z*=fraction;
++    }
+     posed[0].origin=Add(footprint[0].origin,pelvisShift);
+     posed[0].basis=footprint[0].basis;
+     posed[7].origin=Add(posed[0].origin,Transform(bend,Sub(footprint[7].origin,footprint[0].origin)));
+@@ -303,7 +351,15 @@
+         const float length=Length(toFoot);if(!Unit(toFoot,direction)) direction={0,1,0};
+         const float feasible=std::clamp(length,std::fabs(a-b)+.001f,a+b-.001f);
+         foot.origin=Add(chain[0].origin,Scale(direction,feasible));
+-        if(!SolveArm(chain,foot,forward,correction,nullptr,nullptr,false)) return false;
++        Vec pole=forward;
++        if(authoredKnees) {
++            Vec axis{};Unit(Sub(footprint[first+2].origin,footprint[first].origin),axis);
++            const Vec knee=Sub(footprint[first+1].origin,footprint[first].origin);
++            const Vec nativePole=Sub(knee,Scale(axis,Dot(knee,axis)));
++            if(Length(nativePole)>a*.05f) pole=nativePole;
++            pole=SupportedKneePole(chain,foot.origin,pole,std::max(footprint[first+1].origin.y,foot.origin.y));
++        }
++        if(!SolveArm(chain,foot,pole,correction,nullptr,nullptr,false)) return false;
+         for(int j=0;j<3;++j) posed[first+j]=Multiply(correction[j],chain[j]);
+         posed[first+2]=foot;
+     }
+@@ -312,7 +368,7 @@
+ }
+ // Repose the torso against stable leg geometry. Positions are metres; the
+ // tracked head stays exact and arms are subsequently solved to controllers.
+-inline bool ReposeTorso(Frame (&pose)[15],const Frame (&target)[4],Vec forward,const Frame* planted=nullptr) {
++inline bool ReposeTorso(Frame (&pose)[15],const Frame (&target)[4],Vec forward,const Frame* planted=nullptr,bool authoredKnees=false) {
+     Frame result[15];for(int j=0;j<15;++j) result[j]=pose[j];
+     const Frame* legs=planted ? planted : pose;
+     Frame inverseHip{},inverseChest{};
+@@ -346,7 +402,15 @@
+         if(a<.001f || b<.001f || !Unit(delta,direction)) return false;
+         const float feasible=std::clamp(d,std::fabs(a-b)+.000001f,a+b-.000001f);
+         if(std::fabs(feasible-d)>.000001f) foot.origin=Add(chain[0].origin,Scale(direction,feasible));
+-        if(!SolveArm(chain,foot,forward,changes,nullptr,nullptr,false)) return false;
++        Vec pole=forward;
++        if(authoredKnees) {
++            Vec axis{};Unit(Sub(legs[first+2].origin,legs[first].origin),axis);
++            const Vec knee=Sub(legs[first+1].origin,legs[first].origin);
++            const Vec nativePole=Sub(knee,Scale(axis,Dot(knee,axis)));
++            if(Length(nativePole)>a*.05f) pole=nativePole;
++            pole=SupportedKneePole(chain,foot.origin,pole,std::max(legs[first+1].origin.y,foot.origin.y));
++        }
++        if(!SolveArm(chain,foot,pole,changes,nullptr,nullptr,false)) return false;
+         for(int j=0;j<3;++j) result[first+j]=Multiply(changes[j],chain[j]);
+         result[first+2]=foot;
+     }
+--- src/BodyFollower.h
++++ src/BodyFollower.h
+@@ -498,7 +498,7 @@
+     void Mount() { mountPending=true; }
+     bool Update(uint64_t frame,double now,const Frame& reference,const Frame& eye,
+                 bool idle,bool grip,Frame (&pose)[15],Vec forward,bool plant=false,float postureDrop=0,
+-                const Vec* contacts=nullptr) {
++                const Vec* contacts=nullptr,bool authoredKnees=false) {
+         constexpr int joint[4]={0,7,3,6};
+         Frame inverse{},inverseEye{};
+         if(!Inverse(reference,inverse) || !Inverse(eye,inverseEye)) return false;
+@@ -589,7 +589,7 @@
+             for(int j=0;j<7;++j) legReference[j]=Multiply(reference,stance[j]);
+             target[2]=legReference[3];target[3]=legReference[6];
+         }
+-        if(!ReposeTorso(pose,target,forward,planted ? legReference : nullptr)) return false;
++        if(!ReposeTorso(pose,target,forward,planted ? legReference : nullptr,authoredKnees)) return false;
+         for(int i=0;i<4;++i) eyeRelative[i]=Multiply(inverseEye,pose[joint[i]]);
+         return true;
+     }
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -2651,12 +2651,15 @@
+             // The eyes lower around the neck while looking down. The standing
+             // leg constraint already rejects this as crouch; moving and bent
+             // poses must use the same posture height without moving the view.
++            // Native impacts already contain their crouch and foot motion.
++            // Exclude the standing chest reserve and added walking gait here;
++            // keep hips/knees within the animated legs' support envelope.
+             if(!firstperson::SolveFollowingBody(sized,sizedAnchor,Add(anchorInPalette,headDelta),
+                 locomotion::Wrap(heading-nativeHeading),headRotation,forward,scale,rootOffset,
+                 firstperson::BodyChestTwist(locomotion::Wrap(headYaw-heading),BodyControllersStationary() || g_bodyFollower.supportedHands),
+-                grounded,g_bodyFollower.phase,standing ? 0.f : g_bodyFollower.stepWeight,posed,upright,
+-                (Cfg().firstPersonBodyScale==0 ? g_bodySize.eyeGap : 0.f)-
+-                std::max(0.f,VR().FirstPersonHeightDrop()-VisualBodyPostureDrop(item))*scale,Sub(postureEye,eye))) return false;
++                grounded,g_bodyFollower.phase,(standing || landing) ? 0.f : g_bodyFollower.stepWeight,posed,upright,
++                landing ? 0.f : (Cfg().firstPersonBodyScale==0 ? g_bodySize.eyeGap : 0.f)-
++                std::max(0.f,VR().FirstPersonHeightDrop()-VisualBodyPostureDrop(item))*scale,landing ? Vec{} : Sub(postureEye,eye),landing)) return false;
+         } else if(!firstperson::SolveBodyAtEye(native,joint,anchorInPalette,Add(anchorInPalette,headDelta),
+             locomotion::Wrap(heading-nativeHeading),headRotation,forward,posed)) return false;
+     }
+@@ -2677,9 +2680,9 @@
+         firstperson::YawVector(Scale(Sub(native[3].origin,animationRoot),1/scale),-nativeHeading),
+         firstperson::YawVector(Scale(Sub(native[6].origin,animationRoot),1/scale),-nativeHeading)};
+     if(!g_torsoPose.Update(VR().PoseSerial(),TurnTime(),reference,eyeReference,quiet,grip,filtered,forward,
+-        quiet,VisualBodyPostureDrop(item),contacts)) return false;
++        quiet,VisualBodyPostureDrop(item),contacts,landing)) return false;
+     for(int j=0;j<15;++j) { posed[j]=filtered[j];posed[j].origin=Scale(filtered[j].origin,scale); }
+-    if(Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item) &&
++    if(!landing && Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item) &&
+        !g_groundTorso.Apply(obj,posed,body,Sub(eye,cameraOffset),scale,VisualBodyPostureDrop(item),true)) return false;
+     // Offset the visible body after posture filtering, before exact hand IK.
+     // Camera, collision, calibration and the native physics palette stay fixed.
+--- README.md
++++ README.md
+@@ -3604,3 +3604,19 @@
+ simulation, ground-gait and directional-jump paths were compared against their
+ pre-shortcut versions. In-headset confirmation of the corrected shortcut is
+ still needed.
++
++
++### Supported first-person fall landings (2026-11-13)
++
++Hard falls keep the native camera dip and rise and the complete tracked torso/arm
++solve. During that impact pose, the standing chest-height reserve and extra
++walking gait no longer add a second crouch. Additional tracked hip movement is
++limited by both legs' reach, and knee bends follow the authored landing direction
++within its supported range. The feet retain their scaled animation contacts;
++leg segments remain connected without stretching. Standing calibration, roomscale
++inference, normal walking, collision and fall damage are unchanged.
++
++Extracted TR1?5 landing poses pass checks for foot-contact height, supported knees,
++rigid leg lengths, controller wrists and return to standing at multiple body
++scales and physical headset heights. These are automated pose checks; visual
++confirmation of the affected fall in a headset is still needed.
+--- tests/collection_integration_selftest.h
++++ tests/collection_integration_selftest.h
+@@ -165,8 +165,10 @@
+         *reinterpret_cast<int*>(geom+28)=0;g_pistolBodyScope=false;
+     }
+ }
++#include "landing_support_selftest.h"
+ void TestCollectionIntegration() {
+     using namespace tr;
++    TestLandingSupportPalettes();
+     TestGaitArmStability();
+     TestRoomscaleLedge();
+     for(int game:{1,2,3}) {
+--- tests/landing_support_checks.inl
++++ tests/landing_support_checks.inl
+@@ -0,0 +1,14 @@
++#include "native_landing_poses.inl"
++void CheckLandingSupport(const tr::motiongun::Frame (&native)[15],const tr::motiongun::Frame (&out)[15],float size) {
++    using namespace tr;using namespace tr::motiongun;
++    Frame expected[15]{};firstperson::ScaleBody(native,size,expected);
++    for(int first:{1,4}) {
++        Check(std::fabs(out[first+2].origin.y-expected[first+2].origin.y)<.2f,
++              "landing retains native scaled foot contact height");
++        Check(out[first+1].origin.y<=std::max(expected[first+1].origin.y,expected[first+2].origin.y)+.2f,
++              "landing knee cannot fold below authored kneeling support");
++        for(int j=0;j<2;++j) Check(std::fabs(firstperson::Length(Sub(out[first+j+1].origin,out[first+j].origin))-
++            firstperson::Length(Sub(expected[first+j+1].origin,expected[first+j].origin)))<.2f,
++            "landing legs remain rigid connected segments without shrinking or stretching");
++    }
++}
+--- tests/landing_support_selftest.h
++++ tests/landing_support_selftest.h
+@@ -0,0 +1,59 @@
++#include "landing_support_checks.inl"
++void TestLandingSupportPalettes() {
++    using namespace tr;using namespace tr::motiongun;
++    for(int game:{1,2,3}) for(float factor:{0.f,.7f,1.f,1.2f})
++    for(float drop:{0.f,.12f,.3f}) for(bool armed:{false,true}) {
++        BodyRig(game,armed);testConfig.firstPersonFullBodyIK=true;
++        testConfig.firstPersonBodyScale=factor;testConfig.firstPersonMovementStabilization=true;
++        testConfig.firstPersonAnchorY=-32;testConfig.firstPersonAnchorZ=140;
++        testConfig.firstPersonBodyForwardCm=0;
++        g_holsters.active=true;g_holsters.weapon=1;g_groundEye.valid=true;g_groundEye.bodyLocal={};
++        g_bodySkinScope=true;g_autoBodyCalibration={};g_heading.base=0;g_haveManualInput=false;
++        auto* obj=Ptr<uint8_t>(dll.objects);
++        const NativeLandingPose* standing=nullptr;
++        for(const auto& s:nativeLandingPoses) if(s.game==game && s.clip==103) standing=&s;
++        Check(standing!=nullptr,"installed game has a standing reference for landing regression");
++        Frame inverseBind[15]{};
++        for(int j=0;j<15;++j) {
++            Inverse(standing->joints[j],inverseBind[j]);
++            auto* b=reinterpret_cast<float*>(obj+192)+j*16;
++            for(int r=0;r<3;++r) for(int c=0;c<3;++c) b[c*4+r]=inverseBind[j].basis.r[r][c];
++            b[12]=inverseBind[j].origin.x;b[13]=inverseBind[j].origin.y;b[14]=inverseBind[j].origin.z;b[15]=1;
++        }
++        if(factor==0) {g_bodySize.valid=true;g_bodySize.torsoFitted=true;g_bodySize.factor=.845f;g_bodySize.eyeGap=.209f*LiveWorldUnitsPerMetre();g_bodySize.units=LiveWorldUnitsPerMetre();g_bodySizeObject=0;}
++        trackingtest::Clock clock;
++        for(size_t n=0;n<=std::size(nativeLandingPoses);++n) {
++            const auto& s=n==std::size(nativeLandingPoses)?*standing:nativeLandingPoses[n];
++            if(s.game!=game) continue;
++            Field<int16_t>(off::item_anim_state)=s.clip==92?1:2;
++            Field<int16_t>(off::item_anim_number)=int16_t(s.clip);
++            testViewRise=s.clip==103?0:-drop;testVR.m_rawHeadPose.m[1][3]=1.7f+testViewRise;
++            const motiongun::Vec eye=Transform(s.joints[14],{0,-32,140});
++            g_scenePose={int32_t(eye.x),int32_t(eye.y),int32_t(eye.z)};
++            for(int j=0;j<15;++j) WriteRows(Multiply(s.joints[j],inverseBind[j]),ikNative+j*12);
++            clock.Advance(1./30);++testVR.m_poseSerial;
++            const auto camera=g_scenePose;
++            const auto simulationBefore=std::string(reinterpret_cast<char*>(item),off::item_stride);
++            const float size=factor==0?.845f:factor;
++            Detour_GetJoints(item);
++            Check(!std::memcmp(&camera,&g_scenePose,sizeof(camera)) &&
++                simulationBefore==std::string(reinterpret_cast<char*>(item),off::item_stride),
++                "landing palette fitting leaves camera, collision, animation and damage state untouched");
++            const float* physics=FirstPersonNativeBodySkin();
++            Check(physics && !std::memcmp(physics,ikNative,15*12*sizeof(float)),
++                "landing physics retains the unmodified native animation palette");
++            Frame out[15]{};
++            for(int j=0;j<15;++j) Check(ReadIKJoint(obj,g_bodyRenderPalette,15,0,nullptr,nullptr,j,out[j]),"landing joint readable");
++            Check(g_bodyFollower.valid,"landing retains the full-body solver");
++            if(s.clip!=103) {
++                CheckLandingSupport(s.joints,out,size);
++                for(int hand=0;hand<2;++hand) {
++                    Frame wrist{};Basis basis{};
++                    Check(BuildControllerWrist(hand,wrist,basis) && firstperson::Length(Sub(out[hand?10:13].origin,wrist.origin))<.1f,
++                        "native landing legs retain exact live controller wrists");
++                }
++            } else Check(g_bodyFollower.valid && !g_bodyLanding,"standing rendering resumes after native landing recovery");
++        }
++    }
++    testViewRise=0;
++}

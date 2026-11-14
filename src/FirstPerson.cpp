@@ -1995,7 +1995,9 @@ bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
 
 float VisualBodyPostureDrop(uint8_t* item) {
     const float drop=VR().FirstPersonPostureDrop();
-    if(!Cfg().firstPersonMovementStabilization || !g_groundTorso.valid ||
+    // Native fall landings retain the physical posture input used before the
+    // planted-glance compensation; the camera and full-body solver dip together.
+    if(UseLandingCamera(item) || !Cfg().firstPersonMovementStabilization || !g_groundTorso.valid ||
        !CanFitStandingBody(item) || !HasControllerBodyAnchor()) return drop;
     const float units=LiveWorldUnitsPerMetre();
     if(units<=1 || std::fabs(g_groundTorso.units-units)>.01f) return drop;
@@ -2090,8 +2092,12 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     }
     const int anchorJoint=Cfg().firstPersonJoint;
     if(anchorJoint<0 || anchorJoint>=15) return false;
-    const Vec anchorInPalette=Transform(native[anchorJoint],{float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),
+    Vec anchorInPalette=Transform(native[anchorJoint],{float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),
         float(locomotion::FirstPersonAnchorZ(state,Cfg().firstPersonAnchorZ,Cfg().firstPersonInteractionAnchorZ))});
+    // Share the camera's landing eye reference with posture reconstruction.
+    // Otherwise the old pitched-forward offset raises the torso above the view.
+    if(landing && Cfg().firstPersonMovementStabilization && anchorJoint==14)
+        anchorInPalette.y=std::min(anchorInPalette.y,native[14].origin.y+std::min(0,Cfg().firstPersonAnchorY));
     const Vec anchor=Add(anchorInPalette,cameraOffset);
     const float scale=LiveWorldUnitsPerMetre();
     locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
@@ -2204,7 +2210,12 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
             pistolBodyScale=bodyScale;
             Frame sized[15]{};firstperson::ScaleBody(native,bodyScale,sized);
             Frame inverseHead{};Inverse(native[14],inverseHead);
-            const Vec sizedAnchor=Transform(sized[14],Transform(inverseHead,anchorInPalette));
+            Vec sizedAnchor=Transform(sized[14],Transform(inverseHead,anchorInPalette));
+            // Automatic torso fitting reserves real eye-to-collar height.
+            // Carry that same clearance through impacts in the shared eye
+            // reference, rather than dropping the camera to the neck base.
+            if(landing && Cfg().firstPersonMovementStabilization && Cfg().firstPersonBodyScale==0 && g_bodySize.valid)
+                sizedAnchor.y-=g_bodySize.eyeGap;
             Vec rootOffset=Add(Sub(Scale(g_bodyFollower.root,scale),nativeRoot),wallShift);rootOffset.y=0;
             const bool grounded=CanFitStandingBody(item) || CanUseCrouchCamera(item);
             const bool standing=preparingJump || ordinaryLanding || ((state==2 || state==12) && !UseLandingCamera(item));
@@ -2212,12 +2223,15 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
             // The eyes lower around the neck while looking down. The standing
             // leg constraint already rejects this as crouch; moving and bent
             // poses must use the same posture height without moving the view.
+            // Native impacts already contain their crouch and foot motion.
+            // Exclude the standing chest reserve and added walking gait here;
+            // keep hips/knees within the animated legs' support envelope.
             if(!firstperson::SolveFollowingBody(sized,sizedAnchor,Add(anchorInPalette,headDelta),
                 Wrap(heading-nativeHeading),headRotation,forward,scale,rootOffset,
                 firstperson::BodyChestTwist(Wrap(headYaw-heading),BodyControllersStationary() || g_bodyFollower.supportedHands),
-                grounded,g_bodyFollower.phase,standing ? 0.f : g_bodyFollower.stepWeight,posed,upright,
-                (Cfg().firstPersonBodyScale==0 ? g_bodySize.eyeGap : 0.f)-
-                std::max(0.f,VR().FirstPersonHeightDrop()-VisualBodyPostureDrop(item))*scale,Sub(postureEye,eye))) return false;
+                grounded,g_bodyFollower.phase,(standing || landing) ? 0.f : g_bodyFollower.stepWeight,posed,upright,
+                landing ? 0.f : (Cfg().firstPersonBodyScale==0 ? g_bodySize.eyeGap : 0.f)-
+                std::max(0.f,VR().FirstPersonHeightDrop()-VisualBodyPostureDrop(item))*scale,landing ? Vec{} : Sub(postureEye,eye),landing)) return false;
         } else if(!firstperson::SolveBodyAtEye(native,joint,anchorInPalette,Add(anchorInPalette,headDelta),
             Wrap(heading-nativeHeading),headRotation,forward,posed)) return false;
     }
@@ -2238,9 +2252,9 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         firstperson::YawVector(Scale(Sub(native[3].origin,animationRoot),1/scale),-nativeHeading),
         firstperson::YawVector(Scale(Sub(native[6].origin,animationRoot),1/scale),-nativeHeading)};
     if(!g_torsoPose.Update(VR().PoseSerial(),TurnTime(),reference,eyeReference,quiet,grip,filtered,forward,
-        quiet,VisualBodyPostureDrop(item),contacts)) return false;
+        quiet,VisualBodyPostureDrop(item),contacts,landing)) return false;
     for(int j=0;j<15;++j) { posed[j]=filtered[j];posed[j].origin=Scale(filtered[j].origin,scale); }
-    if(Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item) &&
+    if(!landing && Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item) &&
        !g_groundTorso.Apply(obj,posed,body,Sub(eye,cameraOffset),scale,VisualBodyPostureDrop(item),true)) return false;
     // Offset the visible body after posture filtering, before exact hand IK.
     // Camera, collision, calibration and the native physics palette stay fixed.
@@ -2332,6 +2346,22 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         }
     }
     BlendSidearmPose(item,posed);
+    if(mainBody && landing && Cfg().firstPersonDriftLog) {
+        static uint64_t lastLandingPose=UINT64_MAX;
+        if(lastLandingPose!=VR().PoseSerial()) {
+            lastLandingPose=VR().PoseSerial();
+            Frame inverseChest{};
+            if(Inverse(native[7],inverseChest)) {
+                const Frame connected=Multiply(Multiply(posed[7],inverseChest),native[14]);
+                const float finalEye=eye.y-cameraOffset.y;
+                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f reserve=%.2fcm",
+                    g_boundDll->game+4,static_cast<unsigned long long>(VR().PoseSerial()),
+                    *reinterpret_cast<const int16_t*>(item+off::item_anim_number),finalEye,connected.origin.y,
+                    (finalEye-connected.origin.y)*100/scale,g_scenePose.y_pos,VR().FirstPersonVerticalOffset()*scale,
+                    Cfg().firstPersonBodyScale==0 && g_bodySize.valid ? g_bodySize.eyeGap*100/scale : 0.f);
+            }
+        }
+    }
     // Validate every correction before touching a palette. Helpers sharing a
     // native joint receive the same transform, including nonidentity bindings.
     for(int joint=0;joint<15;++joint) {
@@ -4786,6 +4816,32 @@ bool Anchor(PHD_3DPOS& pose) {
     pose.z_pos = head.z;
     pose.x_rot = 0;
     UpdateLocomotion(pose);
+    if(Cfg().firstPersonMovementStabilization && joint==14 && UseLandingCamera(item)) {
+        // Impact pitch rotates the forward eye clearance down into the legs.
+        // Follow the animated head height, retaining the configured upward
+        // eye offset. Keep native horizontal motion and live HMD translation.
+        PHD_VECTOR neck{};
+        reinterpret_cast<Fn_GetJointAbsPositionLerp>(
+            g_boundBase+g_boundDll->getJointAbsPositionLerp)(item,&neck,joint,frac);
+        pose.y_pos=std::min(pose.y_pos,neck.y+std::min(0,Cfg().firstPersonAnchorY));
+        if(Cfg().firstPersonFullBodyIK) {
+            PHD_VECTOR left{},right{};
+            const auto query=reinterpret_cast<Fn_GetJointAbsPositionLerp>(g_boundBase+g_boundDll->getJointAbsPositionLerp);
+            query(item,&left,3,frac);query(item,&right,6,frac);
+            const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
+            const float size=Cfg().firstPersonBodyScale>0 ? Cfg().firstPersonBodyScale :
+                g_bodySize.valid && g_bodySizeObject==object && std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
+            const float footY=float(std::max(left.y,right.y));
+            const float eyeReserve=Cfg().firstPersonBodyScale==0 && g_bodySize.valid && g_bodySizeObject==object &&
+                std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.eyeGap : 0.f;
+            const float supportedEye=footY+(float(pose.y_pos)-footY)*size-eyeReserve;
+            const float trackedY=InvertRigid(VR().HeadView()).r[1][3];
+            // The impact crouch is already at its supported depth. Account
+            // for physical lowering in the SAME final-eye frame as the body;
+            // do not add it again below the connected, floor-supported head.
+            pose.y_pos=std::min(pose.y_pos,int32_t(std::lround(supportedEye-trackedY)));
+        }
+    }
     if (locomotion::IsLadderState(state)) {
         // The native head can pitch through a rung stroke. Define clearance
         // in Lara's facing frame, not that pitching head frame or HMD gaze.

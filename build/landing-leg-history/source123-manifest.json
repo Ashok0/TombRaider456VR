@@ -1,0 +1,44 @@
+[
+  {
+    "Relative": "src/FirstPersonBodyIK.h",
+    "OriginalHash": "F890B4CDD0B31DF1EE05511D6C1C0539FC3011F094E172B5A6CE6291EEF389B4",
+    "ModifiedHash": "9D3484D9681D31C120158BAD7D43F486BCCFDCAE960F82BE3F530F8EFA7A9F43",
+    "Deleted": false
+  },
+  {
+    "Relative": "src/BodyFollower.h",
+    "OriginalHash": "3CC63B736E36E4CFD5D2A3C3403D5548A4E0560F37E0DCBD7E6CE5B21D134920",
+    "ModifiedHash": "85537AF7C2680BF05544EEE632D7019F29FDEE478FF0A4F3246A6DF532C16474",
+    "Deleted": false
+  },
+  {
+    "Relative": "src/FirstPerson.cpp",
+    "OriginalHash": "75259477BFC8CD604FD96AD94BC4E79D2AFB30786FB33061E73D46F47445F83E",
+    "ModifiedHash": "ACE259F53DF6501B525C329A7F83BABF1FF41F796BEF45C2681D0EB4FC5E9DAE",
+    "Deleted": false
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "72D7976A29DBF7EC90754584864AAB88A196BCE7CEA55768AD53B46ED0D891A9",
+    "ModifiedHash": "A4477F143E74B7DA9F56160E0293A1175318010854DB7615EE046568FA9C5197",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/collection_integration_selftest.h",
+    "OriginalHash": "3B45EA9D534C528CBC5620833518D914E7F5277F2BD20583FDE30759DE70FEBD",
+    "ModifiedHash": "84DA13E0803AC47589FF798DD79CC7DAEC3B9B58599B4EC20F6966CA9D537D41",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/landing_support_checks.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "2C248A3C74398741C65BBD09F1EC5E7344CAD42179EC043F9CD01A108145841D",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/landing_support_selftest.h",
+    "OriginalHash": null,
+    "ModifiedHash": "A1B191300AE0B8D3709318EA35733CD98C8384E15E46B52F56494A112A7AAF67",
+    "Deleted": false
+  }
+]

@@ -1,0 +1,63 @@
+{
+  "change": "Preserve authored impact-kneel leg poses at calibrated size instead of running standing leg IK while the landing camera drops",
+  "reproduction": "Installed TR5 log contains hard-landing animation 24. Original production renderer on extracted native landing frames folds a knee 183.8 game units below ankle support with automatic scale and 12 cm HMD lowering.",
+  "fix": "Native landing skeleton scaled about interpolated collision root; controller arm IK retained; standing torso fitting skipped until landing ends; native camera and simulation untouched",
+  "nativeFixtures": {
+    "poses": 334,
+    "games": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "levels": [
+      "LEVEL1",
+      "ASSAULT",
+      "JUNGLE",
+      "ANGKOR1",
+      "ANDREA1"
+    ],
+    "clips": [
+      103,
+      24,
+      31,
+      82,
+      92,
+      99
+    ],
+    "exclusions": "TR1 clip 99 water exit and TR5 clip 99 death excluded by native state",
+    "generator": "tools/extract_landing_poses.py",
+    "regeneratedSHA256": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA"
+  },
+  "tr456Checks": 6905722,
+  "tr123Checks": 3969766,
+  "coverage": [
+    "Native hard/soft landing keys",
+    "Automatic and 0.7/1.0/1.2 manual body scale",
+    "Unarmed and pistols",
+    "Standing and 12 cm physical head lowering",
+    "Left/right controller loss and hands-busy landing",
+    "Exact calibrated pelvis/leg frames, which preserve native mesh floor geometry",
+    "Exact controller wrist targets",
+    "Native physics palette preserved",
+    "Camera and item memory unchanged",
+    "Return to standing IK"
+  ],
+  "build": "Both x64 Release builds passed with automatic game deployment disabled",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "CCABA8595150A75176F760E4C595988EEEC20A97D914243B7C0B8F8481A15825",
+    "src/FirstPersonBodyIK.h": "DDFC38CD5769A4C791EA8E6DCF9B12B4F0E4BC48A2E857327994361998F3AF91",
+    "src/BodyFollower.h": "82CE19C5FFC8B71B6A385D39E8D5B6FF3A9D6704758B50BE86A8ACED558F7A7E",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835"
+  },
+  "testHashes": {
+    "tools/upjump_arms_test.cpp": "123EFD32C3738774560A9ABB92451CEADA677C6D96F7F757331234309EA701B9",
+    "tools/landing_floor_regression.inl": "9E31ADA5157308577A7E733C78813A1AC92410330C1B9D67BC976084FAF72399",
+    "tools/landing_leg_checks.inl": "F02F56DCC29B7C0659DCC7B5624032DF40748306899389B8037BD505D34F4F49",
+    "tools/native_landing_poses.inl": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA",
+    "tools/extract_landing_poses.py": "4F05A507DA3644F1E5F57ECF319ED2455C56DEB2C4F6DF955AA51A2679FD6352"
+  },
+  "inHeadsetTested": false
+}

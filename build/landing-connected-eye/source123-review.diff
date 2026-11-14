@@ -1,0 +1,145 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -860,6 +860,23 @@
+         // camera offset. Retain the animated head dip and live HMD tracking.
+         const int32_t neckY=body[1]+(Lerp(jPrev[7],jCur[7],frac)>>kFixedShift);
+         head[1]=std::min(head[1],neckY+std::min(0,Cfg().firstPersonAnchorY));
++        if(Cfg().firstPersonFullBodyIK) {
++            const auto jointY=[&](int index) {
++                const auto* prev=reinterpret_cast<const int32_t*>(item+off::item_joints_prev+index*off::joint_stride);
++                const auto* cur=reinterpret_cast<const int32_t*>(item+off::item_joints_cur+index*off::joint_stride);
++                return body[1]+(Lerp(prev[7],cur[7],frac)>>kFixedShift);
++            };
++            const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
++            const float size=Cfg().firstPersonBodyScale>0 ? Cfg().firstPersonBodyScale :
++                g_bodySize.valid && g_bodySizeObject==object && std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
++            const float footY=float(std::max(jointY(3),jointY(6)));
++            const float supportedEye=footY+(float(head[1])-footY)*size;
++            const float trackedY=Cfg().positionalTracking && Cfg().firstPersonHeadTranslation ?
++                VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre() : 0;
++            // Share the final rendered eye with the floor-supported landing
++            // pose, instead of adding physical lowering below its head.
++            head[1]=std::min(head[1],int32_t(std::lround(supportedEye-trackedY)));
++        }
+     }
+     if (IsLadder(item)) {
+         int32_t neck[3]{};
+@@ -2535,8 +2552,12 @@
+         if(!g_jumpBodyReference.Apply(native,landingRoot,true,false,(MotionReady() || UnarmedIKReady()) && !SidearmAnimationActive(),
+                                       {std::sin(nativeHeading),0,std::cos(nativeHeading)})) return false;
+     }
+-    const Vec anchorInPalette=Transform(native[anchorJoint],{float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),
++    Vec anchorInPalette=Transform(native[anchorJoint],{float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),
+         float(locomotion::FirstPersonAnchorZ(state,Cfg().firstPersonAnchorZ,Cfg().firstPersonInteractionAnchorZ,BoundGame()))});
++    // Share the camera's landing eye reference with posture reconstruction.
++    // Otherwise the old pitched-forward offset raises the torso above the view.
++    if(landing && Cfg().firstPersonMovementStabilization && anchorJoint==14)
++        anchorInPalette.y=std::min(anchorInPalette.y,native[14].origin.y+std::min(0,Cfg().firstPersonAnchorY));
+     const Vec anchor=Add(anchorInPalette,cameraOffset);
+     const float scale=LiveWorldUnitsPerMetre();
+     locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+@@ -2775,6 +2796,22 @@
+         for(int i=0;i<3;++i) posed[first+i]=Multiply(changes[i],chain[i]);
+     }
+     BlendSidearmPose(item,posed);
++    if(mainBody && landing && Cfg().firstPersonDriftLog) {
++        static uint64_t nextLandingAlignment=0;
++        const auto now=GetTickCount64();
++        if(now>=nextLandingAlignment) {
++            nextLandingAlignment=now+100;
++            Frame inverseChest{};
++            if(Inverse(native[7],inverseChest)) {
++                const Frame connected=Multiply(Multiply(posed[7],inverseChest),native[14]);
++                const float finalEye=eye.y-cameraOffset.y;
++                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f",
++                    BoundGame(),static_cast<unsigned long long>(VR().PoseSerial()),
++                    *reinterpret_cast<const int16_t*>(item+off::item_anim_number),finalEye,connected.origin.y,
++                    (finalEye-connected.origin.y)*100/scale,g_scenePose.y_pos,VR().FirstPersonVerticalOffset()*scale);
++            }
++        }
++    }
+     // Validate every correction before touching a palette. Helpers sharing a
+     // native joint receive the same transform, including nonidentity bindings.
+     for(int joint=0;joint<15;++joint) {
+--- src/FirstPersonBodyIK.h
++++ src/FirstPersonBodyIK.h
+@@ -253,7 +253,9 @@
+     // Lara has one torso joint, not a multi-bone human spine. A two-bone arm
+     // solve folds this chest like an elbow and can lift it into the camera.
+     // Preserve the authored spine shape and apply a bounded coherent lean.
+-    const Basis bend=LimitRotation(Align(spine,Add(spine,lean)),.34906585f);
++    // The impact animation already supplies its torso bend. Re-inferring it
++    // from the falling eye adds a second bend and separates camera from neck.
++    const Basis bend=authoredKnees ? IdentityBasis() : LimitRotation(Align(spine,Add(spine,lean)),.34906585f);
+     const float heightShift=std::copysign(std::max(0.f,std::fabs(displacement.y)-.015f*scale),displacement.y);
+     Vec pelvisShift{0,heightShift,0};
+     const Vec bentHead=Add(footprint[0].origin,Transform(bend,spine));
+--- tests/landing_support_selftest.h
++++ tests/landing_support_selftest.h
+@@ -2,7 +2,7 @@
+ void TestLandingSupportPalettes() {
+     using namespace tr;using namespace tr::motiongun;
+     for(int game:{1,2,3}) for(float factor:{0.f,.7f,1.f,1.2f})
+-    for(float drop:{0.f,.12f,.3f}) for(bool armed:{false,true}) {
++    for(float drop:{0.f,.12f,.15f,.3f}) for(bool armed:{false,true}) {
+         BodyRig(game,armed);testConfig.firstPersonFullBodyIK=true;
+         testConfig.firstPersonBodyScale=factor;testConfig.firstPersonMovementStabilization=true;
+         testConfig.firstPersonAnchorY=-32;testConfig.firstPersonAnchorZ=140;
+@@ -34,11 +34,11 @@
+             clock.Advance(1./30);++testVR.m_poseSerial;
+             // Feed the real fixed-point head query used by the collection's
+             // camera; a camera-only change must also preserve fitted contacts.
+-            for(auto offset:{off::item_joints_prev,off::item_joints_cur}) {
+-                auto* joint=reinterpret_cast<int32_t*>(item+offset+14*off::joint_stride);
++            for(int j=0;j<15;++j) for(auto offset:{off::item_joints_prev,off::item_joints_cur}) {
++                auto* joint=reinterpret_cast<int32_t*>(item+offset+j*off::joint_stride);
+                 for(int row=0;row<3;++row) {
+-                    for(int col=0;col<3;++col) joint[row*4+col]=int32_t(std::lround(s.joints[14].basis.r[row][col]*16384));
+-                    const float value=row==0?s.joints[14].origin.x:row==1?s.joints[14].origin.y:s.joints[14].origin.z;
++                    for(int col=0;col<3;++col) joint[row*4+col]=int32_t(std::lround(s.joints[j].basis.r[row][col]*16384));
++                    const float value=row==0?s.joints[j].origin.x:row==1?s.joints[j].origin.y:s.joints[j].origin.z;
+                     joint[row*4+3]=int32_t(std::lround(value*16384));
+                 }
+             }
+@@ -62,6 +62,11 @@
+             Check(g_bodyFollower.valid,"landing retains the full-body solver");
+             if(s.clip!=103) {
+                 CheckLandingSupport(s.joints,out,size);
++                Frame inverseChest{};Inverse(s.joints[7],inverseChest);
++                const Frame connected=Multiply(Multiply(out[7],inverseChest),s.joints[14]);
++                const float finalEye=g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre();
++                Check(finalEye<=connected.origin.y+2.f,
++                    "final collection camera cannot sink below the neck attached to the rendered torso");
+                 for(int hand=0;hand<2;++hand) {
+                     Frame wrist{};Basis basis{};
+                     Check(BuildControllerWrist(hand,wrist,basis) && firstperson::Length(Sub(out[hand?10:13].origin,wrist.origin))<.1f,
+--- README.md
++++ README.md
+@@ -3608,11 +3608,22 @@
+ 
+ ### Supported first-person fall landings (2026-11-13)
+ 
+-The landing camera follows the animated head's height. Its forward eye clearance
+-can no longer rotate downward into Lara's legs as her head pitches on impact.
+-This adjusts only the downward vertical offset during hard-fall recovery;
+-horizontal animation and live physical headset translation remain intact. The
+-supported leg solve below is unchanged.
++The landing camera and VRIK posture reconstruction now share the same eye offset.
++Correcting only the camera left VRIK reconstructing the torso from the old,
++downward-pitched offset. During native impacts, the authored torso bend is kept
++instead of adding another inferred bend from the falling camera. The final eye
++also respects the scaled, foot-supported pose: physical headset lowering is not
++stacked below a crouch whose hips have already reached their supported depth.
++The camera still follows the animation down and back up; standing, airborne and
++ordinary jump-recovery cameras retain their existing behavior. Raw headset
++tracking is unchanged. Additional downward translation is absorbed in the scene
++anchor only while the native impact pose cannot follow it farther down.
++
++Regression checks compare the final rendered eye with the neck transported by
++the rendered torso, including a downward gaze and 0/12/15/30 cm of physical
++lowering. This catches the previous build's camera/body mismatch; checking the
++independent, camera-driven head joint alone cannot detect it. With drift logging
++enabled, `landing-alignment` records the same eye/connected-neck separation.
+ 
+ Hard falls keep the native camera dip and rise and the complete tracked torso/arm
+ solve. During that impact pose, the standing chest-height reserve and extra

@@ -1,0 +1,12 @@
+{
+  "reference": "6d98c021 (2026-10-31)",
+  "comparison": "Read-only comparison of FirstPerson.cpp, FirstPersonBodyIK.h, BodyFollower.h and VRSystem.cpp against current code",
+  "findings": [
+    "Older SolveFollowingBody used the same native eye offset as the camera and did not apply the later standing chest reserve.",
+    "Later standing calibration added torso fitting and a persistent eye reserve; earlier landing fixes removed their impact contribution.",
+    "The successful supported-leg fix restricts further impact hip compression. The subsequent camera-only head-height patch did not update the body eye reference, nor account for physical lowering after the scene anchor.",
+    "Current correction shares the landing eye offset with VRIK, retains the authored impact torso bend, and bounds the final tracked eye using the same scaled foot-supported pose."
+  ],
+  "notClaimed": "This is not a full historical rollback or a claim that the entire old release has been headset-reproduced.",
+  "installedBuildRegression": "New connected-neck test fails against the exact pre-change source saved in before/src; test passes with candidate."
+}

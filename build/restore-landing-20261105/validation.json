@@ -1,0 +1,39 @@
+{
+  "change": "Restore pre-November-10 full-body IK landing and native animated camera, using November 5 camera source and physical posture behavior",
+  "scope": "TR1-5 first-person native fall landings",
+  "checks": {
+    "456": 6637210,
+    "123": 3738838,
+    "camera": 6117120
+  },
+  "inHeadsetTested": false,
+  "removed": [
+    "Native-only scaled landing skeleton with separate arm fallback",
+    "Standing camera hold on impact",
+    "Scaled/yaw-only landing head anchor",
+    "Downward tracked-height cap on landing"
+  ],
+  "preserved": [
+    "Current roomscale and glance classifiers",
+    "Current standing height calibration",
+    "Controls and menus",
+    "Native collision, damage and animation timing"
+  ],
+  "knownTradeoff": "The earlier temporary foot/lower-leg clipping on hard impacts may return. This is a restoration of preferred presentation, not a new floor-clipping solution.",
+  "cameraCoverage": "Extracted TR4/5 landing poses, calibrated/uncalibrated, full-body IK and stabilization on/off, scales/headings/interpolation, disabled tracking modes, physical head lowering and rise; final rendered eye follows native animation plus enabled tracking",
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "retiredTests": "The floor-fit-only palette assertions describe the rejected native-only landing path and are no longer included in the active suites; original body/arm integration suites are retained.",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "B13721A1068C7DAB7A7CB6493439238224714EE706E5D102C2ED8DC4D4EA2777",
+    "src/FirstPersonStabilization.h": "07E276F599F73FDAA10BFF484E4FC281BDBAD94A6DDB8BCA4D15D33505306316",
+    "src/FirstPersonBodyIK.h": "DDFC38CD5769A4C791EA8E6DCF9B12B4F0E4BC48A2E857327994361998F3AF91",
+    "src/BodyFollower.h": "82CE19C5FFC8B71B6A385D39E8D5B6FF3A9D6704758B50BE86A8ACED558F7A7E",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "1B0DEDEA9C0F3FAB5AF62235DA22E7EE59EDA4F4E757BB808C29AB2A7619A3AD",
+    "tools/landing_camera_test.cpp": "B806BF241ECF7CEB369BC8D87749BD9220E5CB4620E18ACC757DA26014AABC2C",
+    "tools/upjump_arms_test.cpp": "7B8AEC211ADD5084434B954D72F9F8336D983CE4F07CC5E7FF62E59AD7F694D4"
+  }
+}

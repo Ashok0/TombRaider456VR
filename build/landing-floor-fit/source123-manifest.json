@@ -1,0 +1,44 @@
+[
+  {
+    "Relative": "src/FirstPerson.cpp",
+    "OriginalHash": "A77E9FBB34CE481B7109518E71E7269F0A9F9479439476B3A1E4AB99638C5FD0",
+    "ModifiedHash": "564746D81BC0A0E9FD507C278F1ABA599E57B47A1A09722CA57714EC4F321FA9",
+    "Deleted": false
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "411127D91449EE17EC2626FF0D6608E469B75C97AC70B81B57A2222191B7A8B5",
+    "ModifiedHash": "15FD3722CE76301A3FEA3E462911A73FDAA4FC8A5A441B5B613C63E42AB9E278",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/collection_integration_selftest.h",
+    "OriginalHash": "0DE703208F0FFA27C1622573749757DC017C4756396BF453C103BABE6FDF2805",
+    "ModifiedHash": "0D5CEB6772EBF81B079E0A6F98FDD3692790ADB0ED7A18C5D06EB346EC8F4748",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/landing_floor_selftest.h",
+    "OriginalHash": null,
+    "ModifiedHash": "B19D46B1D4972987E317B63D7FB6E5A9D3C07C6535B4EE6E57E09B49D9862BE5",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/landing_leg_checks.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "F02F56DCC29B7C0659DCC7B5624032DF40748306899389B8037BD505D34F4F49",
+    "Deleted": false
+  },
+  {
+    "Relative": "tests/native_landing_poses.inl",
+    "OriginalHash": null,
+    "ModifiedHash": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA",
+    "Deleted": false
+  },
+  {
+    "Relative": "tools/extract_landing_poses.py",
+    "OriginalHash": null,
+    "ModifiedHash": "4F05A507DA3644F1E5F57ECF319ED2455C56DEB2C4F6DF955AA51A2679FD6352",
+    "Deleted": false
+  }
+]

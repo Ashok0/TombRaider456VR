@@ -1,0 +1,36 @@
+{
+  "change": "Compensate downward physical headset displacement in the landing scene anchor so the final tracked eye cannot descend beneath the animated landing eye",
+  "scope": "TR1-5 stabilized first-person native fall landings",
+  "targetedCameraChecks": 7136640,
+  "tr456RenderChecks": 6905722,
+  "tr123Checks": 3969996,
+  "inHeadsetTested": false,
+  "cameraCoverage": [
+    "Actual rendered HeadView displacement after Anchor",
+    "Native TR4/5 landing clips",
+    "Five interpolation fractions",
+    "Three scales and headings",
+    "Full body IK/stabilization on/off",
+    "Calibration present/absent",
+    "Neutral, 17cm and 40cm physical lowering, 20cm physical rise",
+    "Positional tracking disabled, first-person translation disabled, and head-at-camera mode",
+    "TR1-3 native landing hook tests with physical lowering and rise"
+  ],
+  "baseline": "Installed implementation fails the new rendered-eye-height assertion; corrected implementation passes",
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "sliding": "Unchanged; this correction is limited to landing camera height",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "5959A95D135BE453B3A4C43545A48ED7CA16F51DB58F68B042E5CA0143720ECB",
+    "src/FirstPersonStabilization.h": "3B17B4966FBA88A2EBACCCFF2B6389F2F3EEC5C5C51F0136640576C4B01B7DE2",
+    "src/FirstPersonBodyIK.h": "DDFC38CD5769A4C791EA8E6DCF9B12B4F0E4BC48A2E857327994361998F3AF91",
+    "src/BodyFollower.h": "82CE19C5FFC8B71B6A385D39E8D5B6FF3A9D6704758B50BE86A8ACED558F7A7E",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "AA650B18E8E9BFC82E4D4F7F5FB029C7F0713D7750349C3C4B598D1033717A51",
+    "tools/landing_camera_test.cpp": "6E4B5EBFEB4EF38DC20EDD83259C9A9E7C1156B4F780942D8D2322CEDAFFB2F6",
+    "tools/landing_floor_regression.inl": "7571EDCAEC0FD2F7ABF1BBBB6F9F05753B24D018CA7D9D4BF42BB9C3E8ACAE16",
+    "tools/upjump_arms_test.cpp": "123EFD32C3738774560A9ABB92451CEADA677C6D96F7F757331234309EA701B9"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "requestedDate": "approximately 2026-11-06",
+  "tr456Reference": "4607ef8 (2026-11-05 08:55)",
+  "tr123Reference": "9949b67 (2026-11-05 08:55)",
+  "tr456AnchorExactlyMatchesNovember5": true,
+  "restored": "Native animated landing camera plus full-body IK, original physical posture input and shared shoulder/hand solve",
+  "preserved": "Current standing calibration, roomscale classifiers, menus, controls, jump/visibility and non-landing fixes"
+}

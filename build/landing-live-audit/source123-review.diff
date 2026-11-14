@@ -1,0 +1,95 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -870,7 +870,9 @@
+             const float size=Cfg().firstPersonBodyScale>0 ? Cfg().firstPersonBodyScale :
+                 g_bodySize.valid && g_bodySizeObject==object && std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
+             const float footY=float(std::max(jointY(3),jointY(6)));
+-            const float supportedEye=footY+(float(head[1])-footY)*size;
++            const float eyeReserve=Cfg().firstPersonBodyScale==0 && g_bodySize.valid && g_bodySizeObject==object &&
++                std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.eyeGap : 0.f;
++            const float supportedEye=footY+(float(head[1])-footY)*size-eyeReserve;
+             const float trackedY=Cfg().positionalTracking && Cfg().firstPersonHeadTranslation ?
+                 VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre() : 0;
+             // Share the final rendered eye with the floor-supported landing
+@@ -2670,7 +2672,11 @@
+             pistolBodyScale=bodyScale;
+             Frame sized[15]{};firstperson::ScaleBody(native,bodyScale,sized);
+             Frame inverseHead{};Inverse(native[14],inverseHead);
+-            const Vec sizedAnchor=Transform(sized[14],Transform(inverseHead,anchorInPalette));
++            Vec sizedAnchor=Transform(sized[14],Transform(inverseHead,anchorInPalette));
++            // Keep the automatic standing fit's eye-to-collar reserve in the
++            // same landing reference used by the camera and supported body.
++            if(landing && Cfg().firstPersonMovementStabilization && Cfg().firstPersonBodyScale==0 && g_bodySize.valid)
++                sizedAnchor.y-=g_bodySize.eyeGap;
+             Vec rootOffset=Add(Sub(Scale(g_bodyFollower.root,scale),nativeRoot),wallShift);rootOffset.y=0;
+             const bool grounded=CanFitStandingBody(item) || CanUseCrouchCamera(item);
+             const bool standing=ordinaryLanding || preparingJump || ((state==2 || state==12) && !UseLandingCamera(item));
+@@ -2797,18 +2803,18 @@
+     }
+     BlendSidearmPose(item,posed);
+     if(mainBody && landing && Cfg().firstPersonDriftLog) {
+-        static uint64_t nextLandingAlignment=0;
+-        const auto now=GetTickCount64();
+-        if(now>=nextLandingAlignment) {
+-            nextLandingAlignment=now+100;
++        static uint64_t lastLandingPose=UINT64_MAX;
++        if(lastLandingPose!=VR().PoseSerial()) {
++            lastLandingPose=VR().PoseSerial();
+             Frame inverseChest{};
+             if(Inverse(native[7],inverseChest)) {
+                 const Frame connected=Multiply(Multiply(posed[7],inverseChest),native[14]);
+                 const float finalEye=eye.y-cameraOffset.y;
+-                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f",
++                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f reserve=%.2fcm",
+                     BoundGame(),static_cast<unsigned long long>(VR().PoseSerial()),
+                     *reinterpret_cast<const int16_t*>(item+off::item_anim_number),finalEye,connected.origin.y,
+-                    (finalEye-connected.origin.y)*100/scale,g_scenePose.y_pos,VR().FirstPersonVerticalOffset()*scale);
++                    (finalEye-connected.origin.y)*100/scale,g_scenePose.y_pos,VR().FirstPersonVerticalOffset()*scale,
++                    Cfg().firstPersonBodyScale==0 && g_bodySize.valid ? g_bodySize.eyeGap*100/scale : 0.f);
+             }
+         }
+     }
+--- tests/landing_support_selftest.h
++++ tests/landing_support_selftest.h
+@@ -67,6 +67,9 @@
+                 const float finalEye=g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre();
+                 Check(finalEye<=connected.origin.y+2.f,
+                     "final collection camera cannot sink below the neck attached to the rendered torso");
++                const float reserve=factor==0 ? g_bodySize.eyeGap : 0.f;
++                Check(finalEye<=connected.origin.y-reserve+2.f,
++                    "collection landing preserves calibrated eye clearance instead of using the neck base");
+                 for(int hand=0;hand<2;++hand) {
+                     Frame wrist{};Basis basis{};
+                     Check(BuildControllerWrist(hand,wrist,basis) && firstperson::Length(Sub(out[hand?10:13].origin,wrist.origin))<.1f,
+--- README.md
++++ README.md
+@@ -3619,15 +3619,23 @@
+ tracking is unchanged. Additional downward translation is absorbed in the scene
+ anchor only while the native impact pose cannot follow it farther down.
+ 
++Automatic body fitting also keeps its calibrated eye-to-collar clearance
++through the impact. The camera and body solver use that same clearance; losing
++it during landing could put the view too low even when a check reported that
++the eye remained above the neck base. Manual body scale retains its existing
++offset, and the reserve is not applied a second time as torso compression.
++
+ Regression checks compare the final rendered eye with the neck transported by
+-the rendered torso, including a downward gaze and 0/12/15/30 cm of physical
+-lowering. This catches the previous build's camera/body mismatch; checking the
+-independent, camera-driven head joint alone cannot detect it. With drift logging
+-enabled, `landing-alignment` records the same eye/connected-neck separation.
++the rendered torso, requiring the calibrated clearance as well as testing a
++downward gaze and 0/12/15/30 cm of physical lowering. Checking the independent,
++camera-driven head joint alone cannot detect a body/view mismatch. With drift
++logging enabled, `landing-alignment` records the eye/connected-neck separation
++and calibration reserve once per tracked pose throughout the impact.
+ 
+ Hard falls keep the native camera dip and rise and the complete tracked torso/arm
+-solve. During that impact pose, the standing chest-height reserve and extra
+-walking gait no longer add a second crouch. Additional tracked hip movement is
++solve. During that impact pose, the calibration reserve belongs to the shared
++eye reference; extra walking gait and inferred torso compression do not add a
++second crouch. Additional tracked hip movement is
+ limited by both legs' reach, and knee bends follow the authored landing direction
+ within its supported range. The feet retain their scaled animation contacts;
+ leg segments remain connected without stretching. Standing calibration, roomscale

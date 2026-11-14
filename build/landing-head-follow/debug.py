@@ -1,0 +1,4 @@
+from pathlib import Path
+w=Path('build/landing-head-follow');p=w/'candidate/PlantedPivotEvidence.h';s=p.read_text();s=s.replace('double until=0;','double until=0; bool dbgStraight=false,dbgClose=false;int dbgArc=0;');s=s.replace('return inspecting && now<until && !straight;','dbgStraight=straight;dbgClose=closeInspection;dbgArc=arcTurns;return inspecting && now<until && !straight;');p.write_text(s)
+s=Path('build/stance-pivot-review/replay-loop.cpp').read_text();s=s.replace('std::printf("YAW,','std::printf("EVID,%llu,%d,%d,%d,%.3f\\n",frame,anchor.pivotEvidence.dbgStraight,anchor.pivotEvidence.dbgClose,anchor.pivotEvidence.dbgArc,anchor.pivotEvidence.until-time);\n        std::printf("YAW,');(w/'replay-debug.cpp').write_text(s)
+p=w/'replay.cmd';s=p.read_text().replace('build\\stance-pivot-review\\replay-loop.cpp','build\\landing-head-follow\\replay-debug.cpp');p.write_text(s)

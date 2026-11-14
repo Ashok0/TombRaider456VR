@@ -1,0 +1,12 @@
+{
+  "hardLandingLogSamples": 35,
+  "physicalLoweringRangeMetres": [
+    0.12200000000000011,
+    0.19900000000000007
+  ],
+  "bodyScale": 0.845,
+  "anchorY": -32,
+  "worldUnitsPerMetre": 423,
+  "nominalEyeAboveHeadMetres": 0.06392434988179668,
+  "baselineTestFails": true
+}

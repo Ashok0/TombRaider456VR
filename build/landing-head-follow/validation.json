@@ -1,0 +1,32 @@
+{
+  "change": "Follow the scaled animated landing head using a yaw-only eye offset instead of holding standing height",
+  "scope": "TR1-5 stabilized first-person fall landings",
+  "targetedCameraChecks": 637200,
+  "tr456RenderChecks": 6905722,
+  "tr123Checks": 3969766,
+  "inHeadsetTested": false,
+  "cameraCoverage": [
+    "Native TR4/5 landing clips and recovery frames",
+    "Five interpolation fractions",
+    "Three body scales and headings",
+    "Full body IK and stabilization on/off",
+    "Standing calibration present/absent",
+    "Physical head lowering"
+  ],
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "sliding": "NOT FIXED: production stance and body-following headers unchanged. Latest capture reproduces false steps and turns during user-labelled planted glances. Experimental raised-hand guard eliminates the captured glances but reduced combined walking/glancing travel and was rejected.",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "1C29BE52111B40CDCE0F920F44322FAA7A19ACF61A96B0CA2E43E9CBDBF203F5",
+    "src/FirstPersonStabilization.h": "69DA4CEC4C5A3D50EE2E8EFF2C5084E4ED5DE4034BA2ABFC35AC5E4F7E9E1057",
+    "src/FirstPersonBodyIK.h": "DDFC38CD5769A4C791EA8E6DCF9B12B4F0E4BC48A2E857327994361998F3AF91",
+    "src/BodyFollower.h": "82CE19C5FFC8B71B6A385D39E8D5B6FF3A9D6704758B50BE86A8ACED558F7A7E",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "E3EAF48889D78AC94BE278DCD38D229BC20C93C083C4E8BA1B314F09FD3EE9BF",
+    "tools/landing_camera_test.cpp": "F537774063C1E5A90853883E08D57C1161695B28BFF1EFDE973CA5CD45E25236",
+    "tools/landing_floor_regression.inl": "AD2492A9A8D59DF5DD2927BB287CB51C360E9F0E933C132317A46D3350700A4E",
+    "tools/upjump_arms_test.cpp": "123EFD32C3738774560A9ABB92451CEADA677C6D96F7F757331234309EA701B9"
+  }
+}

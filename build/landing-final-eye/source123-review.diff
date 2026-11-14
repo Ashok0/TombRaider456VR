@@ -1,0 +1,90 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -4352,7 +4352,9 @@
+         const float yaw=Radians(prev.y_rot)+Wrap(Radians(pos.y_rot)-Radians(prev.y_rot))*(frac/256.f);
+         const auto eye=stabilization::LandingHeadEye({head.x,head.y,head.z},{hip.x,hip.y,hip.z},
+             float(Lerp(prev.y_pos,pos.y_pos,frac)),AnimatedBodyScale(item),
+-            {float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),float(Cfg().firstPersonAnchorZ)},yaw);
++            {float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),float(Cfg().firstPersonAnchorZ)},yaw,
++            Cfg().positionalTracking && Cfg().firstPersonHeadTranslation ?
++                VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre() : 0.f);
+         pose.x_pos=int32_t(std::lround(eye.x));pose.y_pos=int32_t(std::lround(eye.y));pose.z_pos=int32_t(std::lround(eye.z));
+         g_mountRootHeight.Reset();
+     } else if (Cfg().firstPersonMovementStabilization && (state==3 || state==9 || (state>=25 && state<=28)) &&
+--- src/FirstPersonStabilization.h
++++ src/FirstPersonStabilization.h
+@@ -211,11 +211,15 @@
+ // Follow the visible landing head, with the eye offset in Lara's yaw frame.
+ // Pitching the forward eye offset with the impact animation can push the view
+ // down into the folded legs. Apply the same fixed scale/pivot as the palette.
++// Stereo adds trackedY AFTER this anchor. During the authored impact crouch,
++// limit extra downward travel to the animated eye height; otherwise a downward
++// glance places the actual view below the head even with a correct anchor.
++// Upward tracking remains live. Tracking/calibration themselves are unchanged.
+ inline Point LandingHeadEye(Point head,Point hip,float rootY,float scale,
+-                            Point eyeOffset,float yaw) {
++                            Point eyeOffset,float yaw,float trackedY=0) {
+     const auto flat=locomotion::Rotate({eyeOffset.x*scale,eyeOffset.z*scale},yaw);
+     return {hip.x+(head.x-hip.x)*scale+flat.x,
+-            rootY+(head.y-rootY+eyeOffset.y)*scale,
++            rootY+(head.y-rootY+eyeOffset.y)*scale-std::max(0.f,trackedY),
+             hip.z+(head.z-hip.z)*scale+flat.z};
+ }
+ 
+--- README.md
++++ README.md
+@@ -5,7 +5,9 @@
+ folding the shins through the floor. Tracked hands remain active. The landing
+ camera follows the animated head at the visible body's scale, with the eye
+ offset in Lara's facing frame so head pitch cannot rotate it into her legs.
+-Physical head movement, collision, damage and recovery timing remain native.
++During impact, downward headset displacement is limited at the animated eye
++height so the final view cannot sink below her head. Upward head movement and
++looking around remain tracked. Collision, damage and recovery timing remain native.
+ 
+ Ordinary jumps clear any leftover body-hiding delay from an earlier landing or
+ ledge transition, preventing the torso from suddenly reappearing during flight.
+--- tests/firstperson_ik_selftest.h
++++ tests/firstperson_ik_selftest.h
+@@ -367,8 +367,12 @@
+     Reset(0,{},true);dll.module=L"tomb3.dll";*Ptr<uint16_t>(dll.lara+60)=4;
+     Check(!Gate(),"TR3 special switch extra-animation bank also uses third-person camera");
+     *Ptr<uint16_t>(dll.lara+60)=0;Check(Gate(),"extra-animation exit restores first person");
++    for(int game:{1,2,3}) for(float rise:{-.4f,-.17f,0.f,.2f}) for(bool tracked:{false,true})
+     for (const auto clip : {std::pair<int,int>{2,24},{2,31},{2,82},{1,92},{2,99}}) {
+-        Reset(clip.first,{},true);Field<int16_t>(24)=int16_t(clip.second);
++        Reset(clip.first,{},true);
++        dll.module=game==1?L"tomb1.dll":game==2?L"tomb2.dll":L"tomb3.dll";
++        testViewRise=rise;testConfig.positionalTracking=tracked;testConfig.firstPersonHeadTranslation=true;
++Field<int16_t>(24)=int16_t(clip.second);
+         dll.frameFrac=204;g_headingLevel=0;g_previousBody={};g_dragPrevious=g_dragCurrent=g_dragShown={};
+         g_groundEye={};g_groundEye.Apply({0,0,0},0,{0,-700,70},0);
+         const auto before=g_groundEye;g_bodyVisualOffset={100,100};
+@@ -379,11 +383,13 @@
+         }
+         PHD_3DPOS eye{30,-480,150}; const auto native=eye;
+         UpdateLocomotion(eye);FitBodyToRenderedEye(item,eye,native);
+-        Check(eye.x_pos==30 && eye.y_pos==-480 && eye.z_pos==150,
+-              "landing eye follows the head instead of staying at standing height");
++        const float trackingY=tracked ? -rise*LiveWorldUnitsPerMetre() : 0;
++        Check(eye.x_pos==30 && std::fabs(eye.y_pos+trackingY-(-480+std::min(0.f,trackingY)))<1.1f && eye.z_pos==150,
++              "final landing eye stays at head height when physically lowering; upward tracking remains live");
+         Check(!g_bodyVisualOffset.x && !g_bodyVisualOffset.z &&
+               !std::memcmp(&before,&g_groundEye,sizeof(before)),"landing does not contaminate standing eye/body calibration");
+     }
++    testViewRise=0;
+     Check(!locomotion::IsLandingAnimation(58,99) && !locomotion::IsLandingAnimation(2,11) &&
+           !locomotion::IsLandingAnimation(7,13),
+           "water exit, idle and looping left turn are not landing poses");
+--- tests/landing_floor_selftest.h
++++ tests/landing_floor_selftest.h
+@@ -31,7 +31,8 @@
+                 motiongun::Vec{s.joints[0].origin.x+(s.joints[14].origin.x-s.joints[0].origin.x)*AnimatedBodyScale(item),
+                     (s.joints[14].origin.y-32)*AnimatedBodyScale(item),
+                     s.joints[0].origin.z+(s.joints[14].origin.z-s.joints[0].origin.z+140)*AnimatedBodyScale(item)};
+-            g_scenePose={int32_t(eye.x),int32_t(eye.y),int32_t(eye.z)};
++            const float landingTracking=s.clip==103 ? 0.f : std::max(0.f,VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre());
++            g_scenePose={int32_t(eye.x),int32_t(std::lround(eye.y-landingTracking)),int32_t(eye.z)};
+             for(int j=0;j<15;++j) WriteRows(Multiply(s.joints[j],inverseBind[j]),ikNative+j*12);
+             clock.Advance(1./30);++testVR.m_poseSerial;
+             const auto camera=g_scenePose;

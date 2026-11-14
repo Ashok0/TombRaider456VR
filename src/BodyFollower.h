@@ -477,7 +477,7 @@ struct TorsoPoseFilter {
     void Mount() { mountPending=true; }
     bool Update(uint64_t frame,double now,const Frame& reference,const Frame& eye,
                 bool idle,bool grip,Frame (&pose)[15],Vec forward,bool plant=false,float postureDrop=0,
-                const Vec* contacts=nullptr) {
+                const Vec* contacts=nullptr,bool authoredKnees=false) {
         constexpr int joint[4]={0,7,3,6};
         Frame inverse{},inverseEye{};
         if(!Inverse(reference,inverse) || !Inverse(eye,inverseEye)) return false;
@@ -568,7 +568,7 @@ struct TorsoPoseFilter {
             for(int j=0;j<7;++j) legReference[j]=Multiply(reference,stance[j]);
             target[2]=legReference[3];target[3]=legReference[6];
         }
-        if(!ReposeTorso(pose,target,forward,planted ? legReference : nullptr)) return false;
+        if(!ReposeTorso(pose,target,forward,planted ? legReference : nullptr,authoredKnees)) return false;
         for(int i=0;i<4;++i) eyeRelative[i]=Multiply(inverseEye,pose[joint[i]]);
         return true;
     }

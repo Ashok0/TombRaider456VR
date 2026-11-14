@@ -1,0 +1,108 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -4347,10 +4347,16 @@
+         VR().PivotHeadFloorOffset(turn);
+     }
+     const bool crouch=CanUseCrouchCamera(item);
+-    if (Cfg().firstPersonMovementStabilization && (state==3 || state==9 || (state>=25 && state<=28) || UseLandingCamera(item)) &&
++    if(Cfg().firstPersonMovementStabilization && UseLandingCamera(item)) {
++        const auto head=NativeJointPoint(item,Cfg().firstPersonJoint),hip=NativeJointPoint(item,0);
++        const float yaw=Radians(prev.y_rot)+Wrap(Radians(pos.y_rot)-Radians(prev.y_rot))*(frac/256.f);
++        const auto eye=stabilization::LandingHeadEye({head.x,head.y,head.z},{hip.x,hip.y,hip.z},
++            float(Lerp(prev.y_pos,pos.y_pos,frac)),AnimatedBodyScale(item),
++            {float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),float(Cfg().firstPersonAnchorZ)},yaw);
++        pose.x_pos=int32_t(std::lround(eye.x));pose.y_pos=int32_t(std::lround(eye.y));pose.z_pos=int32_t(std::lround(eye.z));
++        g_mountRootHeight.Reset();
++    } else if (Cfg().firstPersonMovementStabilization && (state==3 || state==9 || (state>=25 && state<=28)) &&
+         LaraWaterStatus()==0 && g_groundEye.valid) {
+-        // Keep the calibrated eye through takeoff, flight and the impact kneel.
+-        // The landing neck must not pull the headset down into the folded legs.
+         // Keep the calibrated eye through the whole ordinary jump,
+         // including the reach before ledge contact. Their interpolated neck can still carry
+         // the crouched takeoff pose after the state becomes airborne. Follow
+--- src/FirstPersonStabilization.h
++++ src/FirstPersonStabilization.h
+@@ -208,6 +208,17 @@
+ 
+ // Keep a standing eye reference across grounded animation frames. Physical
+ // body turns do not rotate this offset a second time; artificial turns do.
++// Follow the visible landing head, with the eye offset in Lara's yaw frame.
++// Pitching the forward eye offset with the impact animation can push the view
++// down into the folded legs. Apply the same fixed scale/pivot as the palette.
++inline Point LandingHeadEye(Point head,Point hip,float rootY,float scale,
++                            Point eyeOffset,float yaw) {
++    const auto flat=locomotion::Rotate({eyeOffset.x*scale,eyeOffset.z*scale},yaw);
++    return {hip.x+(head.x-hip.x)*scale+flat.x,
++            rootY+(head.y-rootY+eyeOffset.y)*scale,
++            hip.z+(head.z-hip.z)*scale+flat.z};
++}
++
+ struct GroundEye {
+     bool valid = false;
+     Point local{};
+--- README.md
++++ README.md
+@@ -2,10 +2,10 @@
+ 
+ Fall landings retain the native leg animation at the calibrated first-person
+ body size until standing IK resumes. This prevents the impact kneel from
+-folding the shins through the floor. Tracked hands remain active. The calibrated
+-camera follows Lara's collision position through impact without the animated
+-neck dip, keeping the view above her legs. Physical head movement remains live;
+-collision, damage and recovery timing remain native.
++folding the shins through the floor. Tracked hands remain active. The landing
++camera follows the animated head at the visible body's scale, with the eye
++offset in Lara's facing frame so head pitch cannot rotate it into her legs.
++Physical head movement, collision, damage and recovery timing remain native.
+ 
+ Ordinary jumps clear any leftover body-hiding delay from an earlier landing or
+ ledge transition, preventing the torso from suddenly reappearing during flight.
+--- tests/remaining_parity_selftest.h
++++ tests/remaining_parity_selftest.h
+@@ -170,8 +170,11 @@
+         Check(OrdinaryJumpLanding(item)==ordinary && UseLandingCamera(item)!=ordinary,
+             "only intentional ordinary landings retain standing presentation; drops, falls, hard landings and level changes stay native");
+         if(scenario!=5) {
++            testConfig.firstPersonAnchorY=0;
++            for(auto offset:{off::item_joints_prev,off::item_joints_cur})
++                reinterpret_cast<int32_t*>(item+offset+14*off::joint_stride)[7]=-440*16384;
+             PHD_3DPOS eye{30,landingY-440,20};UpdateLocomotion(eye);
+-            Check(eye.y_pos==landingY-700,"calibrated landing camera rejects ordinary and hard-fall neck dip");
++            Check(eye.y_pos==landingY-(ordinary?700:440),"ordinary recovery stays stable and hard falls follow the head");
+         }
+         Check(Field<PHD_3DPOS>(off::item_pos).y_pos==landingY && Field<int16_t>(off::item_anim_number)==landingAnimation,
+             "landing presentation leaves native root, animation and gravity untouched");
+--- tests/firstperson_ik_selftest.h
++++ tests/firstperson_ik_selftest.h
+@@ -372,10 +372,15 @@
+         dll.frameFrac=204;g_headingLevel=0;g_previousBody={};g_dragPrevious=g_dragCurrent=g_dragShown={};
+         g_groundEye={};g_groundEye.Apply({0,0,0},0,{0,-700,70},0);
+         const auto before=g_groundEye;g_bodyVisualOffset={100,100};
++        testConfig.firstPersonAnchorX=testConfig.firstPersonAnchorY=testConfig.firstPersonAnchorZ=0;
++        for(auto offset:{off::item_joints_prev,off::item_joints_cur}) {
++            auto* j=reinterpret_cast<int32_t*>(item+offset+14*off::joint_stride);
++            j[3]=30*16384;j[7]=-480*16384;j[11]=150*16384;
++        }
+         PHD_3DPOS eye{30,-480,150}; const auto native=eye;
+         UpdateLocomotion(eye);FitBodyToRenderedEye(item,eye,native);
+-        Check(eye.x_pos==0 && eye.y_pos==-700 && eye.z_pos==70,
+-              "calibrated landing eye remains above the kneeling legs at the flight anchor");
++        Check(eye.x_pos==30 && eye.y_pos==-480 && eye.z_pos==150,
++              "landing eye follows the head instead of staying at standing height");
+         Check(!g_bodyVisualOffset.x && !g_bodyVisualOffset.z &&
+               !std::memcmp(&before,&g_groundEye,sizeof(before)),"landing does not contaminate standing eye/body calibration");
+     }
+--- tests/landing_floor_selftest.h
++++ tests/landing_floor_selftest.h
+@@ -27,7 +27,10 @@
+             Field<int16_t>(off::item_anim_state)=s.clip==92?1:2;
+             Field<int16_t>(off::item_anim_number)=int16_t(s.clip);
+             testViewRise=s.clip==103?0:-drop;testVR.m_rawHeadPose.m[1][3]=1.7f+testViewRise;
+-            const motiongun::Vec eye=Transform(standing->joints[14],{0,-32,140});
++            const motiongun::Vec eye=s.clip==103 ? Transform(standing->joints[14],{0,-32,140}) :
++                motiongun::Vec{s.joints[0].origin.x+(s.joints[14].origin.x-s.joints[0].origin.x)*AnimatedBodyScale(item),
++                    (s.joints[14].origin.y-32)*AnimatedBodyScale(item),
++                    s.joints[0].origin.z+(s.joints[14].origin.z-s.joints[0].origin.z+140)*AnimatedBodyScale(item)};
+             g_scenePose={int32_t(eye.x),int32_t(eye.y),int32_t(eye.z)};
+             for(int j=0;j<15;++j) WriteRows(Multiply(s.joints[j],inverseBind[j]),ikNative+j*12);
+             clock.Advance(1./30);++testVR.m_poseSerial;

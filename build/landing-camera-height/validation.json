@@ -1,0 +1,43 @@
+{
+  "change": "Keep calibrated collision-relative eye anchor through native fall-landing compression and recovery, matching the airborne camera",
+  "scope": "TR1-5 first person with movement stabilization and an existing standing calibration",
+  "preserved": [
+    "Native falling collision-root travel",
+    "Physical HMD translation",
+    "Native landing mesh fix and tracked wrists",
+    "Standing calibration",
+    "Damage, animation timing and third-person behavior"
+  ],
+  "targetedCameraChecks": 147120,
+  "tr456RenderChecks": 6905722,
+  "tr123Checks": 3969766,
+  "cameraCoverage": [
+    "TR4 and TR5",
+    "Full body IK on/off",
+    "Stabilization on/off",
+    "Calibrated/uncalibrated",
+    "Landing clips 24/31/82/92/99",
+    "Three headings",
+    "Physical head lowering",
+    "Five interpolation fractions",
+    "Neck compression through recovery"
+  ],
+  "baselineTargeted": "Previous source fails: calibrated landing ignores neck compression while following interpolated collision height",
+  "broadCameraSuiteLimitation": "The older broad first_person_tests executable stops at calibrated HMD height can request native crouch. The same assertion fails in an isolated copy of the pre-change source. This unrelated existing failure is not counted as a passing suite; dedicated landing-camera tests pass.",
+  "renderCoverage": "TR1-5 extracted native landing palettes now rendered with the stable standing camera, preserving calibrated native leg transforms and exact tracked wrists",
+  "build": "Both x64 Release builds passed; automatic deployment disabled",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "0BBB639EFD0331F3691A00D6CB19E21EFB9D56E0783C800B7C5078FEF2D6F39B",
+    "src/FirstPersonBodyIK.h": "DDFC38CD5769A4C791EA8E6DCF9B12B4F0E4BC48A2E857327994361998F3AF91",
+    "src/BodyFollower.h": "82CE19C5FFC8B71B6A385D39E8D5B6FF3A9D6704758B50BE86A8ACED558F7A7E",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "D11D6932F6BA779FF242A81DDAAAC22AE601E594F323029F75A1D26E90FFCCA8",
+    "tools/landing_camera_test.cpp": "CAD77DAAB76B8724A6B1F153DF8BC13F5C79B42BE0F27ECC8FC73B8976E05EBB",
+    "tools/landing_floor_regression.inl": "229E2E8025A1EBDD52BA23D7E8597A55F095F5837AC34CE7939923900DFA396E",
+    "tools/upjump_arms_test.cpp": "123EFD32C3738774560A9ABB92451CEADA677C6D96F7F757331234309EA701B9"
+  },
+  "inHeadsetTested": false
+}

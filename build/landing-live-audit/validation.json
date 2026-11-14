@@ -1,0 +1,41 @@
+{
+  "change": "Retain automatic torso calibration eye clearance in both the supported landing camera and body eye reference. Capture landing diagnostics once per tracked pose.",
+  "scope": "TR1-5 first-person native fall landings",
+  "checks": {
+    "456": 6981658,
+    "123": 3898326,
+    "camera": 6626880
+  },
+  "inHeadsetTested": false,
+  "regressionEvidence": "The calibrated-clearance assertion fails against the exact installed production preimage and passes against this candidate. The final eye is compared to the torso-attached neck, not the independently camera-driven head joint.",
+  "observedSession": "World scale 423 units/metre, auto torso scale 0.845, fixed eye reserve 20.9 cm. Prior landing measurements put the eye only approximately 6 cm above the connected neck base. This proves lost calibrated clearance, but is not visual proof that it explains the entire reported leg-level view.",
+  "preserved": [
+    "Supported leg reach, knee direction, foot contact and limb-length constraints (unchanged code)",
+    "Standing calibration",
+    "Native horizontal landing camera movement",
+    "Raw HMD pose and orientation",
+    "Tracked arms and native chest physics input",
+    "Roomscale/glance inference",
+    "Native collision, damage and animation timing"
+  ],
+  "compromise": "Only automatic fitted body scale adds its existing eye reserve during impact. Share it between camera and body reference instead of applying extra torso compression. Manual body scale behavior is unchanged.",
+  "coverage": "Extracted TR1-5 impact palettes; automatic/manual scale; 0/12/15/30 cm physical lowering; armed/unarmed; downward HMD gaze in TR4/5; calibrated eye clearance relative to torso-attached neck, fixed foot contacts, supported knees, rigid legs, live wrists, recovery to standing; independent camera interpolation/heading/tracking-mode tests. Additional 344448 integrated checks pass at the recorded 423 world units/metre.",
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "51544847272B12699980B7E0B8D517FE0343724D8B1153DE496ECC967419F2BE",
+    "src/FirstPersonStabilization.h": "07E276F599F73FDAA10BFF484E4FC281BDBAD94A6DDB8BCA4D15D33505306316",
+    "src/FirstPersonBodyIK.h": "4698EA36FD6B6CFA89E2E1AE59672B289B41E2FFB78A852B75E7AA7A9AF8D523",
+    "src/BodyFollower.h": "BEF49DBC4122FE8A3659EAEB9F1027251DDE06BBB15F6B3B1ED89C5DF0F6DEA9",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835",
+    "src/GroundTorso.h": "B8674260546B7B184FF6F0004DC7FBFDD4F023052CF0E6E6B501C815622F8D5E"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "1B0DEDEA9C0F3FAB5AF62235DA22E7EE59EDA4F4E757BB808C29AB2A7619A3AD",
+    "tools/landing_camera_test.cpp": "E0B6665F624ED53E5FA5643F3751C160565C32C27A856457E275CC3A8A23A8B0",
+    "tools/upjump_arms_test.cpp": "5B238AB33D1F020005A222107D1DBF1235DC41B02E343F657C108367AB84FFC9",
+    "tools/landing_support_checks.inl": "2C248A3C74398741C65BBD09F1EC5E7344CAD42179EC043F9CD01A108145841D",
+    "tools/landing_support_regression.inl": "C03F1205B11758A396B31BCBE1ADA88AD2188B1DB9FBAC8C7DC94E2799B6132A",
+    "tools/native_landing_poses.inl": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "change": "During native fall landings, cap only the downward animated eye offset at the head joint plus configured upward eye offset; preserve native horizontal anchor and live HMD tracking.",
+  "scope": "TR1-5 first-person head joint, movement stabilization enabled",
+  "checks": {
+    "456": 6757882,
+    "123": 3851158,
+    "camera": 6626880
+  },
+  "inHeadsetTested": false,
+  "cause": "The 140-unit forward camera offset rotates downward with native impact head pitch; extracted TR5 keys place it up to 107.76 units below the head joint before physical tracking.",
+  "preserved": [
+    "Successful supported landing hip/knee solver (source hashes unchanged)",
+    "Standing calibration",
+    "Native horizontal landing camera movement",
+    "Full physical HMD translation",
+    "Tracked torso and arms",
+    "Roomscale/glance inference",
+    "Native collision, damage and animation timing"
+  ],
+  "cameraCoverage": "Native TR4/5 landing keys, root interpolation, world headings, manual scales, calibration on/off, full-body IK on/off, movement stabilization on/off, physical head lowering/rise and translation-disabled modes; actual HeadView translation verified.",
+  "bodyCoverage": "Native TR1-5 impact palettes driven by the corrected production camera, armed/unarmed, automatic and manual scale, 0/12/30 cm physical lowering; foot contacts, supported knees, rigid legs and exact controller wrists remain valid.",
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "C6E85AEC43358DBCDD0FEF1EC7DB9F781BB3324D62C72EBEA2741BF52768BE59",
+    "src/FirstPersonStabilization.h": "07E276F599F73FDAA10BFF484E4FC281BDBAD94A6DDB8BCA4D15D33505306316",
+    "src/FirstPersonBodyIK.h": "E992943ED5C3C0E435BA8C9656CA3EFECDC9AEAFB65DF09E458DD568A4FE019F",
+    "src/BodyFollower.h": "BEF49DBC4122FE8A3659EAEB9F1027251DDE06BBB15F6B3B1ED89C5DF0F6DEA9",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835",
+    "src/GroundTorso.h": "B8674260546B7B184FF6F0004DC7FBFDD4F023052CF0E6E6B501C815622F8D5E"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "1B0DEDEA9C0F3FAB5AF62235DA22E7EE59EDA4F4E757BB808C29AB2A7619A3AD",
+    "tools/landing_camera_test.cpp": "16A04643038ACC0420C6E083C0828B985FCA8FADB6F591259A74092C30F3444B",
+    "tools/upjump_arms_test.cpp": "5B238AB33D1F020005A222107D1DBF1235DC41B02E343F657C108367AB84FFC9",
+    "tools/landing_support_checks.inl": "2C248A3C74398741C65BBD09F1EC5E7344CAD42179EC043F9CD01A108145841D",
+    "tools/landing_support_regression.inl": "5E8E27B260FD4E89891CDCDA2F6EA339E0F8E008958A5C34846EAF7B86FF8C67",
+    "tools/native_landing_poses.inl": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA"
+  }
+}

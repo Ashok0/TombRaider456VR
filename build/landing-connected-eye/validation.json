@@ -1,0 +1,45 @@
+{
+  "change": "Share the landing camera eye reference with body posture reconstruction; keep authored impact torso bend; bound final tracked eye by the scaled foot-supported landing pose.",
+  "scope": "TR1-5 first-person native fall landings",
+  "checks": {
+    "456": 6970330,
+    "123": 3893462,
+    "camera": 6626880
+  },
+  "inHeadsetTested": false,
+  "regressionEvidence": "New final-eye-versus-connected-neck assertion fails against the exact installed preimages and passes against the candidate. The separately camera-driven head joint is deliberately not used as the reference.",
+  "causes": [
+    "Camera-only correction left the original pitched-forward eye offset in the body solver.",
+    "Additional inferred torso lean moved the neck away from the authored impact reference.",
+    "Physical headset lowering was still added below a landing pose whose supported pelvis could no longer follow it."
+  ],
+  "preserved": [
+    "Supported leg reach, knee direction, foot contact and limb-length constraints (unchanged code)",
+    "Standing calibration",
+    "Native horizontal landing camera movement",
+    "Raw HMD pose and orientation",
+    "Tracked arms and native chest physics input",
+    "Roomscale/glance inference",
+    "Native collision, damage and animation timing"
+  ],
+  "compromise": "During the native impact only, retain its authored torso bend and absorb downward headset translation in the scene anchor when it exceeds the supported pose depth. Native dip/rise remains; no standing-height hold or render-frame feedback is introduced.",
+  "coverage": "Extracted TR1-5 impact palettes; automatic/manual scale; 0/12/15/30 cm physical lowering; armed/unarmed; downward HMD gaze in TR4/5; final eye relative to torso-attached neck, fixed foot contacts, supported knees, rigid legs, live wrists, recovery to standing; independent camera interpolation/heading/tracking-mode tests. An additional 333120 integrated checks pass at the user's actual 423 world units/metre.",
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "34A1D3EB22EAEA8A5A8FCF7883D1DC8B2D74EEE6EE8CB8716D8BCB1EE081DC12",
+    "src/FirstPersonStabilization.h": "07E276F599F73FDAA10BFF484E4FC281BDBAD94A6DDB8BCA4D15D33505306316",
+    "src/FirstPersonBodyIK.h": "4698EA36FD6B6CFA89E2E1AE59672B289B41E2FFB78A852B75E7AA7A9AF8D523",
+    "src/BodyFollower.h": "BEF49DBC4122FE8A3659EAEB9F1027251DDE06BBB15F6B3B1ED89C5DF0F6DEA9",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835",
+    "src/GroundTorso.h": "B8674260546B7B184FF6F0004DC7FBFDD4F023052CF0E6E6B501C815622F8D5E"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "1B0DEDEA9C0F3FAB5AF62235DA22E7EE59EDA4F4E757BB808C29AB2A7619A3AD",
+    "tools/landing_camera_test.cpp": "E0B6665F624ED53E5FA5643F3751C160565C32C27A856457E275CC3A8A23A8B0",
+    "tools/upjump_arms_test.cpp": "5B238AB33D1F020005A222107D1DBF1235DC41B02E343F657C108367AB84FFC9",
+    "tools/landing_support_checks.inl": "2C248A3C74398741C65BBD09F1EC5E7344CAD42179EC043F9CD01A108145841D",
+    "tools/landing_support_regression.inl": "ABD17B7EADFA2D579C26E11DF503041AB26CD12E8CE25603FAFFC052310E3EBA",
+    "tools/native_landing_poses.inl": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA"
+  }
+}

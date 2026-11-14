@@ -210,6 +210,7 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
 }
 
 #include "body_transition_regression.inl"
+#include "landing_support_regression.inl"
 #include "torso_clearance_regression.inl"
 #include "jump_turn_regression.inl"
 
@@ -348,6 +349,7 @@ int main() {
         reset(which,fullBody);TestJumpTurnCentering(objectInfo);
         reset(which,fullBody);TestBodyTransitions(objectInfo);
         if(fullBody) { reset(which,true);TestStandingCalibration(objectInfo); }
+        if(fullBody) { reset(which,true);TestLandingSupportPalette(objectInfo); }
         for(int hang:{10,30,31,75,76,77,78,79,82,83,139}) {
             reset(which,fullBody);state=int16_t(hang);
             g_bodyVisibility.Update(itemMemory,0,TurnTime(),true,false,true);

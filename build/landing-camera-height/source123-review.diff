@@ -1,0 +1,66 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -4347,9 +4347,11 @@
+         VR().PivotHeadFloorOffset(turn);
+     }
+     const bool crouch=CanUseCrouchCamera(item);
+-    if (Cfg().firstPersonMovementStabilization && (state==3 || state==9 || (state>=25 && state<=28)) &&
++    if (Cfg().firstPersonMovementStabilization && (state==3 || state==9 || (state>=25 && state<=28) || UseLandingCamera(item)) &&
+         LaraWaterStatus()==0 && g_groundEye.valid) {
+-        // Keep the calibrated eye through takeoff and the whole ordinary jump,
++        // Keep the calibrated eye through takeoff, flight and the impact kneel.
++        // The landing neck must not pull the headset down into the folded legs.
++        // Keep the calibrated eye through the whole ordinary jump,
+         // including the reach before ledge contact. Their interpolated neck can still carry
+         // the crouched takeoff pose after the state becomes airborne. Follow
+         // the collision arc, as for TR4/5's directional jumps; HMD motion is
+--- README.md
++++ README.md
+@@ -2,8 +2,10 @@
+ 
+ Fall landings retain the native leg animation at the calibrated first-person
+ body size until standing IK resumes. This prevents the impact kneel from
+-folding the shins through the floor. Tracked hands remain active; the landing
+-camera, collision, damage and recovery timing remain native.
++folding the shins through the floor. Tracked hands remain active. The calibrated
++camera follows Lara's collision position through impact without the animated
++neck dip, keeping the view above her legs. Physical head movement remains live;
++collision, damage and recovery timing remain native.
+ 
+ Ordinary jumps clear any leftover body-hiding delay from an earlier landing or
+ ledge transition, preventing the torso from suddenly reappearing during flight.
+--- tests/remaining_parity_selftest.h
++++ tests/remaining_parity_selftest.h
+@@ -171,7 +171,7 @@
+             "only intentional ordinary landings retain standing presentation; drops, falls, hard landings and level changes stay native");
+         if(scenario!=5) {
+             PHD_3DPOS eye{30,landingY-440,20};UpdateLocomotion(eye);
+-            Check(eye.y_pos==landingY-(ordinary?700:440),"ordinary landing camera removes native neck dip without changing hard-fall camera");
++            Check(eye.y_pos==landingY-700,"calibrated landing camera rejects ordinary and hard-fall neck dip");
+         }
+         Check(Field<PHD_3DPOS>(off::item_pos).y_pos==landingY && Field<int16_t>(off::item_anim_number)==landingAnimation,
+             "landing presentation leaves native root, animation and gravity untouched");
+--- tests/firstperson_ik_selftest.h
++++ tests/firstperson_ik_selftest.h
+@@ -374,8 +374,8 @@
+         const auto before=g_groundEye;g_bodyVisualOffset={100,100};
+         PHD_3DPOS eye{30,-480,150}; const auto native=eye;
+         UpdateLocomotion(eye);FitBodyToRenderedEye(item,eye,native);
+-        Check(eye.x_pos==native.x_pos && eye.y_pos==native.y_pos && eye.z_pos==native.z_pos,
+-              "landing eye follows native head on all axes instead of remaining inside torso");
++        Check(eye.x_pos==0 && eye.y_pos==-700 && eye.z_pos==70,
++              "calibrated landing eye remains above the kneeling legs at the flight anchor");
+         Check(!g_bodyVisualOffset.x && !g_bodyVisualOffset.z &&
+               !std::memcmp(&before,&g_groundEye,sizeof(before)),"landing does not contaminate standing eye/body calibration");
+     }
+--- tests/landing_floor_selftest.h
++++ tests/landing_floor_selftest.h
+@@ -27,7 +27,7 @@
+             Field<int16_t>(off::item_anim_state)=s.clip==92?1:2;
+             Field<int16_t>(off::item_anim_number)=int16_t(s.clip);
+             testViewRise=s.clip==103?0:-drop;testVR.m_rawHeadPose.m[1][3]=1.7f+testViewRise;
+-            const motiongun::Vec eye=Transform(s.joints[14],{0,-32,140});
++            const motiongun::Vec eye=Transform(standing->joints[14],{0,-32,140});
+             g_scenePose={int32_t(eye.x),int32_t(eye.y),int32_t(eye.z)};
+             for(int j=0;j<15;++j) WriteRows(Multiply(s.joints[j],inverseBind[j]),ikNative+j*12);
+             clock.Advance(1./30);++testVR.m_poseSerial;
