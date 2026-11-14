@@ -9296,42 +9296,30 @@ records every TR4/5 sequence; `collection-asset-audit.json` records every asset;
 room metadata is retained in `current-room.json`.
 
 
-### Supported first-person fall landings (2026-11-13)
+### Native first-person fall landings (2026-11-14)
 
-The landing camera and VRIK posture reconstruction now share the same eye offset.
-Correcting only the camera left VRIK reconstructing the torso from the old,
-downward-pitched offset. During native impacts, the authored torso bend is kept
-instead of adding another inferred bend from the falling camera. The final eye
-also respects the scaled, foot-supported pose: physical headset lowering is not
-stacked below a crouch whose hips have already reached their supported depth.
-The camera still follows the animation down and back up; standing, airborne and
-ordinary jump-recovery cameras retain their existing behavior. Raw headset
-tracking is unchanged. Additional downward translation is absorbed in the scene
-anchor only while the native impact pose cannot follow it farther down.
+During a hard-fall impact and its recovery animation, Lara's native animation
+controls her torso, legs, arms, hands and weapons. Full-body VRIK, arm-only IK
+and tracked weapon placement pause for the entire clip. The body keeps its
+calibrated uniform visual scale and menu placement; joint angles and limb
+positions come from the animation, without extra knee or wrist constraints.
+Ordinary jumps and their existing quick landing behavior are unchanged.
 
-Automatic body fitting also keeps its calibrated eye-to-collar clearance
-through the impact. The camera and body solver use that same clearance; losing
-it during landing could put the view too low even when a check reported that
-the eye remained above the neck base. Manual body scale retains its existing
-offset, and the reserve is not applied a second time as torso compression.
+When the native clip ends, VRIK clears its transient body, torso, arm and weapon
+pose caches and starts from the current tracking data. This is a pose restart,
+not a height recalibration: standing height, body size, headset tracking and
+physical movement inference remain intact. During the clip, the visible hands
+and guns follow the canned animation instead of the controllers.
 
-Regression checks compare the final rendered eye with the neck transported by
-the rendered torso, requiring the calibrated clearance as well as testing a
-downward gaze and 0/12/15/30 cm of physical lowering. Checking the independent,
-camera-driven head joint alone cannot detect a body/view mismatch. With drift
-logging enabled, `landing-alignment` records the eye/connected-neck separation
-and calibration reserve once per tracked pose throughout the impact.
+The landing camera retains the improved animated dip and rise. It uses the
+calibrated neck reserve and at least 25 cm above the measured upper torso,
+matching standing torso fitting. Missing or stale outfit measurements retain
+the neck/reserve fallback. Camera clearance does not move or bend the native
+landing skeleton, and does not feed last frame's rendered pose into the camera.
 
-Hard falls keep the native camera dip and rise and the complete tracked torso/arm
-solve. During that impact pose, the calibration reserve belongs to the shared
-eye reference; extra walking gait and inferred torso compression do not add a
-second crouch. Additional tracked hip movement is
-limited by both legs' reach, and knee bends follow the authored landing direction
-within its supported range. The feet retain their scaled animation contacts;
-leg segments remain connected without stretching. Standing calibration, roomscale
-inference, normal walking, collision and fall damage are unchanged.
-
-Extracted TR1?5 landing poses pass checks for foot-contact height, supported knees,
-rigid leg lengths, controller wrists and return to standing at multiple body
-scales and physical headset heights. These are automated pose checks; visual
-confirmation of the affected fall in a headset is still needed.
+Regression checks cover extracted TR1-5 impacts and standing recovery, native
+joint positions and rotations, calibrated size, IK suspension, rendering hooks,
+armed/unarmed states, physical headset lowering and measured torso clearance.
+The native animation palette used for chest physics remains untouched. With
+drift logging enabled, `landing-native` records the animation, visual scale and
+above-collar camera clearance. In-headset confirmation remains necessary.

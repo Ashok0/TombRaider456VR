@@ -978,6 +978,11 @@ bool UseLandingCamera(const uint8_t* item) {
         *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
 }
 
+bool NativeLandingAnimation(const uint8_t* item) {
+    return g_active && g_boundDll && g_boundBase && item &&
+        item==*Ptr<uint8_t*>(g_boundDll->laraItem) && UseLandingCamera(item);
+}
+
 bool HideLandingHead(const uint8_t* item) {
     return g_active && g_boundDll && g_boundBase && item &&
         item==*Ptr<uint8_t*>(g_boundDll->laraItem) && UseLandingCamera(item);
@@ -1111,6 +1116,7 @@ const char* ControllerTrackingBlockedReason() {
 
 const char* MotionBlockedReason() {
     if (const auto* reason=ControllerTrackingBlockedReason()) return reason;
+    if(NativeLandingAnimation(*Ptr<uint8_t*>(g_boundDll->laraItem))) return "native-landing-animation";
     const uint8_t* lara = Ptr<uint8_t>(g_boundDll->lara);
     const int16_t status = *reinterpret_cast<const int16_t*>(lara + 2);
     const int16_t gun = *reinterpret_cast<const int16_t*>(lara + 4);
@@ -1430,6 +1436,7 @@ bool FlareIKReady() {
        *Ptr<int16_t>(g_boundDll->lara+2)!=0 ||
        (!Cfg().firstPersonUnarmedIK && !Cfg().firstPersonFullBodyIK)) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(NativeLandingAnimation(item)) return false;
     if(!FullBodyState(item) || FullBodyGripState(item)) return false;
     motiongun::Frame wrist{};GunBasis controller{};
     return BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller);
@@ -1442,6 +1449,7 @@ uint32_t FlareLOS() {return g_motionDll ? g_motionDll->lineOfSight : 0;}
 bool FullBodyIKReady() {
     if(!Cfg().firstPersonFullBodyIK || ControllerTrackingBlockedReason()) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(NativeLandingAnimation(item)) return false;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool nativeGrip=status==1 && FullBodyGripState(item); // Hands-busy during pull-ups.
     // ALL4S marks hands busy even when no interaction owns them. Track the
@@ -1459,6 +1467,7 @@ bool UnarmedIKReady() {
     if(FlareIKReady()) return true;
     if (!Cfg().firstPersonUnarmedIK || ControllerTrackingBlockedReason()) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(NativeLandingAnimation(item)) return false;
     if(PhysicalCrowbarOwns(item)) return true;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
     const bool crouchHands=status==1 && CanSteerCrouch(item);
@@ -2009,8 +2018,73 @@ float VisualBodyPostureDrop(uint8_t* item) {
     return firstperson::PlantedPostureDrop(drop,lean,hipToNeck);
 }
 
+// Native impact/recovery owns every joint. Keep only the calibrated uniform
+// visual size and user placement; no controller targets or limb solver run.
+bool FitNativeLandingBody(uint8_t* item,float* joints,int count) {
+    using namespace motiongun;
+    if(!joints || count<15 || count>33) return false;
+    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
+    if(object<0) return false;
+    const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+    const auto* geom=obj+off::object_geom;
+    const int bones=*reinterpret_cast<const int32_t*>(geom+28);
+    const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+    const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+    if(bones>0 && (bones!=count || !mapping || !poses)) return false;
+    Frame hip{},left{},right{};
+    if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,0,hip) ||
+       !ReadIKJoint(obj,joints,count,bones,mapping,poses,3,left) ||
+       !ReadIKJoint(obj,joints,count,bones,mapping,poses,6,right)) return false;
+    const float size=!Cfg().firstPersonFullBodyIK ? 1.f : Cfg().firstPersonBodyScale>0 ? Cfg().firstPersonBodyScale :
+        g_bodySize.valid && g_bodySizeObject==object && std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
+    const Vec pivot{hip.origin.x,std::max(left.origin.y,right.origin.y),hip.origin.z};
+    const auto offset=BodyMeshOffset(item);
+    Frame change{firstperson::IdentityBasis(),Add(Scale(pivot,1-size),{offset.x,0,offset.z})};
+    for(auto& row:change.basis.r) for(auto& value:row) value*=size;
+    float result[33*12]{};
+    for(int j=0;j<count;++j) {
+        const auto posed=Multiply(change,ReadRows(joints+j*12));
+        if(!firstperson::Finite(posed)) return false;
+        WriteRows(posed,result+j*12);
+    }
+    if(Cfg().firstPersonDriftLog && g_bodySkinScope &&
+       (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49) {
+        static uint64_t lastNativeLandingPose=UINT64_MAX;
+        if(lastNativeLandingPose!=VR().PoseSerial()) {
+            lastNativeLandingPose=VR().PoseSerial();
+            Frame head{},torso{};
+            if(ReadIKJoint(obj,joints,count,bones,mapping,poses,14,head) &&
+               ReadIKJoint(obj,result,count,bones,mapping,poses,7,torso)) {
+                const float units=LiveWorldUnitsPerMetre();
+                const float eye=g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*units-BodyPaletteCameraOrigin(item,head).y;
+                LogF("landing-native: pose=%llu anim=%d size=%.3f above-collar=%.2fcm IK=off",
+                    static_cast<unsigned long long>(VR().PoseSerial()),
+                    *reinterpret_cast<const int16_t*>(item+off::item_anim_number),size,
+                    g_torsoSurface.valid && g_torsoSurface.owner==obj ? (g_torsoSurface.TopY(torso)-eye)*100/units : -1.f);
+            }
+        }
+    }
+    std::memcpy(joints,result,count*12*sizeof(float));
+    return true;
+}
+
+void UpdateLandingIKState(bool nativeLanding) {
+    if(g_bodyLanding==nativeLanding) return;
+    // Re-seed transient pose inference at BOTH boundaries. Do not recenter
+    // tracking or discard standing height, body size or roomscale inference.
+    g_bodyFollower.Reset();g_torsoPose.Reset();g_torsoClearance.Reset();g_groundGait.Reset();
+    for(auto& arm:g_traversalArms) arm.Reset();
+    for(auto& arm:g_jumpArms) arm.Reset();
+    g_pistolRoll={};g_pistolArmPose.valid=false;g_pistolArmSolveReady=false;
+    g_pistolAnimation.Reset();
+    g_bodyLanding=nativeLanding;
+}
+
 bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
+    const bool cannedLanding=NativeLandingAnimation(item);
+    UpdateLandingIKState(cannedLanding);
+    if(cannedLanding) return FitNativeLandingBody(item,joints,count);
     // Calibrated airborne torso fitting needs the HMD, not two valid hands.
     // Losing a controller (or entering hands-busy reach) must not replace the
     // fitted torso with native size or switch its near-eye trim to 20 cm.
@@ -2028,13 +2102,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         return false;
     }
     const bool landing=UseLandingCamera(item);
-    if(g_bodyLanding && !landing) {
-        // The camera has returned from the animated landing neck to the
-        // standing eye. A cached kneeling torso belongs to the old frame;
-        // easing it in the new frame briefly places the body ahead of the eye.
-        g_bodyFollower.Reset();g_torsoPose.Reset();
-    }
-    g_bodyLanding=landing;
+
     const int object=*reinterpret_cast<const int16_t*>(item+off::item_object);
     if(object<0) return false;
     const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
@@ -2216,6 +2284,13 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
             // reference, rather than dropping the camera to the neck base.
             if(landing && Cfg().firstPersonMovementStabilization && Cfg().firstPersonBodyScale==0 && g_bodySize.valid)
                 sizedAnchor.y-=g_bodySize.eyeGap;
+            // A pitched chest can rise above its neck pivot. Retain the same
+            // eye clearance above the measured collar as the standing fit.
+            // Share this reference with Anchor so lifting the view does not
+            // also pull the torso and its supported feet upwards.
+            if(landing && Cfg().firstPersonMovementStabilization && anchorJoint==14 &&
+               g_torsoSurface.valid && g_torsoSurface.owner==obj)
+                sizedAnchor.y=std::min(sizedAnchor.y,g_torsoSurface.TopY(sized[7])-.25f*scale);
             Vec rootOffset=Add(Sub(Scale(g_bodyFollower.root,scale),nativeRoot),wallShift);rootOffset.y=0;
             const bool grounded=CanFitStandingBody(item) || CanUseCrouchCamera(item);
             const bool standing=preparingJump || ordinaryLanding || ((state==2 || state==12) && !UseLandingCamera(item));
@@ -2354,11 +2429,12 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
             if(Inverse(native[7],inverseChest)) {
                 const Frame connected=Multiply(Multiply(posed[7],inverseChest),native[14]);
                 const float finalEye=eye.y-cameraOffset.y;
-                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f reserve=%.2fcm",
+                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f reserve=%.2fcm above-collar=%.2fcm",
                     g_boundDll->game+4,static_cast<unsigned long long>(VR().PoseSerial()),
                     *reinterpret_cast<const int16_t*>(item+off::item_anim_number),finalEye,connected.origin.y,
                     (finalEye-connected.origin.y)*100/scale,g_scenePose.y_pos,VR().FirstPersonVerticalOffset()*scale,
-                    Cfg().firstPersonBodyScale==0 && g_bodySize.valid ? g_bodySize.eyeGap*100/scale : 0.f);
+                    Cfg().firstPersonBodyScale==0 && g_bodySize.valid ? g_bodySize.eyeGap*100/scale : 0.f,
+                    g_torsoSurface.valid && g_torsoSurface.owner==obj ? (g_torsoSurface.TopY(posed[7])-finalEye)*100/scale : -1.f);
             }
         }
     }
@@ -2747,7 +2823,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
             }
         }
         if(g_pistolBodyScope) { g_pistolArmSolveReady=false;g_pistolArmPose.valid=false; }
-        bool solved=g_pistolForearmScope && PistolBodyArmPose(item,joints,count,pass,false);
+        bool solved=!NativeLandingAnimation(item) && g_pistolForearmScope && PistolBodyArmPose(item,joints,count,pass,false);
         if(g_pistolForearmScope && Cfg().firstPersonDriftLog) {
             static uint64_t nextPistolPoseLog=0;
             const uint64_t now=GetTickCount64();
@@ -2767,7 +2843,7 @@ int32_t __cdecl Detour_GetJoints(uint8_t* item, float* joints, int32_t pass) {
             else ++g_armIKFailed;
         }
         if(!solved) stabilization::OffsetBodyPalette(joints,count,BodyMeshOffset(item));
-        if(solved && g_pistolBodyScope) PistolBodyArmPose(item,joints,count,pass,true);
+        if(solved && !NativeLandingAnimation(item) && g_pistolBodyScope) PistolBodyArmPose(item,joints,count,pass,true);
         if (g_bodySkinReady) {
             std::memcpy(g_bodyRenderPalette,joints,count*12*sizeof(float));
             firstperson::StabilizeHiddenNeck(g_bodyRenderPalette,count,MirrorJointMapping(item,count),g_bodySkinMask);
@@ -4834,7 +4910,19 @@ bool Anchor(PHD_3DPOS& pose) {
             const float footY=float(std::max(left.y,right.y));
             const float eyeReserve=Cfg().firstPersonBodyScale==0 && g_bodySize.valid && g_bodySizeObject==object &&
                 std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.eyeGap : 0.f;
-            const float supportedEye=footY+(float(pose.y_pos)-footY)*size-eyeReserve;
+            float supportedEye=footY+(float(pose.y_pos)-footY)*size-eyeReserve;
+            const auto* obj=object>=0 ? Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride : nullptr;
+            if(g_torsoSurface.valid && g_torsoSurface.owner==obj) {
+                float top=INFINITY;
+                for(int corner=0;corner<8;++corner) {
+                    const auto local=g_torsoSurface.Corner(corner);
+                    PHD_VECTOR point{int32_t(std::lround(local.x)),int32_t(std::lround(local.y)),int32_t(std::lround(local.z))};
+                    query(item,&point,7,frac);top=std::min(top,float(point.y));
+                }
+                // Use the current animated surface, not the last render's
+                // corrected torso. This follows impact/recovery without feedback.
+                supportedEye=std::min(supportedEye,footY+(top-footY)*size-.25f*LiveWorldUnitsPerMetre());
+            }
             const float trackedY=InvertRigid(VR().HeadView()).r[1][3];
             // The impact crouch is already at its supported depth. Account
             // for physical lowering in the SAME final-eye frame as the body;
@@ -5361,7 +5449,7 @@ void UpdateSceneCamera(PHD_3DPOS& pose) {
         g_unarmedTwist[0]=g_unarmedTwist[1]={};
         for(auto& arm:g_jumpArms) arm.Reset();
     }
-    const bool hideUnarmedArms=g_unarmedArmVisibility.Hide(unarmedMovement && !unarmedIK,VR().HeadPitchRadians());
+    const bool hideUnarmedArms=g_unarmedArmVisibility.Hide(unarmedMovement && !unarmedIK && !NativeLandingAnimation(item),VR().HeadPitchRadians());
     SetMeshVisibility(g_active && (Cfg().firstPersonHideHead || HideLandingHead(item)),
                       g_active && IsRollState(item),
                       g_active && FirstPersonBodyMask(item)==firstperson::HandMeshBits,

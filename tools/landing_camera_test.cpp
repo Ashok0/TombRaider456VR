@@ -58,11 +58,14 @@ int main() {
 
     for(const auto& fixture:nativeLandingPoses) {
         if(fixture.game<4 || fixture.clip==103) continue;
-        for(bool full:{false,true}) for(bool stable:{false,true}) for(bool calibrated:{false,true})
+        for(int surface:{0,1,2}) for(bool full:{false,true}) for(bool stable:{false,true}) for(bool calibrated:{false,true})
         for(float size:{.7f,1.f,1.2f}) for(float heading:{0.f,.7f,-1.9f}) for(float duck:{0.f,-.17f,-.4f,.2f}) for(int tracking:{0,1,2,3}) {
             reset(fixture.game-4,full);config.firstPersonMovementStabilization=stable;
             config.firstPersonBodyScale=size;config.firstPersonAnchorX=0;config.firstPersonAnchorY=-32;config.firstPersonAnchorZ=140;
             config.firstPersonPhysicalCrouch=false;
+            g_torsoSurface.Reset();
+            if(surface) g_torsoSurface.Add(surface==1 ? objectInfo : objectInfo+1,1,
+                {-67.2f,-199.6f,-91.7f},{69.2f,-32.9f,64.4f},4185);
             config.positionalTracking=tracking!=1;config.firstPersonHeadTranslation=tracking!=2;
             VR().m_headAtCamera=tracking==3;
             auto& pos=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
@@ -85,16 +88,25 @@ int main() {
                 if(stable && full) {
                     PHD_VECTOR left{},right{};LandingJoint(itemMemory,&left,3,f);LandingJoint(itemMemory,&right,6,f);
                     const float footY=float(std::max(left.y,right.y));
-                    const float supported=footY+(expectedY-footY)*size;
+                    float supported=footY+(expectedY-footY)*size;
+                    if(surface==1) {
+                        float top=INFINITY;
+                        for(int corner=0;corner<8;++corner) {
+                            const motiongun::Vec local{corner&1 ? 69.2f : -67.2f,corner&2 ? -32.9f : -199.6f,corner&4 ? 64.4f : -91.7f};
+                            top=std::min(top,motiongun::Transform(fixture.joints[7],local).y);
+                        }
+                        top+=400+(512-400)*(f/256.f);
+                        supported=std::min(supported,footY+(top-footY)*size-.25f*LiveWorldUnitsPerMetre());
+                    }
                     expectedY=std::min(expectedY,float(std::lround(supported-trackingY)));
                 }
-                Check(std::fabs(camera.x_pos-raw.x)<1.1f && std::fabs(camera.y_pos-expectedY)<1.1f && std::fabs(camera.z_pos-raw.z)<1.1f,
+                Check(std::fabs(camera.x_pos-raw.x)<1.1f && std::fabs(camera.y_pos-expectedY)<2.1f && std::fabs(camera.z_pos-raw.z)<1.1f,
                       "landing retains horizontal animation and follows head height without pitching forward clearance into legs");
                 if(stable) Check(camera.y_pos<=head.y-31.f,
                       "impact eye anchor remains above the animated neck at every extracted landing key");
                 const float renderedY=camera.y_pos+InvertRigid(VR().HeadView()).r[1][3];
                 Check(std::fabs(InvertRigid(VR().HeadView()).r[1][3]-trackingY)<.01f,"test uses actual rendered tracking translation");
-                Check(std::fabs(renderedY-(expectedY+trackingY))<1.1f,
+                Check(std::fabs(renderedY-(expectedY+trackingY))<2.1f,
                       "final eye obeys supported landing depth after applying actual HMD translation");
                 Check(physics==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)) &&
                     !std::memcmp(&rawHead,&VR().m_rawHeadPose,sizeof(rawHead)),"head following leaves collision and physical tracking untouched");

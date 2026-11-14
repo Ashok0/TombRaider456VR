@@ -1,0 +1,278 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -595,6 +595,11 @@
+         *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
+ }
+ 
++bool NativeLandingAnimation(const uint8_t* item) {
++    return g_active && g_boundDll && g_boundBase && item &&
++        item==*reinterpret_cast<uint8_t**>(g_boundBase+g_boundDll->laraItem) && UseLandingCamera(item);
++}
++
+ template <typename T>
+ T* Ptr(uint32_t rva) { return reinterpret_cast<T*>(g_boundBase + rva); }
+ 
+@@ -1672,7 +1677,7 @@
+ // Match TR4/5: only ordinary unarmed ground movement uses the pitch gate.
+ // Busy hands, weapon transitions and flares retain their native visibility.
+ bool HideUnarmedArms(const uint8_t* item) {
+-    const bool eligible=g_active && g_boundDll && g_boundBase && item && CanWalk(item) && !UnarmedIKReady() &&
++    const bool eligible=g_active && g_boundDll && g_boundBase && item && !NativeLandingAnimation(item) && CanWalk(item) && !UnarmedIKReady() &&
+         *Ptr<int16_t>(g_boundDll->lara+off::lara_gun_status)==0 &&
+         (*Ptr<int16_t>(g_boundDll->lara+4)==0 || MotionWeaponSupported(*Ptr<int16_t>(g_boundDll->lara+4)));
+     return g_unarmedArmVisibility.Hide(eligible,eligible ? VR().HeadPitchRadians() : 0.f);
+@@ -1707,6 +1712,7 @@
+ 
+ const char* MotionBlockedReason() {
+     if (const auto* reason=ControllerTrackingBlockedReason()) return reason;
++    if(NativeLandingAnimation(*Ptr<uint8_t*>(g_boundDll->laraItem))) return "native-landing-animation";
+     const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
+     if (*reinterpret_cast<const int16_t*>(lara + off::lara_gun_status) != 4 &&
+         !(PhysicalHolsterOwnsWeapon() && (*reinterpret_cast<const int16_t*>(lara+2)==2 || *reinterpret_cast<const int16_t*>(lara+2)==3)))
+@@ -1930,6 +1936,7 @@
+     const int flare=g_boundDll->module[4]==L'2' ? 8 : 9;
+     if(CurrentMotionWeapon()!=flare || *Ptr<int16_t>(g_boundDll->lara+2)!=0) return false;
+     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
++    if(NativeLandingAnimation(item)) return false;
+     if(!CanFitStandingBody(item) && !CanSteerCrouch(item)) return false;
+     motiongun::Frame wrist{};motiongun::Basis basis{};
+     return BuildControllerWrist(0,wrist,basis);
+@@ -1950,6 +1957,7 @@
+         !(AppFlag(drva::app_off::cfg_flags)&1)) return false;
+     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+     if (!item || item!=g_headingItem || LaraWaterStatus()!=0) return false;
++    if(NativeLandingAnimation(item)) return false;
+     const int status=*Ptr<int16_t>(g_boundDll->lara+off::lara_gun_status);
+     // Native ALL4S uses hands-busy even without a weapon or interaction.
+     // Keep controller hands available without changing that native flag.
+@@ -2160,6 +2168,7 @@
+ bool FullBodyIKReady() {
+     if(!Cfg().firstPersonFullBodyIK || ControllerTrackingBlockedReason() || !Gate()) return false;
+     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
++    if(NativeLandingAnimation(item)) return false;
+     const int status=*Ptr<int16_t>(g_boundDll->lara+off::lara_gun_status);
+     if(!item || LaraWaterStatus()!=0 || *reinterpret_cast<const int16_t*>(item+off::item_hit_points)<=0) return false;
+     if(!CanFitStandingBody(item) && !CanFitAirborneBody(item) && !CanSteerCrouch(item) && !FullBodyGripState(item)) return false;
+@@ -2467,8 +2476,72 @@
+     return firstperson::PlantedPostureDrop(drop,lean,hipToNeck);
+ }
+ 
++// Native impact/recovery owns every joint. Keep only the calibrated uniform
++// visual size and user placement; no controller targets or limb solver run.
++bool FitNativeLandingBody(uint8_t* item,float* joints,int count) {
++    using namespace motiongun;
++    if(!joints || count<15 || count>32) return false;
++    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
++    if(object<0) return false;
++    const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
++    const auto* geom=obj+off::object_geom;
++    const int bones=*reinterpret_cast<const int32_t*>(geom+28);
++    const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
++    const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
++    if(bones>0 && (bones!=count || !mapping || !poses)) return false;
++    Frame hip{},left{},right{};
++    if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,0,hip) ||
++       !ReadIKJoint(obj,joints,count,bones,mapping,poses,3,left) ||
++       !ReadIKJoint(obj,joints,count,bones,mapping,poses,6,right)) return false;
++    const float size=!Cfg().firstPersonFullBodyIK ? 1.f : Cfg().firstPersonBodyScale>0 ? Cfg().firstPersonBodyScale :
++        g_bodySize.valid && g_bodySizeObject==object && std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
++    const Vec pivot{hip.origin.x,std::max(left.origin.y,right.origin.y),hip.origin.z};
++    const auto offset=BodyMeshOffset(item);
++    Frame change{firstperson::IdentityBasis(),Add(Scale(pivot,1-size),{offset.x,0,offset.z})};
++    for(auto& row:change.basis.r) for(auto& value:row) value*=size;
++    float result[32*12]{};
++    for(int j=0;j<count;++j) {
++        const auto posed=Multiply(change,ReadRows(joints+j*12));
++        if(!firstperson::Finite(posed)) return false;
++        WriteRows(posed,result+j*12);
++    }
++    if(Cfg().firstPersonDriftLog && g_bodySkinScope &&
++       (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49) {
++        static uint64_t lastNativeLandingPose=UINT64_MAX;
++        if(lastNativeLandingPose!=VR().PoseSerial()) {
++            lastNativeLandingPose=VR().PoseSerial();
++            Frame head{},torso{};
++            if(ReadIKJoint(obj,joints,count,bones,mapping,poses,14,head) &&
++               ReadIKJoint(obj,result,count,bones,mapping,poses,7,torso)) {
++                const float units=LiveWorldUnitsPerMetre();
++                const float eye=g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*units-BodyPaletteCameraOrigin(item,head).y;
++                LogF("landing-native: pose=%llu anim=%d size=%.3f above-collar=%.2fcm IK=off",
++                    static_cast<unsigned long long>(VR().PoseSerial()),
++                    *reinterpret_cast<const int16_t*>(item+off::item_anim_number),size,
++                    g_torsoSurface.valid && g_torsoSurface.owner==obj ? (g_torsoSurface.TopY(torso)-eye)*100/units : -1.f);
++            }
++        }
++    }
++    std::memcpy(joints,result,count*12*sizeof(float));
++    return true;
++}
++
++void UpdateLandingIKState(bool nativeLanding) {
++    if(g_bodyLanding==nativeLanding) return;
++    // Re-seed transient pose inference at BOTH boundaries. Do not recenter
++    // tracking or discard standing height, body size or roomscale inference.
++    g_bodyFollower.Reset();g_torsoPose.Reset();g_torsoClearance.Reset();g_groundGait.Reset();
++    for(auto& arm:g_jumpArms) arm.Reset();
++    g_pistolRoll={};g_pistolArmPose.valid=false;g_pistolArmSolveReady=false;
++    g_pistolAnimation.Reset();
++    g_bodyLanding=nativeLanding;
++}
++
+ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
+     using namespace motiongun;
++    const bool cannedLanding=NativeLandingAnimation(item);
++    UpdateLandingIKState(cannedLanding);
++    if(cannedLanding) return FitNativeLandingBody(item,joints,count);
+     // Calibrated airborne torso fitting needs the HMD, not two valid hands.
+     // Losing a controller (or entering hands-busy reach) must not replace the
+     // fitted torso with native size or switch its near-eye trim to 20 cm.
+@@ -2490,13 +2563,7 @@
+         return false;
+     }
+     const bool landing=UseLandingCamera(item);
+-    if(g_bodyLanding && !landing) {
+-        // The camera has returned from the animated landing neck to the
+-        // standing eye. A cached kneeling torso belongs to the old frame;
+-        // easing it in the new frame briefly places the body ahead of the eye.
+-        g_bodyFollower.Reset();g_torsoPose.Reset();
+-    }
+-    g_bodyLanding=landing;
++
+     const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
+     if(object<0) return false;
+     const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+@@ -3195,7 +3262,7 @@
+                     std::memcpy(g_bodyRenderPalette,g_bodySkinPalette,sizeof(g_bodySkinPalette));
+                     const int pass=g_boundDll->renderPass ? *Ptr<int32_t>(g_boundDll->renderPass) : 0;
+                     if(g_pistolBodyScope) { g_pistolArmPose.valid=false;g_pistolArmSolveReady=false; }
+-                    bool solved=g_pistolForearmScope && PistolBodyArmPose(item,g_bodyRenderPalette,count,pass,false);
++                    bool solved=!NativeLandingAnimation(item) && g_pistolForearmScope && PistolBodyArmPose(item,g_bodyRenderPalette,count,pass,false);
+                     if(!solved) solved=ApplyFullBodyIK(item,g_bodyRenderPalette,count);
+                     if(!UnarmedIKReady()) for(auto& arm:g_jumpArms) arm.Reset();
+                     if(!solved && (MotionReady() || UnarmedIKReady())) solved=ApplyArmIK(item,g_bodyRenderPalette,count);
+@@ -3203,7 +3270,7 @@
+                     firstperson::StabilizeHiddenNeck(g_bodyRenderPalette,count,mapping,g_bodySkinMask);
+                     if(solved) {
+                         ++g_armIKSolved;
+-                        if(g_pistolBodyScope) PistolBodyArmPose(item,g_bodyRenderPalette,count,pass,true);
++                        if(!NativeLandingAnimation(item) && g_pistolBodyScope) PistolBodyArmPose(item,g_bodyRenderPalette,count,pass,true);
+                         TraceArmGlance(item,g_bodyRenderPalette,count,pass);
+                     }
+                     motiongun::Vec holsterCamera{};
+--- tests/landing_support_selftest.h
++++ tests/landing_support_selftest.h
+@@ -61,7 +61,7 @@
+                 "landing physics retains the unmodified native animation palette");
+             Frame out[15]{};
+             for(int j=0;j<15;++j) Check(ReadIKJoint(obj,g_bodyRenderPalette,15,0,nullptr,nullptr,j,out[j]),"landing joint readable");
+-            Check(g_bodyFollower.valid,"landing retains the full-body solver");
++
+             if(s.clip!=103) {
+                 CheckLandingSupport(s.joints,out,size);
+                 Frame inverseChest{};Inverse(s.joints[7],inverseChest);
+@@ -81,11 +81,23 @@
+                     Check(finalEye<=top-.25f*LiveWorldUnitsPerMetre()+2.f,
+                         "collection impact eye preserves clearance above the actual rendered collar");
+                 }
+-                for(int hand=0;hand<2;++hand) {
+-                    Frame wrist{};Basis basis{};
+-                    Check(BuildControllerWrist(hand,wrist,basis) && firstperson::Length(Sub(out[hand?10:13].origin,wrist.origin))<.1f,
+-                        "native landing legs retain exact live controller wrists");
++                Check(g_bodyLanding && !g_bodyFollower.valid && !g_torsoPose.valid,
++                    "native impact suspends cached body and torso inference");
++                Check(!MotionReady() && !UnarmedIKReady() && !FullBodyIKReady(),
++                    "native impact disables tracked weapons and both arm/body IK paths");
++                const float nativeSize=factor==0 ? .845f : factor;
++                const motiongun::Vec pivot{s.joints[0].origin.x,std::max(s.joints[3].origin.y,s.joints[6].origin.y),s.joints[0].origin.z};
++                for(int j=0;j<14;++j) {
++                    const auto expected=Add(pivot,Scale(Sub(s.joints[j].origin,pivot),nativeSize));
++                    Check(firstperson::Length(Sub(out[j].origin,expected))<.15f,
++                        "landing preserves every native body and arm joint position at calibrated size");
++                    for(int row=0;row<3;++row) for(int col=0;col<3;++col)
++                        Check(std::fabs(out[j].basis.r[row][col]-s.joints[j].basis.r[row][col]*nativeSize)<.001f,
++                            "impact and recovery preserve native limb angles without VRIK contortion");
+                 }
++                if(factor==0) Check(g_bodySize.valid && g_bodySize.torsoFitted && g_bodySize.factor==.845f &&
++                    g_bodySizeObject==0 && g_bodySize.units==LiveWorldUnitsPerMetre(),
++                    "native impact keeps existing height and body-size calibration");
+             } else Check(g_bodyFollower.valid && !g_bodyLanding,"standing rendering resumes after native landing recovery");
+         }
+     }
+--- README.md
++++ README.md
+@@ -3606,48 +3606,30 @@
+ still needed.
+ 
+ 
+-### Supported first-person fall landings (2026-11-13)
+-
+-The landing camera and VRIK posture reconstruction now share the same eye offset.
+-Correcting only the camera left VRIK reconstructing the torso from the old,
+-downward-pitched offset. During native impacts, the authored torso bend is kept
+-instead of adding another inferred bend from the falling camera. The final eye
+-also respects the scaled, foot-supported pose: physical headset lowering is not
+-stacked below a crouch whose hips have already reached their supported depth.
+-The camera still follows the animation down and back up; standing, airborne and
+-ordinary jump-recovery cameras retain their existing behavior. Raw headset
+-tracking is unchanged. Additional downward translation is absorbed in the scene
+-anchor only while the native impact pose cannot follow it farther down.
+-
+-Automatic body fitting keeps its calibrated eye reserve through the impact.
+-The camera also stays at least 25 cm above the measured upper torso, matching
+-standing torso fitting. The neck joint alone is insufficient: the chest mesh
+-can rise above that pivot when the landing animation pitches the torso forward.
+-Both automatic and manual body scales use the measured surface when available;
+-missing or stale outfit measurements retain the existing neck/reserve fallback.
+-
+-Camera and body reconstruction share this reference, so the higher viewpoint
+-does not pull the torso or feet up with it. Clearance follows the current native
+-animation, including its dip and recovery; it does not feed a previous rendered
+-body pose back into the camera or hold the camera at standing height.
+-
+-Regression checks compare the final eye with the rendered torso's measured
+-upper boundary, as well as its connected neck, at multiple body scales and
+-physical headset heights. Camera checks cover interpolation, heading, tracking
+-modes and stale outfit measurements. With drift logging enabled,
+-`landing-alignment` reports both neck and visible-collar clearance once per
+-tracked pose during impact. Headset confirmation remains necessary.
+-
+-Hard falls keep the native camera dip and rise and the complete tracked torso/arm
+-solve. During that impact pose, the calibration reserve belongs to the shared
+-eye reference; extra walking gait and inferred torso compression do not add a
+-second crouch. Additional tracked hip movement is
+-limited by both legs' reach, and knee bends follow the authored landing direction
+-within its supported range. The feet retain their scaled animation contacts;
+-leg segments remain connected without stretching. Standing calibration, roomscale
+-inference, normal walking, collision and fall damage are unchanged.
+-
+-Extracted TR1?5 landing poses pass checks for foot-contact height, supported knees,
+-rigid leg lengths, controller wrists and return to standing at multiple body
+-scales and physical headset heights. These are automated pose checks; visual
+-confirmation of the affected fall in a headset is still needed.
++### Native first-person fall landings (2026-11-14)
++
++During a hard-fall impact and its recovery animation, Lara's native animation
++controls her torso, legs, arms, hands and weapons. Full-body VRIK, arm-only IK
++and tracked weapon placement pause for the entire clip. The body keeps its
++calibrated uniform visual scale and menu placement; joint angles and limb
++positions come from the animation, without extra knee or wrist constraints.
++Ordinary jumps and their existing quick landing behavior are unchanged.
++
++When the native clip ends, VRIK clears its transient body, torso, arm and weapon
++pose caches and starts from the current tracking data. This is a pose restart,
++not a height recalibration: standing height, body size, headset tracking and
++physical movement inference remain intact. During the clip, the visible hands
++and guns follow the canned animation instead of the controllers.
++
++The landing camera retains the improved animated dip and rise. It uses the
++calibrated neck reserve and at least 25 cm above the measured upper torso,
++matching standing torso fitting. Missing or stale outfit measurements retain
++the neck/reserve fallback. Camera clearance does not move or bend the native
++landing skeleton, and does not feed last frame's rendered pose into the camera.
++
++Regression checks cover extracted TR1-5 impacts and standing recovery, native
++joint positions and rotations, calibrated size, IK suspension, rendering hooks,
++armed/unarmed states, physical headset lowering and measured torso clearance.
++The native animation palette used for chest physics remains untouched. With
++drift logging enabled, `landing-native` records the animation, visual scale and
++above-collar camera clearance. In-headset confirmation remains necessary.

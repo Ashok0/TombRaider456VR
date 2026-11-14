@@ -10,6 +10,15 @@ struct TorsoSurface {
     unsigned buffers[64]{},count=0;
     bool valid=false;
     void Reset() { *this={}; }
+    Vec Corner(int index) const {
+        return {index&1 ? high.x : low.x,index&2 ? high.y : low.y,index&4 ? high.z : low.z};
+    }
+    float TopY(const Frame& torso) const {
+        float top=INFINITY;
+        if(valid) for(int corner=0;corner<8;++corner)
+            top=std::min(top,Transform(torso,Corner(corner)).y);
+        return top;
+    }
     bool Known(unsigned buffer) const {
         for(unsigned i=0;i<count;++i) if(buffers[i]==buffer) return true;
         return false;

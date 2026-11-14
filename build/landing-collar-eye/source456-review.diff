@@ -1,0 +1,190 @@
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -2216,6 +2216,13 @@
+             // reference, rather than dropping the camera to the neck base.
+             if(landing && Cfg().firstPersonMovementStabilization && Cfg().firstPersonBodyScale==0 && g_bodySize.valid)
+                 sizedAnchor.y-=g_bodySize.eyeGap;
++            // A pitched chest can rise above its neck pivot. Retain the same
++            // eye clearance above the measured collar as the standing fit.
++            // Share this reference with Anchor so lifting the view does not
++            // also pull the torso and its supported feet upwards.
++            if(landing && Cfg().firstPersonMovementStabilization && anchorJoint==14 &&
++               g_torsoSurface.valid && g_torsoSurface.owner==obj)
++                sizedAnchor.y=std::min(sizedAnchor.y,g_torsoSurface.TopY(sized[7])-.25f*scale);
+             Vec rootOffset=Add(Sub(Scale(g_bodyFollower.root,scale),nativeRoot),wallShift);rootOffset.y=0;
+             const bool grounded=CanFitStandingBody(item) || CanUseCrouchCamera(item);
+             const bool standing=preparingJump || ordinaryLanding || ((state==2 || state==12) && !UseLandingCamera(item));
+@@ -2354,11 +2361,12 @@
+             if(Inverse(native[7],inverseChest)) {
+                 const Frame connected=Multiply(Multiply(posed[7],inverseChest),native[14]);
+                 const float finalEye=eye.y-cameraOffset.y;
+-                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f reserve=%.2fcm",
++                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f reserve=%.2fcm above-collar=%.2fcm",
+                     g_boundDll->game+4,static_cast<unsigned long long>(VR().PoseSerial()),
+                     *reinterpret_cast<const int16_t*>(item+off::item_anim_number),finalEye,connected.origin.y,
+                     (finalEye-connected.origin.y)*100/scale,g_scenePose.y_pos,VR().FirstPersonVerticalOffset()*scale,
+-                    Cfg().firstPersonBodyScale==0 && g_bodySize.valid ? g_bodySize.eyeGap*100/scale : 0.f);
++                    Cfg().firstPersonBodyScale==0 && g_bodySize.valid ? g_bodySize.eyeGap*100/scale : 0.f,
++                    g_torsoSurface.valid && g_torsoSurface.owner==obj ? (g_torsoSurface.TopY(posed[7])-finalEye)*100/scale : -1.f);
+             }
+         }
+     }
+@@ -4834,7 +4842,19 @@
+             const float footY=float(std::max(left.y,right.y));
+             const float eyeReserve=Cfg().firstPersonBodyScale==0 && g_bodySize.valid && g_bodySizeObject==object &&
+                 std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.eyeGap : 0.f;
+-            const float supportedEye=footY+(float(pose.y_pos)-footY)*size-eyeReserve;
++            float supportedEye=footY+(float(pose.y_pos)-footY)*size-eyeReserve;
++            const auto* obj=object>=0 ? Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride : nullptr;
++            if(g_torsoSurface.valid && g_torsoSurface.owner==obj) {
++                float top=INFINITY;
++                for(int corner=0;corner<8;++corner) {
++                    const auto local=g_torsoSurface.Corner(corner);
++                    PHD_VECTOR point{int32_t(std::lround(local.x)),int32_t(std::lround(local.y)),int32_t(std::lround(local.z))};
++                    query(item,&point,7,frac);top=std::min(top,float(point.y));
++                }
++                // Use the current animated surface, not the last render's
++                // corrected torso. This follows impact/recovery without feedback.
++                supportedEye=std::min(supportedEye,footY+(top-footY)*size-.25f*LiveWorldUnitsPerMetre());
++            }
+             const float trackedY=InvertRigid(VR().HeadView()).r[1][3];
+             // The impact crouch is already at its supported depth. Account
+             // for physical lowering in the SAME final-eye frame as the body;
+--- src/TorsoClearance.h
++++ src/TorsoClearance.h
+@@ -10,6 +10,15 @@
+     unsigned buffers[64]{},count=0;
+     bool valid=false;
+     void Reset() { *this={}; }
++    Vec Corner(int index) const {
++        return {index&1 ? high.x : low.x,index&2 ? high.y : low.y,index&4 ? high.z : low.z};
++    }
++    float TopY(const Frame& torso) const {
++        float top=INFINITY;
++        if(valid) for(int corner=0;corner<8;++corner)
++            top=std::min(top,Transform(torso,Corner(corner)).y);
++        return top;
++    }
+     bool Known(unsigned buffer) const {
+         for(unsigned i=0;i<count;++i) if(buffers[i]==buffer) return true;
+         return false;
+--- tools/landing_support_regression.inl
++++ tools/landing_support_regression.inl
+@@ -26,13 +26,14 @@
+     g_holsters.active=true;g_holsters.weapon=1;
+     *reinterpret_cast<int16_t*>(laraMemory+4)=1;*reinterpret_cast<int16_t*>(laraMemory+2)=0;
+     trackingtest::Clock clock;
+-    for(float factor:{0.f,.7f,1.f,1.2f}) for(float drop:{0.f,.12f,.15f,.3f}) for(float pitch:{0.f,.75f}) for(int status:{0,4}) {
++    for(bool measured:{false,true}) for(float factor:{0.f,.7f,1.f,1.2f}) for(float drop:{0.f,.12f,.15f,.3f}) for(float pitch:{0.f,.75f}) for(int status:{0,4}) {
+         *reinterpret_cast<int16_t*>(laraMemory+2)=int16_t(status);
+         config.firstPersonBodyScale=factor;ResetBodyFollower();g_autoBodyCalibration={};
+         VR().m_rawHeadPose.m[1][3]=VR().m_firstPersonNeutral[1]-drop;
+         VR().m_rawHeadPose.m[1][1]=VR().m_rawHeadPose.m[2][2]=std::cos(pitch);
+         VR().m_rawHeadPose.m[1][2]=std::sin(pitch);VR().m_rawHeadPose.m[2][1]=-std::sin(pitch);
+         g_groundTorso.Reset();g_torsoSurface.Reset();g_torsoPose.Reset();
++        if(measured) g_torsoSurface.Add(objectInfo,1,{-67.2f,-199.6f,-91.7f},{69.2f,-32.9f,64.4f},4185);
+         if(factor==0) {g_bodySize.valid=true;g_bodySize.torsoFitted=true;g_bodySize.factor=.845f;g_bodySize.eyeGap=88.4f;g_bodySize.units=LiveWorldUnitsPerMetre();g_bodySizeObject=0;}
+         for(size_t n=0;n<=std::size(nativeLandingPoses);++n) {
+             const auto& s=n==std::size(nativeLandingPoses)?*standing:nativeLandingPoses[n];
+@@ -66,6 +67,15 @@
+                 const float reserve=factor==0 ? g_bodySize.eyeGap : 0.f;
+                 Check(finalEye<=connected.origin.y-reserve+2.f,
+                     "landing retains calibrated eye-to-neck clearance instead of dropping to the neck base");
++                if(measured) {
++                    float top=INFINITY;
++                    for(int corner=0;corner<8;++corner) {
++                        const Vec local{corner&1 ? 69.2f : -67.2f,corner&2 ? -32.9f : -199.6f,corner&4 ? 64.4f : -91.7f};
++                        top=std::min(top,Transform(out[7],local).y);
++                    }
++                    Check(finalEye<=top-.25f*LiveWorldUnitsPerMetre()+2.f,
++                        "impact eye keeps standing clearance above the visible collar, not only the neck pivot");
++                }
+                 for(int hand=0;hand<2;++hand) {
+                     Frame wrist{};Basis basis{};
+                     Check(BuildControllerWrist(hand,wrist,basis) && firstperson::Length(Sub(out[hand?10:13].origin,wrist.origin))<.1f,
+--- tools/landing_camera_test.cpp
++++ tools/landing_camera_test.cpp
+@@ -58,11 +58,14 @@
+ 
+     for(const auto& fixture:nativeLandingPoses) {
+         if(fixture.game<4 || fixture.clip==103) continue;
+-        for(bool full:{false,true}) for(bool stable:{false,true}) for(bool calibrated:{false,true})
++        for(int surface:{0,1,2}) for(bool full:{false,true}) for(bool stable:{false,true}) for(bool calibrated:{false,true})
+         for(float size:{.7f,1.f,1.2f}) for(float heading:{0.f,.7f,-1.9f}) for(float duck:{0.f,-.17f,-.4f,.2f}) for(int tracking:{0,1,2,3}) {
+             reset(fixture.game-4,full);config.firstPersonMovementStabilization=stable;
+             config.firstPersonBodyScale=size;config.firstPersonAnchorX=0;config.firstPersonAnchorY=-32;config.firstPersonAnchorZ=140;
+             config.firstPersonPhysicalCrouch=false;
++            g_torsoSurface.Reset();
++            if(surface) g_torsoSurface.Add(surface==1 ? objectInfo : objectInfo+1,1,
++                {-67.2f,-199.6f,-91.7f},{69.2f,-32.9f,64.4f},4185);
+             config.positionalTracking=tracking!=1;config.firstPersonHeadTranslation=tracking!=2;
+             VR().m_headAtCamera=tracking==3;
+             auto& pos=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+@@ -85,16 +88,25 @@
+                 if(stable && full) {
+                     PHD_VECTOR left{},right{};LandingJoint(itemMemory,&left,3,f);LandingJoint(itemMemory,&right,6,f);
+                     const float footY=float(std::max(left.y,right.y));
+-                    const float supported=footY+(expectedY-footY)*size;
++                    float supported=footY+(expectedY-footY)*size;
++                    if(surface==1) {
++                        float top=INFINITY;
++                        for(int corner=0;corner<8;++corner) {
++                            const motiongun::Vec local{corner&1 ? 69.2f : -67.2f,corner&2 ? -32.9f : -199.6f,corner&4 ? 64.4f : -91.7f};
++                            top=std::min(top,motiongun::Transform(fixture.joints[7],local).y);
++                        }
++                        top+=400+(512-400)*(f/256.f);
++                        supported=std::min(supported,footY+(top-footY)*size-.25f*LiveWorldUnitsPerMetre());
++                    }
+                     expectedY=std::min(expectedY,float(std::lround(supported-trackingY)));
+                 }
+-                Check(std::fabs(camera.x_pos-raw.x)<1.1f && std::fabs(camera.y_pos-expectedY)<1.1f && std::fabs(camera.z_pos-raw.z)<1.1f,
++                Check(std::fabs(camera.x_pos-raw.x)<1.1f && std::fabs(camera.y_pos-expectedY)<2.1f && std::fabs(camera.z_pos-raw.z)<1.1f,
+                       "landing retains horizontal animation and follows head height without pitching forward clearance into legs");
+                 if(stable) Check(camera.y_pos<=head.y-31.f,
+                       "impact eye anchor remains above the animated neck at every extracted landing key");
+                 const float renderedY=camera.y_pos+InvertRigid(VR().HeadView()).r[1][3];
+                 Check(std::fabs(InvertRigid(VR().HeadView()).r[1][3]-trackingY)<.01f,"test uses actual rendered tracking translation");
+-                Check(std::fabs(renderedY-(expectedY+trackingY))<1.1f,
++                Check(std::fabs(renderedY-(expectedY+trackingY))<2.1f,
+                       "final eye obeys supported landing depth after applying actual HMD translation");
+                 Check(physics==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)) &&
+                     !std::memcmp(&rawHead,&VR().m_rawHeadPose,sizeof(rawHead)),"head following leaves collision and physical tracking untouched");
+--- README.md
++++ README.md
+@@ -9309,18 +9309,24 @@
+ tracking is unchanged. Additional downward translation is absorbed in the scene
+ anchor only while the native impact pose cannot follow it farther down.
+ 
+-Automatic body fitting also keeps its calibrated eye-to-collar clearance
+-through the impact. The camera and body solver use that same clearance; losing
+-it during landing could put the view too low even when a check reported that
+-the eye remained above the neck base. Manual body scale retains its existing
+-offset, and the reserve is not applied a second time as torso compression.
+-
+-Regression checks compare the final rendered eye with the neck transported by
+-the rendered torso, requiring the calibrated clearance as well as testing a
+-downward gaze and 0/12/15/30 cm of physical lowering. Checking the independent,
+-camera-driven head joint alone cannot detect a body/view mismatch. With drift
+-logging enabled, `landing-alignment` records the eye/connected-neck separation
+-and calibration reserve once per tracked pose throughout the impact.
++Automatic body fitting keeps its calibrated eye reserve through the impact.
++The camera also stays at least 25 cm above the measured upper torso, matching
++standing torso fitting. The neck joint alone is insufficient: the chest mesh
++can rise above that pivot when the landing animation pitches the torso forward.
++Both automatic and manual body scales use the measured surface when available;
++missing or stale outfit measurements retain the existing neck/reserve fallback.
++
++Camera and body reconstruction share this reference, so the higher viewpoint
++does not pull the torso or feet up with it. Clearance follows the current native
++animation, including its dip and recovery; it does not feed a previous rendered
++body pose back into the camera or hold the camera at standing height.
++
++Regression checks compare the final eye with the rendered torso's measured
++upper boundary, as well as its connected neck, at multiple body scales and
++physical headset heights. Camera checks cover interpolation, heading, tracking
++modes and stale outfit measurements. With drift logging enabled,
++`landing-alignment` reports both neck and visible-collar clearance once per
++tracked pose during impact. Headset confirmation remains necessary.
+ 
+ Hard falls keep the native camera dip and rise and the complete tracked torso/arm
+ solve. During that impact pose, the calibration reserve belongs to the shared

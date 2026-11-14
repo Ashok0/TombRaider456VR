@@ -1,0 +1,42 @@
+{
+  "change": "Apply the standing fit's 25 cm clearance above the animated measured torso surface to the landing camera and body reference. Preserve the existing neck/automatic-fit reserve as a fallback.",
+  "scope": "TR1-5 stabilized first-person full-body native fall landings",
+  "checks": {
+    "456": 7337434,
+    "123": 4062678,
+    "camera": 19880640
+  },
+  "inHeadsetTested": false,
+  "regressionEvidence": "The new rendered-mesh clearance assertion fails against the exact installed source and passes against the candidate, including at 423 units/metre. Foot contacts, supported knees, rigid limbs and tracked wrists remain valid.",
+  "observedSession": "TR5 session reports auto scale 0.911, reserve 12.86 cm, approximately 19.6 cm eye-to-neck separation. Extracted deepest impact poses and recorded torso bounds imply only approximately 5 cm eye-to-visible-collar clearance despite the neck check passing. The candidate raises that limit to 25 cm, the existing standing-fit clearance.",
+  "preserved": [
+    "Existing leg support solver unchanged",
+    "Standing calibration unchanged",
+    "Native horizontal camera movement",
+    "Raw HMD tracking",
+    "Native animation palette for chest physics",
+    "Roomscale/glance inference",
+    "Native collision, damage and animation timing"
+  ],
+  "limitations": "Torso bounds conservatively enclose the mesh and are not a measurement of facial eye vertices. Missing or stale outfit bounds use the previous fallback. In-headset confirmation remains necessary.",
+  "coverage": "TR1-5 extracted impacts and standing recovery; measured/missing surface; automatic/manual scales; armed/unarmed; physical lowering and downward gaze. Independent camera tests cover stale outfit owners, stabilization disabled, full-body disabled, tracking modes, yaw and interpolation. Actual-scale integrated suite: 700224 checks.",
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "5E0F1DBBB55F9F9D30570C46003777D6CDB3A92B2C4E271A0A0E9483D6745409",
+    "src/FirstPersonStabilization.h": "07E276F599F73FDAA10BFF484E4FC281BDBAD94A6DDB8BCA4D15D33505306316",
+    "src/FirstPersonBodyIK.h": "4698EA36FD6B6CFA89E2E1AE59672B289B41E2FFB78A852B75E7AA7A9AF8D523",
+    "src/BodyFollower.h": "BEF49DBC4122FE8A3659EAEB9F1027251DDE06BBB15F6B3B1ED89C5DF0F6DEA9",
+    "src/ControllerBodyAnchor.h": "AA5928380F164C6B777C0B80AB72B80BBB01CF261F7990AFE295F84DDBDE8C86",
+    "src/PlantedPivotEvidence.h": "9B5D53DBE76EDD4978714CC975B764E14BA216A5AAA599954D57BD95DC967835",
+    "src/GroundTorso.h": "B8674260546B7B184FF6F0004DC7FBFDD4F023052CF0E6E6B501C815622F8D5E",
+    "src/TorsoClearance.h": "30139EE01BBD5D2E8B81F651D3BD1B01700EF0B48EFB7F188B16EDB8EA27C986"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "1B0DEDEA9C0F3FAB5AF62235DA22E7EE59EDA4F4E757BB808C29AB2A7619A3AD",
+    "tools/landing_camera_test.cpp": "DC4D4035D2BF86D4883812D2107EE4F48246E4F2357D39D9220DE8CC3715D38A",
+    "tools/upjump_arms_test.cpp": "5B238AB33D1F020005A222107D1DBF1235DC41B02E343F657C108367AB84FFC9",
+    "tools/landing_support_checks.inl": "2C248A3C74398741C65BBD09F1EC5E7344CAD42179EC043F9CD01A108145841D",
+    "tools/landing_support_regression.inl": "A35E9BE20ECBBE144814DB62043EBFBCFAD733E573CEDD90F12583FB35F89DF5",
+    "tools/native_landing_poses.inl": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA"
+  }
+}
