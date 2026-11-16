@@ -1,0 +1,48 @@
+{
+  "change": "Sustained body-facing hold for deeply lowered downward inspection, including correlated head/hand motion; independent shared straight travel releases the hold.",
+  "scope": "Shared TR1-5 controller body-facing inference; native ladder, landing animation and camera code unchanged",
+  "checks": {
+    "456": 10854778,
+    "123": 5416918,
+    "camera": 19880640,
+    "inspection": 11320,
+    "sustained": 4138
+  },
+  "inHeadsetTested": false,
+  "regressionEvidence": "Latest installed-code session replays 6335 poses with no mismatches. Full stationary sequence of 1163 poses fails under baseline and passes candidate. False turn has gaze Y -0.908, raw physical lowering 0.242m and closely correlated head/controller turn, defeating the prior head-leading gate. Existing recorded walking/turning regression passes with actual calibrated physical height. New log format roundtrips all 1163 samples.",
+  "preserved": [
+    "Native landing animation/VRIK handoff",
+    "Standing height and body-size calibration",
+    "Camera clearance implementation",
+    "Existing translation pivot detector defaults",
+    "Roomscale walking in all four directions",
+    "Coordinated physical turns with level/downward gaze",
+    "Native simulation and ladder animation"
+  ],
+  "compromise": "Deep lowered inspection holds facing without timed expiry or center-gaze release. Looking up, straightening, movement stick or independent shared straight physical travel release it. A real turn begun while bent over inspecting may need looking up/straightening first; feet are not tracked.",
+  "coverage": "1163 samples of latest stationary glance, 30 seconds repeated synthetic glances, earlier 181-sample post-ladder glance, existing labelled close-hand physical walking/turning with calibrated height, level/downward turns at 60/90/120 Hz, four-direction shared translation, targeted mod and camera regressions.",
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "7759A11F3F256C548FC0A9A075F97F058DBD0CB59F4A2599EC03FAE671718078",
+    "src/FirstPersonStabilization.h": "07E276F599F73FDAA10BFF484E4FC281BDBAD94A6DDB8BCA4D15D33505306316",
+    "src/FirstPersonBodyIK.h": "4698EA36FD6B6CFA89E2E1AE59672B289B41E2FFB78A852B75E7AA7A9AF8D523",
+    "src/BodyFollower.h": "BEF49DBC4122FE8A3659EAEB9F1027251DDE06BBB15F6B3B1ED89C5DF0F6DEA9",
+    "src/ControllerBodyAnchor.h": "9CC3472EFD1D8CC6E54A307EDA51EB455E821DDC3FB547D933284588AB76B942",
+    "src/PlantedPivotEvidence.h": "FEC5DF7837122BABF51EF7378007063B90BAAADA9B3F2793A060442E3753EF44",
+    "src/GroundTorso.h": "B8674260546B7B184FF6F0004DC7FBFDD4F023052CF0E6E6B501C815622F8D5E",
+    "src/TorsoClearance.h": "30139EE01BBD5D2E8B81F651D3BD1B01700EF0B48EFB7F188B16EDB8EA27C986",
+    "src/ControllerBodyAnchor.inl": "4BFAC402F66D0910542DF12025CF942412CB5D72F0179DE6A2A57FC114D262A9"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "1B0DEDEA9C0F3FAB5AF62235DA22E7EE59EDA4F4E757BB808C29AB2A7619A3AD",
+    "tools/landing_camera_test.cpp": "DC4D4035D2BF86D4883812D2107EE4F48246E4F2357D39D9220DE8CC3715D38A",
+    "tools/upjump_arms_test.cpp": "5B238AB33D1F020005A222107D1DBF1235DC41B02E343F657C108367AB84FFC9",
+    "tools/landing_support_checks.inl": "2C248A3C74398741C65BBD09F1EC5E7344CAD42179EC043F9CD01A108145841D",
+    "tools/landing_support_regression.inl": "40CA6C1165B06D9B33BDEE099BDC5DA3084DE2471A760956063B9C108CBA1138",
+    "tools/native_landing_poses.inl": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA",
+    "tools/inspection_heading_tests.cpp": "39FC70C335E1F002A1684BF3010723BCE83730080A6424AD6AB995F758EB3ED9",
+    "tools/lowered_inspection_tests.cpp": "EA37BBF4D022AD7651A5069555DF006AF968921476EE870CEB9DB15B5E19C8ED",
+    "tools/close_hands_motion_regression.inl": "1EDB73A03A15E52AF7E972F3BF4981A82D942BC98060968DD1543C6C8277888C",
+    "tools/body_anchor_replay.cpp": "5EDB17157E9948F73B77242BAC9A9979D14CE3277EE74F9F4213F70FCED2786D"
+  }
+}

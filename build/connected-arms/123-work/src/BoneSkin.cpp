@@ -379,6 +379,52 @@ float Component(const uint8_t* p, const Attr& a, int i) {
     }
 }
 
+// Measure the actual torso surface once per body buffer. This does not
+// change geometry or GL state; the next body solve consumes the cached bounds.
+void MeasureFirstPersonTorso(GLuint program) {
+    float inverse[12]{};uint64_t mask=0;bool measured=false;
+    if(!FirstPersonTorsoMeasureInfo(inverse,mask,measured)) return;
+    static unsigned calls=0;
+    if(measured && (++calls%120)!=0) return;
+    Attr coord,joints,weights;
+    if(!QueryAttr(program,"aCoord",coord) || !QueryAttr(program,"aLight",joints) ||
+       !QueryAttr(program,"aColor",weights) || coord.size<3 || joints.size<3 || weights.size<3 ||
+       coord.buf!=joints.buf || coord.buf!=weights.buf || coord.stride<=0 || joints.stride<=0 || weights.stride<=0) return;
+    if(FirstPersonTorsoBufferKnown(coord.buf)) return;
+    GLint previous=0,bytes=0;glGetIntegerv(GL_ARRAY_BUFFER_BINDING,&previous);
+    gl::BindBuffer(GL_ARRAY_BUFFER,coord.buf);
+    gl::GetBufferParameteriv(GL_ARRAY_BUFFER,GL_BUFFER_SIZE,&bytes);
+    std::vector<uint8_t> data;
+    if(bytes>0 && bytes<=64*1024*1024) {
+        data.resize(size_t(bytes));gl::GetBufferSubData(GL_ARRAY_BUFFER,0,bytes,data.data());
+    }
+    gl::BindBuffer(GL_ARRAY_BUFFER,GLuint(previous));
+    if(data.empty()) return;
+    float low[3]={INFINITY,INFINITY,INFINITY},high[3]={-INFINITY,-INFINITY,-INFINITY};unsigned samples=0;
+    for(size_t i=0;;++i) {
+        bool valid=true;
+        for(const Attr* attr:{&coord,&joints,&weights})
+            if(attr->offset+i*size_t(attr->stride)+attr->elemBytes>data.size()) valid=false;
+        if(!valid) break;
+        float weight=0;
+        for(int k=0;k<3;++k) {
+            const float index=Component(data.data()+joints.offset+i*joints.stride,joints,k);
+            if(!std::isfinite(index) || index<0 || index>=64) continue;
+            const int joint=int(index);
+            if(mask&(uint64_t(1)<<joint)) weight+=Component(data.data()+weights.offset+i*weights.stride,weights,k);
+        }
+        if(!std::isfinite(weight) || weight<.5f) continue;
+        float point[3]{};
+        for(int k=0;k<3;++k) point[k]=Component(data.data()+coord.offset+i*coord.stride,coord,k);
+        float local[3]{};
+        for(int r=0;r<3;++r) local[r]=inverse[r*4]*point[0]+inverse[r*4+1]*point[1]+inverse[r*4+2]*point[2]+inverse[r*4+3];
+        if(!std::isfinite(local[0]+local[1]+local[2])) continue;
+        for(int k=0;k<3;++k) {low[k]=std::min(low[k],local[k]);high[k]=std::max(high[k],local[k]);}
+        ++samples;
+    }
+    FirstPersonTorsoMeasure(coord.buf,low,high,samples);
+}
+
 struct WristRim {
     GLuint vao=0,vertices=0,indices=0;
     unsigned first=0,count=0,indexBytes=0;
@@ -614,7 +660,7 @@ void MeasureBuffer(GLuint prog) {
 }
 
 // Decide which way is front by comparing the torso's local +Z, carried into
-// world by the joint matrix, with Lara's facing from lara_item. Evidence is
+// the render frame by the joint matrix, with the same palette's root. Evidence is
 // accumulated and only trusted once it is consistent, because she can twist
 // her torso against her facing while aiming or looking around.
 void UpdateForward() {
@@ -1106,6 +1152,7 @@ void BoneSkinAfterValidate(bool jointApplied) {
     if (prog == 0 || prog >= kMaxProgram) return;
 
     ProgramState& ps = g_prog[prog];
+    MeasureFirstPersonTorso(prog);
     if (ps.locBone == -2) {
         ps.locBone   = gl::GetUniformLocation(prog, "uDynBone");
         ps.locRegion = gl::GetUniformLocation(prog, "uDynRegion");

@@ -19,7 +19,9 @@
 #include "MotionGunInput.h"
 #include "FirstPersonIK.h"
 #include "BodyFollower.h"
+#include "ControllerBodyAnchor.h"
 #include "GroundTorso.h"
+#include "TorsoClearance.h"
 #include "ClassicBodyRender.h"
 #include "PistolAnimationBlend.h"
 #include "PhysicalHolster.h"
@@ -403,6 +405,18 @@ struct PistolArmPose {
     uint64_t serial=0;
     motiongun::Frame joint[6]{};
 } g_pistolArmPose;
+// The last visible body solve supplies reach geometry, not a frozen hand pose.
+// Fresh controller orientation/position is limited against it before firing.
+struct ConnectedWeaponReach {
+    bool valid=false;
+    const uint8_t* item=nullptr;
+    int game=-1,weapon=0,object=-1,level=-1;
+    uint64_t serial=0;
+    double time=0;
+    float heading=0,units=0,bodyOffset=0;
+    motiongun::Vec root{};
+    motiongun::Frame chain[3]{};
+} g_connectedWeaponReach[2];
 bool g_pistolBodyScope=false,g_pistolForearmScope=false;
 bool g_pistolArmSolveReady=false;
 struct PistolRollHistory {
@@ -424,10 +438,18 @@ firstperson::ArmRollContinuity PistolRollSeed(int hand,const uint8_t* item) {
     return g_pistolRoll.previous[hand];
 }
 firstperson::BodyFollower g_bodyFollower;
+void UpdateControllerBodyAnchor();
+void ResetControllerBodyAnchor();
+bool BodyControllersStationary();
+bool HasControllerBodyAnchor();
+bool BodyControllersPermitTravel();
+void BodyTrackingOffset(float& right,float& forward);
 firstperson::BodySizeCalibration g_bodySize;
 firstperson::AutoBodyCalibration g_autoBodyCalibration;
 firstperson::TorsoPoseFilter g_torsoPose;
 firstperson::GroundTorso g_groundTorso;
+firstperson::TorsoClearance g_torsoClearance;
+firstperson::TorsoSurface g_torsoSurface;
 firstperson::GroundGaitReference g_groundGait;
 int g_groundGaitObject=-1;
 bool g_bodyLanding=false;
@@ -454,6 +476,10 @@ firstperson::BodyFollowSettings BodyFollowSettings() {
     s.followSpeed=Cfg().firstPersonBodyFollowSpeedMetres;return s;
 }
 void ResetBodyFollower() {
+    ResetControllerBodyAnchor();
+    for(auto& reach:g_connectedWeaponReach) reach={};
+    g_torsoSurface.Reset();
+    g_torsoClearance.Reset();
     g_groundTorso.Reset();
     for(auto& arm:g_jumpArms) arm.Reset();
     g_mountCamera.Reset();
@@ -553,11 +579,15 @@ bool CanFitStandingBody(const uint8_t* item) {
 // This permits horizontal render placement only, not grounded IK or dragging
 // Lara's airborne collision root toward the headset.
 bool CanFitAirborneBody(const uint8_t* item) {
-    return g_active && g_haveHeading &&
-        Cfg().firstPersonMovementStabilization && Cfg().positionalTracking &&
-        Cfg().firstPersonHeadTranslation && VR().poseValid() && g_groundEye.valid && GroundBodyAvailable(item) &&
-        (*reinterpret_cast<const uint16_t*>(item+off::item_flags)&8u) &&
-        locomotion::IsJumpOrFallState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state));
+    if(!g_active || !g_haveHeading || !Cfg().firstPersonMovementStabilization ||
+       !Cfg().positionalTracking || !Cfg().firstPersonHeadTranslation || !VR().poseValid() ||
+       !g_groundEye.valid || !GroundBodyAvailable(item)) return false;
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    // Keep the fitted mesh until native collision replaces the jump clip,
+    // including the frame where landing/contact has already cleared gravity.
+    if(state==3 || state==9 || state==28) return true;
+    return (*reinterpret_cast<const uint16_t*>(item+off::item_flags)&8u) &&
+        locomotion::IsJumpOrFallState(state);
 }
 
 bool IsLadder(const uint8_t* item) {
@@ -576,6 +606,11 @@ bool UseLandingCamera(const uint8_t* item) {
     return item && CanWalk(item) && !OrdinaryJumpLanding(item) && locomotion::IsLandingAnimation(
         *reinterpret_cast<const int16_t*>(item+off::item_anim_state),
         *reinterpret_cast<const int16_t*>(item+off::item_anim_number));
+}
+
+bool NativeLandingAnimation(const uint8_t* item) {
+    return g_active && g_boundDll && g_boundBase && item &&
+        item==*reinterpret_cast<uint8_t**>(g_boundBase+g_boundDll->laraItem) && UseLandingCamera(item);
 }
 
 template <typename T>
@@ -838,6 +873,46 @@ bool Anchor(PHD_3DPOS& pose) {
         return false;
     }
 
+    if(Cfg().firstPersonMovementStabilization && joint==14 && UseLandingCamera(item)) {
+        // Impact pitch must not turn forward eye clearance into a downward
+        // camera offset. Retain the animated head dip and live HMD tracking.
+        const int32_t neckY=body[1]+(Lerp(jPrev[7],jCur[7],frac)>>kFixedShift);
+        head[1]=std::min(head[1],neckY+std::min(0,Cfg().firstPersonAnchorY));
+        if(Cfg().firstPersonFullBodyIK) {
+            const auto jointY=[&](int index) {
+                const auto* prev=reinterpret_cast<const int32_t*>(item+off::item_joints_prev+index*off::joint_stride);
+                const auto* cur=reinterpret_cast<const int32_t*>(item+off::item_joints_cur+index*off::joint_stride);
+                return body[1]+(Lerp(prev[7],cur[7],frac)>>kFixedShift);
+            };
+            const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
+            const float size=Cfg().firstPersonBodyScale>0 ? Cfg().firstPersonBodyScale :
+                g_bodySize.valid && g_bodySizeObject==object && std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
+            const float footY=float(std::max(jointY(3),jointY(6)));
+            const float eyeReserve=Cfg().firstPersonBodyScale==0 && g_bodySize.valid && g_bodySizeObject==object &&
+                std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.eyeGap : 0.f;
+            float supportedEye=footY+(float(head[1])-footY)*size-eyeReserve;
+            const auto* obj=object>=0 ? Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride : nullptr;
+            if(g_torsoSurface.valid && g_torsoSurface.owner==obj) {
+                const auto* prev=reinterpret_cast<const int32_t*>(item+off::item_joints_prev+7*off::joint_stride);
+                const auto* cur=reinterpret_cast<const int32_t*>(item+off::item_joints_cur+7*off::joint_stride);
+                float top=INFINITY;
+                for(int corner=0;corner<8;++corner) {
+                    const auto local=g_torsoSurface.Corner(corner);
+                    const double y=double(Lerp(prev[7],cur[7],frac))+
+                        double(Lerp(prev[4],cur[4],frac))*local.x+
+                        double(Lerp(prev[5],cur[5],frac))*local.y+
+                        double(Lerp(prev[6],cur[6],frac))*local.z;
+                    top=std::min(top,body[1]+float(y/16384.0));
+                }
+                supportedEye=std::min(supportedEye,footY+(top-footY)*size-.25f*LiveWorldUnitsPerMetre());
+            }
+            const float trackedY=Cfg().positionalTracking && Cfg().firstPersonHeadTranslation ?
+                VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre() : 0;
+            // Share the final rendered eye with the floor-supported landing
+            // pose, instead of adding physical lowering below its head.
+            head[1]=std::min(head[1],int32_t(std::lround(supportedEye-trackedY)));
+        }
+    }
     if (IsLadder(item)) {
         int32_t neck[3]{};
         for (int row=0;row<3;++row) {
@@ -898,7 +973,8 @@ bool FlareIKReady();
 
 void SetMeshVisibility(bool hideHead, bool hideRoll,
                        bool hideCrouch = false, bool ledgeArms = false, bool hideArms = false) {
-    if (MotionReady() || UnarmedIKReady()) hideCrouch=ledgeArms=hideArms=false;
+    // Tracked hands keep their arms, but must not reveal the hanging torso.
+    if (MotionReady() || UnarmedIKReady()) hideCrouch=hideArms=false;
     if (!g_boundDll || !g_boundBase) return;
     auto* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
     if (!item) {
@@ -984,12 +1060,10 @@ uint32_t FirstPersonBodyMask(const uint8_t* item) {
         g_bodyVisibility={};return UINT32_MAX;
     }
     const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
-    if(state==10 || state==30 || state==31 || (BoundGame()==3 && locomotion::IsMonkeyBarState(state))) {
-        g_bodyVisibility={};return UINT32_MAX; // Reveal the hanging torso and legs immediately.
-    }
     const auto mask=g_bodyVisibility.Update(item,AppFlag(drva::app_off::level),TurnTime(),
         locomotion::IsLedgeArmsOnlyState(state,BoundGame()),UseLandingCamera(item),
-        g_mountBodyTransition.active || g_torsoPose.recovering || g_mountCamera.active);
+        g_mountBodyTransition.active || g_torsoPose.recovering || g_mountCamera.active,
+        CanFitAirborneBody(item) && (state==3 || state==9 || state==15 || state==28));
     return IsHandsOnlyBodyState(item) || firstperson::TraversalTransitionHandsOnly(state,BoundGame(),mask)
         ? firstperson::HandMeshBits : mask;
 }
@@ -1254,9 +1328,9 @@ void __cdecl Detour_DrawCreatureHD(void* item, int32_t useMeshBits) {
         bool old=g_pistolBodyScope;
         bool oldForearm=g_pistolForearmScope;
         PistolScope(void* drawItem,int32_t masked) {
-            g_pistolBodyScope=!masked && SidearmWeapon();
+            g_pistolBodyScope=!masked && (SidearmWeapon() || MotionReady());
             const uint32_t bits=drawItem ? *reinterpret_cast<const uint32_t*>(static_cast<const uint8_t*>(drawItem)+off::item_mesh_bits) : 0;
-            g_pistolForearmScope=masked && SidearmWeapon() && bits && !(bits&~firstperson::ArmMeshBits);
+            g_pistolForearmScope=masked && (SidearmWeapon() || MotionReady()) && bits && !(bits&~firstperson::ArmMeshBits);
         }
         ~PistolScope() { g_pistolBodyScope=old;g_pistolForearmScope=oldForearm; }
     } pistolScope(item,useMeshBits);
@@ -1314,7 +1388,7 @@ void __cdecl Detour_DrawCreatureHD(void* item, int32_t useMeshBits) {
         const uint32_t saved=bits;
         if (!useMeshBits) {
             if(handsOnly) return;
-            g_pistolBodyScope=SidearmWeapon(); g_pistolArmPose.valid=false;
+            g_pistolBodyScope=MotionReady(); g_pistolArmPose.valid=false;
             bits=bodyMask & ~kHeadMeshBit & ~0x2400u;
             g_bodySkinScope=true;g_bodySkinReady=false;
             const bool previousWristScope=g_bodyWristSeamScope;g_bodyWristSeamScope=true;
@@ -1325,7 +1399,7 @@ void __cdecl Detour_DrawCreatureHD(void* item, int32_t useMeshBits) {
         }
         const uint32_t forearms=saved&0x1200u&bodyMask;
         if (forearms) {
-            g_pistolForearmScope=SidearmWeapon();
+            g_pistolForearmScope=MotionReady();
             bits=forearms;g_bodySkinScope=true;g_bodySkinReady=false;
             g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1);
             g_bodySkinScope=g_bodySkinReady=false;bits=saved;g_pistolForearmScope=false;
@@ -1401,7 +1475,7 @@ void TurnBodyToHead(uint8_t* item, float dt) {
         return;
     using namespace locomotion;
     auto& pos = *reinterpret_cast<PHD_3DPOS*>(item + off::item_pos);
-    if(remastered && Cfg().firstPersonFullBodyIK && g_bodyFollower.valid) { pos.y_rot=Angle(g_bodyFollower.yaw); return; }
+    if(remastered && Cfg().firstPersonFullBodyIK && g_bodyFollower.valid) { pos.y_rot=Angle(g_bodyFollower.WorldYaw(g_heading.base)); return; }
     const float delta = Wrap(g_heading.World(VR().HeadYawRadians()) - Radians(pos.y_rot));
     const float dead = std::clamp(Cfg().firstPersonBodyDeadzoneDegrees, 0.0f, 90.0f) * Pi / 180;
     const float move = std::copysign(std::max(0.0f, std::fabs(delta) - dead), delta);
@@ -1534,20 +1608,33 @@ locomotion::Vec DragBody(uint8_t* item) {
     if (!CanWalk(item) || g_shifted || !Cfg().firstPersonRoomscaleMove ||
         !Cfg().positionalTracking || !Cfg().firstPersonHeadTranslation) return {};
     if(*reinterpret_cast<const uint16_t*>(item+off::item_flags)&8) return {};
+    // Fixed physical hands prohibit roomscale root consumption as well as
+    // render following. Otherwise a pending HMD lean can keep walking Lara.
+    if(Cfg().firstPersonFullBodyIK && (BodyControllersStationary() ||
+       !BodyControllersPermitTravel())) {
+        g_roomscaleFollower={};g_roomscaleFollowTime={};return {};
+    }
     Vec pending;
     VR().HeadFloorOffset(pending.x, pending.z);
     // Full-body fitting follows the stabilized eye. Use the same physical
     // displacement here so looking down at an edge cannot leave the collision
     // root behind the rendered body through neck-pivot compensation.
     if(Cfg().firstPersonFullBodyIK && Cfg().firstPersonMovementStabilization)
-        VR().FirstPersonViewOffset(pending.x,pending.z);
+        BodyTrackingOffset(pending.x,pending.z);
     const float scale = LiveWorldUnitsPerMetre();
     if (!std::isfinite(scale) || scale <= 1) return {};
     // Exclude motion already simulated but not yet displayed by interpolation.
     pending = pending - Rotate(g_dragCurrent - g_dragShown, -g_heading.base);
     Vec request=DragRequest(pending,Cfg().firstPersonRoomscaleDeadzoneMetres);
     if(Cfg().firstPersonFullBodyIK) {
-        const auto follow=g_roomscaleFollower.Request({pending.x,0,pending.z},Elapsed(g_roomscaleFollowTime),BodyFollowSettings());
+        auto settings=BodyFollowSettings();
+        if(HasControllerBodyAnchor()) {
+            // Controller agreement already distinguishes a step from a lean.
+            // Do not require another 15 cm of travel after that decision.
+            settings.leanRadius=std::clamp(Cfg().firstPersonRoomscaleDeadzoneMetres,0.f,settings.leanRadius);
+            settings.leanRelease=std::min(settings.leanRelease,settings.leanRadius*.5f);
+        }
+        const auto follow=g_roomscaleFollower.Request({pending.x,0,pending.z},Elapsed(g_roomscaleFollowTime),settings);
         request={follow.x,follow.z};
     }
     const Vec requested=Rotate(request,g_heading.base)*scale;
@@ -1603,7 +1690,7 @@ bool MotionWeaponSupported(int gun) {
 // Match TR4/5: only ordinary unarmed ground movement uses the pitch gate.
 // Busy hands, weapon transitions and flares retain their native visibility.
 bool HideUnarmedArms(const uint8_t* item) {
-    const bool eligible=g_active && g_boundDll && g_boundBase && item && CanWalk(item) && !UnarmedIKReady() &&
+    const bool eligible=g_active && g_boundDll && g_boundBase && item && !NativeLandingAnimation(item) && CanWalk(item) && !UnarmedIKReady() &&
         *Ptr<int16_t>(g_boundDll->lara+off::lara_gun_status)==0 &&
         (*Ptr<int16_t>(g_boundDll->lara+4)==0 || MotionWeaponSupported(*Ptr<int16_t>(g_boundDll->lara+4)));
     return g_unarmedArmVisibility.Hide(eligible,eligible ? VR().HeadPitchRadians() : 0.f);
@@ -1638,6 +1725,7 @@ const char* ControllerTrackingBlockedReason() {
 
 const char* MotionBlockedReason() {
     if (const auto* reason=ControllerTrackingBlockedReason()) return reason;
+    if(NativeLandingAnimation(*Ptr<uint8_t*>(g_boundDll->laraItem))) return "native-landing-animation";
     const auto* lara=Ptr<uint8_t>(g_boundDll->lara);
     if (*reinterpret_cast<const int16_t*>(lara + off::lara_gun_status) != 4 &&
         !(PhysicalHolsterOwnsWeapon() && (*reinterpret_cast<const int16_t*>(lara+2)==2 || *reinterpret_cast<const int16_t*>(lara+2)==3)))
@@ -1847,6 +1935,7 @@ bool TrackedControllerWrist(int hand, motiongun::Frame& out, motiongun::Basis& c
     return motiongun::Inverse(out,inverse);
 }
 
+
 bool BuildControllerWrist(int hand, motiongun::Frame& out, motiongun::Basis& controller) {
     motiongun::Vec local{};
     if (!TrackedControllerWrist(hand,out,controller,&local)) return false;
@@ -1860,6 +1949,7 @@ bool FlareIKReady() {
     const int flare=g_boundDll->module[4]==L'2' ? 8 : 9;
     if(CurrentMotionWeapon()!=flare || *Ptr<int16_t>(g_boundDll->lara+2)!=0) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(NativeLandingAnimation(item)) return false;
     if(!CanFitStandingBody(item) && !CanSteerCrouch(item)) return false;
     motiongun::Frame wrist{};motiongun::Basis basis{};
     return BuildControllerWrist(0,wrist,basis);
@@ -1880,6 +1970,7 @@ bool UnarmedIKReadyForPass(bool shadow) {
         !(AppFlag(drva::app_off::cfg_flags)&1)) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
     if (!item || item!=g_headingItem || LaraWaterStatus()!=0) return false;
+    if(NativeLandingAnimation(item)) return false;
     const int status=*Ptr<int16_t>(g_boundDll->lara+off::lara_gun_status);
     // Native ALL4S uses hands-busy even without a weapon or interaction.
     // Keep controller hands available without changing that native flag.
@@ -1897,6 +1988,36 @@ bool UnarmedIKReadyForPass(bool shadow) {
 
 bool UnarmedIKReady() { return UnarmedIKReadyForPass(false); }
 
+void PublishConnectedWeaponReach(uint8_t* item,int hand,const motiongun::Frame (&chain)[3],motiongun::Vec camera) {
+    if(!g_active || !item || !g_boundDll || !g_boundBase || hand<0 || hand>1 || NativeLandingAnimation(item)) return;
+    auto& reach=g_connectedWeaponReach[hand];
+    reach={};reach.valid=true;reach.item=item;reach.game=(g_boundDll->module[4]-L'1');reach.weapon=CurrentMotionWeapon();
+    reach.object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);reach.level=AppFlag(drva::app_off::level);
+    reach.serial=VR().PoseSerial();reach.time=TurnTime();reach.heading=g_heading.base;
+    reach.units=LiveWorldUnitsPerMetre();reach.bodyOffset=Cfg().firstPersonBodyForwardCm;
+    const auto& root=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    reach.root={float(root.x_pos),float(root.y_pos),float(root.z_pos)};
+    for(int i=0;i<3;++i) {reach.chain[i]=chain[i];reach.chain[i].origin=Add(chain[i].origin,camera);}
+}
+void LimitConnectedWeaponWrist(uint8_t* item,int hand,motiongun::Frame& wrist) {
+    if(!g_active || !g_boundDll || !g_boundBase || !item || hand<0 || hand>1 || NativeLandingAnimation(item)) return;
+    const auto& reach=g_connectedWeaponReach[hand];
+    const double age=TurnTime()-reach.time;
+    if(!reach.valid || reach.item!=item || reach.game!=(g_boundDll->module[4]-L'1') || reach.weapon!=CurrentMotionWeapon() ||
+       reach.object!=*reinterpret_cast<const int16_t*>(item+off::item_object_number) || reach.level!=AppFlag(drva::app_off::level) ||
+       VR().PoseSerial()<reach.serial || VR().PoseSerial()-reach.serial>1 || age<0 || age>.1 ||
+       reach.units!=LiveWorldUnitsPerMetre() || reach.bodyOffset!=Cfg().firstPersonBodyForwardCm) return;
+    const auto& root=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const motiongun::Vec position{float(root.x_pos),float(root.y_pos),float(root.z_pos)};
+    if(firstperson::Length(Sub(position,reach.root))>reach.units*2) return;
+    const auto rotation=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},
+        firstperson::BodyAngle(g_heading.base-reach.heading)));
+    const motiongun::Frame transport{rotation,Sub(position,Transform(rotation,reach.root))};
+    motiongun::Frame chain[3]{},limited{};
+    for(int i=0;i<3;++i) chain[i]=motiongun::Multiply(transport,reach.chain[i]);
+    if(firstperson::ConnectedArmTarget(chain,wrist,limited)) wrist=limited;
+}
+
 bool BuildGunPose(int hand, GunPose& out) {
     if (hand < 0 || hand > 1 || (!MotionReady() && !FlareIKReady())) return false;
     auto rejected=[hand](const char* why) {
@@ -1905,6 +2026,7 @@ bool BuildGunPose(int hand, GunPose& out) {
     };
     motiongun::Frame wrist{}; motiongun::Basis controller{};
     if (!BuildControllerWrist(hand,wrist,controller)) return false;
+    LimitConnectedWeaponWrist(*Ptr<uint8_t*>(g_boundDll->laraItem),hand,wrist);
     out.basis=wrist.basis; out.hand=wrist.origin;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
     out.nativeHand=NativeJointPoint(item,hand ? 10 : 13);
@@ -1976,9 +2098,16 @@ void __cdecl Detour_DrawGunFlash(int32_t weapon,int32_t unused,int32_t joint) {
     std::memcpy(matrix,saved,sizeof(saved));
 }
 
+#include "ControllerBodyAnchor.inl"
+
 float BodyPlacementHeading(const uint8_t* item) {
-    if(CanFitAirborneBody(item)) return locomotion::Wrap(g_heading.base+VR().HeadYawRadians());
-    return g_bodyFollower.valid ? g_bodyFollower.yaw :
+    if(CanFitAirborneBody(item)) {
+        UpdateControllerBodyAnchor();
+        return locomotion::Wrap(g_heading.base+(g_controllerBodyAnchor.valid ?
+            (g_controllerBodyAnchor.heading.active ? g_controllerBodyAnchor.heading.target : g_controllerBodyAnchor.yaw) :
+            VR().HeadYawRadians()));
+    }
+    return g_bodyFollower.valid ? g_bodyFollower.WorldYaw(g_heading.base) :
         locomotion::Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
 }
 
@@ -2083,9 +2212,10 @@ bool FullBodyGripState(const uint8_t* item) {
 bool FullBodyIKReady() {
     if(!Cfg().firstPersonFullBodyIK || ControllerTrackingBlockedReason() || !Gate()) return false;
     const auto* item=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(NativeLandingAnimation(item)) return false;
     const int status=*Ptr<int16_t>(g_boundDll->lara+off::lara_gun_status);
     if(!item || LaraWaterStatus()!=0 || *reinterpret_cast<const int16_t*>(item+off::item_hit_points)<=0) return false;
-    if(!CanFitStandingBody(item) && !CanSteerCrouch(item) && !FullBodyGripState(item)) return false;
+    if(!CanFitStandingBody(item) && !CanFitAirborneBody(item) && !CanSteerCrouch(item) && !FullBodyGripState(item)) return false;
     if(status==1 && !FullBodyGripState(item) && !CanSteerCrouch(item)) return false;
     if(status!=0 && status!=1 && !MotionWeaponSupported(CurrentMotionWeapon())) return false;
     return true;
@@ -2118,7 +2248,7 @@ bool FitAirborneBodyPalette(uint8_t* item,float* joints,int count) {
     if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,0,pelvis) ||
        !ReadIKJoint(obj,joints,count,bones,mapping,poses,14,head)) return false;
     const auto camera=BodyPaletteCameraOrigin(item,head);
-    locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+    locomotion::Vec view{};BodyTrackingOffset(view.x,view.z);
     view=locomotion::Rotate(view,g_heading.base)*LiveWorldUnitsPerMetre();
     const auto anchor=locomotion::Rotate(g_groundEye.bodyLocal,BodyPlacementHeading(item));
     stabilization::OffsetBodyPalette(joints,count,{
@@ -2130,10 +2260,10 @@ bool FitAirborneBodyPalette(uint8_t* item,float* joints,int count) {
 motiongun::Vec FixedBodyPlacement(uint8_t* item,motiongun::Vec pelvis,motiongun::Vec camera) {
     if(!g_active || !g_scenePoseValid || DrawingNativeShadow() ||
        !Cfg().firstPersonMovementStabilization || !g_groundEye.valid || !CanFitStandingBody(item)) return {};
-    const float heading=g_bodyFollower.valid ? g_bodyFollower.yaw :
+    const float heading=g_bodyFollower.valid ? g_bodyFollower.WorldYaw(g_heading.base) :
         locomotion::Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
     const auto anchor=locomotion::Rotate(g_groundEye.bodyLocal,heading);
-    locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+    locomotion::Vec view{};BodyTrackingOffset(view.x,view.z);
     view=locomotion::Rotate(view,g_heading.base)*LiveWorldUnitsPerMetre();
     // Cancel horizontal animation/root settling before the user's offset and
     // hand IK. The stable eye carries intentional travel, turns and roomscale.
@@ -2210,7 +2340,7 @@ void TraceArmGlance(uint8_t* item,const float* joints,int count,int pass) {
 bool PistolBodyPoseMatches(const uint8_t* item,int pass) {
     if(!g_boundDll || !g_boundBase) return false;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
-    return (MotionReady() || status==2 || status==3 || g_pistolAnimation.blending) && SidearmWeapon() && g_pistolArmPose.valid &&
+    return (MotionReady() || (SidearmWeapon() && (status==2 || status==3 || g_pistolAnimation.blending))) && g_pistolArmPose.valid &&
         g_pistolArmPose.item==item && g_pistolArmPose.weapon==CurrentMotionWeapon() && g_pistolArmPose.game==(g_boundDll->module[4]-L'1') &&
         g_pistolArmPose.pass==pass && g_pistolArmPose.serial==VR().PoseSerial() &&
         g_pistolArmPose.fraction==*Ptr<int32_t>(g_boundDll->frameFrac);
@@ -2220,7 +2350,7 @@ bool PistolBodyArmPose(uint8_t* item,float* joints,int count,int pass,bool captu
     using namespace motiongun;
     if(!g_boundDll || !g_boundBase) return false;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
-    if((!MotionReady() && status!=2 && status!=3 && !g_pistolAnimation.blending) || !SidearmWeapon() || count<15 || count>32) return false;
+    if((!MotionReady() && !(SidearmWeapon() && (status==2 || status==3 || g_pistolAnimation.blending))) || count<15 || count>32) return false;
     const int fraction=*Ptr<int32_t>(g_boundDll->frameFrac);
     if(capture) {
         // Solvers publish the complete chains, including joints omitted from
@@ -2297,30 +2427,187 @@ bool BlendSidearmPose(uint8_t* item,motiongun::Frame (&pose)[15]) {
     return wasBlending || g_pistolAnimation.blending;
 }
 
+// Keep the calibrated visual size through native jump animation. This is a
+// render-only similarity transform; no standing IK or foot planting runs here.
+float AirborneBodyScale(const uint8_t* item) {
+    if(!Cfg().firstPersonFullBodyIK || !CanFitAirborneBody(item)) return 1.f;
+    if(Cfg().firstPersonBodyScale>0) return Cfg().firstPersonBodyScale;
+    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
+    return g_bodySize.valid && g_bodySizeObject==object &&
+        std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
+}
+
+bool FitAirborneVisualBody(uint8_t* item,float* joints,int count) {
+    using namespace motiongun;
+    if(!CanFitAirborneBody(item) || DrawingNativeShadow()) return false;
+    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
+    if(object<0) return false;
+    const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+    const auto* geom=obj+off::object_geom;
+    const int bones=*reinterpret_cast<const int32_t*>(geom+28);
+    const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+    const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+    if(bones>0 && (bones!=count || !mapping || !poses)) return false;
+    const float size=AirborneBodyScale(item);
+    const bool measured=g_torsoSurface.valid && g_torsoSurface.owner==obj;
+    const int state=*reinterpret_cast<const int16_t*>(item+off::item_anim_state);
+    // Vertical takeoff/ascent/descent can bow the collar toward the eye too.
+    // Share the forward-jump torso reference; grounded compression stays on
+    // the existing standing solver and hand/leg animation remains independent.
+    const bool uprightJumpReference=(state==3 || state==9 || state==15 || state==28) && g_groundTorso.valid && g_groundTorso.owner==obj &&
+        std::fabs(g_groundTorso.units-LiveWorldUnitsPerMetre())<.01f;
+    if(size==1.f && !measured && !uprightJumpReference) { g_torsoClearance.Reset();return true; }
+    Frame native[15]{},posed[15]{},bind[15]{},correction[15]{};
+    for(int j=0;j<15;++j) {
+        if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,j,native[j]) ||
+           !ReadIKBind(obj,count,bones,mapping,poses,j,bind[j])) return false;
+    }
+    const Vec camera=BodyPaletteCameraOrigin(item,native[14]);
+    const auto& current=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const auto& previous=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos_prev);
+    const float fraction=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256)/256.f;
+    // Scale around Lara's interpolated collision root, never a swinging foot
+    // or the headset. Native takeoff/flight/tuck motion stays proportional.
+    const Vec pivot{native[0].origin.x,previous.y_pos+(current.y_pos-previous.y_pos)*fraction-camera.y,native[0].origin.z};
+    const auto offset=BodyMeshOffset(item);const Vec meshOffset{offset.x,0,offset.z};
+    for(int j=0;j<15;++j) {
+        posed[j]=native[j];posed[j].origin=Add(Add(pivot,Scale(Sub(native[j].origin,pivot),size)),meshOffset);
+        for(auto& row:posed[j].basis.r) for(auto& value:row) value*=size;
+    }
+    if(uprightJumpReference) {
+        const float nativeYaw=locomotion::Radians(previous.y_rot)+firstperson::BodyAngle(
+            locomotion::Radians(current.y_rot)-locomotion::Radians(previous.y_rot))*fraction;
+        const auto yaw=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},nativeYaw));
+        if(!g_groundTorso.HoldForwardJump(obj,posed,yaw,LiveWorldUnitsPerMetre())) return false;
+    }
+    const float units=LiveWorldUnitsPerMetre();
+    locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+    view=locomotion::Rotate(view,g_heading.base)*units;
+    const Vec eye{g_scenePose.x_pos+view.x,g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*units,g_scenePose.z_pos+view.z};
+    const bool mainBody=g_bodySkinScope && (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49;
+    if(measured) {
+        if(!g_torsoClearance.Apply(obj,posed,bind,Sub(eye,camera),BodyPlacementHeading(item),units,
+            VR().PoseSerial(),TurnTime(),mainBody,&g_torsoSurface)) return false;
+    } else if(mainBody) g_torsoClearance.Reset();
+    for(int j=0;j<15;++j) {
+        // Arm-only IK adds the user offset after this helper. Avoid applying
+        // it twice while still evaluating clearance at the final mesh position.
+        posed[j].origin=Sub(posed[j].origin,meshOffset);
+        Frame inverse{};if(!Inverse(native[j],inverse)) return false;
+        correction[j]=Multiply(posed[j],inverse);
+        if(!firstperson::Finite(correction[j])) return false;
+    }
+    for(int i=0;i<count;++i) {
+        const int j=mapping ? mapping[i] : i;
+        if(j>=0 && j<15) WriteRows(Multiply(correction[j],ReadRows(joints+i*12)),joints+i*12);
+    }
+    return true;
+}
+
+float VisualBodyPostureDrop(uint8_t* item) {
+    const float drop=VR().FirstPersonPostureDrop();
+    // Native fall landings retain the physical posture input used before the
+    // planted-glance compensation; the camera and full-body solver dip together.
+    if(UseLandingCamera(item) || !Cfg().firstPersonMovementStabilization || !g_groundTorso.valid ||
+       !CanFitStandingBody(item) || !HasControllerBodyAnchor()) return drop;
+    const float units=LiveWorldUnitsPerMetre();
+    if(units<=1 || std::fabs(g_groundTorso.units-units)>.01f) return drop;
+    // The upright fit supplies this length once; never derive it from the
+    // currently bent pelvis (that would feed the correction back into itself).
+    // PostureDrop already removes the eye's own 8 cm vertical neck offset.
+    const float hipToNeck=std::clamp(g_groundTorso.hipBelowEye/units-.08f,.45f,.95f);
+    const float lean=std::hypot(g_controllerBodyAnchor.offset.x,g_controllerBodyAnchor.offset.z);
+    return firstperson::PlantedPostureDrop(drop,lean,hipToNeck);
+}
+
+// Native impact/recovery owns every joint. Keep only the calibrated uniform
+// visual size and user placement; no controller targets or limb solver run.
+bool FitNativeLandingBody(uint8_t* item,float* joints,int count) {
+    using namespace motiongun;
+    if(!joints || count<15 || count>32) return false;
+    const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
+    if(object<0) return false;
+    const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+    const auto* geom=obj+off::object_geom;
+    const int bones=*reinterpret_cast<const int32_t*>(geom+28);
+    const auto* mapping=bones>0 ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+    const auto* poses=bones>0 ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+    if(bones>0 && (bones!=count || !mapping || !poses)) return false;
+    Frame hip{},left{},right{};
+    if(!ReadIKJoint(obj,joints,count,bones,mapping,poses,0,hip) ||
+       !ReadIKJoint(obj,joints,count,bones,mapping,poses,3,left) ||
+       !ReadIKJoint(obj,joints,count,bones,mapping,poses,6,right)) return false;
+    const float size=!Cfg().firstPersonFullBodyIK ? 1.f : Cfg().firstPersonBodyScale>0 ? Cfg().firstPersonBodyScale :
+        g_bodySize.valid && g_bodySizeObject==object && std::fabs(g_bodySize.units-LiveWorldUnitsPerMetre())<.01f ? g_bodySize.factor : 1.f;
+    const Vec pivot{hip.origin.x,std::max(left.origin.y,right.origin.y),hip.origin.z};
+    const auto offset=BodyMeshOffset(item);
+    Frame change{firstperson::IdentityBasis(),Add(Scale(pivot,1-size),{offset.x,0,offset.z})};
+    for(auto& row:change.basis.r) for(auto& value:row) value*=size;
+    float result[32*12]{};
+    for(int j=0;j<count;++j) {
+        const auto posed=Multiply(change,ReadRows(joints+j*12));
+        if(!firstperson::Finite(posed)) return false;
+        WriteRows(posed,result+j*12);
+    }
+    if(Cfg().firstPersonDriftLog && g_bodySkinScope &&
+       (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49) {
+        static uint64_t lastNativeLandingPose=UINT64_MAX;
+        if(lastNativeLandingPose!=VR().PoseSerial()) {
+            lastNativeLandingPose=VR().PoseSerial();
+            Frame head{},torso{};
+            if(ReadIKJoint(obj,joints,count,bones,mapping,poses,14,head) &&
+               ReadIKJoint(obj,result,count,bones,mapping,poses,7,torso)) {
+                const float units=LiveWorldUnitsPerMetre();
+                const float eye=g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*units-BodyPaletteCameraOrigin(item,head).y;
+                LogF("landing-native: pose=%llu anim=%d size=%.3f above-collar=%.2fcm IK=off",
+                    static_cast<unsigned long long>(VR().PoseSerial()),
+                    *reinterpret_cast<const int16_t*>(item+off::item_anim_number),size,
+                    g_torsoSurface.valid && g_torsoSurface.owner==obj ? (g_torsoSurface.TopY(torso)-eye)*100/units : -1.f);
+            }
+        }
+    }
+    std::memcpy(joints,result,count*12*sizeof(float));
+    return true;
+}
+
+void UpdateLandingIKState(bool nativeLanding) {
+    if(g_bodyLanding==nativeLanding) return;
+    // Re-seed transient pose inference at BOTH boundaries. Do not recenter
+    // tracking or discard standing height, body size or roomscale inference.
+    g_bodyFollower.Reset();g_torsoPose.Reset();g_torsoClearance.Reset();g_groundGait.Reset();
+    for(auto& arm:g_jumpArms) arm.Reset();
+    g_pistolRoll={};g_pistolArmPose.valid=false;g_pistolArmSolveReady=false;
+    g_pistolAnimation.Reset();
+    g_bodyLanding=nativeLanding;
+}
+
 bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     using namespace motiongun;
-    if(!FullBodyIKReady()) {
+    const bool cannedLanding=NativeLandingAnimation(item);
+    UpdateLandingIKState(cannedLanding);
+    if(cannedLanding) return FitNativeLandingBody(item,joints,count);
+    // Calibrated airborne torso fitting needs the HMD, not two valid hands.
+    // Losing a controller (or entering hands-busy reach) must not replace the
+    // fitted torso with native size or switch its near-eye trim to 20 cm.
+    const bool airborneFit=Cfg().firstPersonFullBodyIK && !ControllerTrackingBlockedReason() && Gate() &&
+        CanFitAirborneBody(item);
+    if(!FullBodyIKReady() && !airborneFit) {
+        g_torsoClearance.Reset();
         g_bodyFollower.Reset();g_torsoPose.Reset();g_groundGait.Reset();g_bodyLanding=false; // Arm-only fallback owns its animation blend.
         return false;
     }
     if(count<15 || count>32) return false;
     const bool preparingJump=StandingJumpPreparation(item);
     if(IsNativeAirborneBodyState(item) && !preparingJump) {
-        // Airborne feet must follow this frame's native animation. Standing
-        // body fitting and mount-recovery filtering can otherwise pull them
-        // toward a headset-relative pose or ease them out over several frames.
-        // Fall through to arm-only IK, which leaves hips/legs/chest untouched.
+        // Keep native jump articulation and the calibrated visual size.
+        // Clearance only bends the upper torso; arm-only IK reconnects the
+        // shoulders to exact controller wrists after this visual correction.
+        if(!FitAirborneVisualBody(item,joints,count)) g_torsoClearance.Reset();
         g_bodyFollower.Reset();g_torsoPose.Reset();g_groundGait.Reset();g_bodyLanding=false; // Arm-only fallback owns its animation blend.
         return false;
     }
     const bool landing=UseLandingCamera(item);
-    if(g_bodyLanding && !landing) {
-        // The camera has returned from the animated landing neck to the
-        // standing eye. A cached kneeling torso belongs to the old frame;
-        // easing it in the new frame briefly places the body ahead of the eye.
-        g_bodyFollower.Reset();g_torsoPose.Reset();
-    }
-    g_bodyLanding=landing;
+
     const int object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);
     if(object<0) return false;
     const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
@@ -2393,8 +2680,12 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         if(!g_jumpBodyReference.Apply(native,landingRoot,true,false,(MotionReady() || UnarmedIKReady()) && !SidearmAnimationActive(),
                                       {std::sin(nativeHeading),0,std::cos(nativeHeading)})) return false;
     }
-    const Vec anchorInPalette=Transform(native[anchorJoint],{float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),
+    Vec anchorInPalette=Transform(native[anchorJoint],{float(Cfg().firstPersonAnchorX),float(Cfg().firstPersonAnchorY),
         float(locomotion::FirstPersonAnchorZ(state,Cfg().firstPersonAnchorZ,Cfg().firstPersonInteractionAnchorZ,BoundGame()))});
+    // Share the camera's landing eye reference with posture reconstruction.
+    // Otherwise the old pitched-forward offset raises the torso above the view.
+    if(landing && Cfg().firstPersonMovementStabilization && anchorJoint==14)
+        anchorInPalette.y=std::min(anchorInPalette.y,native[14].origin.y+std::min(0,Cfg().firstPersonAnchorY));
     const Vec anchor=Add(anchorInPalette,cameraOffset);
     const float scale=LiveWorldUnitsPerMetre();
     locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
@@ -2414,12 +2705,16 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     bool handsForward=false;
     float r[2]{},d[2]{},f[2]{},headR=0,headF=0;
     VR().FirstPersonViewOffset(headR,headF);
-    if(VR().FirstPersonControllerOffset(0,r[0],d[0],f[0]) &&
-       VR().FirstPersonControllerOffset(1,r[1],d[1],f[1])) {
+    const bool turnHandsTracked=VR().FirstPersonControllerOffset(0,r[0],d[0],f[0]) &&
+        VR().FirstPersonControllerOffset(1,r[1],d[1],f[1]);
+    UpdateControllerBodyAnchor();
+    const float physicalTurn=turnHandsTracked && !grip && Cfg().firstPersonBodyHandYawWeight>0 ?
+        g_controllerBodyAnchor.turnOutput : 0.f;
+    if(turnHandsTracked) {
         const Vec leftHint=motiongun::HandInWorld({},r[0]-headR,0,f[0]-headF,g_heading.base,1);
         const Vec rightHint=motiongun::HandInWorld({},r[1]-headR,0,f[1]-headF,g_heading.base,1);
         const Vec handHint=Scale(Add(leftHint,rightHint),.5f);
-        const float bodyYaw=g_bodyFollower.valid ? g_bodyFollower.yaw : nativeHeading;
+        const float bodyYaw=g_bodyFollower.valid ? g_bodyFollower.WorldYaw(g_heading.base) : nativeHeading;
         const float headDrop=VR().FirstPersonHeightDrop();
         vr::HmdMatrix34_t leftPose{},rightPose{};
         const float handHeightLimit=g_bodyFollower.supportedHands ? .6f : .5f;
@@ -2436,21 +2731,29 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     // Collision retraction belongs to the shared eye/body frame, not the
     // inferred physical step. Apply it immediately once to the whole body.
     const Vec wallShift{g_bodyWallOffset.x,0,g_bodyWallOffset.z};
-    const Vec physicalEye=Sub(eye,wallShift);
+    locomotion::Vec bodyView{};BodyTrackingOffset(bodyView.x,bodyView.z);
+    bodyView=locomotion::Rotate(bodyView,g_heading.base)*scale;
+    const Vec postureEye{g_scenePose.x_pos+bodyView.x,eye.y,g_scenePose.z_pos+bodyView.z};
+    const Vec physicalEye=Sub(postureEye,wallShift);
     Vec followerGoal=Sub(Add(nativeRoot,headDelta),wallShift),followerNative=nativeRoot;
     if(Cfg().firstPersonMovementStabilization && g_groundEye.valid) {
         // Center the standing footprint under the eye in the BODY's facing.
         // Keeping this offset in artificial yaw leaves the hips on the old
         // side of the eye when the player physically turns around.
+        // This goal is transported by BodyFollower::Update below along with
+        // its cached footprint, so use the follower's cached frame here.
         const float bodyYaw=g_bodyFollower.valid ? g_bodyFollower.yaw : nativeHeading;
         const auto standingOffset=locomotion::Rotate(g_groundEye.bodyLocal,bodyYaw);
         followerGoal={physicalEye.x-standingOffset.x,simulationRoot.y,physicalEye.z-standingOffset.z};
         followerNative=simulationRoot;
     }
     if(grip) g_bodyFollower.Reset();
-    else g_bodyFollower.Update(VR().PoseSerial(),TurnTime(),g_heading.base,headYaw,facing,
+    else g_bodyFollower.Update(VR().PoseSerial(),TurnTime(),g_heading.base,
+        (BodyControllersStationary() || g_controllerBodyAnchor.valid) ? locomotion::Wrap(g_heading.base+g_controllerBodyAnchor.yaw) : headYaw,facing,
         Scale(followerGoal,1/scale),Scale(followerNative,1/scale),moving,BodyFollowSettings(),Scale(physicalEye,1/scale),handsForward,
-        Cfg().firstPersonMovementStabilization && g_groundEye.valid);
+        Cfg().firstPersonMovementStabilization && g_groundEye.valid,physicalTurn,BodyControllersStationary(),g_controllerBodyAnchor.valid,
+        g_controllerBodyAnchor.heading.active && Cfg().firstPersonBodyHandYawWeight>0 ?
+            locomotion::Wrap(g_heading.base+g_controllerBodyAnchor.heading.target) : NAN,g_controllerBodyAnchor.rotating);
     const float heading=grip || !g_bodyFollower.valid ? nativeHeading : g_bodyFollower.yaw;
     const Basis body{{{std::cos(heading),0,std::sin(heading)},{0,1,0},{-std::sin(heading),0,std::cos(heading)}}};
     Frame inverseBody{};Inverse({body,{}},inverseBody);
@@ -2467,7 +2770,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         if(joint==14 && g_bodyFollower.valid) {
             if(mainBody && (g_bodySizeObject!=object ||
                (g_bodySize.valid && std::fabs(g_bodySize.units-scale)>.01f))) {
-                g_bodySize.Reset();g_bodySizeObject=object;
+                g_bodySize.Reset();g_bodySizeObject=object;g_groundTorso.Reset();
             }
             // Remove only physical height displacement from the eye. The
             // comfortable scene-camera height stays fixed during calibration.
@@ -2477,23 +2780,50 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
                std::fabs(VR().FirstPersonHeightDrop())<.06f &&
                g_bodySize.Capture(native,anchorInPalette,
                    anchorInPalette.y+headDelta.y-VR().FirstPersonVerticalOffset()*scale,scale)) {
-                g_torsoPose.Reset();
+                g_torsoPose.Reset();g_groundTorso.Reset();
                 LogF("firstperson: standing body scale=%.3f (eye/floor fit; fixed until recenter or model change)",g_bodySize.factor);
+            }
+            if(mainBody && Cfg().firstPersonBodyScale==0 && g_bodySize.valid && !g_bodySize.torsoFitted &&
+               g_torsoSurface.valid && g_torsoSurface.owner==obj && state==2 && CanWalk(item) &&
+               !UseLandingCamera(item) && !g_autoBodyCalibration.pending && !g_stanceEye.transition &&
+               std::fabs(VR().FirstPersonHeightDrop())<.06f &&
+               g_bodySize.FitTorso(native,g_torsoSurface.low,g_torsoSurface.high,
+                   eye.y-cameraOffset.y-VR().FirstPersonVerticalOffset()*scale)) {
+                g_torsoPose.Reset();g_groundTorso.Reset();g_torsoClearance.Reset();
+                LogF("firstperson: upright torso fit scale=%.3f fixed eye reserve=%.1fcm",
+                    g_bodySize.factor,g_bodySize.eyeGap*100/scale);
             }
             const float bodyScale=Cfg().firstPersonBodyScale>0 ? Cfg().firstPersonBodyScale :
                 g_bodySize.valid ? g_bodySize.factor : 1.f;
             pistolBodyScale=bodyScale;
             Frame sized[15]{};firstperson::ScaleBody(native,bodyScale,sized);
             Frame inverseHead{};Inverse(native[14],inverseHead);
-            const Vec sizedAnchor=Transform(sized[14],Transform(inverseHead,anchorInPalette));
+            Vec sizedAnchor=Transform(sized[14],Transform(inverseHead,anchorInPalette));
+            // Keep the automatic standing fit's eye-to-collar reserve in the
+            // same landing reference used by the camera and supported body.
+            if(landing && Cfg().firstPersonMovementStabilization && Cfg().firstPersonBodyScale==0 && g_bodySize.valid)
+                sizedAnchor.y-=g_bodySize.eyeGap;
+            // Preserve standing eye clearance above the actual pitched collar,
+            // using the same native-pose reference as the landing camera.
+            if(landing && Cfg().firstPersonMovementStabilization && anchorJoint==14 &&
+               g_torsoSurface.valid && g_torsoSurface.owner==obj)
+                sizedAnchor.y=std::min(sizedAnchor.y,g_torsoSurface.TopY(sized[7])-.25f*scale);
             Vec rootOffset=Add(Sub(Scale(g_bodyFollower.root,scale),nativeRoot),wallShift);rootOffset.y=0;
             const bool grounded=CanFitStandingBody(item) || CanUseCrouchCamera(item);
             const bool standing=ordinaryLanding || preparingJump || ((state==2 || state==12) && !UseLandingCamera(item));
-            const float upright=standing ? firstperson::StandingPostureWeight(VR().FirstPersonPostureDrop()) : 0;
+            const float upright=standing ? firstperson::StandingPostureWeight(VisualBodyPostureDrop(item)) : 0;
+            // The eyes lower around the neck while looking down. The standing
+            // leg constraint already rejects this as crouch; moving and bent
+            // poses must use the same posture height without moving the view.
+            // Native impacts already contain their crouch and foot motion.
+            // Exclude the standing chest reserve and added walking gait here;
+            // keep hips/knees within the animated legs' support envelope.
             if(!firstperson::SolveFollowingBody(sized,sizedAnchor,Add(anchorInPalette,headDelta),
                 locomotion::Wrap(heading-nativeHeading),headRotation,forward,scale,rootOffset,
-                firstperson::BodyChestTwist(locomotion::Wrap(headYaw-heading),g_bodyFollower.supportedHands),
-                grounded,g_bodyFollower.phase,standing ? 0.f : g_bodyFollower.stepWeight,posed,upright)) return false;
+                firstperson::BodyChestTwist(locomotion::Wrap(headYaw-heading),BodyControllersStationary() || g_bodyFollower.supportedHands),
+                grounded,g_bodyFollower.phase,(standing || landing) ? 0.f : g_bodyFollower.stepWeight,posed,upright,
+                landing ? 0.f : (Cfg().firstPersonBodyScale==0 ? g_bodySize.eyeGap : 0.f)-
+                std::max(0.f,VR().FirstPersonHeightDrop()-VisualBodyPostureDrop(item))*scale,landing ? Vec{} : Sub(postureEye,eye),landing)) return false;
         } else if(!firstperson::SolveBodyAtEye(native,joint,anchorInPalette,Add(anchorInPalette,headDelta),
             locomotion::Wrap(heading-nativeHeading),headRotation,forward,posed)) return false;
     }
@@ -2514,15 +2844,38 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         firstperson::YawVector(Scale(Sub(native[3].origin,animationRoot),1/scale),-nativeHeading),
         firstperson::YawVector(Scale(Sub(native[6].origin,animationRoot),1/scale),-nativeHeading)};
     if(!g_torsoPose.Update(VR().PoseSerial(),TurnTime(),reference,eyeReference,quiet,grip,filtered,forward,
-        quiet,VR().FirstPersonPostureDrop(),contacts)) return false;
+        quiet,VisualBodyPostureDrop(item),contacts,landing)) return false;
     for(int j=0;j<15;++j) { posed[j]=filtered[j];posed[j].origin=Scale(filtered[j].origin,scale); }
-    if(Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item) &&
-       !g_groundTorso.Apply(obj,posed,body,Sub(eye,cameraOffset),scale,VR().FirstPersonPostureDrop())) return false;
+    if(!landing && Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item) &&
+       !g_groundTorso.Apply(obj,posed,body,Sub(eye,cameraOffset),scale,VisualBodyPostureDrop(item),true)) return false;
     // Offset the visible body after posture filtering, before exact hand IK.
     // Camera, collision, calibration and the native physics palette stay fixed.
     const auto meshOffset=BodyMeshOffset(item);
     const auto placement=Add(FixedBodyPlacement(item,posed[0].origin,cameraOffset),{meshOffset.x,0,meshOffset.z});
     for(auto& joint:posed) joint.origin=Add(joint.origin,placement);
+    // Resolve torso/headset proximity after the configured body offset, while
+    // the calibrated hips and planted feet are already final. Shoulders follow
+    // the same rigid correction; exact tracked wrists are solved below.
+    if(!grip && !landing && Cfg().firstPersonMovementStabilization && g_groundEye.valid && CanFitStandingBody(item)) {
+        if(!g_torsoClearance.Apply(obj,posed,bind,Sub(eye,cameraOffset),heading,scale,
+            VR().PoseSerial(),TurnTime(),mainBody,&g_torsoSurface,BodyControllersStationary())) return false;
+    } else if(mainBody) g_torsoClearance.Reset();
+    if(mainBody && Cfg().firstPersonDriftLog) {
+        static uint64_t nextPlacementTrace=0;
+        const auto now=GetTickCount64();
+        if(now>=nextPlacementTrace) {
+            nextPlacementTrace=now+100;
+            vr::HmdMatrix34_t h{},l{},r{};
+            const bool ht=VR().HeadPose(h),lt=VR().ControllerPose(0,l),rt=VR().ControllerPose(1,r);
+            LogF("body-placement: pose=%llu held=%d move=%d turn=%d tracking=%d state=%d yaw=%.4f posture=%.4f raw-posture=%.4f head=(%.4f,%.4f,%.4f) left=(%.4f,%.4f,%.4f) right=(%.4f,%.4f,%.4f) anchor=(%.4f,%.4f) scene=(%d,%d) hip=(%.3f,%.3f,%.3f) chest=(%.3f,%.3f,%.3f)",
+                VR().PoseSerial(),g_controllerBodyAnchor.held,g_controllerBodyAnchor.translating,
+                g_controllerBodyAnchor.rotating,int(ht)*4+int(lt)*2+int(rt),state,heading,VisualBodyPostureDrop(item),VR().FirstPersonPostureDrop(),
+                h.m[0][3],h.m[1][3],h.m[2][3],l.m[0][3],l.m[1][3],l.m[2][3],r.m[0][3],r.m[1][3],r.m[2][3],
+                g_controllerBodyAnchor.head.x,g_controllerBodyAnchor.head.z,g_scenePose.x_pos,g_scenePose.z_pos,
+                posed[0].origin.x+cameraOffset.x,posed[0].origin.y+cameraOffset.y,posed[0].origin.z+cameraOffset.z,
+                posed[7].origin.x+cameraOffset.x,posed[7].origin.y+cameraOffset.y,posed[7].origin.z+cameraOffset.z);
+        }
+    }
     static uint64_t nextStanceLog=0;
     if(g_bodySkinScope && Cfg().firstPersonDriftLog && GetTickCount64()>=nextStanceLog &&
        (*reinterpret_cast<const uint32_t*>(item+off::item_mesh_bits)&0x49)==0x49) {
@@ -2532,8 +2885,14 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         const auto chestLocal=firstperson::YawVector(Scale(Sub(posed[7].origin,eyeInPalette),100/scale),-heading);
         LogF("firstperson: fixed body state=%d offset=%.0fcm locked=%d hip=(%.2f,%.2f,%.2f)cm chest=(%.2f,%.2f,%.2f)cm",
             state,Cfg().firstPersonBodyForwardCm,g_groundTorso.valid,hipLocal.x,hipLocal.y,hipLocal.z,chestLocal.x,chestLocal.y,chestLocal.z);
+        LogF("firstperson: body world held=%d hip=(%.2f,%.2f) chest=(%.2f,%.2f) anchor=(%.3f,%.3f)m",
+            BodyControllersStationary(),posed[0].origin.x+cameraOffset.x,posed[0].origin.y+cameraOffset.y,posed[0].origin.z+cameraOffset.z,
+            posed[7].origin.x+cameraOffset.x,posed[7].origin.z+cameraOffset.z,
+            g_controllerBodyAnchor.offset.x,g_controllerBodyAnchor.offset.z);
+        LogF("firstperson: torso clearance measured=%d bend=%.2fdeg before=%.3f after=%.3f (clear>=1)",
+            g_torsoClearance.measured,g_torsoClearance.angle*57.2957795f,g_torsoClearance.before,g_torsoClearance.after);
         LogF("firstperson: body stance state=%d posture=%.3fm idle=%d recovery=%d hands=%d planted=%d follow=%.2f gait=%.2f knee-bend=(%.1f,%.1f)deg",
-            state,VR().FirstPersonPostureDrop(),quiet,g_torsoPose.recovering,g_bodyFollower.supportedHands,g_torsoPose.planted,g_bodyFollower.stepWeight,
+            state,VisualBodyPostureDrop(item),quiet,g_torsoPose.recovering,g_bodyFollower.supportedHands,g_torsoPose.planted,g_bodyFollower.stepWeight,
             quiet ? 0.f : g_bodyFollower.stepWeight,
             firstperson::KneeBendDegrees(posed,1),firstperson::KneeBendDegrees(posed,4));
     }
@@ -2565,8 +2924,8 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         if(!PrepareJumpArm(item,hand,jumpReference,chain)) return false;
         if(!grip && MotionReady() && CurrentMotionWeapon()==1 &&
            !firstperson::PistolArmReference(posed[7],bind[7],armBind,pistolBodyScale,chain)) return false;
-        auto roll=g_pistolBodyScope ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
-        if(!firstperson::SolveTrackedArm(chain,target,pole,armBind,changes,true,g_pistolBodyScope ? &roll : nullptr)) return false;
+        auto roll=g_pistolBodyScope && SidearmWeapon() ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
+        if(!firstperson::SolveConnectedTrackedArm(chain,target,pole,armBind,changes,true,g_pistolBodyScope && SidearmWeapon() ? &roll : nullptr)) return false;
         if(g_pistolBodyScope) {
             g_pistolRoll.current[hand]=roll;
             g_pistolRoll.minConfidence[hand]=std::min(g_pistolRoll.minConfidence[hand],roll.confidence);
@@ -2574,6 +2933,23 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         for(int i=0;i<3;++i) posed[first+i]=Multiply(changes[i],chain[i]);
     }
     BlendSidearmPose(item,posed);
+    if(mainBody && landing && Cfg().firstPersonDriftLog) {
+        static uint64_t lastLandingPose=UINT64_MAX;
+        if(lastLandingPose!=VR().PoseSerial()) {
+            lastLandingPose=VR().PoseSerial();
+            Frame inverseChest{};
+            if(Inverse(native[7],inverseChest)) {
+                const Frame connected=Multiply(Multiply(posed[7],inverseChest),native[14]);
+                const float finalEye=eye.y-cameraOffset.y;
+                LogF("landing-alignment: game=%d pose=%llu anim=%d eye=%.2f neck=%.2f below-neck=%.2fcm sceneY=%d trackedY=%.2f reserve=%.2fcm above-collar=%.2fcm",
+                    BoundGame(),static_cast<unsigned long long>(VR().PoseSerial()),
+                    *reinterpret_cast<const int16_t*>(item+off::item_anim_number),finalEye,connected.origin.y,
+                    (finalEye-connected.origin.y)*100/scale,g_scenePose.y_pos,VR().FirstPersonVerticalOffset()*scale,
+                    Cfg().firstPersonBodyScale==0 && g_bodySize.valid ? g_bodySize.eyeGap*100/scale : 0.f,
+                    g_torsoSurface.valid && g_torsoSurface.owner==obj ? (g_torsoSurface.TopY(posed[7])-finalEye)*100/scale : -1.f);
+            }
+        }
+    }
     // Validate every correction before touching a palette. Helpers sharing a
     // native joint receive the same transform, including nonidentity bindings.
     for(int joint=0;joint<15;++joint) {
@@ -2584,6 +2960,11 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     for(int i=0;i<count;++i) {
         const int joint=mapping ? mapping[i] : i;
         if(joint>=0 && joint<15) WriteRows(Multiply(correction[joint],ReadRows(joints+i*12)),joints+i*12);
+    }
+    if(!grip && !animatedSidearms) for(int hand=0;hand<2;++hand) {
+        const int first=hand ? 8 : 11;
+        const Frame arm[3]={posed[first],posed[first+1],posed[first+2]};
+        PublishConnectedWeaponReach(item,hand,arm,cameraOffset);
     }
     if(g_pistolBodyScope) {
         for(int joint=8;joint<=13;++joint) g_pistolArmPose.joint[joint-8]=posed[joint];
@@ -2613,7 +2994,7 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
             complete=ReadIKJoint(obj,joints,count,bones,mapping,poses,j,original[j]) && complete;
             stable[j]=original[j];
         }
-        const float heading=g_bodyFollower.valid ? g_bodyFollower.yaw : locomotion::Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
+        const float heading=g_bodyFollower.valid ? g_bodyFollower.WorldYaw(g_heading.base) : locomotion::Radians(reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos)->y_rot);
         const Basis yaw=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},heading));
         locomotion::Vec trackedView{};VR().FirstPersonViewOffset(trackedView.x,trackedView.z);
         const float units=LiveWorldUnitsPerMetre();trackedView=locomotion::Rotate(trackedView,g_heading.base)*units;
@@ -2645,6 +3026,7 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
     const bool animatedSidearms=!shadow && SidearmAnimationActive();
     if(animatedSidearms) for(auto& arm:g_jumpArms) arm.Reset();
     bool solved[2]{};
+    motiongun::Vec reachCamera[2]{};
     bool bindReference[2]{};
     for (int hand=0;hand<2;++hand) {
         const int first=hand ? 8 : 11;
@@ -2729,7 +3111,7 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
             if(ReadIKJoint(obj,joints,count,bones,mapping,poses,7,torso) &&
                ReadIKBind(obj,count,bones,mapping,poses,7,torsoBind)) {
                 if(!ReadIKBind(obj,count,bones,mapping,poses,first,bind[0]) ||
-                   !firstperson::PistolArmReference(torso,torsoBind,bind,1.f,chain)) return false;
+                   !firstperson::PistolArmReference(torso,torsoBind,bind,shadow ? 1.f : AirborneBodyScale(item),chain)) return false;
                 bindReference[hand]=true;
             }
         }
@@ -2746,8 +3128,9 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
             const motiongun::Frame jumpReference{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},g_heading.base)),Sub(eye,cameraOffset)};
             if(!PrepareJumpArm(item,hand,jumpReference,chain)) return false;
         }
+        reachCamera[hand]=motiongun::Sub(trackedOrigin,target.origin);
         auto roll=bindReference[hand] ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
-        if (!firstperson::SolveTrackedArm(chain,target,pole,bind,changes,present[0],bindReference[hand] ? &roll : nullptr)) return false;
+        if (!firstperson::SolveConnectedTrackedArm(chain,target,pole,bind,changes,present[0],bindReference[hand] ? &roll : nullptr)) return false;
         if(bindReference[hand]) {
             g_pistolRoll.current[hand]=roll;
             g_pistolRoll.minConfidence[hand]=std::min(g_pistolRoll.minConfidence[hand],roll.confidence);
@@ -2787,6 +3170,11 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
         if (index>=0 && solved[index/3]) motiongun::WriteRows(motiongun::Multiply(correction[index],
             motiongun::ReadRows(joints+i*12)),joints+i*12);
         else if(shifted) stabilization::OffsetBodyPalette(joints+i*12,1,meshOffset);
+    }
+    if(!shadow && !animatedSidearms) for(int hand=0;hand<2;++hand) if(solved[hand]) {
+        const int first=hand ? 0 : 3;
+        const motiongun::Frame arm[3]={solvedArms[first],solvedArms[first+1],solvedArms[first+2]};
+        PublishConnectedWeaponReach(item,hand,arm,reachCamera[hand]);
     }
     if(!shadow && g_pistolBodyScope && solved[0] && solved[1]) {
         for(int i=0;i<6;++i) g_pistolArmPose.joint[i]=solvedArms[i];
@@ -2930,14 +3318,15 @@ void __cdecl Detour_GetJoints(uint8_t* item) {
                     std::memcpy(g_bodyRenderPalette,g_bodySkinPalette,sizeof(g_bodySkinPalette));
                     const int pass=g_boundDll->renderPass ? *Ptr<int32_t>(g_boundDll->renderPass) : 0;
                     if(g_pistolBodyScope) { g_pistolArmPose.valid=false;g_pistolArmSolveReady=false; }
-                    bool solved=g_pistolForearmScope && PistolBodyArmPose(item,g_bodyRenderPalette,count,pass,false);
+                    bool solved=!NativeLandingAnimation(item) && g_pistolForearmScope && PistolBodyArmPose(item,g_bodyRenderPalette,count,pass,false);
                     if(!solved) solved=ApplyFullBodyIK(item,g_bodyRenderPalette,count);
                     if(!UnarmedIKReady()) for(auto& arm:g_jumpArms) arm.Reset();
                     if(!solved && (MotionReady() || UnarmedIKReady())) solved=ApplyArmIK(item,g_bodyRenderPalette,count);
                     if(!solved) stabilization::OffsetBodyPalette(g_bodyRenderPalette,count,BodyMeshOffset(item));
+                    firstperson::StabilizeHiddenNeck(g_bodyRenderPalette,count,mapping,g_bodySkinMask);
                     if(solved) {
                         ++g_armIKSolved;
-                        if(g_pistolBodyScope) PistolBodyArmPose(item,g_bodyRenderPalette,count,pass,true);
+                        if(!NativeLandingAnimation(item) && g_pistolBodyScope) PistolBodyArmPose(item,g_bodyRenderPalette,count,pass,true);
                         TraceArmGlance(item,g_bodyRenderPalette,count,pass);
                     }
                     motiongun::Vec holsterCamera{};
@@ -4145,10 +4534,10 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
         VR().PivotHeadFloorOffset(turn);
     }
     const bool crouch=CanUseCrouchCamera(item);
-    if (Cfg().firstPersonMovementStabilization && (state==3 || (state>=25 && state<=28)) &&
+    if (Cfg().firstPersonMovementStabilization && (state==3 || state==9 || (state>=25 && state<=28)) &&
         LaraWaterStatus()==0 && g_groundEye.valid) {
         // Keep the calibrated eye through takeoff and the whole ordinary jump,
-        // including forward/up jumps. Their interpolated neck can still carry
+        // including the reach before ledge contact. Their interpolated neck can still carry
         // the crouched takeoff pose after the state becomes airborne. Follow
         // the collision arc, as for TR4/5's directional jumps; HMD motion is
         // applied separately, without filtering native ascent or descent.
@@ -4179,7 +4568,7 @@ void UpdateLocomotion(PHD_3DPOS& pose) {
             {body.x, bodyY, body.z}, g_heading.base,
             {float(pose.x_pos), float(pose.y_pos), float(pose.z_pos)},
             Radians(prev.y_rot)+Wrap(Radians(pos.y_rot)-Radians(prev.y_rot))*(frac/256.f),
-            !CanWalk(item) && !StandingJumpPreparation(item));
+            !CanWalk(item) && !StandingJumpPreparation(item),float(Cfg().firstPersonAnchorX));
         pose.x_pos = static_cast<int32_t>(std::lround(eye.x));
         pose.y_pos = static_cast<int32_t>(std::lround(eye.y));
         pose.z_pos = static_cast<int32_t>(std::lround(eye.z));
@@ -4463,7 +4852,7 @@ void FitBodyToRenderedEye(const uint8_t* item,const PHD_3DPOS& pose,
     const int frac=std::clamp(*Ptr<int32_t>(g_boundDll->frameFrac),0,256);
     Vec view{},floor{};
     if (Cfg().positionalTracking && Cfg().firstPersonHeadTranslation) {
-        VR().FirstPersonViewOffset(view.x,view.z);
+        BodyTrackingOffset(view.x,view.z);
         VR().HeadFloorOffset(floor.x,floor.z);
     }
     // Grounded full-body IK adds the residual tracking displacement itself.
@@ -5076,7 +5465,8 @@ void FirstPersonTrackingOriginChanged(float yawCorrection) {
 }
 
 bool FirstPersonSwitchGrip(bool down,bool allowed) {
-    return UpdatePhysicalSwitchGrip(down,allowed,GetTickCount64());
+    return UpdatePhysicalSwitchGrip(down,allowed,GetTickCount64()) ||
+        (down && allowed && PhysicalButtonGrip());
 }
 
 unsigned FirstPersonHolsterGrips(bool left,bool right,bool leftValid,bool rightValid,bool allowed) {
@@ -5090,6 +5480,7 @@ bool FirstPersonFlareTip(int32_t (&tip)[3]) {
     if(!FlareIKReady()) return false;
     motiongun::Frame wrist{};motiongun::Basis basis{};
     if(!BuildControllerWrist(0,wrist,basis)) return false;
+    LimitConnectedWeaponWrist(*Ptr<uint8_t*>(g_boundDll->laraItem),0,wrist);
     const auto point=motiongun::Transform(wrist,{11,-64,41});
     if(!firstperson::Finite({firstperson::IdentityBasis(),point})) return false;
     tip[0]=int32_t(std::lround(point.x));tip[1]=int32_t(std::lround(point.y));tip[2]=int32_t(std::lround(point.z));
@@ -5195,6 +5586,34 @@ const float* FirstPersonNativeBodySkin() {
         ? g_bodySkinPalette : nullptr;
 }
 
+// Measure only the first-person main body's actual torso palette slots.
+bool FirstPersonTorsoMeasureInfo(float inverse[12],uint64_t& mask,bool& measured) {
+    if(!g_active || !g_bodySkinScope || !g_bodySkinReady || g_renderArm>=0 ||
+       !Cfg().firstPersonFullBodyIK || !g_headingItem || !g_boundDll ||
+       DrawingNativeShadow() || g_transitionHand>=0) return false;
+    const int object=*reinterpret_cast<const int16_t*>(g_headingItem+off::item_object_number);
+    if(object<0) return false;
+    const auto* obj=Ptr<uint8_t>(g_boundDll->objects)+object*off::object_stride;
+    const auto* geom=obj+off::object_geom;
+    const int bones=*reinterpret_cast<const int32_t*>(geom+28);
+    if(bones<0 || bones>32) return false;
+    const auto* mapping=bones ? *reinterpret_cast<const int32_t* const*>(geom+48) : nullptr;
+    const auto* poses=bones ? *reinterpret_cast<const float* const*>(geom+72) : nullptr;
+    if(bones && (!mapping || !poses)) return false;
+    motiongun::Frame bind{},inv{};
+    if(!ReadIKBind(obj,bones ? bones : 15,bones,mapping,poses,7,bind) || !motiongun::Inverse(bind,inv)) return false;
+    motiongun::WriteRows(inv,inverse);
+    mask=firstperson::SkinJointMask(1u<<7,mapping,bones ? bones : 15);
+    if(g_torsoSurface.owner!=obj) { g_torsoSurface.Reset();g_torsoSurface.owner=obj; }
+    measured=g_torsoSurface.valid;return mask!=0;
+}
+bool FirstPersonTorsoBufferKnown(unsigned buffer) { return g_torsoSurface.Known(buffer); }
+void FirstPersonTorsoMeasure(unsigned buffer,const float low[3],const float high[3],unsigned vertices) {
+    g_torsoSurface.Add(g_torsoSurface.owner,buffer,{low[0],low[1],low[2]},{high[0],high[1],high[2]},vertices);
+    if(vertices>=8) LogF("firstperson: measured torso buffer=%u vertices=%u local bounds=(%.1f,%.1f,%.1f)..(%.1f,%.1f,%.1f)",
+        buffer,vertices,low[0],low[1],low[2],high[0],high[1],high[2]);
+}
+
 bool FirstPersonBodyClearance(float out[4],uint64_t& mask) {
     std::fill(out,out+4,0.f);mask=0;
     if(!g_active || !g_scenePoseValid || !g_bodySkinScope || !g_bodySkinReady ||
@@ -5215,7 +5634,10 @@ bool FirstPersonBodyClearance(float out[4],uint64_t& mask) {
     const motiongun::Vec centre{g_scenePose.x_pos+view.x-camera.x,
         g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*units-camera.y,g_scenePose.z_pos+view.z-camera.z};
     if(!firstperson::Finite({firstperson::IdentityBasis(),centre}) || !std::isfinite(units) || units<=1) return false;
-    out[0]=centre.x;out[1]=centre.y;out[2]=centre.z;out[3]=units*.20f;
+    // With pose-based clearance, retain only a small last-resort near-eye
+    // trim. The previous 20 cm cutout would remove the corrected torso again.
+    const float radius=Cfg().firstPersonFullBodyIK && g_torsoClearance.valid ? .03f : .20f;
+    out[0]=centre.x;out[1]=centre.y;out[2]=centre.z;out[3]=units*radius;
     mask=firstperson::SkinJointMask(0x40ffu,mapping,bones>0 ? bones : 15);
     return true;
 }

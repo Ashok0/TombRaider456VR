@@ -89,12 +89,29 @@ looking around. Hand gestures alone do not turn the body. Without reliable
 matching hand movement, the usual head-turn slack remains; this is an inference,
 not waist tracking. `FirstPersonBodyHandYawWeight=0` disables this assistance.
 
-Tracked arms preserve upper-arm and forearm lengths, including during jump and
-landing transitions. Hands and weapons retain their controller positions and
-rotations. Reachable poses keep the shoulder anchored. Outside Lara's natural
-reach, the visual shoulder moves only by the excess needed to keep the hand
-tracked, rather than stretching the arm mesh. Extreme reaches can expose a
-shoulder seam; this restores the earlier rigid-arm compromise.
+Tracked arms keep their shoulder sockets attached while following full controller
+reach. **VR Options > Arm Length** adjusts the arm fit from 80% to 120%, in 1%
+steps; Select restores 100%. It applies immediately and is independent of body
+height. This is a manual fit, not an automatic measurement of your real arms.
+Start at 100%; increase it slightly if ordinary extended poses feel too short.
+
+Hands follow the controllers exactly through ordinary reach and a small extra
+allowance. Near full extension, the upper arm and forearm lengthen gradually,
+without changing limb thickness, hand size, weapon size or controller orientation.
+There is no outward reach cap or soft resistance: the arms extend as far as
+required to reach the controllers. Very close shoulder-to-hand poses retain an
+inner singularity guard. Arm Length sets the resting proportions, not a maximum
+controller distance. Long reaches can visibly stretch the arms; this is deliberate.
+
+Lara has no independent collarbones. The solver distributes the extra extension
+through her arm segments while leaving the shoulder sockets on the torso; it
+does not move her chest to chase the controllers. Guns, muzzle origins and flare
+lights use the same reach envelope. The original arm reference is retained so
+repeated draws cannot compound the extension. Hand poses remain unchanged.
+
+Native holster animations, climbing contacts and the native landing-animation
+handoff retain their existing behavior. This change does not adjust roomscale
+movement inference, standing height or camera placement.
 
 With the head hidden, shared collar vertices follow the final chest pose so
 crouch-to-stand recovery cannot pull neck triangles toward the headset. The
@@ -696,7 +713,8 @@ All four rows display their current selected value on the native page.
   Shadows and third-person rendering stay native.
 
 Changes save automatically to `ValveIndexControllers`, `VRBrighterColors`,
-`HybridModernTankControls` and `FirstPersonBodyForwardCm` in the
+`HybridModernTankControls`, `FirstPersonBodyForwardCm` and
+`FirstPersonArmLengthPercent` in the
 installed INI. Existing INIs without a color setting keep Dark; new INIs include
 `VRBrighterColors=0`. Other settings stay unchanged, and the previous INI is backed
 up as `TombRaiderVR.ini.vr-options.bak`. Index mode uses the existing
@@ -9323,3 +9341,179 @@ armed/unarmed states, physical headset lowering and measured torso clearance.
 The native animation palette used for chest physics remains untouched. With
 drift logging enabled, `landing-native` records the animation, visual scale and
 above-collar camera clearance. In-headset confirmation remains necessary.
+
+### Downward head-led inspection hold (2026-11-14)
+
+When looking down toward Lara's holsters, a head turn that leads the controller
+frame by more than 20 degrees now holds the inferred body facing when the
+tracked head/hand arc also indicates a planted torso inspection. Later hand
+movement cannot retroactively turn that same inspection into a whole-body turn.
+The hold releases when the gaze rises, returns near the body's facing, or the
+movement stick is used. Coordinated head/controller turns can still start while
+looking down, and the hold does not disable roomscale translation.
+
+This is a conservative compromise with head-and-hand tracking: a real body turn
+started after such an inspection may require raising or centering the gaze
+first. The classifier has no direct foot tracking. A captured post-ladder glance
+reproduces the previous false turn; regressions also cover coordinated turns at
+60/90/120 Hz, different arm extensions, and walking in all four directions.
+Height calibration, the native landing-animation handoff, and camera clearance
+are unchanged. In-headset confirmation remains necessary.
+
+### Sustained lowered inspection (2026-11-14)
+
+A steep downward inspection now also holds body facing when the tracked head is
+more than 18 cm below calibrated standing height. This covers glances where the
+head and hands turn together, which could previously start rotating the mesh
+after a few seconds. The hold neither expires nor releases just because a glance
+crosses the center of the body. It uses raw physical height, not the animated
+landing camera or posture compensation.
+
+Looking up, rising to within 10 cm of standing height, or using the movement
+stick releases this additional hold. A matching straight displacement of the
+head and both controllers also releases it and allows two seconds of physical
+turn continuation. Roomscale translation retains its existing algorithm.
+A genuine turn begun while deeply lowered and inspecting can require looking
+up or straightening first; this conservative facing hold cannot directly track
+the feet. Standing calibration, landing animation and camera code are unchanged.
+
+Regression coverage includes the complete 1,163-sample stationary-glance capture,
+30 seconds of repeated synthetic glances, the earlier recorded walking/turning
+sequence, and shared physical steps in all four directions. Drift replay logs
+now include the physical height input. Headset confirmation remains necessary.
+
+### Consistent planted-inspection transitions (2026-11-14)
+
+The inspection hold now applies to horizontal body placement as well as facing.
+A deeply lowered inspection can stop an already active inferred turn; an earlier
+turn no longer exempts later glances from the hold. Looking up while the head is
+still physically lowered does not release it. Returning upright (within 5 cm of
+standing height, gaze above roughly 20 degrees down), explicit stick travel, or
+corroborated physical walking releases the deep inspection hold.
+
+Walking release uses sustained shared head/controller displacement over 0.2 to
+0.6 seconds. Very clean straight movement can qualify after 3 cm; movement with
+arm sway requires 6 cm and agreement within 20 percent. Both paths reject changes
+in heading. A single short 6 mm coincidence no longer opens the two-second
+walking/turn continuation window. The window itself cannot authorize movement.
+
+Turn continuation checks head agreement for deliberate bilateral hand gestures.
+Tracking noise can finish an already accepted blend, but deliberate arm motion
+without head movement cannot keep renewing an old turn. When horizontal
+controller spacing is below 12 cm, turn entry also needs agreement from the hand
+midpoint moving around the head; the short hand-to-hand line alone is unreliable.
+Translation then needs the stronger shared-step evidence too. A turn begun
+while deeply bent over inspecting can require straightening first. These are
+conservative compromises of head/hand inference, not direct foot tracking.
+
+The user-labelled 8,093-pose stationary recording is checked with physical input
+isolated from recorded stick motion and artificial yaw. The prior build falsely
+authorizes 1,880 turn samples and 1,434 movement samples in that replay; the
+correction authorizes neither and retains the anchor throughout each tracking
+segment. Separate regressions cover recorded actual walking/turning, hand-only
+gestures after a turn, four-direction steps after a swivel, and upright turning
+after inspection. Landing, calibration, camera and animation solvers are unchanged.
+In-headset confirmation remains necessary.
+
+#### Attached shoulders and limited controller reach (2026-11-14)
+
+Tracked arms keep their shoulder sockets attached while following full controller
+reach. **VR Options > Arm Length** adjusts the arm fit from 80% to 120%, in 1%
+steps; Select restores 100%. It applies immediately and is independent of body
+height. This is a manual fit, not an automatic measurement of your real arms.
+Start at 100%; increase it slightly if ordinary extended poses feel too short.
+
+Hands follow the controllers exactly through ordinary reach and a small extra
+allowance. Near full extension, the upper arm and forearm lengthen gradually,
+without changing limb thickness, hand size, weapon size or controller orientation.
+There is no outward reach cap or soft resistance: the arms extend as far as
+required to reach the controllers. Very close shoulder-to-hand poses retain an
+inner singularity guard. Arm Length sets the resting proportions, not a maximum
+controller distance. Long reaches can visibly stretch the arms; this is deliberate.
+
+Lara has no independent collarbones. The solver distributes the extra extension
+through her arm segments while leaving the shoulder sockets on the torso; it
+does not move her chest to chase the controllers. Guns, muzzle origins and flare
+lights use the same reach envelope. The original arm reference is retained so
+repeated draws cannot compound the extension. Hand poses remain unchanged.
+
+Native holster animations, climbing contacts and the native landing-animation
+handoff retain their existing behavior. This change does not adjust roomscale
+movement inference, standing height or camera placement.
+
+### Physical turning out of a downward inspection (2026-11-15)
+
+The planted-inspection hold no longer permanently blocks roomscale turns while
+looking down. A sustained broad turn, corroborated by headset and both-controller
+positions, can release it. The body keeps its stance orientation reference during
+the hold, so recovery includes the already observed turn instead of starting
+from the middle. Once admitted, turning uses the existing continuous body blend;
+stopping or moving only the head/hands ends that permission.
+
+Deep downward inspection remains deliberately conservative: release requires
+roughly 80 degrees of consistent turning around a compact pivot, or a wider
+110-degree sweep with modest foot-to-foot movement. Smaller ambiguous motions
+remain held; ordinary upright turn entry is unchanged. This is an inference from
+head/hand tracking, not direct foot tracking. Connected arms, calibrated height,
+native landing animations and existing INI values are preserved.
+
+### Slow and completed roomscale turnaround recovery (2026-11-15)
+
+The short inspection-turn window can miss a slow physical turnaround when head
+height or pitch changes. A separate safeguard now recognizes a sustained pose:
+both headset and calibrated controller-frame facing more than 120 degrees from
+the frozen body, agreeing within 25 degrees for 0.75 seconds. It can recover an
+already completed turn; fresh motion every frame is not required.
+
+Recovery uses the existing bounded body rotation and moves the visual body
+smoothly toward the accepted tracked position. A new head-only glance or hand-only
+gesture cannot drag that target. Matching new head/controller rotation advances
+it if the physical turn continues. Once motion settles and the body catches up,
+normal planted-glance protection resumes. Tracking loss, explicit stick walking
+and disabled hand-assisted body yaw cancel this recovery. Camera position,
+standing height, connected arms and native landing animation handling are unchanged.
+
+Automated validation includes the reported recording with corrected body facing
+fed back into the detector, slow half-turns at several rates, stopped-turn recovery,
+and the earlier 8,093-pose stationary-glance recording. Headset confirmation remains
+necessary; three tracked devices still cannot directly observe feet.
+
+
+### Soft connected-arm reach (2026-11-15)
+
+The arm solver now uses a manual arm-length fit plus bounded axial extension
+and a smooth outer reach limit. There is no hard stop at the original arm length.
+The shoulder socket stays attached; no independent collarbone motion is claimed.
+The new Arm Length setting affects tracked first-person arms in TR1-5, including
+weapon reach, without changing body height, the camera, roomscale inference,
+native grip contacts or native landing-animation ownership. Native holstering
+still uses its authored proportions, with the existing transition back to IK.
+The TR4-6 package exposes this option in TR6's menu but it affects TR4/5 only.
+
+Validation includes both collection render/hook suites, independent geometry
+sweeps at 80/100/120% fit, repeated stereo draws, weapon cache invalidation,
+menu save/reload and landing-camera regression checks. Headset confirmation is
+still required; extreme reaches intentionally retain a soft limit.
+
+
+### Full arm reach and slow roomscale motion (2026-11-15)
+
+Tracked arms now have no outward reach limit. The wrist and weapon remain on
+the controller at long reaches; the shoulder stays attached and only the limb
+length stretches. Hand size, gun size and wrist orientation remain unchanged.
+The manual Arm Length setting still adjusts the resting fit independently of height.
+
+Slow roomscale motion has a separate short-history agreement check for head and
+both controller positions. This supplies movement intent to the existing body
+anchor rather than creating a second position solver. It rejects head-led motion,
+checks the intervening trajectory, and avoids using near-vertical inspection
+samples to authorize a turn after looking up. Once a turn is accepted, the old
+six-degree rendering lock is reduced to half a degree. Deep downward inspections
+retain the more conservative existing turn-recovery path.
+
+Accepted physical steps gradually retire retained horizontal lean toward the
+calibrated neck position. Head pitch/yaw are removed from this centering target,
+and visual catch-up is bounded per frame. This cosmetic correction is separate
+from the physical displacement consumed by collision and ledge/fall movement.
+Stationary glances never authorize that recentering. Three tracked devices still infer feet rather than measure
+them; simultaneous head/arm articulation can remain ambiguous.

@@ -5,7 +5,8 @@ const std::array<Setting,SettingCount>& Settings() {
         {L"ValveIndexControllers",L"Controller Type",0,1,1,true,[]{return Cfg().valveIndexControllers ? 1.f : 0.f;}},
         {L"VRBrighterColors",L"Color Scheme",0,1,1,true,[]{return Cfg().vrBrighterColors ? 1.f : 0.f;}},
         {L"HybridModernTankControls",L"Hybrid Modern/Tank Controls",0,1,1,true,[]{return Cfg().hybridModernTankControls ? 1.f : 0.f;}},
-        {L"FirstPersonBodyForwardCm",L"Body Position",0,20,1,false,[]{return Cfg().firstPersonBodyForwardCm;}}
+        {L"FirstPersonBodyForwardCm",L"Body Position",0,20,1,false,[]{return Cfg().firstPersonBodyForwardCm;}},
+        {L"FirstPersonArmLengthPercent",L"Arm Length",80,120,1,false,[]{return Cfg().firstPersonArmLengthPercent;}}
     }};
     return settings;
 }
@@ -56,7 +57,8 @@ bool SaveSettings(const Values& values,const Values& original,std::wstring& erro
     if(values[1]!=original[1]) g_cfg.vrBrighterColors=values[1]!=0;
     if(values[2]!=original[2]) g_cfg.hybridModernTankControls=values[2]!=0;
     if(values[3]!=original[3]) g_cfg.firstPersonBodyForwardCm=values[3];
-    Log("VR Options saved; colors, hybrid controls and body position apply immediately; controller type requires restart");
+    if(values[4]!=original[4]) g_cfg.firstPersonArmLengthPercent=values[4];
+    Log("VR Options saved; colors, hybrid controls, body position and arm length apply immediately; controller type requires restart");
     return true;
 }
 }

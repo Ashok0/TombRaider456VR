@@ -1,3 +1,51 @@
+void TestJumpVisibilityRecovery() {
+    using namespace tr;
+    const auto savedState=*reinterpret_cast<int16_t*>(item+off::item_anim_state);
+    const auto savedFlags=*reinterpret_cast<uint16_t*>(item+off::item_flags);
+    const auto savedVisibility=g_bodyVisibility;
+    const bool savedRecovery=g_torsoPose.recovering;
+    for(int jump:{3,9,15,28}) for(bool fromHang:{false,true}) for(bool recovering:{false,true}) {
+        *reinterpret_cast<int16_t*>(item+off::item_anim_state)=int16_t(jump);
+        *reinterpret_cast<uint16_t*>(item+off::item_flags)=8;
+        g_torsoPose.recovering=recovering;
+        const double now=TurnTime();g_bodyVisibility={};
+        g_bodyVisibility.Update(item,AppFlag(drva::app_off::level),now,fromHang,!fromHang,false);
+        Check(g_bodyVisibility.mask!=UINT32_MAX,"fixture starts with a real traversal or landing visibility restriction");
+        Check(CanFitAirborneBody(item),"jump visibility fixture uses the calibrated airborne body");
+        const auto camera=g_scenePose;
+        for(int eye=0;eye<2;++eye) Check(FirstPersonBodyMask(item)==UINT32_MAX,
+            "new normal jump immediately clears stale hide timers in both eyes");
+        g_bodyVisibility.until=now-1;
+        Check(FirstPersonBodyMask(item)==UINT32_MAX,"expiry cannot reveal the body partway through a jump");
+        Check(!std::memcmp(&camera,&g_scenePose,sizeof(camera)),"visibility correction cannot alter the jump camera");
+    }
+    for(int state:{10,25,26,27}) {
+        *reinterpret_cast<int16_t*>(item+off::item_anim_state)=int16_t(state);
+        *reinterpret_cast<uint16_t*>(item+off::item_flags)=state==10?0:8;
+        g_bodyVisibility={};
+        Check(FirstPersonBodyMask(item)!=(uint32_t)UINT32_MAX,"hanging and protective directional jump visibility remain restricted");
+    }
+    *reinterpret_cast<int16_t*>(item+off::item_anim_state)=savedState;
+    *reinterpret_cast<uint16_t*>(item+off::item_flags)=savedFlags;
+    g_bodyVisibility=savedVisibility;g_torsoPose.recovering=savedRecovery;
+}
+
+// Independent contract for the restored rigid arm solve: exact lengths and
+// the minimum shoulder displacement required by the reachable annulus.
+void CheckRigidTrackedReach(const tr::motiongun::Frame (&native)[3],const tr::motiongun::Frame (&posed)[3]) {
+    using namespace tr::motiongun;
+    const float a=tr::firstperson::Length(Sub(native[1].origin,native[0].origin));
+    const float b=tr::firstperson::Length(Sub(native[2].origin,native[1].origin));
+    const float distance=tr::firstperson::Length(Sub(posed[2].origin,native[0].origin));
+    const float margin=std::min(a,b)*.001f;
+    const float excess=std::fabs(distance-std::clamp(distance,std::fabs(a-b)+margin,a+b-margin));
+    Check(std::fabs(tr::firstperson::Length(Sub(posed[1].origin,posed[0].origin))-a)<.1f &&
+          std::fabs(tr::firstperson::Length(Sub(posed[2].origin,posed[1].origin))-b)<.1f,
+          "tracked arm keeps fixed upper and lower lengths at all reaches");
+    Check(std::fabs(tr::firstperson::Length(Sub(posed[0].origin,native[0].origin))-excess)<.1f,
+          "shoulder moves only by the unreachable excess, remaining anchored within reach");
+}
+
 // Exercise TR1-3's actual render hooks through takeoff, flight and touchdown.
 namespace {
 void TestBodyPosition() {
@@ -19,8 +67,12 @@ void TestBodyPosition() {
                 const auto before=ReadRows(original+j*12),after=ReadRows(render+j*12);
                 if(j<8 || j==14) Check(firstperson::Length(Sub(after.origin,Add(before.origin,{std::sin(yaw)*cm*10,0,std::cos(yaw)*cm*10})))<.06f,
                     "body position follows Lara's forward axis with full-body IK on or off");
-                if(j==10 || j==13) Check(firstperson::Length(Sub(after.origin,before.origin))<.04f &&
-                    WristBasisError(after.basis,before.basis)<.001f,"body adjustment keeps armed and unarmed controller wrists exact");
+                if(j==10 || j==13) {
+                    Frame target{};Basis controller{};BuildControllerWrist(j==10 ? 1 : 0,target,controller);
+                    Frame actual{};Check(ReadIKJoint(Ptr<uint8_t>(dll.objects),render,15,0,nullptr,nullptr,j,actual),"body adjustment wrist resolves");
+                    Check(firstperson::Length(Sub(actual.origin,ExpectedPublishedWrist(j==10 ? 1 : 0,target).origin))<.04f &&
+                        WristBasisError(after.basis,before.basis)<.001f,"body adjustment keeps wrists within connected reach");
+                }
             }
             Check(!std::memcmp(itemBefore,item,sizeof(item)) && !std::memcmp(&cameraBefore,&g_scenePose,sizeof(cameraBefore)),
                 "body position never alters collision or camera");
@@ -40,6 +92,7 @@ void TestJumpArms() {
         BodyRig(game,false);testConfig.firstPersonFullBodyIK=fullBody;
         testConfig.firstPersonBodyScale=1;testConfig.firstPersonMovementStabilization=true;
         g_groundEye.valid=true;g_groundEye.local={0,-850,0};
+        TestJumpVisibilityRecovery();
         Field<uint32_t>(off::item_mesh_bits)=0x7fff;
         auto* obj=Ptr<uint8_t>(dll.objects);auto* geom=obj+off::object_geom;
         Frame native[15]{},inverse[15]{},bind[15]{},baseline[15]{};
@@ -98,13 +151,19 @@ void TestJumpArms() {
                     if(step==0 && eye==0) baseline[j]=actual;
                     if(state==28 && (j==8 || j==11)) {
                         auto shoulder=Multiply(ReadRows(ikNative+i*12),bind[j]);shoulder.origin=Add(shoulder.origin,camera);
-                        Check(firstperson::Length(Sub(actual.origin,shoulder.origin))<.1f,
-                              "jump shoulders remain attached to the currently rendered torso in both eyes");
+                        Frame inverse{};Inverse(shoulder,inverse);
+                        const auto change=Multiply(actual,inverse);
+                        for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
+                            float dot=0;for(int k=0;k<3;++k) dot+=change.basis.r[k][r]*change.basis.r[k][c];
+                            Check(std::fabs(dot-(r==c?1.f:0.f))<.003f,
+                                  "jump shoulder adjustment retains rigid arm geometry in both eyes");
+                        }
                     }
-                    if(state==28 && j<8) Check(!std::memcmp(render+i*12,ikNative+i*12,12*sizeof(float)),
-                                              "native airborne torso and legs remain animated");
+                    if(state==28 && j<7) Check(!std::memcmp(render+i*12,ikNative+i*12,12*sizeof(float)),
+                                              "native airborne legs remain animated while the collar keeps its upright reference");
                     if(j==10 || j==13) {
                         Frame target{};Basis controller{};BuildControllerWrist(j==10 ? 1 : 0,target,controller);
+                        target=ExpectedPublishedWrist(j==10 ? 1 : 0,target);
                         Check(firstperson::Length(Sub(actual.origin,target.origin))<.04f &&
                               WristBasisError(actual.basis,target.basis)<.001f,"tracked wrists stay exact across native animation changes");
                     }
@@ -118,8 +177,12 @@ void TestJumpArms() {
                         const auto adjusted=Multiply(ReadRows(render+i*12),bind[j]);
                         if(j<8 || j==14) Check(firstperson::Length(Sub(adjusted.origin,Add(old.origin,{0,0,cm*10})))<.05f,
                             "body slider moves torso and legs by the selected distance and restores exact zero");
-                        if(j==10 || j==13) Check(firstperson::Length(Sub(adjusted.origin,old.origin))<.04f &&
-                            WristBasisError(adjusted.basis,old.basis)<.001f,"body position keeps both controller wrists fixed");
+                        if(j==10 || j==13) {
+                            Frame target{};Basis controller{};BuildControllerWrist(j==10 ? 1 : 0,target,controller);
+                            target=ExpectedPublishedWrist(j==10 ? 1 : 0,target);
+                            Check(firstperson::Length(Sub(Add(adjusted.origin,camera),target.origin))<.04f &&
+                                WristBasisError(adjusted.basis,old.basis)<.001f,"body position retains connected wrists and exact orientation");
+                        }
                     }
                     Check(!std::memcmp(itemBefore,item,sizeof(itemBefore)) && !std::memcmp(&cameraBefore,&g_scenePose,sizeof(cameraBefore)),
                         "body adjustment does not change camera or simulated Lara");
@@ -149,6 +212,7 @@ void TestJumpArms() {
         Check(ReadIKJoint(obj,g_bodyRenderPalette,count,count==15 ? 0 : count,
                           count==15 ? nullptr : mapping,count==15 ? nullptr : poses,13,wrist) &&
               BuildControllerWrist(0,target,controller) &&
+              (target=ExpectedPublishedWrist(0,target),true) &&
               firstperson::Length(Sub(Add(wrist.origin,{float(Ptr<int32_t>(dll.w2vMatrix)[3]),-200,-500}),target.origin))<.04f,
               "moving a controller during a jump is never delayed by arm continuity");
         for(int reason=0;reason<4;++reason) {

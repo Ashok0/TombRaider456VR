@@ -70,7 +70,7 @@ void TestJumpBodyCentering() {
                     }
                     if(MotionReady() || UnarmedIKReady()) for(int hand:{0,1}) {
                         Frame target{},wrist{};Basis controller{};
-                        Check(BuildControllerWrist(hand,target,controller) &&
+                        Check(BuildControllerWrist(hand,target,controller) && (target=ExpectedPublishedWrist(hand,target),true) &&
                             ReadIKJoint(Ptr<uint8_t>(dll.objects),g_bodyRenderPalette,15,0,nullptr,nullptr,hand?10:13,wrist),"tracked wrist fixture resolves");
                         if(firstperson::Length(Sub(wrist.origin,target.origin))>=.1f)
                             std::fprintf(stderr,"wrist game=%d armed=%d state=%d hand=%d target=(%.1f,%.1f,%.1f) actual=(%.1f,%.1f,%.1f) ready=%d/%d\n",

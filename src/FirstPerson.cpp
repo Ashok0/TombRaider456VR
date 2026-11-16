@@ -268,6 +268,18 @@ struct PistolArmPose {
     uint64_t serial=0;
     motiongun::Frame joint[6]{};
 } g_pistolArmPose;
+// The last visible body solve supplies reach geometry, not a frozen hand pose.
+// Fresh controller orientation/position is limited against it before firing.
+struct ConnectedWeaponReach {
+    bool valid=false;
+    const uint8_t* item=nullptr;
+    int game=-1,weapon=0,object=-1,level=-1;
+    uint64_t serial=0;
+    double time=0;
+    float heading=0,units=0,bodyOffset=0,armLength=100;
+    motiongun::Vec root{};
+    motiongun::Frame chain[3]{};
+} g_connectedWeaponReach[2];
 bool g_pistolBodyScope=false,g_pistolForearmScope=false;
 bool g_pistolArmSolveReady=false;
 struct PistolRollHistory {
@@ -294,7 +306,7 @@ void ResetControllerBodyAnchor();
 bool BodyControllersStationary();
 bool HasControllerBodyAnchor();
 bool BodyControllersPermitTravel();
-void BodyTrackingOffset(float& right,float& forward);
+void BodyTrackingOffset(float& right,float& forward,bool physical=false);
 firstperson::BodySizeCalibration g_bodySize;
 firstperson::TorsoPoseFilter g_torsoPose;
 firstperson::TraversalArmIK g_traversalArms[2];
@@ -326,6 +338,7 @@ firstperson::BodyFollowSettings BodyFollowSettings() {
 }
 void ResetBodyFollower() {
     ResetControllerBodyAnchor();
+    for(auto& reach:g_connectedWeaponReach) reach={};
     g_torsoSurface.Reset();
     g_torsoClearance.Reset();
     g_groundTorso.Reset();
@@ -1485,6 +1498,36 @@ bool UnarmedIKReady() {
     return BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller);
 }
 
+void PublishConnectedWeaponReach(uint8_t* item,int hand,const motiongun::Frame (&chain)[3],motiongun::Vec camera) {
+    if(!g_active || !item || !g_boundDll || !g_boundBase || hand<0 || hand>1 || NativeLandingAnimation(item)) return;
+    auto& reach=g_connectedWeaponReach[hand];
+    reach={};reach.valid=true;reach.item=item;reach.game=g_boundDll->game;reach.weapon=CurrentMotionWeapon();
+    reach.object=*reinterpret_cast<const int16_t*>(item+off::item_object);reach.level=AppState(drva::app_off::level);
+    reach.serial=VR().PoseSerial();reach.time=TurnTime();reach.heading=g_headingBase;
+    reach.units=LiveWorldUnitsPerMetre();reach.bodyOffset=Cfg().firstPersonBodyForwardCm;reach.armLength=Cfg().firstPersonArmLengthPercent;
+    const auto& root=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    reach.root={float(root.x_pos),float(root.y_pos),float(root.z_pos)};
+    for(int i=0;i<3;++i) {reach.chain[i]=chain[i];reach.chain[i].origin=Add(chain[i].origin,camera);}
+}
+void LimitConnectedWeaponWrist(uint8_t* item,int hand,motiongun::Frame& wrist) {
+    if(!g_active || !g_boundDll || !g_boundBase || !item || hand<0 || hand>1 || NativeLandingAnimation(item)) return;
+    const auto& reach=g_connectedWeaponReach[hand];
+    const double age=TurnTime()-reach.time;
+    if(!reach.valid || reach.item!=item || reach.game!=g_boundDll->game || reach.weapon!=CurrentMotionWeapon() ||
+       reach.object!=*reinterpret_cast<const int16_t*>(item+off::item_object) || reach.level!=AppState(drva::app_off::level) ||
+       VR().PoseSerial()<reach.serial || VR().PoseSerial()-reach.serial>1 || age<0 || age>.1 ||
+       reach.units!=LiveWorldUnitsPerMetre() || reach.bodyOffset!=Cfg().firstPersonBodyForwardCm || reach.armLength!=Cfg().firstPersonArmLengthPercent) return;
+    const auto& root=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+    const motiongun::Vec position{float(root.x_pos),float(root.y_pos),float(root.z_pos)};
+    if(firstperson::Length(Sub(position,reach.root))>reach.units*2) return;
+    const auto rotation=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},
+        firstperson::BodyAngle(g_headingBase-reach.heading)));
+    const motiongun::Frame transport{rotation,Sub(position,Transform(rotation,reach.root))};
+    motiongun::Frame chain[3]{},limited{};
+    for(int i=0;i<3;++i) chain[i]=motiongun::Multiply(transport,reach.chain[i]);
+    if(firstperson::ConnectedArmTarget(chain,wrist,limited,Cfg().firstPersonArmLengthPercent)) wrist=limited;
+}
+
 bool BuildGunPose(int hand, GunPose& out) {
     if (hand<0 || hand>1) return false;
     if (const auto* reason=MotionBlockedReason()) {
@@ -1495,6 +1538,7 @@ bool BuildGunPose(int hand, GunPose& out) {
     };
     motiongun::Frame wrist{}; GunBasis controller{};
     if (!BuildControllerWrist(hand,wrist,controller)) return false;
+    LimitConnectedWeaponWrist(*Ptr<uint8_t*>(g_boundDll->laraItem),hand,wrist);
     out.desired=wrist.basis; out.trackedHand=wrist.origin;
     const int16_t gun = *Ptr<int16_t>(g_boundDll->lara + 4);
     uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
@@ -1783,7 +1827,7 @@ void TraceArmGlance(uint8_t* item,const float* joints,int count,int pass) {
 bool PistolBodyPoseMatches(const uint8_t* item,int pass) {
     if(!g_boundDll || !g_boundBase) return false;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
-    return (MotionReady() || status==2 || status==3 || g_pistolAnimation.blending) && SidearmWeapon() && g_pistolArmPose.valid &&
+    return (MotionReady() || (SidearmWeapon() && (status==2 || status==3 || g_pistolAnimation.blending))) && g_pistolArmPose.valid &&
         g_pistolArmPose.item==item && g_pistolArmPose.weapon==CurrentMotionWeapon() && g_pistolArmPose.game==g_boundDll->game &&
         g_pistolArmPose.pass==pass && g_pistolArmPose.serial==VR().PoseSerial() &&
         g_pistolArmPose.fraction==*Ptr<int32_t>(g_boundDll->frameFrac);
@@ -1793,7 +1837,7 @@ bool PistolBodyArmPose(uint8_t* item,float* joints,int count,int pass,bool captu
     using namespace motiongun;
     if(!g_boundDll || !g_boundBase) return false;
     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
-    if((!MotionReady() && status!=2 && status!=3 && !g_pistolAnimation.blending) || !SidearmWeapon() || count<15 || count>33) return false;
+    if((!MotionReady() && (!SidearmWeapon() || (status!=2 && status!=3 && !g_pistolAnimation.blending))) || count<15 || count>33) return false;
     const int fraction=*Ptr<int32_t>(g_boundDll->frameFrac);
     if(capture) {
         // Solvers publish the complete chains, including joints omitted from
@@ -2379,6 +2423,7 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
             quiet ? 0.f : g_bodyFollower.stepWeight,
             firstperson::KneeBendDegrees(posed,1),firstperson::KneeBendDegrees(posed,4));
     }
+    Frame reachReference[2][3]{};
     const bool animatedSidearms=SidearmAnimationActive();
     if(animatedSidearms) for(auto& arm:g_jumpArms) arm.Reset();
     if(animatedSidearms) for(auto& arm:g_traversalArms) arm.Reset();
@@ -2407,9 +2452,10 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
         const Frame armBind[3]={bind[first],bind[first+1],bind[first+2]};
         if(!grip && MotionReady() && CurrentMotionWeapon()==1 &&
            !firstperson::PistolArmReference(posed[7],bind[7],armBind,pistolBodyScale,chain)) return false;
-        auto roll=g_pistolBodyScope ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
+        for(int i=0;i<3;++i) reachReference[hand][i]=chain[i];
+        auto roll=(g_pistolBodyScope && SidearmWeapon()) ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
         if(grip ? !firstperson::SolveArm(chain,target,pole,changes,nullptr,nullptr,false)
-                : !firstperson::SolveTrackedArm(chain,target,pole,armBind,changes,true,g_pistolBodyScope ? &roll : nullptr)) return false;
+                : !firstperson::SolveConnectedTrackedArm(chain,target,pole,armBind,changes,true,(g_pistolBodyScope && SidearmWeapon()) ? &roll : nullptr,Cfg().firstPersonArmLengthPercent)) return false;
         if(g_pistolBodyScope) {
             g_pistolRoll.current[hand]=roll;
             g_pistolRoll.minConfidence[hand]=std::min(g_pistolRoll.minConfidence[hand],roll.confidence);
@@ -2448,6 +2494,9 @@ bool ApplyFullBodyIK(uint8_t* item,float* joints,int count) {
     for(int i=0;i<count;++i) {
         const int joint=mapping ? mapping[i] : i;
         if(joint>=0 && joint<15) WriteRows(Multiply(correction[joint],ReadRows(joints+i*12)),joints+i*12);
+    }
+    if(!grip && !animatedSidearms) for(int hand=0;hand<2;++hand) {
+        PublishConnectedWeaponReach(item,hand,reachReference[hand],cameraOffset);
     }
     if(g_pistolBodyScope) {
         for(int joint=8;joint<=13;++joint) g_pistolArmPose.joint[joint-8]=posed[joint];
@@ -2512,6 +2561,8 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
     if(animatedSidearms) for(auto& arm:g_jumpArms) arm.Reset();
     if(animatedSidearms) for(auto& arm:g_traversalArms) arm.Reset();
     bool solved[2]{};
+    motiongun::Vec reachCamera[2]{};
+    motiongun::Frame reachReference[2][3]{};
     bool bindReference[2]{};
     for (int hand=0;hand<2;++hand) {
         // The crowbar is part of the native right-hand mesh. Keep that entire
@@ -2628,8 +2679,10 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
             if(!g_traversalArms[hand].Prepare(item,VR().PoseSerial(),TurnTime(),false,
                 traversalReference,native,chain,target,pole)) return false;
         } else if(!shadow) g_traversalArms[hand].Reset();
+        reachCamera[hand]=Sub(trackedOrigin,target.origin);
+        for(int i=0;i<3;++i) reachReference[hand][i]=chain[i];
         auto roll=bindReference[hand] ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
-        if (!firstperson::SolveTrackedArm(chain,target,pole,bind,changes,present[0],bindReference[hand] ? &roll : nullptr)) return false;
+        if (!firstperson::SolveConnectedTrackedArm(chain,target,pole,bind,changes,present[0],bindReference[hand] ? &roll : nullptr,Cfg().firstPersonArmLengthPercent)) return false;
         if(traversal) {
             const motiongun::Frame posed[3]={Multiply(changes[0],chain[0]),Multiply(changes[1],chain[1]),Multiply(changes[2],chain[2])};
             g_traversalArms[hand].Finish(traversalReference,posed);
@@ -2673,6 +2726,9 @@ bool ApplyArmIK(uint8_t* item, float* joints, int count, bool shadow=false) {
         if (index>=0 && solved[index/3]) motiongun::WriteRows(motiongun::Multiply(correction[index],
             motiongun::ReadRows(joints+i*12)),joints+i*12);
         else if(shifted) stabilization::OffsetBodyPalette(joints+i*12,1,meshOffset);
+    }
+    if(!shadow && !animatedSidearms) for(int hand=0;hand<2;++hand) if(solved[hand]) {
+        PublishConnectedWeaponReach(item,hand,reachReference[hand],reachCamera[hand]);
     }
     if(!shadow && g_pistolBodyScope && solved[0] && solved[1]) {
         for(int i=0;i<6;++i) g_pistolArmPose.joint[i]=solvedArms[i];
@@ -3254,6 +3310,7 @@ void UpdateFlareLightPosition() {
        elapsed<0 || elapsed>.15 || !FlareIKReady()) {g_flareLights={};return;}
     motiongun::Frame wrist{};GunBasis controller{};
     if(!BuildControllerWrist(0,wrist,controller)) return;
+    LimitConnectedWeaponWrist(g_headingItem,0,wrist);
     const auto tip=Transform(wrist,{11,-64,41});
     for(int i=0;i<g_flareLights.count;++i) {
         auto& slot=g_flareLights.slots[i];
@@ -3299,6 +3356,7 @@ void __cdecl Detour_FlareInHand(int32_t age) {
     g_flareLights={};
     FlareHandFrames frames{};GunBasis controller{};
     if(FlareIKReady() && BuildControllerWrist(0,frames.current,controller)) {
+        LimitConnectedWeaponWrist(*Ptr<uint8_t*>(g_boundDll->laraItem),0,frames.current);
         auto& h=g_flareHandHistory;
         const int level=AppState(drva::app_off::level);
         const double now=TurnTime();
@@ -3658,7 +3716,7 @@ locomotion::Vec DragBody(uint8_t* item) {
     Vec pending;
     VR().HeadFloorOffset(pending.x, pending.z);
     if(Cfg().firstPersonFullBodyIK && Cfg().firstPersonMovementStabilization)
-        BodyTrackingOffset(pending.x,pending.z);
+        BodyTrackingOffset(pending.x,pending.z,true);
     const float scale = LiveWorldUnitsPerMetre();
     if (!std::isfinite(scale) || scale <= 1) return {};
     pending = pending - Rotate(g_dragCurrent - g_dragShown, -g_headingBase);
@@ -5251,7 +5309,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
                 const bool previousPistolScope=g_pistolBodyScope;
                 const bool previousWristScope=g_bodyWristSeamScope;
                 g_bodyWristSeamScope=true;
-                g_pistolBodyScope=SidearmWeapon();
+                g_pistolBodyScope=MotionReady();
                 g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
                 g_pistolBodyScope=previousPistolScope;
                 g_bodyWristSeamScope=previousWristScope;
@@ -5282,7 +5340,7 @@ void __cdecl Detour_DrawCreatureHD(uint8_t* item, int32_t useMeshBits,
             bits=forearms;g_renderArm=-1;g_renderHandJoint=-1;
             g_bodySkinScope=true;g_bodySkinReady=false;
             const bool previousPistolScope=g_pistolForearmScope;
-            g_pistolForearmScope=SidearmWeapon();
+            g_pistolForearmScope=MotionReady();
             g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
             g_pistolForearmScope=previousPistolScope;
             g_bodySkinScope=g_bodySkinReady=false;

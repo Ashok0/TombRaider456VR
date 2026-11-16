@@ -70,6 +70,7 @@ void TestJumpTurnCentering(uint8_t* objectInfo) {
             if(MotionReady() || UnarmedIKReady()) for(int hand:{0,1}) {
                 Frame target{},wrist{};Basis controller{};
                 Check(BuildControllerWrist(hand,target,controller) && ReadIKJoint(objectInfo,palette,15,0,nullptr,nullptr,hand?10:13,wrist),"jump wrist fixture resolves");
+                target=ExpectedPublishedWrist(hand,target);
                 Check(firstperson::Length(Sub(Add(wrist.origin,camera),target.origin))<.2f,"turning jump placement preserves controller wrist targets");
             }
             Check(before==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)),"jump centering leaves gameplay and collision untouched");

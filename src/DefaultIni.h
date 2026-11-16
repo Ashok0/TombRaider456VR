@@ -8,7 +8,7 @@
 // comments in the template carry most of what was learned tuning this thing,
 // and a generated key=value dump would throw all of it away.
 //
-// Source: TombRaiderVR.ini, 61916 bytes, 1229 lines.
+// Source: TombRaiderVR.ini, 62209 bytes, 1235 lines.
 #pragma once
 
 namespace tr {
@@ -29,6 +29,9 @@ inline const char* DefaultIniText() {
 ;   depth inverted / eyes crossed .......... SwapEyes
 
 [VR]
+; First-person arm fit, independent of body height. Live in VR Options.
+; 80..120 percent; default 100. Connected arms extend freely to the controllers.
+FirstPersonArmLengthPercent=100
 Enabled=1
 
 ; Mode = mono | stereo
@@ -188,10 +191,10 @@ VRBrighterColors=0
 ; Where the per-eye TRANSLATION is applied. Leave this at 3.
 ;
 ;   0 = uViewMatrix translation column. BROKEN: 38 of the engine's 125 vertex
-;       shaders transform position as dot(uViewMatrix[i].xyz, p.xyz) -- rotation
-;       ONLY, never reading the translation column. Invisible to them, so: no
 )INI"
-           R"INI(;       parallax, no depth, everything at infinity (reads oversized), and dead
+           R"INI(;       shaders transform position as dot(uViewMatrix[i].xyz, p.xyz) -- rotation
+;       ONLY, never reading the translation column. Invisible to them, so: no
+;       parallax, no depth, everything at infinity (reads oversized), and dead
 ;       IpdScale / WorldUnitsPerMetre keys.
 ;   1 = uModelMatrix translation column. ALSO BROKEN: skinned geometry goes
 ;       through uJoints[72*3], not uModelMatrix, so characters do not move with
@@ -337,11 +340,11 @@ Ortho3DDepthMetres=2.0
 ;     the other way. An ortho projection has no perspective divide, so shifting
 ;     it is pure convergence: relative x, y AND z all survive untouched. The
 ;     HUD's world-locked panel discards its z input, which is harmless for flat
-;     overlays and wrong for these -- they are meshes with real depth, and
+)INI"
+           R"INI(;     overlays and wrong for these -- they are meshes with real depth, and
 ;     flattening them makes every item z-fight with itself.
 ; 0 = world-locked panel, same construction as the HUD's but with the z column
-)INI"
-           R"INI(;     filled in so ortho depth lands in a slab instead of on one plane.
+;     filled in so ortho depth lands in a slab instead of on one plane.
 Ortho3DLockToHead=1
 
 ; Horizontal angular width of the world-locked panel, in degrees. Ignored when
@@ -491,12 +494,12 @@ GamepadLogButtons=0
 ; It does genuinely take something away: the engine aims and reads its look
 ; camera from the pitch this suppresses, so a shot lined up by tilting the stick
 ; has to be lined up by tilting your head instead. It is ON by default anyway,
-; because DecoupledPitchChord below hands the stick pitch back whenever you hold
+)INI"
+           R"INI(; because DecoupledPitchChord below hands the stick pitch back whenever you hold
 ; RT+RB -- nothing is out of reach, and comfort is the right default in a
 ; headset. Set this to 0 for the stock two-axis stick.
 ;
-)INI"
-           R"INI(; Applied to whatever right stick reaches the game, including a physical pad
+; Applied to whatever right stick reaches the game, including a physical pad
 ; merged in alongside the Touch controllers. The binding line in the log says
 ; "look=Rstick(yaw only; hold RT+RB for pitch)" when both are on.
 DecoupledPitch=1
@@ -642,12 +645,12 @@ DpadShift=1
 
 ; TR4/5 stereo VR: X opens the paused native inventory in front of the
 ; headset, anchored there until closed, including with weapons active. Tap R3
-; to cycle supported ammo types. Release X, then LS navigates, A uses, B exits.
+)INI"
+           R"INI(; to cycle supported ammo types. Release X, then LS navigates, A uses, B exits.
 ; Native 3D items over the live head-tracked level; gameplay remains paused.
 WorldInventory=1
 
-)INI"
-           R"INI(; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
+; Hold Y + LT for this many seconds to send the Xbox Menu button (XInput START).
 ;
 ; Touch has no Start or Back of its own, so both have to come from somewhere.
 ; The System button on the left hand's lower face sends one of them (see
@@ -804,10 +807,10 @@ CullDumpKey=0x77
 ;
 ; DrawSkyHD already zeros the translation of the matrix it draws the dome
 ; through, so the dome stays centred on the game camera -- that is "at
-; infinity" on a monitor. The stereo path then composes the per-eye
-; transform, whose translation is IPD plus any 6DOF head offset, and the dome
 )INI"
-           R"INI(; gets stereo disparity equal to its mesh radius: a painted sphere a few
+           R"INI(; infinity" on a monitor. The stereo path then composes the per-eye
+; transform, whose translation is IPD plus any 6DOF head offset, and the dome
+; gets stereo disparity equal to its mesh radius: a painted sphere a few
 ; metres away, sitting in front of distant geometry.
 ;
 ; On: those draws use the rotation of the eye transform only (looking around
@@ -900,6 +903,8 @@ FirstPersonUnarmedIK=1
 ; Torso/hips follow head movement; leg IK retains native animated foot targets.
 ; No waist/foot trackers required. Set 0 to restore the earlier arm-only mode.
 FirstPersonFullBodyIK=1
+; Visual first-person body offset: 0 restores default; VR Options adjusts 0-20 cm.
+FirstPersonBodyForwardCm=0
 ; Physical squats bend the legs, then enter native crouch at a 55 cm drop.
 ; Stand within 23 cm of calibrated height to release (ceiling clearance applies).
 ; Requires full-body IK above. Set 0 to keep native crouch button-only.
@@ -958,12 +963,12 @@ FirstPersonTurnDeadzone=0.25
 ; and JUG_R_DYNAMIC, named in 6\DATA\CHAR\LARA_HD.CHR -- fed to the same
 ; spring solver as PONY1..10_DYNAMIC. TR4/TR5 have no such bones: Lara there
 ; is the classic 15-node rigid hierarchy, and the chest is polygons inside
-; the TORSO mesh. So the solver can be reimplemented but not ported, and
+)INI"
+           R"INI(; the TORSO mesh. So the solver can be reimplemented but not ported, and
 ; whether it is worth reimplementing depends on whether 30 Hz source
 ; animation gives a spring anything smooth to chase at headset frame rates.
 ;
-)INI"
-           R"INI(; The answer turned out to be yes, so this is the master switch for the whole
+; The answer turned out to be yes, so this is the master switch for the whole
 ; section: it runs the solver, and it is what lets the skinning shader be
 ; patched. Off means no chest motion at all, whatever the settings below say.
 ;
@@ -1122,12 +1127,12 @@ DynamicBonesShader=1
 DynamicBonesForwardSign=0
 
 ; How strongly the chest moves on the per-vertex path, as a multiple of the
-; solved motion. Shader path only.
+)INI"
+           R"INI(; solved motion. Shader path only.
 ;
 ; 1.0 moves the bust as far as the whole-torso view moved the whole upper body,
 ; which reads as much less because so much less of her moves. Simulated first
-)INI"
-           R"INI(; bounce at this value and the default spring: about 16 units for a small hop,
+; bounce at this value and the default spring: about 16 units for a small hop,
 ; 28 standing, 40 running, 57 for a long fall, with the second bounce under a
 ; third of the first. Raise for more; lower if rubbery.
 ;
@@ -1253,6 +1258,7 @@ DumpDraws=0
 
 ; Virtual-key code that arms the dump. 0x78 = F9.
 DumpKey=0x78
+
 )INI";
 }
 

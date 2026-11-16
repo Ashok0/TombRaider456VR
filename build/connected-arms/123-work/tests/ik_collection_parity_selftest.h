@@ -104,6 +104,7 @@ void TestCollectionIKParity() {
                 Frame target{};Basis controller{};
                 Check(BuildControllerWrist(hand,target,controller),"calibrated target available");
                 const auto wrist=ReadRows(render+(hand ? 10 : 13)*12);
+                target=ExpectedPublishedWrist(hand,target);
                 const auto error=Sub(wrist.origin,target.origin);
                 Check(Dot(error,error)<.01f && WristBasisError(wrist.basis,target.basis)<.001f,
                       "body wall retreat never shifts tracked wrist or clamps orientation");
@@ -123,6 +124,7 @@ void TestCollectionIKParity() {
         const auto* single=FirstPersonBodySkin(singleMask);
         Frame singleTarget{};Basis singleController{};
         Check(BuildControllerWrist(1,singleTarget,singleController),"right wrist target remains tracked");
+        singleTarget=ExpectedPublishedWrist(1,singleTarget);
         const auto singleError=Sub(ReadRows(single+10*12).origin,singleTarget.origin);
         Check(Dot(singleError,singleError)<.01f && !std::memcmp(single+11*12,ikNative+11*12,3*12*sizeof(float)),
               "missing left tracking preserves authored left arm and connected right arm");
@@ -157,6 +159,7 @@ void TestCollectionIKParity() {
         Frame wrist{},target{};Basis controller{};
         Check(ReadIKJoint(Ptr<uint8_t>(dll.objects),sparse,16,16,mapping,poses,10,wrist) &&
               BuildControllerWrist(1,target,controller),"sparse arm recovers missing shoulder and hand joints");
+        target=ExpectedPublishedWrist(1,target);
         Check(Dot(Sub(wrist.origin,target.origin),Sub(wrist.origin,target.origin))<.01f &&
               WristBasisError(wrist.basis,target.basis)<.001f,"nonidentity HD bind preserves exact wrist target");
         Check(!std::memcmp(sparse+9*12,sparse+15*12,12*sizeof(float)),"duplicate forearm helpers share correction");

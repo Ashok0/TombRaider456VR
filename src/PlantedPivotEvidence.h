@@ -8,7 +8,8 @@ struct PlantedPivotEvidence {
     struct Sample { Vec eye{},left{},right{};double time=0; };
     Sample samples[32]{};int next=0,count=0;
     double until=0;
-    bool Update(Vec eye,Vec left,Vec right,Vec forward,double now) {
+    bool straightTravel=false;
+    bool Update(Vec eye,Vec left,Vec right,Vec forward,double now,float inspectionPitch=-.65f) {
         bool orbit=false,straight=false;
         int nearbyTurns=0,arcTurns=0;
         // Current shared translation releases an old angular observation.
@@ -20,7 +21,8 @@ struct PlantedPivotEvidence {
             const float distance=Length(h);
             if(distance>.006f && Length(Sub(h,l))<distance*.12f && Length(Sub(h,r))<distance*.12f) straight=true;
         }
-        const bool inspecting=forward.y<-.65f && left.y>eye.y-.5f && right.y>eye.y-.5f;
+        straightTravel=straight;
+        const bool inspecting=forward.y<inspectionPitch && left.y>eye.y-.5f && right.y>eye.y-.5f;
         if(inspecting) for(int i=0;i<count;++i) {
             const auto& s=samples[i];const double age=now-s.time;
             if(age<.10 || age>.24) continue;

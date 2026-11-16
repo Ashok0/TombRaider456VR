@@ -403,4 +403,79 @@ inline bool SolveTrackedArm(const Frame (&native)[3],const Frame& target,
     }
     return true;
 }
+// Manual arm-length fit is independent of body height. No pose history or
+// automatic growing: repeated eyes/draws must never increase the reach envelope.
+inline float ConnectedArmScale(float percent) {
+    return std::isfinite(percent) ? std::clamp(percent,80.f,120.f)*.01f : 1.f;
+}
+// No outward reach limit: hands and weapons follow the tracked controller.
+// Only the inner folded-arm singularity needs a positional guard.
+inline bool ConnectedArmTarget(const Frame (&chain)[3],const Frame& tracked,Frame& target,float percent=100) {
+    const auto length=[](Vec v) {return std::sqrt(Dot(v,v));};
+    const float scale=ConnectedArmScale(percent);
+    const float upper=length(Sub(chain[1].origin,chain[0].origin))*scale;
+    const float lower=length(Sub(chain[2].origin,chain[1].origin))*scale;
+    const Vec offset=Sub(tracked.origin,chain[0].origin);
+    const float distance=length(offset);
+    Frame inverse{};
+    if(!std::isfinite(upper+lower+distance) || upper<.001f || lower<.001f || !Inverse(tracked,inverse)) return false;
+    Vec direction{};
+    if(!Unit(offset,direction) && !Unit(Sub(chain[2].origin,chain[0].origin),direction)) direction={0,0,1};
+    const float margin=std::min(upper,lower)*.001f;
+    const float reach=std::max(distance,std::fabs(upper-lower)+margin);
+    target=tracked;
+    if(reach!=distance) target.origin=Add(chain[0].origin,Scale(direction,reach));
+    return true;
+}
+inline bool SolveConnectedTrackedArm(const Frame (&native)[3],const Frame& tracked,
+                                    Vec pole,const Frame (&bind)[3],Frame* corrections,
+                                    bool upperArmPresent=true,ArmRollContinuity* continuity=nullptr,float percent=100) {
+    Frame target{};
+    if(!ConnectedArmTarget(native,tracked,target,percent)) return false;
+    const auto length=[](Vec v) {return std::sqrt(Dot(v,v));};
+    const float scale=ConnectedArmScale(percent);
+    const float a=length(Sub(native[1].origin,native[0].origin))*scale;
+    const float b=length(Sub(native[2].origin,native[1].origin))*scale;
+    const float radius=length(Sub(target.origin,native[0].origin));
+    const float natural=a+b-std::min(a,b)*.001f;
+    // Grow gradually over the last 10% of ordinary reach. At full extension
+    // there is still a small elbow bend, avoiding an abrupt straight-arm lock.
+    const float x=std::max(0.f,radius/natural-.9f);
+    const float extension=x<.2f ? x*x/.4f : x-.1f;
+    const float extra=natural*extension;
+    // The rig has no clavicles. Keep its socket fixed and distribute give into
+    // the upper arm (60%) and forearm (40%) instead of translating the chest.
+    // Proportional weights keep unusual rigs well conditioned at long reach.
+    const float share=std::clamp(.6f,1.f-1.25f*b/(a+b),1.25f*a/(a+b));
+    float lengths[2]={a+extra*share,b+extra*(1-share)};
+    const float available=lengths[0]+lengths[1]-std::min(lengths[0],lengths[1])*.001f;
+    if(radius>available) {
+        const float growth=(radius+.001f)/available;
+        lengths[0]*=growth;lengths[1]*=growth;
+    }
+    Frame reference[3]={native[0],native[1],native[2]};
+    for(int i=0;i<2;++i) {
+        Vec axis{};const Vec bone=Sub(native[i+1].origin,native[i].origin);
+        if(!Unit(bone,axis)) return false;
+        reference[i+1].origin=Add(reference[i].origin,Scale(axis,lengths[i]));
+    }
+    if(!SolveTrackedArm(reference,target,pole,bind,corrections,upperArmPresent,continuity)) return false;
+    Frame solved[3]{};
+    for(int i=0;i<3;++i) solved[i]=Multiply(corrections[i],reference[i]);
+    const Vec residual=Sub(native[0].origin,solved[0].origin);
+    for(int i=0;i<3;++i) {
+        if(i<2) {
+            Vec axis{};if(!Unit(Sub(solved[i+1].origin,solved[i].origin),axis)) return false;
+            const float ratio=lengths[i]/length(Sub(native[i+1].origin,native[i].origin));
+            const float v[3]={axis.x,axis.y,axis.z};auto stretch=IdentityBasis();
+            for(int row=0;row<3;++row) for(int col=0;col<3;++col)
+                stretch.r[row][col]+=(ratio-1)*v[row]*v[col];
+            solved[i].basis=Multiply(stretch,solved[i].basis);
+        }
+        solved[i].origin=Add(solved[i].origin,residual);
+        Frame inverse{};if(!Inverse(native[i],inverse)) return false;
+        corrections[i]=Multiply(solved[i],inverse);
+    }
+    return true;
+}
 } // namespace tr::firstperson

@@ -63,15 +63,15 @@ void TestClimbingArms() {
             if(game!=3 && state>=75) continue;
             Field<int16_t>(off::item_anim_state)=Field<int16_t>(off::item_goal_state)=int16_t(state);
             Check(FullBodyGripState(item) && FullBodyIKReady(),"every ledge and TR3 monkey movement state retains grip IK");
-            Check(FirstPersonBodyMask(item)==(locomotion::IsLedgeMountState(state,game) ? HandMeshBits : UINT32_MAX),
-                "mounts retain their existing mask; hanging and monkey traversal show the full body");
+            Check(FirstPersonBodyMask(item)==(locomotion::IsLedgeMountState(state,game) ? HandMeshBits : ArmMeshBits),
+                "mounts retain their existing mask; hanging and monkey traversal show only the arms");
             for(V headOffset:{V{0,0,0},{.35f,.2f,-.3f},{-.35f,-.2f,.3f}}) {
                 testViewRight=headOffset.x;testViewRise=headOffset.y;testViewForward=headOffset.z;
                 uint8_t savedItem[sizeof(item)]{};std::memcpy(savedItem,item,sizeof(item));
                 float firstEye[384]{};
                 ++testVR.m_poseSerial;
                 for(int eye=0;eye<2;++eye) {
-                    Field<uint32_t>(off::item_mesh_bits)=0x3fff;g_bodySkinScope=true;
+                    Field<uint32_t>(off::item_mesh_bits)=ArmMeshBits;g_bodySkinScope=true;
                     Detour_GetJoints(item);
                     uint32_t mask=0;const auto* palette=FirstPersonBodySkin(mask);
                     Check(palette && g_torsoPose.lastGrip,"grip solver stays active through movement animation states");

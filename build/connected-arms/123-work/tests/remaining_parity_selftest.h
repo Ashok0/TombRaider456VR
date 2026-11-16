@@ -62,11 +62,11 @@ void TestRemainingParity() {
             Field<int16_t>(off::item_anim_state)=int16_t(state);
             Field<uint32_t>(off::item_mesh_bits)=0x7fff;
             g_meshOverride=false;g_bodyVisibility.Update(item,AppFlag(drva::app_off::level),TurnTime(),true,false,true);
-            Check(FirstPersonBodyMask(item)==UINT32_MAX,"hanging clears stale mount/landing visibility immediately");
+            Check(FirstPersonBodyMask(item)==ArmMeshBits,"hanging selects arms-only rendering to conceal the body interior");
             SetMeshVisibility(true,false,false,FirstPersonBodyMask(item)==ArmMeshBits,false);
-            Check((Field<uint32_t>(off::item_mesh_bits)&0x3fff)==0x3fff,"classic hanging keeps the torso legs and arms visible");
+            Check(Field<uint32_t>(off::item_mesh_bits)==ArmMeshBits,"classic hanging retains complete arms while hiding torso legs and head");
             jumpDrawBits=0;Detour_DrawCreatureHD(item,0);
-            Check((jumpDrawBits&0xff)==0xff && !(jumpDrawBits&HeadMeshBit),"HD hanging reveals the torso and legs while retaining head hiding");
+            Check((jumpDrawBits&ArmMeshBits)!=0 && !(jumpDrawBits&~ArmMeshBits),"HD hanging retains arms without revealing any body or head meshes");
             SetMeshVisibility(false,false);
         }
         for(int state:{71,80,81,84,85,86,89,90}) {

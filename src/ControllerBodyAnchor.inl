@@ -20,15 +20,16 @@ void UpdateControllerBodyAnchor() {
         {head.m[0][3],head.m[1][3],-head.m[2][3]},
         {left.m[0][3],left.m[1][3],-left.m[2][3]},
         {right.m[0][3],right.m[1][3],-right.m[2][3]},g_headingBase,
-        bodyYaw,tracked,walking,headYaw,Cfg().firstPersonRoomscaleNeckMetres,{-head.m[0][2],-head.m[1][2],head.m[2][2]});
-    if(trace) LogF("body-input: %llu %.17g %.9g %.9g %d %d %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g -> %.9g %.9g %d %d %d",
+        bodyYaw,tracked,walking,headYaw,Cfg().firstPersonRoomscaleNeckMetres,{-head.m[0][2],-head.m[1][2],head.m[2][2]},
+        VR().FirstPersonHeightDrop(),Cfg().firstPersonBodyHandYawWeight>0);
+    if(trace) LogF("body-input: %llu %.17g %.9g %.9g %d %d %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g -> %.9g %.9g %d %d %d drop=%.9g",
         frame,time,g_headingBase,bodyYaw,int(tracked),int(walking),headYaw,Cfg().firstPersonRoomscaleNeckMetres,
         head.m[0][3],head.m[1][3],-head.m[2][3],left.m[0][3],left.m[1][3],-left.m[2][3],
         right.m[0][3],right.m[1][3],-right.m[2][3],-head.m[0][2],-head.m[1][2],head.m[2][2],
         g_controllerBodyAnchor.head.x,g_controllerBodyAnchor.head.z,int(g_controllerBodyAnchor.held),
-        int(g_controllerBodyAnchor.rotating),int(g_controllerBodyAnchor.translating));
+        int(g_controllerBodyAnchor.rotating),int(g_controllerBodyAnchor.translating),VR().FirstPersonHeightDrop());
     if(trace && tracked) {
-        // Keep the existing replay input unchanged. These supplementary raw
+        // Keep the original replay fields compatible. These supplementary raw
         // tracking-space bases distinguish hand aim from rotation of the line
         // joining the controllers; positions alone cannot measure that difference.
         const auto basis=[frame](const char* device,const vr::HmdMatrix34_t& pose) {
@@ -59,7 +60,8 @@ void UpdateControllerBodyAnchor() {
 bool BodyControllersStationary() { UpdateControllerBodyAnchor();return g_controllerBodyAnchor.held; }
 bool HasControllerBodyAnchor() { UpdateControllerBodyAnchor();return g_controllerBodyAnchor.valid; }
 bool BodyControllersPermitTravel() { UpdateControllerBodyAnchor();return !g_controllerBodyAnchor.valid || g_controllerBodyAnchor.translating; }
-void BodyTrackingOffset(float& right,float& forward) {
+void BodyTrackingOffset(float& right,float& forward,bool physical) {
     UpdateControllerBodyAnchor();VR().FirstPersonViewOffset(right,forward);
-    right-=g_controllerBodyAnchor.offset.x;forward-=g_controllerBodyAnchor.offset.z;
+    const auto offset=physical ? g_controllerBodyAnchor.offset : g_controllerBodyAnchor.visualOffset;
+    right-=offset.x;forward-=offset.z;
 }

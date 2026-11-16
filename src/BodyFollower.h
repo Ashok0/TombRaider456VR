@@ -184,12 +184,13 @@ struct RoomscaleHeadingRecovery {
     float facingOrigin=0,bodyOrigin=0;Vec facingAnchor{},facingMid{};
     Vec eyeReference{},hands[2]{},lastHands[2]{},quietHands[2]{};
     double referenceTime=0,quietSince=0,geometryRejectedSince=-1;int coherentSamples=0;Vec evaluatedHands[2]{};
-    Vec filteredHands[2]{},windowHands[2]{};
+    Vec filteredHands[2]{},windowHands[2]{},windowRawHands[2]{};
     double filterTime=0,windowTime=0,continuousUntil=0,stillSince=-1;
     float windowHead=0;
     void Capture(Vec eye,Vec left,Vec right,float headYaw,double now) {
         headReference=headYaw;geometryRejectedSince=-1;
-        filteredHands[0]=windowHands[0]=left;filteredHands[1]=windowHands[1]=right;
+        filteredHands[0]=windowHands[0]=windowRawHands[0]=left;
+        filteredHands[1]=windowHands[1]=windowRawHands[1]=right;
         filterTime=windowTime=now;windowHead=headYaw;continuousUntil=0;stillSince=-1;
         eyeReference=eye;hands[0]=lastHands[0]=quietHands[0]=left;
         hands[1]=lastHands[1]=quietHands[1]=right;referenceTime=quietSince=now;turning=false;coherentSamples=0;evaluatedHands[0]=left;evaluatedHands[1]=right;
@@ -249,6 +250,15 @@ struct RoomscaleHeadingRecovery {
         }
         geometryRejectedSince=-1;
         if(!turning) {
+            // A short hand-to-hand line magnifies wrist adjustments. Require
+            // the independently measured hand midpoint around the head to
+            // corroborate entry; close hands can still make a real turn.
+            if(beforeSpan<.12f || afterSpan<.12f) {
+                const Vec before=Flat(Sub(beforeMid,eyeReference)),after=Flat(Sub(afterMid,eye));
+                const float midTurn=BodyAngle(std::atan2(after.x,after.z)-std::atan2(before.x,before.z));
+                if(Length(before)<.12f || Length(after)<.12f || midTurn*headTurn<=0 ||
+                   std::fabs(BodyAngle(midTurn-headTurn))>std::max(.04f,std::fabs(headTurn)*.4f)) return;
+            }
             if(Length(Flat(Sub(left,evaluatedHands[0])))<.025f || Length(Flat(Sub(right,evaluatedHands[1])))<.025f) return;
             evaluatedHands[0]=left;evaluatedHands[1]=right;
             if(headTurn*heading<=0 || std::fabs(BodyAngle(headTurn-heading))>std::max(.12f,std::fabs(heading)*.45f)) {
@@ -257,7 +267,8 @@ struct RoomscaleHeadingRecovery {
             ++coherentSamples;
             if(coherentSamples<2 || now-referenceTime<.12 || std::fabs(heading)<.22f ||
                Length(Flat(Sub(left,hands[0])))<.07f || Length(Flat(Sub(right,hands[1])))<.07f) return;
-            filteredHands[0]=windowHands[0]=left;filteredHands[1]=windowHands[1]=right;
+            filteredHands[0]=windowHands[0]=windowRawHands[0]=left;
+            filteredHands[1]=windowHands[1]=windowRawHands[1]=right;
             windowHead=headYaw;windowTime=now;continuousUntil=now+.38;
         } else {
             // Once intent is established, follow a filtered controller frame
@@ -273,12 +284,20 @@ struct RoomscaleHeadingRecovery {
                 // A head-led glance with modest hand drift terminates the
                 // intent, including its unfinished blend. It cannot convert
                 // old controller momentum into more mesh rotation.
-                if(support && std::fabs(head)>.20f && std::fabs(head)>std::fabs(turn)*2.2f) {
-                    target=bodyYaw;active=false;
+                const bool handGesture=Length(Flat(Sub(left,windowRawHands[0])))>.02f &&
+                    Length(Flat(Sub(right,windowRawHands[1])))>.02f;
+                const bool headSupports=(!handGesture || std::fabs(head)>.008f) &&
+                    !(std::fabs(head)>.20f && std::fabs(head)>std::fabs(turn)*2.2f);
+                // Both arms can keep sweeping after the feet and head stop.
+                // A successful entry is not permanent permission to follow
+                // controller facing; renew it with fresh head agreement too.
+                if(support && !headSupports) {
+                    target=bodyYaw;active=established=false;
                     Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;
                 }
-                if(support) continuousUntil=now+.38;
+                if(support && headSupports) continuousUntil=now+.38;
                 windowHands[0]=filteredHands[0];windowHands[1]=filteredHands[1];windowHead=headYaw;windowTime=now;
+                windowRawHands[0]=left;windowRawHands[1]=right;
             }
             if(now>continuousUntil) return;
         }
@@ -348,7 +367,7 @@ struct BodyFollower {
         // A meaningful accepted angular error releases the lock; frame-time
         // convergence then follows continuously instead of timing motion packets.
         const float facingError=recoveringHeading ? BodyAngle(physicalTarget-yaw) : 0.f;
-        if(recoveringHeading && allowHeldTurn && std::fabs(facingError)>.104719755f) physicalLocked=false;
+        if(recoveringHeading && allowHeldTurn && std::fabs(facingError)>.008726646f) physicalLocked=false;
         if(!recoveringHeading) physicalLocked=true;
         float physical=recoveringHeading && !physicalLocked ?
             std::clamp(facingError*(1-std::exp(-50*dt)),-3.14159265f*dt,3.14159265f*dt) :

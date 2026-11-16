@@ -1589,23 +1589,28 @@ void TestRecordedPlantedGlances() {
     for(const auto& s:samples) {
         anchor.Update(s.frame,s.time,s.eye,s.left,s.right,s.base,s.body,true,false,s.yaw,s.neck,s.forward);
         if(s.frame==samples[0].frame) planted=anchor.head;
-        Check(Length(Flat(Sub(anchor.head,planted)))<.00001f,
+        Check(Length(Flat(Sub(anchor.head,planted)))<.00001f && Length(Flat(Sub(anchor.visualHead,planted)))<.00001f,
             "recorded raised/lowered-hand planted glances keep the body position fixed");
         Check(!anchor.translating,"recorded planted glances do not grant gameplay roomscale travel");
     }
     // A real shared displacement from this exact leaned posture must release
-    // promptly in each direction, retaining the already established lean.
+    // promptly in each direction, then retire the old lean gradually while walking.
     const auto& last=samples[sizeof(samples)/sizeof(samples[0])-1];
     for(int direction=0;direction<4;++direction) {
         auto walking=anchor;tr::motiongun::Vec shift{};int firstStep=0;
         for(int i=1;i<=180;++i) {
             shift=YawVector({0,0,i*.0015f},direction*1.5707963f);
+            const auto previous=walking.visualHead;
             walking.Update(last.frame+i,last.time+i/90.,Add(last.eye,shift),Add(last.left,shift),Add(last.right,shift),
                 last.base,last.body,true,false,last.yaw,last.neck,last.forward);
             if(!firstStep && walking.translating) firstStep=i;
+            if(firstStep && i>firstStep+2) Check(Length(Flat(Sub(walking.visualHead,previous)))<.010f,
+                "confirmed walking recenters smoothly without a body jump");
         }
         Check(firstStep>0 && firstStep<=25,"a real small step after the recorded glance releases without an extra delay");
         Check(Length(Flat(Sub(Sub(walking.head,planted),shift)))<.015f,
-            "walking after a planted glance retains the lean without losing physical travel");
+            "cosmetic centering preserves physical step displacement and lean");
+        Check(Length(Flat(Sub(walking.visualHead,Add(Add(Sub(last.eye,Scale(Flat(last.forward),last.neck)),YawVector(walking.neutralEyeOffset,last.body)),shift))))<.015f,
+            "walking after a planted glance recenters the body after consuming physical travel");
     }
 }

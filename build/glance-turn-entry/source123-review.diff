@@ -1,0 +1,127 @@
+--- src/ControllerBodyAnchor.h
++++ src/ControllerBodyAnchor.h
+@@ -37,6 +37,8 @@
+     float turnOutput=0; // Facing is supplied exclusively as an absolute target.
+     bool valid=false,held=false,rotating=false,translating=false;
+     bool inspectionHold=false;
++    bool loweredInspectionHold=false;
++    double lastInspectionStep=-INFINITY;
+     uint64_t serial=0;
+     double time=0,moved=0,referenceTime=0,rotated=0,translated=0;
+     float base=0,yaw=0,height=0,motionYaw=0;
+@@ -57,7 +59,7 @@
+         const Vec pair=Sub(right,left);placementFacing=std::atan2(pair.x,pair.z);
+     }
+     void Reset() { *this={}; }
+-    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f,Vec headForward={}) {
++    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f,Vec headForward={},float physicalHeightDrop=0) {
+         if(!tracked || !Finite({IdentityBasis(),eye}) || !Finite({IdentityBasis(),left}) ||
+            !Finite({IdentityBasis(),right}) || !Finite({IdentityBasis(),headForward}) || !std::isfinite(now+artificial+bodyYaw+headYaw+neckMetres)) {Reset();return;}
+         // The forward eye-to-neck offset shrinks horizontally when looking
+@@ -141,6 +143,7 @@
+         const float controllerFacingBefore=heading.valid && Length(facingPair)>.05f ?
+             BodyAngle(heading.bodyOrigin+std::atan2(facingPair.x,facingPair.z)-heading.facingOrigin) : bodyYaw;
+         const bool inspectionArc=inspectionEvidence.Update(eye,left,right,headForward,now,-.55f);
++        if(inspectionEvidence.straightTravel) lastInspectionStep=now;
+         const bool releaseInspection=walking || headForward.y>-.35f ||
+             std::fabs(BodyAngle(gazeYaw-bodyYaw))<.174532925f;
+         if(releaseInspection) inspectionHold=false;
+@@ -148,6 +151,18 @@
+                 std::fabs(BodyAngle(gazeYaw-controllerFacingBefore))>.34906585f)
+             inspectionHold=true;
+         if(inspectionHold) {
++            heading={};rotating=false;yaw=bodyYaw;
++        }
++        // A deep inspection can rotate head AND hands coherently over planted
++        // feet. Once the player is lowered and looking steeply down, a later
++        // correlated sample must not promote the same inspection to a turn.
++        // Use calibrated physical height (including the neck arc), not the
++        // animated landing camera or a gaze-dependent posture compensation.
++        if(walking || now-lastInspectionStep<2. || headForward.y>-.65f || physicalHeightDrop<.10f || !std::isfinite(physicalHeightDrop))
++            loweredInspectionHold=false;
++        else if(!heading.turning && headForward.y<-.85f && physicalHeightDrop>.18f)
++            loweredInspectionHold=true;
++        if(loweredInspectionHold) {
+             heading={};rotating=false;yaw=bodyYaw;
+         }
+         // Entry evidence must not revoke an established step or body turn.
+--- src/ControllerBodyAnchor.inl
++++ src/ControllerBodyAnchor.inl
+@@ -20,15 +20,16 @@
+         {head.m[0][3],head.m[1][3],-head.m[2][3]},
+         {left.m[0][3],left.m[1][3],-left.m[2][3]},
+         {right.m[0][3],right.m[1][3],-right.m[2][3]},g_heading.base,
+-        bodyYaw,tracked,walking,headYaw,Cfg().firstPersonRoomscaleNeckMetres,{-head.m[0][2],-head.m[1][2],head.m[2][2]});
+-    if(trace) LogF("body-input: %llu %.17g %.9g %.9g %d %d %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g -> %.9g %.9g %d %d %d",
++        bodyYaw,tracked,walking,headYaw,Cfg().firstPersonRoomscaleNeckMetres,{-head.m[0][2],-head.m[1][2],head.m[2][2]},
++        VR().FirstPersonHeightDrop());
++    if(trace) LogF("body-input: %llu %.17g %.9g %.9g %d %d %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g -> %.9g %.9g %d %d %d drop=%.9g",
+         frame,time,g_heading.base,bodyYaw,int(tracked),int(walking),headYaw,Cfg().firstPersonRoomscaleNeckMetres,
+         head.m[0][3],head.m[1][3],-head.m[2][3],left.m[0][3],left.m[1][3],-left.m[2][3],
+         right.m[0][3],right.m[1][3],-right.m[2][3],-head.m[0][2],-head.m[1][2],head.m[2][2],
+         g_controllerBodyAnchor.head.x,g_controllerBodyAnchor.head.z,int(g_controllerBodyAnchor.held),
+-        int(g_controllerBodyAnchor.rotating),int(g_controllerBodyAnchor.translating));
++        int(g_controllerBodyAnchor.rotating),int(g_controllerBodyAnchor.translating),VR().FirstPersonHeightDrop());
+     if(trace && tracked) {
+-        // Keep the existing replay input unchanged. These supplementary raw
++        // Keep the original replay fields compatible. These supplementary raw
+         // tracking-space bases distinguish hand aim from rotation of the line
+         // joining the controllers; positions alone cannot measure that difference.
+         const auto basis=[frame](const char* device,const vr::HmdMatrix34_t& pose) {
+--- tests/close_hands_motion_regression.inl
++++ tests/close_hands_motion_regression.inl
+@@ -1811,7 +1811,7 @@
+     tr::motiongun::Vec planted{};float minZ=INFINITY,maxZ=-INFINITY,minX=INFINITY,maxX=-INFINITY;int turns=0;
+     for(const auto& s:samples) {
+         const float body=follower.valid ? BodyAngle(follower.yaw-s.base) : s.body;
+-        anchor.Update(s.frame,s.time,s.eye,s.left,s.right,s.base,body,true,false,s.yaw,.15f,s.forward);
++        anchor.Update(s.frame,s.time,s.eye,s.left,s.right,s.base,body,true,false,s.yaw,.15f,s.forward,std::max(0.f,s.neutralY-s.eye.y));
+         follower.Update(s.frame,s.time,s.base,s.base+anchor.yaw,s.base+s.yaw,{},{},false,tr::firstperson::BodyFollowSettings{},
+             {},false,true,0,anchor.held,true,anchor.heading.active?s.base+anchor.heading.target:NAN,anchor.rotating);
+         if(s.frame==samples[0].frame) planted=anchor.head;
+--- README.md
++++ README.md
+@@ -3651,3 +3651,25 @@
+ 60/90/120 Hz, different arm extensions, and walking in all four directions.
+ Height calibration, the native landing-animation handoff, and camera clearance
+ are unchanged. In-headset confirmation remains necessary.
++
++### Sustained lowered inspection (2026-11-14)
++
++A steep downward inspection now also holds body facing when the tracked head is
++more than 18 cm below calibrated standing height. This covers glances where the
++head and hands turn together, which could previously start rotating the mesh
++after a few seconds. The hold neither expires nor releases just because a glance
++crosses the center of the body. It uses raw physical height, not the animated
++landing camera or posture compensation.
++
++Looking up, rising to within 10 cm of standing height, or using the movement
++stick releases this additional hold. A matching straight displacement of the
++head and both controllers also releases it and allows two seconds of physical
++turn continuation. Roomscale translation retains its existing algorithm.
++A genuine turn begun while deeply lowered and inspecting can require looking
++up or straightening first; this conservative facing hold cannot directly track
++the feet. Standing calibration, landing animation and camera code are unchanged.
++
++Regression coverage includes the complete 1,163-sample stationary-glance capture,
++30 seconds of repeated synthetic glances, the earlier recorded walking/turning
++sequence, and shared physical steps in all four directions. Drift replay logs
++now include the physical height input. Headset confirmation remains necessary.
+--- src/PlantedPivotEvidence.h
++++ src/PlantedPivotEvidence.h
+@@ -8,6 +8,7 @@
+     struct Sample { Vec eye{},left{},right{};double time=0; };
+     Sample samples[32]{};int next=0,count=0;
+     double until=0;
++    bool straightTravel=false;
+     bool Update(Vec eye,Vec left,Vec right,Vec forward,double now,float inspectionPitch=-.65f) {
+         bool orbit=false,straight=false;
+         int nearbyTurns=0,arcTurns=0;
+@@ -20,6 +21,7 @@
+             const float distance=Length(h);
+             if(distance>.006f && Length(Sub(h,l))<distance*.12f && Length(Sub(h,r))<distance*.12f) straight=true;
+         }
++        straightTravel=straight;
+         const bool inspecting=forward.y<inspectionPitch && left.y>eye.y-.5f && right.y>eye.y-.5f;
+         if(inspecting) for(int i=0;i<count;++i) {
+             const auto& s=samples[i];const double age=now-s.time;

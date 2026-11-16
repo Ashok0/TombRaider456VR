@@ -1811,7 +1811,7 @@ void TestCloseHandsRecordedMotion() {
     tr::motiongun::Vec planted{};float minZ=INFINITY,maxZ=-INFINITY,minX=INFINITY,maxX=-INFINITY;int turns=0;
     for(const auto& s:samples) {
         const float body=follower.valid ? BodyAngle(follower.yaw-s.base) : s.body;
-        anchor.Update(s.frame,s.time,s.eye,s.left,s.right,s.base,body,true,false,s.yaw,.15f,s.forward);
+        anchor.Update(s.frame,s.time,s.eye,s.left,s.right,s.base,body,true,false,s.yaw,.15f,s.forward,std::max(0.f,s.neutralY-s.eye.y));
         follower.Update(s.frame,s.time,s.base,s.base+anchor.yaw,s.base+s.yaw,{},{},false,tr::firstperson::BodyFollowSettings{},
             {},false,true,0,anchor.held,true,anchor.heading.active?s.base+anchor.heading.target:NAN,anchor.rotating);
         if(s.frame==samples[0].frame) planted=anchor.head;

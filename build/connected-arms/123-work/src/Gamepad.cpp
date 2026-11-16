@@ -179,7 +179,7 @@ void BuildState(XState& out, bool& shifted, bool gameplay, bool& gripAction) {
     gripAction=gameplay && !holsterGrips && L.grip>.5f && R.grip>.5f;
     const bool switchGrip = FirstPersonSwitchGrip(R.grip > 0.5f,
         gameplay && !(holsterGrips&2) && !gripAction && !photoChord && !L.btnUpper && !L.btnLower &&
-        L.trigger <= 0.12f && R.trigger <= 0.12f);
+        L.trigger <= 0.12f);
     FirstPersonFlareMotion(gameplay && L.valid && !holsterGrips && !switchGrip && !gripAction &&
         !L.btnUpper && !L.btnLower && !photoChord && L.trigger<=.12f && R.trigger<=.12f);
     uint16_t dpad = 0;
@@ -213,7 +213,9 @@ void BuildState(XState& out, bool& shifted, bool gameplay, bool& gripAction) {
 
     out.Gamepad.wButtons      = b;
     out.Gamepad.bLeftTrigger  = Trig(L.trigger);    // Equip
-    out.Gamepad.bRightTrigger = Trig(R.trigger);   // Shoot
+    // A nearby physical interaction owns RG+RT; do not draw/fire or enable
+    // the pitch chord while the right hand is operating it.
+    out.Gamepad.bRightTrigger = switchGrip ? 0 : Trig(R.trigger);
     shifted = (Cfg().dpadShift && R.stickClick && !photoChord);
     float lx = L.stickX, ly = L.stickY;
 

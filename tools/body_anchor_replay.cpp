@@ -3,6 +3,7 @@
 #include "ControllerBodyAnchor.h"
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <algorithm>
 int main(int argc,char** argv) {
     if(argc!=2) {std::fprintf(stderr,"Usage: body_anchor_replay.exe session.log\n");return 2;}
@@ -22,7 +23,9 @@ int main(int argc,char** argv) {
             &eye.x,&eye.y,&eye.z,&left.x,&left.y,&left.z,&right.x,&right.y,&right.z,
             &forward.x,&forward.y,&forward.z,&x,&z,&held,&turn,&move);
         if(read!=25) {std::fprintf(stderr,"Incomplete input at line %d\n",lineNumber);++errors;continue;}
-        anchor.Update(frame,time,eye,left,right,base,body,tracked!=0,walking!=0,yaw,neck,forward);
+        const char* dropText=std::strstr(line," drop=");
+        const float physicalDrop=dropText ? float(std::atof(dropText+6)) : 0.f;
+        anchor.Update(frame,time,eye,left,right,base,body,tracked!=0,walking!=0,yaw,neck,forward,physicalDrop);
         const float error=std::hypot(anchor.head.x-x,anchor.head.z-z);worst=std::max(worst,error);++samples;
         if(error>.00001f || anchor.held!=(held!=0) || anchor.rotating!=(turn!=0) || anchor.translating!=(move!=0)) {
             if(errors<8) std::printf("Mismatch at line %d pose %llu: position %.4f mm, flags %d/%d/%d expected %d/%d/%d\n",

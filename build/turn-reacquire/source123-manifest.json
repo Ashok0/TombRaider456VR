@@ -1,0 +1,26 @@
+[
+  {
+    "Relative": "src/ControllerBodyAnchor.h",
+    "OriginalHash": "6B256CF62DCD5165871CD593F894678218B6502071B86BAE42706CBC38BC6736",
+    "ModifiedHash": "6017922220A54ECB97ADC622AA62FE551D5A7A4FC3E24AB3D95C2BF05BF5EDA8",
+    "Deleted": false
+  },
+  {
+    "Relative": "src/InspectionTurnEvidence.h",
+    "OriginalHash": null,
+    "ModifiedHash": "4F9FC640DDC2CF2C7804B4B7747698AEB542A4E2E52BAAC872ECEE1FD745E116",
+    "Deleted": false
+  },
+  {
+    "Relative": "README.md",
+    "OriginalHash": "364BD51744E386383ACB693733E5058C3B14B114339EB18B4BBAAC63FEDF6116",
+    "ModifiedHash": "8DF9BA70F791C7879C7B0A2FE0AD95BD7521161C870AD437CF5EAFB0656E4F9F",
+    "Deleted": false
+  },
+  {
+    "Relative": "tools/inspection_turn_tests.cpp",
+    "OriginalHash": null,
+    "ModifiedHash": "C371F9B42BDF03E03EA3A1203FE893861CA2A345CCD1D3021579BCAD3A005D5B",
+    "Deleted": false
+  }
+]

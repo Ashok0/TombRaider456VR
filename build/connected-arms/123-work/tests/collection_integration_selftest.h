@@ -26,7 +26,51 @@ void TestRoomscaleLedge() {
             Field<int16_t>(off::item_anim_state)==2 && !(Field<uint16_t>(off::item_flags)&8),
             "roomscale stops at first unsupported sweep and leaves fall selection to native collision");
     }
-    testFloorRight=testFloorForward=0;
+    for(int game:{1,2,3}) for(int direction=0;direction<4;++direction) {
+        Reset(2,{},true);dll.module=game==1?L"tomb1.dll":game==2?L"tomb2.dll":L"tomb3.dll";
+        const auto base=reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
+        const auto shift=uint32_t(reinterpret_cast<uint64_t>(module)-base);
+        for(auto* field:{&dll.laraItem,&dll.camera,&dll.lara,&dll.input,&dll.analogInput}) *field+=shift;
+        dll.getCollisionInfo=uint32_t(reinterpret_cast<uint64_t>(&DragCollision)-base);
+        dll.updateLaraRoom=uint32_t(reinterpret_cast<uint64_t>(&DragRoom)-base);g_boundBase=base;
+        testConfig.firstPersonFullBodyIK=testConfig.firstPersonMovementStabilization=testConfig.firstPersonRoomscaleMove=true;
+        testConfig.firstPersonRoomscaleDeadzoneMetres=.02f;testConfig.firstPersonRoomscaleNeckMetres=.15f;
+        testHeadYaw=0;testViewRight=testViewForward=0;g_haveManualInput=false;
+        testVR.m_rawHeadPose={};testVR.m_rawHeadPose.m[0][0]=testVR.m_rawHeadPose.m[1][1]=testVR.m_rawHeadPose.m[2][2]=1;
+        testVR.m_rawHeadPose.m[1][3]=1.7f;
+        for(int hand=0;hand<2;++hand) {
+            testControllerPose[hand]=testVR.m_rawHeadPose;
+            testControllerPose[hand].m[0][3]=hand ? .2f : -.2f;
+            testControllerPose[hand].m[1][3]-=.3f;testControllerPose[hand].m[2][3]=-.3f;
+        }
+        g_dragCurrent=g_dragPrevious=g_dragShown={};g_roomscaleFollower={};dragQueries=roomUpdates=0;dragWall=false;
+        ++testVR.m_poseSerial;UpdateControllerBodyAnchor();
+        g_controllerBodyAnchor.moved=TurnTime()-.2;++testVR.m_poseSerial;UpdateControllerBodyAnchor();
+        const auto travel=locomotion::Rotate({.03f,0},direction*1.5707963f);
+        const auto left=testControllerPose[0],right=testControllerPose[1];
+        trackingtest::Clock stepClock;
+        for(int i=1;i<=20;++i) {
+            const float t=i/20.f,angle=.3f*t;
+            testHeadYaw=angle;
+            // Keep raw HMD orientation consistent with the yaw accessor.
+            testVR.m_rawHeadPose.m[0][0]=testVR.m_rawHeadPose.m[2][2]=std::cos(angle);
+            testVR.m_rawHeadPose.m[0][2]=-std::sin(angle);testVR.m_rawHeadPose.m[2][0]=std::sin(angle);
+            testViewRight=.15f*std::sin(angle)+travel.x*t;
+            testViewForward=.15f*(std::cos(angle)-1)+travel.z*t;
+            testVR.m_rawHeadPose.m[0][3]=testViewRight;testVR.m_rawHeadPose.m[2][3]=-testViewForward;
+            testControllerPose[0]=left;testControllerPose[1]=right;
+            for(auto& hand:testControllerPose) {hand.m[0][3]+=travel.x*t;hand.m[2][3]-=travel.z*t;}
+            stepClock.Advance(1./90);++testVR.m_poseSerial;UpdateControllerBodyAnchor();
+        }
+        ++testVR.m_poseSerial;
+        LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&g_roomscaleFollowTime);
+        g_roomscaleFollowTime.QuadPart-=frequency.QuadPart/30;
+        const auto result=DragBody(item);
+        Check(g_controllerBodyAnchor.translating && locomotion::Length(result)>.005f && dragQueries>0 &&
+            result.x*travel.x+result.z*travel.z>0,
+            "TR1-3 confirmed small roomscale steps reach native movement in all four directions while glancing");
+    }
+    testHeadYaw=0;testViewRight=testViewForward=0;testFloorRight=testFloorForward=0;
 }
 void BodyRig(int game,bool armed) {
     using namespace tr;
@@ -105,6 +149,9 @@ void TestGaitArmStability() {
             float repeated[384];std::memcpy(repeated,g_bodyRenderPalette,sizeof(repeated));Detour_GetJoints(item);
             for(int i=0;i<count*12;++i) Check(std::fabs(repeated[i]-g_bodyRenderPalette[i])<.001f,"stereo redraw cannot advance upper-body reference");
         }
+        // A visible head still follows tracking. Hidden head weights now belong
+        // to the collar and deliberately follow the fitted chest instead.
+        Field<uint32_t>(off::item_mesh_bits)|=firstperson::HeadMeshBit;
         testControllerOffset[1].x+=.07f;testViewRight=.15f;draw();
         Frame target{};Basis controller{};Check(BuildControllerWrist(1,target,controller),"gait hand target remains live");
         const motiongun::Vec camera{float(Ptr<int32_t>(dll.w2vMatrix)[3]),0,float(Ptr<int32_t>(dll.w2vMatrix)[11])};
@@ -118,8 +165,10 @@ void TestGaitArmStability() {
         *reinterpret_cast<int*>(geom+28)=0;g_pistolBodyScope=false;
     }
 }
+#include "landing_support_selftest.h"
 void TestCollectionIntegration() {
     using namespace tr;
+    TestLandingSupportPalettes();
     TestGaitArmStability();
     TestRoomscaleLedge();
     for(int game:{1,2,3}) {

@@ -139,7 +139,7 @@ void TestJumpPort() {
             UpdateLocomotion(eye);
             Check(eye.y_pos==-700,"grounded jump preparation cannot dip the calibrated camera");
         }
-        for(int state:{3,25,26,27,28}) for(int rise:{-104,-50,40}) {
+        for(int state:{3,9,25,26,27,28}) for(int rise:{-104,-50,40}) {
             Field<int16_t>(18)=int16_t(state);Field<uint16_t>(off::item_flags)=8;
             Field<PHD_3DPOS>(off::item_pos_prev).y_pos=0;
             Field<PHD_3DPOS>(off::item_pos).y_pos=rise;

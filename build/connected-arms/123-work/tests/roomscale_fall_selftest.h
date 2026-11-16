@@ -57,6 +57,16 @@ void RoomscaleFixture(int game,bool fullBody) {
     testConfig.firstPersonRoomscaleMove=true;testConfig.firstPersonFullBodyIK=fullBody;
     g_dragCurrent=g_dragPrevious=g_dragShown={};roomscaleNativeQueries=0;roomscaleTestWall=false;
     testViewRight=testViewForward=0;
+    // Views are pending offsets after engine consumption; raw tracking remains
+    // continuous in playspace. Supply both to the controller-confirmed path.
+    testVR.m_rawHeadPose={};testVR.m_rawHeadPose.m[0][0]=testVR.m_rawHeadPose.m[1][1]=testVR.m_rawHeadPose.m[2][2]=1;
+    testVR.m_rawHeadPose.m[1][3]=1.7f;
+    for(int hand=0;hand<2;++hand) {
+        testControllerPose[hand]=testVR.m_rawHeadPose;
+        testControllerPose[hand].m[0][3]=hand ? .2f : -.2f;
+        testControllerPose[hand].m[1][3]-=.3f;testControllerPose[hand].m[2][3]=-.3f;
+    }
+    ++testVR.m_poseSerial;UpdateControllerBodyAnchor();
 }
 void TestRoomscaleNativeFall() {
     using namespace tr;
@@ -75,6 +85,7 @@ void TestRoomscaleNativeFall() {
           !ResolveNativeLaraCollision(kNativeCollisionFixtures[0].code,4),"unsupported collision binding is rejected");
     for(int game:{1,2,3}) for(bool fullBody:{false,true}) for(bool patched:{false,true})
     for(int argument:{0,1,2}) for(bool stabilized:{false,true}) {
+        trackingtest::Clock physicalClock;
         RoomscaleFixture(game,fullBody);RoomCollision coll{},unrelated{};roomscaleTestNative=&coll;
         testConfig.firstPersonMovementStabilization=stabilized;
         g_nativeLaraCollision=&coll;
@@ -86,6 +97,12 @@ void TestRoomscaleNativeFall() {
             const bool pause=tick%2!=0;
             testFloorRight=pause ? 0.f : fullBody ? .22f : .05f;
             testViewRight=testFloorRight;
+            if(!pause) {
+                testVR.m_rawHeadPose.m[0][3]+=testViewRight;
+                for(auto& hand:testControllerPose) hand.m[0][3]+=testViewRight;
+            }
+            physicalClock.Advance(1./30);
+            ++testVR.m_poseSerial;
             if(fullBody && stabilized) testFloorRight=0; // looking down: rendered body owns the displacement
             g_dragShown=g_dragCurrent;
             LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&g_roomscaleFollowTime);
@@ -139,9 +156,17 @@ void TestRoomscaleNativeFall() {
         }
         Check(!g_roomscaleNativeCollision && !g_roomscaleNativeItem,"collision scope is cleared after every native tick");
     }
+    trackingtest::Clock wallClock;
     RoomscaleFixture(1,true);RoomCollision coll{};roomscaleTestNative=&coll;roomscaleTestWall=true;
     g_nativeLaraCollision=&coll;
-    testFloorRight=testViewRight=.22f;LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&g_roomscaleFollowTime);
+    for(int i=1;i<=20;++i) {
+        testFloorRight=testViewRight=.22f*i/20;
+        testVR.m_rawHeadPose.m[0][3]+=.22f/20;for(auto& hand:testControllerPose) hand.m[0][3]+=.22f/20;
+        wallClock.Advance(1./90);++testVR.m_poseSerial;UpdateControllerBodyAnchor();
+    }
+    Check(g_controllerBodyAnchor.translating,"wall pipeline starts with a confirmed physical step");
+    ++testVR.m_poseSerial;
+    LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&g_roomscaleFollowTime);
     g_roomscaleFollowTime.QuadPart-=frequency.QuadPart/30;
     Detour_LaraAboveWater(item,&coll);
     Check(Field<PHD_3DPOS>(off::item_pos).x_pos==0 && !(Field<uint16_t>(off::item_flags)&8),"solid walls still block the complete roomscale/native collision pipeline");

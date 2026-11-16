@@ -16,7 +16,8 @@ struct BodyFollowSettings {
 // degree of freedom: ducking, walking and leaning must never shrink the body.
 struct BodySizeCalibration {
     bool valid=false;
-    float factor=1,units=0;
+    float factor=1,units=0,standingStature=0,eyeGap=0;
+    bool torsoFitted=false;
     void Reset() { *this={}; }
     bool Capture(const Frame (&native)[15],Vec anchor,float standingEyeY,float worldUnits) {
         if(valid) return true;
@@ -35,7 +36,37 @@ struct BodySizeCalibration {
         }
         const float stature=relaxedHipHeight*.5f+native[0].origin.y-anchor.y;
         if(!std::isfinite(stature+available) || stature<worldUnits*.5f || available<worldUnits*.5f) return false;
-        factor=std::clamp(available/stature,.5f,1.5f);units=worldUnits;valid=true;return true;
+        factor=std::clamp(available/stature,.5f,1.5f);units=worldUnits;standingStature=stature;valid=true;return true;
+    }
+    bool FitTorso(const Frame (&native)[15],Vec low,Vec high,float standingEyeY) {
+        if(!valid || torsoFitted || units<=1 || standingStature<=0) return false;
+        const float floor=std::max(native[3].origin.y,native[6].origin.y);
+        float uprightHip=-INFINITY;
+        for(int first:{1,4}) {
+            const float a=Length(Sub(native[first+1].origin,native[first].origin));
+            const float b=Length(Sub(native[first+2].origin,native[first+1].origin));
+            const Vec delta=Sub(native[first+2].origin,native[first].origin);
+            const float reach=(a+b)*.99995f,horizontal=delta.x*delta.x+delta.z*delta.z;
+            if(horizontal>=reach*reach) return false;
+            uprightHip=std::max(uprightHip,native[first+2].origin.y-std::sqrt(reach*reach-horizontal)-
+                (native[first].origin.y-native[0].origin.y));
+        }
+        float top=INFINITY;
+        for(int corner=0;corner<8;++corner) {
+            const Vec local{corner&1 ? high.x : low.x,corner&2 ? high.y : low.y,corner&4 ? high.z : low.z};
+            top=std::min(top,Transform(native[7],local).y);
+        }
+        // Measure the visible collar at FULL leg extension. Calibrating from
+        // a bent animation fits a taller torso once the standing constraint
+        // subsequently lifts the pelvis. Keep a fixed eye-to-collar reserve.
+        top+=uprightHip-native[0].origin.y;
+        const float height=floor-top,available=floor-standingEyeY-units*.25f;
+        if(!std::isfinite(height+available) || height<units*.4f || available<=0) return false;
+        // Uniform, floor-anchored fitting preserves proportions. Limit the
+        // refinement to 15%; never resize continuously with gaze or crouch.
+        const float fitted=std::clamp(available/height,factor*.85f,factor);
+        eyeGap=(factor-fitted)*standingStature;
+        factor=fitted;torsoFitted=true;return true;
     }
 };
 // Evaluate hands in the BODY frame, never the current gaze frame. Looking
@@ -58,25 +89,266 @@ inline float StandingPostureWeight(float drop) {
 }
 // World positions are metres. Update once per tracked pose, independent of
 // skin/hand/holster passes and stereo eyes. Artificial turns are applied whole.
+// Recognize a physical body turn from the HEAD and BOTH hand positions.
+// Inputs stay in tracking space: artificial yaw must never enter this signal.
+// Head-only glances, aiming one hand, tracking loss and pose discontinuities
+// retain the ordinary neck slack instead of dragging the body around.
+struct PhysicalBodyTurn {
+    bool valid=false;
+    uint64_t serial=0;
+    double time=0,referenceTime=0;
+    float head=0,hand[2]{},radius[2]{},turn=0,pairYaw=0,pairSpan=0,samplePairYaw=0;
+    void Reset() { *this={}; }
+    float Observe(uint64_t frame,double now,float headYaw,Vec left,Vec right,bool tracked) {
+        const Vec hands[2]={Flat(left),Flat(right)};
+        float angles[2]{},lengths[2]{};
+        if(!tracked || !std::isfinite(now+headYaw) || !Finite({IdentityBasis(),left}) || !Finite({IdentityBasis(),right})) {Reset();return 0;}
+        for(int i=0;i<2;++i) {
+            lengths[i]=Length(hands[i]);
+            if(lengths[i]<.12f || lengths[i]>1.5f) {Reset();return 0;}
+            angles[i]=std::atan2(hands[i].x,hands[i].z);
+        }
+        if(valid && serial==frame) return turn;
+        const float delta=BodyAngle(headYaw-head);
+        const bool fresh=!valid || now<time || now-time>.1 || now-referenceTime>.25 || std::fabs(delta)>=.35f;
+        bool coherent=!fresh && now>time && std::fabs(delta)>.00001f;
+        for(int i=0;i<2;++i) {
+            const float movement=BodyAngle(angles[i]-hand[i]);
+            coherent=coherent && std::fabs(movement-delta)<=std::fabs(delta)*.65f &&
+                lengths[i]>radius[i]*.8f && lengths[i]<radius[i]*1.25f;
+        }
+        // Relative-to-head hand angles also change when the head moves
+        // between stationary controllers. The line joining the hands cancels
+        // that parallax and must corroborate a real physical turn as well.
+        const Vec pair=Sub(hands[1],hands[0]);const float span=Length(pair);
+        const float yaw=std::atan2(pair.x,pair.z),pairDelta=BodyAngle(yaw-pairYaw);
+        const float pairStep=BodyAngle(yaw-samplePairYaw);samplePairYaw=yaw;
+        // Do not spend old hand motion on a new head-only glance after stopping.
+        coherent=coherent && pairStep*delta>0 && std::fabs(pairStep)>.00001f && pairSpan>.12f && span>pairSpan*.9f && span<pairSpan*1.1f &&
+            std::fabs(BodyAngle(pairDelta-delta))<=std::fabs(delta)*.35f;
+        turn=coherent ? delta : 0.f;
+        // A rejected noisy sample is not a new motion reference. Accumulate
+        // up to 250 ms, then emit the full corroborated angle exactly once.
+        // Otherwise controller jitter permanently loses degrees every frame.
+        // Discontinuities and uncorroborated gestures still expire normally.
+        if(coherent || fresh) {
+            head=headYaw;pairYaw=yaw;pairSpan=span;referenceTime=now;
+            for(int i=0;i<2;++i) {hand[i]=angles[i];radius[i]=lengths[i];}
+        }
+        valid=true;serial=frame;time=now;
+        return turn;
+    }
+};
+// Independent body-relative hand bearings: unlike the line joining the
+// controllers, these remain usable when the hands meet or change spacing.
+// Calibrate each hand's rest angle so an asymmetric stance is not a turn.
+// The third cue is the last head-corroborated controller frame, carried by
+// controller motion. Substituting live HMD yaw here breaks the planted hold.
+struct BodyRelativeFacing {
+    float handOffset[2]{};
+    void Capture(Vec anchor,float bodyYaw,Vec left,Vec right) {
+        const Vec pelvis=Sub(anchor,YawVector({0,0,.15f},bodyYaw));
+        const Vec hands[2]={left,right};
+        for(int i=0;i<2;++i) {
+            const Vec arm=Flat(Sub(hands[i],pelvis));
+            handOffset[i]=BodyAngle(std::atan2(arm.x,arm.z)-bodyYaw);
+        }
+    }
+    float Estimate(Vec anchor,float bodyYaw,float confirmedFacing,Vec left,Vec right) const {
+        const float guide=confirmedFacing;
+        const Vec pelvis=Sub(anchor,YawVector({0,0,.15f},bodyYaw));
+        const Vec hands[2]={left,right};
+        // Average offsets around the accepted guide, including when that guide
+        // lies opposite the current body. +/-180 wrap must not cancel votes.
+        const float guideWeight=.5f+std::clamp(std::fabs(BodyAngle(guide-bodyYaw))/.8f,0.f,1.f);
+        float sum=0,weight=guideWeight;
+        for(int i=0;i<2;++i) {
+            const Vec arm=Flat(Sub(hands[i],pelvis));const float reach=Length(arm);
+            if(reach<.08f) continue;
+            const float hint=BodyAngle(std::atan2(arm.x,arm.z)-handOffset[i]);
+            const float offset=std::clamp(BodyAngle(hint-guide),-.9f,.9f);
+            const float w=std::clamp(reach/.45f,.25f,1.5f);
+            sum+=offset*w;weight+=w;
+        }
+        return BodyAngle(guide+sum/weight);
+    }
+};
+// Infer a planted stance until sustained head + bilateral controller motion
+// supports a whole-body turn. This is deliberately conservative: three tracked
+// devices cannot observe feet, and a glance with small hand adjustments is not
+// sufficient evidence to move the inferred stance.
+struct RoomscaleHeadingRecovery {
+    BodyRelativeFacing bodyFacing;
+    bool valid=false,active=false,established=false,turning=false,sampleAccepted=false;
+    float target=0,headReference=0;
+    float facingOrigin=0,bodyOrigin=0;Vec facingAnchor{},facingMid{};
+    Vec eyeReference{},hands[2]{},lastHands[2]{},quietHands[2]{};
+    double referenceTime=0,quietSince=0,geometryRejectedSince=-1;int coherentSamples=0;Vec evaluatedHands[2]{};
+    Vec filteredHands[2]{},windowHands[2]{},windowRawHands[2]{};
+    double filterTime=0,windowTime=0,continuousUntil=0,stillSince=-1;
+    float windowHead=0;
+    void Capture(Vec eye,Vec left,Vec right,float headYaw,double now) {
+        headReference=headYaw;geometryRejectedSince=-1;
+        filteredHands[0]=windowHands[0]=windowRawHands[0]=left;
+        filteredHands[1]=windowHands[1]=windowRawHands[1]=right;
+        filterTime=windowTime=now;windowHead=headYaw;continuousUntil=0;stillSince=-1;
+        eyeReference=eye;hands[0]=lastHands[0]=quietHands[0]=left;
+        hands[1]=lastHands[1]=quietHands[1]=right;referenceTime=quietSince=now;turning=false;coherentSamples=0;evaluatedHands[0]=left;evaluatedHands[1]=right;
+    }
+    void Replant(Vec left,Vec right,Vec anchor,float bodyYaw) {
+        const Vec pair=Sub(right,left);facingOrigin=std::atan2(pair.x,pair.z);
+        bodyOrigin=active ? target : bodyYaw;facingAnchor=anchor;facingMid=Scale(Add(left,right),.5f);
+        bodyFacing.Capture(anchor,bodyOrigin,left,right);
+    }
+    void Update(Vec eye,Vec left,Vec right,float bodyYaw,float headYaw,double now,Vec anchor={}) {
+        sampleAccepted=false;
+        if(!valid) {
+            valid=true;target=bodyYaw;
+            Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;
+        }
+        // Expired turn evidence is discarded BEFORE examining another head
+        // pose. Old hand motion cannot be revived by the next glance.
+        if(turning && now>continuousUntil) {Capture(eye,left,right,headYaw,now);return;}
+        const float filterWeight=1-std::exp(-35*float(std::clamp(now-filterTime,0.,.1)));
+        filterTime=now;
+        filteredHands[0]=Add(filteredHands[0],Scale(Sub(left,filteredHands[0]),filterWeight));
+        filteredHands[1]=Add(filteredHands[1],Scale(Sub(right,filteredHands[1]),filterWeight));
+        if(active && std::fabs(BodyAngle(target-bodyYaw))<.00001f) active=false;
+        if(Length(Flat(Sub(left,quietHands[0])))>.02f || Length(Flat(Sub(right,quietHands[1])))>.02f) {
+            quietHands[0]=left;quietHands[1]=right;quietSince=now;
+        }
+        // Replant after the hands settle. A previous successful turn must not
+        // permanently lower the evidence required for the next one.
+        if(now-quietSince>.65) {Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;}
+        const Vec beforePair=Flat(Sub(hands[1],hands[0])),afterPair=Flat(Sub(right,left));
+        const float beforeSpan=Length(beforePair),afterSpan=Length(afterPair);
+        // Hand spacing is a pose choice, not evidence that feet stopped.
+        // Refresh unusable geometry so one changed pose cannot latch us out.
+        if(beforeSpan<.05f || afterSpan<.05f) {
+            if(geometryRejectedSince<0) geometryRejectedSince=now;
+            else if(now-geometryRejectedSince>.25) Capture(eye,left,right,headYaw,now);
+            return;
+        }
+        if(turning && Length(Flat(Sub(left,lastHands[0])))<1.e-6f && Length(Flat(Sub(right,lastHands[1])))<1.e-6f) {
+            if(stillSince<0) stillSince=now;
+            else if(now-stillSince>.1) Capture(eye,left,right,headYaw,now);
+            return;
+        }
+        stillSince=-1;
+        const float heading=BodyAngle(std::atan2(afterPair.x,afterPair.z)-std::atan2(beforePair.x,beforePair.z));
+        const float headTurn=BodyAngle(headYaw-headReference);
+        const Vec beforeMid=Scale(Add(hands[0],hands[1]),.5f),afterMid=Scale(Add(left,right),.5f);
+        const Vec predictedEye=Add(afterMid,YawVector(Sub(eyeReference,beforeMid),heading));
+        // Reject gestures that deform the tracked triangle instead of carrying
+        // head and hands together. Allow modest elbow articulation during turns.
+        if(!turning && Length(Flat(Sub(predictedEye,eye)))>.10f) {
+            // Keep absolute facing/anchor origins, but learn the new elbow
+            // posture. Reacquisition still requires fresh bilateral travel.
+            if(geometryRejectedSince<0) geometryRejectedSince=now;
+            else if(now-geometryRejectedSince>.25) Capture(eye,left,right,headYaw,now);
+            return;
+        }
+        geometryRejectedSince=-1;
+        if(!turning) {
+            // A short hand-to-hand line magnifies wrist adjustments. Require
+            // the independently measured hand midpoint around the head to
+            // corroborate entry; close hands can still make a real turn.
+            if(beforeSpan<.12f || afterSpan<.12f) {
+                const Vec before=Flat(Sub(beforeMid,eyeReference)),after=Flat(Sub(afterMid,eye));
+                const float midTurn=BodyAngle(std::atan2(after.x,after.z)-std::atan2(before.x,before.z));
+                if(Length(before)<.12f || Length(after)<.12f || midTurn*headTurn<=0 ||
+                   std::fabs(BodyAngle(midTurn-headTurn))>std::max(.04f,std::fabs(headTurn)*.4f)) return;
+            }
+            if(Length(Flat(Sub(left,evaluatedHands[0])))<.025f || Length(Flat(Sub(right,evaluatedHands[1])))<.025f) return;
+            evaluatedHands[0]=left;evaluatedHands[1]=right;
+            if(headTurn*heading<=0 || std::fabs(BodyAngle(headTurn-heading))>std::max(.12f,std::fabs(heading)*.45f)) {
+                coherentSamples=0;return;
+            }
+            ++coherentSamples;
+            if(coherentSamples<2 || now-referenceTime<.12 || std::fabs(heading)<.22f ||
+               Length(Flat(Sub(left,hands[0])))<.07f || Length(Flat(Sub(right,hands[1])))<.07f) return;
+            filteredHands[0]=windowHands[0]=windowRawHands[0]=left;
+            filteredHands[1]=windowHands[1]=windowRawHands[1]=right;
+            windowHead=headYaw;windowTime=now;continuousUntil=now+.38;
+        } else {
+            // Once intent is established, follow a filtered controller frame
+            // continuously. A short history sustains intent through tracking
+            // noise; it expires when bilateral motion stops.
+            if(now-windowTime>=.18) {
+                const auto before=Sub(windowHands[1],windowHands[0]),after=Sub(filteredHands[1],filteredHands[0]);
+                const float turn=BodyAngle(std::atan2(after.x,after.z)-std::atan2(before.x,before.z));
+                const float head=BodyAngle(headYaw-windowHead);
+                const bool support=Length(Flat(Sub(filteredHands[0],windowHands[0])))>.005f &&
+                    Length(Flat(Sub(filteredHands[1],windowHands[1])))>.005f &&
+                    std::fabs(turn)>.012f;
+                // A head-led glance with modest hand drift terminates the
+                // intent, including its unfinished blend. It cannot convert
+                // old controller momentum into more mesh rotation.
+                const bool handGesture=Length(Flat(Sub(left,windowRawHands[0])))>.02f &&
+                    Length(Flat(Sub(right,windowRawHands[1])))>.02f;
+                const bool headSupports=(!handGesture || std::fabs(head)>.008f) &&
+                    !(std::fabs(head)>.20f && std::fabs(head)>std::fabs(turn)*2.2f);
+                // Both arms can keep sweeping after the feet and head stop.
+                // A successful entry is not permanent permission to follow
+                // controller facing; renew it with fresh head agreement too.
+                if(support && !headSupports) {
+                    target=bodyYaw;active=established=false;
+                    Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;
+                }
+                if(support && headSupports) continuousUntil=now+.38;
+                windowHands[0]=filteredHands[0];windowHands[1]=filteredHands[1];windowHead=headYaw;windowTime=now;
+                windowRawHands[0]=left;windowRawHands[1]=right;
+            }
+            if(now>continuousUntil) return;
+        }
+        // Preserve absolute progress across rejected articulated samples.
+        // Only a newly planted stance establishes a new orientation origin.
+        const Vec renderPair=Sub(filteredHands[1],filteredHands[0]);
+        const float absolute=BodyAngle(std::atan2(renderPair.x,renderPair.z)-facingOrigin);
+        // Carry the last head-corroborated frame with accepted controller
+        // motion. Live gaze must not enter the blend during a planted glance.
+        const float confirmedFacing=BodyAngle(bodyOrigin+absolute);
+        // Keep the facing reference controller-owned. A positional correction
+        // must not feed back into yaw and turn a head glance into rotation.
+        const Vec renderMid=Scale(Add(filteredHands[0],filteredHands[1]),.5f);
+        const Vec facingReference=Add(renderMid,YawVector(Sub(facingAnchor,facingMid),absolute));
+        target=bodyFacing.Estimate(facingReference,bodyYaw,confirmedFacing,filteredHands[0],filteredHands[1]);
+        active=established=turning=sampleAccepted=true;
+        lastHands[0]=left;lastHands[1]=right;
+    }
+};
 struct BodyFollower {
-    bool valid=false,turning=false,stepping=false,supportedHands=false;
+    PhysicalBodyTurn physicalTurn;
+    bool valid=false,turning=false,stepping=false,supportedHands=false,physicalLocked=true;
     uint64_t serial=0;
     double time=0;
-    float yaw=0,base=0,phase=0,stepWeight=0;
-    Vec root{},nativeRoot{};
+    float yaw=0,base=0,phase=0,stepWeight=0,pendingPhysicalTurn=0;
+    Vec root{},nativeRoot{},lastPivot{};
     void Reset() { *this={}; }
+    // Cached yaw belongs to cached base, which can lag a native roll or stick
+    // turn until rendering resumes. Queries must name the frame they need.
+    float TrackingYaw() const { return BodyAngle(yaw-base); }
+    float WorldYaw(float artificialYaw) const { return BodyAngle(TrackingYaw()+artificialYaw); }
     void Update(uint64_t frame,double now,float artificialYaw,float headYaw,float travelYaw,
                 Vec goal,Vec native,bool moving,const BodyFollowSettings& s,Vec turnPivot={},bool handsForward=false,
-                bool pivotFootprint=false) {
+                bool pivotFootprint=false,float trackedTurn=0,bool holdPhysical=false,bool holdHeadTurn=false,float physicalTarget=NAN,bool allowHeldTurn=false) {
         if(!std::isfinite(now+artificialYaw+headYaw+travelYaw) ||
            !Finite({IdentityBasis(),goal}) || !Finite({IdentityBasis(),native})) { Reset();return; }
         if(!valid || now<time || now-time>.25 || Length(Sub(native,nativeRoot))>2) {
             valid=true;turning=stepping=false;serial=frame;time=now;
-            yaw=headYaw;base=artificialYaw;root=Flat(goal);nativeRoot=native;stepWeight=0;
-            supportedHands=handsForward;return;
+            yaw=headYaw;base=artificialYaw;root=Flat(goal);nativeRoot=native;lastPivot=Flat(turnPivot);stepWeight=0;pendingPhysicalTurn=0;
+            supportedHands=handsForward;physicalLocked=true;return;
+        }
+        // Transport the IK footprint with the accepted body anchor before
+        // rotating it. Orbiting the old root around a newly moved pivot makes
+        // the feet drift away from the pelvis on every physical-turn sample.
+        if(serial!=frame || artificialYaw!=base) {
+            if(pivotFootprint && holdPhysical && !moving) root=Add(root,Sub(Flat(turnPivot),lastPivot));
+            lastPivot=Flat(turnPivot);
         }
         const float turn=BodyAngle(artificialYaw-base);
         if(turn!=0) {
+            pendingPhysicalTurn=0;physicalLocked=true;
             yaw=BodyAngle(yaw+turn);
             root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),turn));
             if(pivotFootprint) goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),turn));
@@ -89,11 +361,37 @@ struct BodyFollower {
         // not count the same HMD displacement a second time.
         if(moving) root=Add(root,Flat(Sub(native,nativeRoot)));
         nativeRoot=native;
+        // Corroborated roomscale turning follows the same pivot as a stick
+        // turn. Preserve any existing head-only glance rather than snapping
+        // the torso to the current gaze when the whole body starts turning.
+        const bool recoveringHeading=std::isfinite(physicalTarget) && !moving;
+        if(moving || recoveringHeading) pendingPhysicalTurn=0;
+        else if(std::isfinite(trackedTurn)) pendingPhysicalTurn=BodyAngle(pendingPhysicalTurn+trackedTurn);
+        // Separate the planted lower body from the desired torso facing.
+        // A meaningful accepted angular error releases the lock; frame-time
+        // convergence then follows continuously instead of timing motion packets.
+        const float facingError=recoveringHeading ? BodyAngle(physicalTarget-yaw) : 0.f;
+        if(recoveringHeading && allowHeldTurn && std::fabs(facingError)>.104719755f) physicalLocked=false;
+        if(!recoveringHeading) physicalLocked=true;
+        float physical=recoveringHeading && !physicalLocked ?
+            std::clamp(facingError*(1-std::exp(-50*dt)),-3.14159265f*dt,3.14159265f*dt) :
+            !recoveringHeading && (!holdPhysical || allowHeldTurn) && !moving ? std::clamp(pendingPhysicalTurn,-.35f,.35f) : 0.f;
+        if(recoveringHeading && !allowHeldTurn && std::fabs(facingError)<.008726646f) {
+            physical=facingError;physicalLocked=true;
+        }
+        if(!recoveringHeading) pendingPhysicalTurn-=physical;
+        yaw=BodyAngle(yaw+physical);
+        if(pivotFootprint && physical!=0) {
+            root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),physical));
+            goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),physical));
+        }
         const float delta=BodyAngle(headYaw-yaw);
         // Angular slack, without a timed chase: every degree beyond the
         // boundary is carried in this pose. Stopping the head stops the body.
         const bool supported=handsForward && !moving && !turning && std::fabs(delta)<1.3962634f;
-        const float change=moving ? BodyAngle(travelYaw-yaw) : supported ? 0.f :
+        // A positional controller hold freezes physical body following;
+        // explicit stick motion still owns travel and artificial yaw above.
+        const float change=moving ? BodyAngle(travelYaw-yaw) : (holdPhysical || holdHeadTurn || supported) ? 0.f :
             delta-std::clamp(delta,-s.yawSlack,s.yawSlack);
         turning=std::fabs(change)>.00001f;
         yaw=BodyAngle(yaw+change);
@@ -101,7 +399,7 @@ struct BodyFollower {
             root=Add(Flat(turnPivot),YawVector(Sub(root,Flat(turnPivot)),change));
             goal=Add(Flat(turnPivot),YawVector(Sub(goal,Flat(turnPivot)),change));
         }
-        const Vec offset=Flat(Sub(goal,root));const float distance=Length(offset);
+        const Vec offset=holdPhysical && !moving ? Vec{} : Flat(Sub(goal,root));const float distance=Length(offset);
         // Once an actual step starts, bring the visual body back under the
         // player. Collision-root hysteresis can retain a larger lean margin;
         // retaining it here as well leaves a permanent torso displacement.
@@ -113,7 +411,7 @@ struct BodyFollower {
             const float excess=std::max(0.f,distance-(moving ? 0.f : settleRadius));
             move=Scale(offset,std::min(excess,s.followSpeed*dt)/distance);root=Add(root,move);
         }
-        const float stride=Length(move)+std::fabs(change)*.12f;
+        const float stride=Length(move)+std::fabs(change+physical)*.12f;
         phase=std::fmod(phase+stride*15.f,6.28318530718f);
         const float weight=!moving && stride>.0001f ? 1.f : 0.f;
         stepWeight+=(weight-stepWeight)*(1-std::exp(-12*dt));
@@ -219,7 +517,7 @@ struct TorsoPoseFilter {
     void Mount() { mountPending=true; }
     bool Update(uint64_t frame,double now,const Frame& reference,const Frame& eye,
                 bool idle,bool grip,Frame (&pose)[15],Vec forward,bool plant=false,float postureDrop=0,
-                const Vec* contacts=nullptr) {
+                const Vec* contacts=nullptr,bool authoredKnees=false) {
         constexpr int joint[4]={0,7,3,6};
         Frame inverse{},inverseEye{};
         if(!Inverse(reference,inverse) || !Inverse(eye,inverseEye)) return false;
@@ -310,7 +608,7 @@ struct TorsoPoseFilter {
             for(int j=0;j<7;++j) legReference[j]=Multiply(reference,stance[j]);
             target[2]=legReference[3];target[3]=legReference[6];
         }
-        if(!ReposeTorso(pose,target,forward,planted ? legReference : nullptr)) return false;
+        if(!ReposeTorso(pose,target,forward,planted ? legReference : nullptr,authoredKnees)) return false;
         for(int i=0;i<4;++i) eyeRelative[i]=Multiply(inverseEye,pose[joint[i]]);
         return true;
     }

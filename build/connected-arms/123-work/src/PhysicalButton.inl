@@ -97,6 +97,38 @@ bool ButtonSight(uint8_t* lara,motiongun::Vec hand) {
     ShotVector end{int32_t(std::lround(hand.x)),int32_t(std::lround(hand.y)),int32_t(std::lround(hand.z)),eye.room,0};
     return reinterpret_cast<Sight>(g_boundBase+g_boundDll->los)(&eye,&end)!=0;
 }
+// Claim RG/RT near a supported push-button face without claiming the lever
+// preview: touch still drives the actual button and its native activation.
+bool PhysicalButtonGrip() {
+    if(!PhysicalSwitchReady() || g_boundDll->module[4]==L'1') return false;
+    auto* lara=*Ptr<uint8_t*>(g_boundDll->laraItem);
+    if(!lara || (*reinterpret_cast<uint16_t*>(lara+off::item_flags)&8)) return false;
+    const int state=*reinterpret_cast<int16_t*>(lara+18);
+    if(state!=2 && !(g_boundDll->module[4]==L'3' && (state==71 || state==80))) return false;
+    auto* items=*Ptr<uint8_t*>(g_switchDll->items);const int count=*Ptr<int32_t>(g_switchDll->count);
+    motiongun::Vec hand{};
+    if(!items || count<1 || count>32768 || !ButtonHandPoint(1,hand)) return false;
+    const float scale=LiveWorldUnitsPerMetre();
+    if(!std::isfinite(scale) || scale<=1) return false;
+    const auto& body=*reinterpret_cast<const PHD_3DPOS*>(lara+off::item_pos);
+    for(int i=0;i<count;++i) {
+        auto* target=items+i*off::item_stride;const uint8_t* object=nullptr;
+        const auto* profile=ButtonObject(target,object);
+        if(!profile || (*reinterpret_cast<uint16_t*>(target+off::item_flags)&6)==6 ||
+            (*reinterpret_cast<uint16_t*>(target+44)&0x100)) continue;
+        const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(target+off::item_pos);
+        if(std::abs(float(body.y_pos)-pos.y_pos)>768 ||
+            std::hypot(float(body.x_pos)-pos.x_pos,float(body.z_pos)-pos.z_pos)>1800) continue;
+        motiongun::Frame inverse{};firstperson::ButtonSurface face{};
+        if(!ButtonFrame(target,object,*profile,inverse,face)) continue;
+        const auto p=motiongun::Transform(inverse,hand);
+        const float dx=p.x-std::clamp(p.x,face.left,face.right);
+        const float dy=p.y-std::clamp(p.y,face.top,face.bottom),dz=p.z-face.z;
+        if(std::isfinite(dx+dy+dz) && dz<=scale*.04f &&
+            dx*dx+dy*dy+dz*dz<=scale*scale*.10f*.10f && ButtonSight(lara,hand)) return true;
+    }
+    return false;
+}
 void AdvancePhysicalButton(uint8_t* lara,void* collision,uint64_t now) {
     if(!PhysicalSwitchReady() || !lara || lara!=*Ptr<uint8_t*>(g_boundDll->laraItem) ||
        g_boundDll->module[4]==L'1' || g_switchGripClaimed || (*reinterpret_cast<uint16_t*>(lara+off::item_flags)&8)) {

@@ -1,0 +1,55 @@
+{
+  "change": "Apply planted-inspection confidence to both position and yaw; require sustained shared steps to release it; reject unstable close-hand angular evidence and hand-only turn continuation.",
+  "checks": {
+    "456": 10854778,
+    "123": 5416918,
+    "camera": 19880640,
+    "inspection": 11320,
+    "sustained": 4140,
+    "continuation": 1347,
+    "swivel": 2604,
+    "anchor": 1945962
+  },
+  "inHeadsetTested": false,
+  "stationarySamples": 8093,
+  "stationaryTranslationSamples": 0,
+  "stationaryTurnSamples": 0,
+  "baselineTranslationSamples": 1434,
+  "baselineTurnSamples": 1880,
+  "regressionEvidence": "User explicitly labelled all three behaviors in the entire recording as feet planted. Replay isolates physical inference from stick/artificial input, keeps each segment anchor fixed, and tests active yaw targets as well as motion flags. Recorded true walking/turning and broad existing movement tests remain required.",
+  "preserved": [
+    "Landing animation/VRIK handoff",
+    "Standing height/calibration",
+    "Camera/torso clearance",
+    "Collection-specific crouch behavior"
+  ],
+  "compromise": "Deep inspection requires returning upright or a corroborated shared step before inferred body movement resumes. Closely spaced hands (<12 cm horizontally) additionally require midpoint/head agreement for yaw. Clear straight steps qualify after 3 cm with <1 mm mismatch; arm sway needs 6 cm within 0.2-0.6 s. Feet remain inferred, not tracked.",
+  "broadSuiteLimitation": "The existing broad first_person_tests executable has an independently reproduced pre-change physical-crouch assertion failure. This is not counted as a passing suite.",
+  "productionHashes": {
+    "src/FirstPerson.cpp": "7759A11F3F256C548FC0A9A075F97F058DBD0CB59F4A2599EC03FAE671718078",
+    "src/FirstPersonStabilization.h": "07E276F599F73FDAA10BFF484E4FC281BDBAD94A6DDB8BCA4D15D33505306316",
+    "src/FirstPersonBodyIK.h": "4698EA36FD6B6CFA89E2E1AE59672B289B41E2FFB78A852B75E7AA7A9AF8D523",
+    "src/BodyFollower.h": "14E286B51345F3B7BF24D9ED5BE402B731C75145AC924C3363DB6590FB99D834",
+    "src/ControllerBodyAnchor.h": "6B256CF62DCD5165871CD593F894678218B6502071B86BAE42706CBC38BC6736",
+    "src/PlantedPivotEvidence.h": "FEC5DF7837122BABF51EF7378007063B90BAAADA9B3F2793A060442E3753EF44",
+    "src/GroundTorso.h": "B8674260546B7B184FF6F0004DC7FBFDD4F023052CF0E6E6B501C815622F8D5E",
+    "src/TorsoClearance.h": "30139EE01BBD5D2E8B81F651D3BD1B01700EF0B48EFB7F188B16EDB8EA27C986",
+    "src/ControllerBodyAnchor.inl": "4BFAC402F66D0910542DF12025CF942412CB5D72F0179DE6A2A57FC114D262A9",
+    "src/InspectionStepEvidence.h": "4A6CDE6BB515770F3A846C992433EFEDEB3E24E028302C963A73018A77E56A2E"
+  },
+  "testHashes": {
+    "tools/first_person_tests.cpp": "1B0DEDEA9C0F3FAB5AF62235DA22E7EE59EDA4F4E757BB808C29AB2A7619A3AD",
+    "tools/landing_camera_test.cpp": "DC4D4035D2BF86D4883812D2107EE4F48246E4F2357D39D9220DE8CC3715D38A",
+    "tools/upjump_arms_test.cpp": "5B238AB33D1F020005A222107D1DBF1235DC41B02E343F657C108367AB84FFC9",
+    "tools/landing_support_checks.inl": "2C248A3C74398741C65BBD09F1EC5E7344CAD42179EC043F9CD01A108145841D",
+    "tools/landing_support_regression.inl": "40CA6C1165B06D9B33BDEE099BDC5DA3084DE2471A760956063B9C108CBA1138",
+    "tools/native_landing_poses.inl": "062A8C32595222BD50F72D18493B2AFBC3A893C951E2FE969625789FCBD60DAA",
+    "tools/inspection_heading_tests.cpp": "39FC70C335E1F002A1684BF3010723BCE83730080A6424AD6AB995F758EB3ED9",
+    "tools/lowered_inspection_tests.cpp": "12BD5A7339CB8854AC0E2B8C8F158544A3B9CEA2F96DC07442280BFE1971C2C7",
+    "tools/close_hands_motion_regression.inl": "1EDB73A03A15E52AF7E972F3BF4981A82D942BC98060968DD1543C6C8277888C",
+    "tools/body_anchor_replay.cpp": "5EDB17157E9948F73B77242BAC9A9979D14CE3277EE74F9F4213F70FCED2786D",
+    "tools/turn_continuation_tests.cpp": "73163CCDFAC76BEF3A91A10BB1A644EC09B9B7CE4FBBDD4C683D81F7AC8D362B",
+    "tools/planted_session_tests.cpp": "06461785AADEAE6568D54EFA51B2C4208EB899A4D42F2CF2B66A13ADFFF9AD11"
+  },
+  "captureSHA256": "409D7A3EE5A22687A46848A0BE5D409666EF93E938191138E8703450025A4DE0"
+}

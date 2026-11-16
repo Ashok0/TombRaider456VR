@@ -5,6 +5,15 @@
 
 namespace tr::firstperson {
 inline float Length(Vec v) { return std::sqrt(Dot(v,v)); }
+// Looking around a planted torso lowers the neck along an arc even without
+// bending the knees. Remove that geometric component from visual crouch only.
+// A vertical squat has no horizontal lean and retains its complete height drop.
+inline float PlantedPostureDrop(float drop,float lean,float hipToNeck) {
+    if(!std::isfinite(drop+lean+hipToNeck) || hipToNeck<=0 || drop<=0) return drop;
+    const float horizontal=std::clamp(lean,0.f,hipToNeck*.8f);
+    const float arc=hipToNeck-std::sqrt(std::max(0.f,hipToNeck*hipToNeck-horizontal*horizontal));
+    return std::max(0.f,drop-arc);
+}
 inline Vec LimitLength(Vec v,float limit) {
     const float n=Length(v);return n>limit ? Scale(v,limit/n) : v;
 }
@@ -194,10 +203,28 @@ inline bool SolveBodyAtEye(const Frame (&native)[15],int anchorJoint,Vec anchor,
 // Lazy pelvis/footprint with a hard eye target. Preserve the authored torso
 // shape with bounded leaning; sparse neck joints absorb small head movement.
 // Hands are solved separately.
+// Choose the nearest knee bend on the two-bone circle that does not pass
+// below its authored kneeling support (or ankle height for an upright leg).
+// Only the bend direction changes: thigh/shin lengths and foot target stay fixed.
+inline Vec SupportedKneePole(const Frame (&chain)[3],Vec foot,Vec preferred,float limitY) {
+    const Vec delta=Sub(foot,chain[0].origin);Vec axis{};
+    const float distance=Length(delta);if(distance<.001f || !Unit(delta,axis)) return preferred;
+    const float a=Length(Sub(chain[1].origin,chain[0].origin)),b=Length(Sub(chain[2].origin,chain[1].origin));
+    const float along=(a*a-b*b+distance*distance)/(2*distance);
+    const float radius=std::sqrt(std::max(0.f,a*a-along*along));
+    Vec bend{};if(!Unit(Sub(preferred,Scale(axis,Dot(preferred,axis))),bend)) return preferred;
+    const float centreY=chain[0].origin.y+axis.y*along;
+    if(centreY+radius*bend.y<=limitY || radius<.001f) return preferred;
+    const Vec projected=Sub(Vec{0,-1,0},Scale(axis,-axis.y));Vec up{};
+    if(!Unit(projected,up)) return preferred;
+    const float required=std::clamp((centreY-limitY)/(radius*Length(projected))+.00001f,0.f,1.f);
+    Vec side{};if(!Unit(Sub(bend,Scale(up,Dot(bend,up))),side)) Unit(Cross(axis,up),side);
+    return Add(Scale(up,required),Scale(side,std::sqrt(std::max(0.f,1-required*required))));
+}
 inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,float yawDelta,
                                const Basis& headRotation,Vec forward,float scale,Vec rootOffset,
                                float headTwist,bool grounded,float stepPhase,float stepWeight,
-                               Frame (&posed)[15],float standingWeight=0) {
+                               Frame (&posed)[15],float standingWeight=0,float postureEyeOffset=0,Vec horizontalPostureOffset={},bool authoredKnees=false) {
     if(!std::isfinite(scale) || scale<=1 || !Finite({headRotation,eye}) ||
        !Finite({IdentityBasis(),rootOffset})) return false;
     for(const auto& joint:native) { Frame inverse{};if(!Finite(joint) || !Inverse(joint,inverse)) return false; }
@@ -211,7 +238,12 @@ inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,floa
     head.origin=Sub(eye,Transform(head.basis,localEye));
     // Position drives posture; orientation drives only the head. Rotating the
     // eye-to-neck offset must not masquerade as a lean/crouch and bend the chest.
-    const Vec postureHead=Sub(eye,Transform(footprint[14].basis,localEye));
+    // Separate posture target: fixed visual reserve minus the neck arc.
+    // The tracked head stays exact; looking down cannot become a moving squat.
+    // A controller-held footprint also holds the horizontal posture target.
+    // The hidden head and the rendered camera retain the true tracked eye.
+    const Vec postureHead=Add(Sub(eye,Transform(footprint[14].basis,localEye)),
+        {horizontalPostureOffset.x,postureEyeOffset,horizontalPostureOffset.z});
     const Vec displacement=Sub(postureHead,footprint[14].origin);
     const Vec spine=Sub(footprint[14].origin,footprint[0].origin);
     if(Length(spine)<.001f) return false;
@@ -221,7 +253,9 @@ inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,floa
     // Lara has one torso joint, not a multi-bone human spine. A two-bone arm
     // solve folds this chest like an elbow and can lift it into the camera.
     // Preserve the authored spine shape and apply a bounded coherent lean.
-    const Basis bend=LimitRotation(Align(spine,Add(spine,lean)),.34906585f);
+    // The impact animation already supplies its torso bend. Re-inferring it
+    // from the falling eye adds a second bend and separates camera from neck.
+    const Basis bend=authoredKnees ? IdentityBasis() : LimitRotation(Align(spine,Add(spine,lean)),.34906585f);
     const float heightShift=std::copysign(std::max(0.f,std::fabs(displacement.y)-.015f*scale),displacement.y);
     Vec pelvisShift{0,heightShift,0};
     const Vec bentHead=Add(footprint[0].origin,Transform(bend,spine));
@@ -231,6 +265,36 @@ inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,floa
     const float residualLength=Length(residual);
     if(residualLength>neckSlack) pelvisShift=Add(pelvisShift,
         Scale(residual,(residualLength-neckSlack)/residualLength));
+    if(authoredKnees && grounded) {
+        // The authored impact pose already supplies the deepest supported
+        // crouch. A headset dip must not drive the pelvis through its feet.
+        pelvisShift.y=std::min(0.f,pelvisShift.y);
+        float highest=-INFINITY;
+        for(int first:{1,4}) {
+            const float a=Length(Sub(footprint[first+1].origin,footprint[first].origin));
+            const float b=Length(Sub(footprint[first+2].origin,footprint[first+1].origin));
+            const Vec delta=Sub(footprint[first].origin,footprint[first+2].origin);
+            const float reach=a+b-.001f,horizontal=delta.x*delta.x+delta.z*delta.z;
+            if(horizontal<reach*reach) highest=std::max(highest,
+                -std::sqrt(reach*reach-horizontal)-delta.y);
+        }
+        pelvisShift.y=std::max(pelvisShift.y,std::min(0.f,highest));
+        // Keep both animated contacts reachable. Limit only the extra tracked
+        // lean, not the authored pelvis motion or the camera's impact bounce.
+        const Vec horizontal{pelvisShift.x,0,pelvisShift.z};
+        const double travel=Dot(horizontal,horizontal);
+        float fraction=1;
+        if(travel>1.e-8) for(int first:{1,4}) {
+            const float a=Length(Sub(footprint[first+1].origin,footprint[first].origin));
+            const float b=Length(Sub(footprint[first+2].origin,footprint[first+1].origin));
+            const Vec delta=Add(Sub(footprint[first].origin,footprint[first+2].origin),{0,pelvisShift.y,0});
+            const double reach=a+b-.001f,along=Dot(delta,horizontal);
+            const double c=Dot(delta,delta)-reach*reach;
+            fraction=std::min(fraction,float(std::clamp(
+                (-along+std::sqrt(std::max(0.,along*along-travel*c)))/travel,0.,1.)));
+        }
+        pelvisShift.x*=fraction;pelvisShift.z*=fraction;
+    }
     posed[0].origin=Add(footprint[0].origin,pelvisShift);
     posed[0].basis=footprint[0].basis;
     posed[7].origin=Add(posed[0].origin,Transform(bend,Sub(footprint[7].origin,footprint[0].origin)));
@@ -289,7 +353,15 @@ inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,floa
         const float length=Length(toFoot);if(!Unit(toFoot,direction)) direction={0,1,0};
         const float feasible=std::clamp(length,std::fabs(a-b)+.001f,a+b-.001f);
         foot.origin=Add(chain[0].origin,Scale(direction,feasible));
-        if(!SolveArm(chain,foot,forward,correction,nullptr,nullptr,false)) return false;
+        Vec pole=forward;
+        if(authoredKnees) {
+            Vec axis{};Unit(Sub(footprint[first+2].origin,footprint[first].origin),axis);
+            const Vec knee=Sub(footprint[first+1].origin,footprint[first].origin);
+            const Vec nativePole=Sub(knee,Scale(axis,Dot(knee,axis)));
+            if(Length(nativePole)>a*.05f) pole=nativePole;
+            pole=SupportedKneePole(chain,foot.origin,pole,std::max(footprint[first+1].origin.y,foot.origin.y));
+        }
+        if(!SolveArm(chain,foot,pole,correction,nullptr,nullptr,false)) return false;
         for(int j=0;j<3;++j) posed[first+j]=Multiply(correction[j],chain[j]);
         posed[first+2]=foot;
     }
@@ -298,7 +370,7 @@ inline bool SolveFollowingBody(const Frame (&native)[15],Vec anchor,Vec eye,floa
 }
 // Repose the torso against stable leg geometry. Positions are metres; the
 // tracked head stays exact and arms are subsequently solved to controllers.
-inline bool ReposeTorso(Frame (&pose)[15],const Frame (&target)[4],Vec forward,const Frame* planted=nullptr) {
+inline bool ReposeTorso(Frame (&pose)[15],const Frame (&target)[4],Vec forward,const Frame* planted=nullptr,bool authoredKnees=false) {
     Frame result[15];for(int j=0;j<15;++j) result[j]=pose[j];
     const Frame* legs=planted ? planted : pose;
     Frame inverseHip{},inverseChest{};
@@ -332,7 +404,15 @@ inline bool ReposeTorso(Frame (&pose)[15],const Frame (&target)[4],Vec forward,c
         if(a<.001f || b<.001f || !Unit(delta,direction)) return false;
         const float feasible=std::clamp(d,std::fabs(a-b)+.000001f,a+b-.000001f);
         if(std::fabs(feasible-d)>.000001f) foot.origin=Add(chain[0].origin,Scale(direction,feasible));
-        if(!SolveArm(chain,foot,forward,changes,nullptr,nullptr,false)) return false;
+        Vec pole=forward;
+        if(authoredKnees) {
+            Vec axis{};Unit(Sub(legs[first+2].origin,legs[first].origin),axis);
+            const Vec knee=Sub(legs[first+1].origin,legs[first].origin);
+            const Vec nativePole=Sub(knee,Scale(axis,Dot(knee,axis)));
+            if(Length(nativePole)>a*.05f) pole=nativePole;
+            pole=SupportedKneePole(chain,foot.origin,pole,std::max(legs[first+1].origin.y,foot.origin.y));
+        }
+        if(!SolveArm(chain,foot,pole,changes,nullptr,nullptr,false)) return false;
         for(int j=0;j<3;++j) result[first+j]=Multiply(changes[j],chain[j]);
         result[first+2]=foot;
     }

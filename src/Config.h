@@ -734,6 +734,7 @@ struct Config {
     float firstPersonBodyLeanRadiusMetres = .15f;
     float firstPersonBodyFollowSpeedMetres = .9f;
     float firstPersonBodyHandYawWeight = .15f;
+    float firstPersonArmLengthPercent = 100; // Manual arm fit, independent of body height (80..120).
     float firstPersonBodyScale = 0; // 0: calibrated standing fit; 1: original model size.
     float firstPersonBodyForwardCm = 0; // Cosmetic forward displacement; zero preserves the original fit.
     bool firstPersonPhysicalCrouch = true; // Native Duck from HMD height; opt out in INI.

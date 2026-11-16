@@ -31,7 +31,8 @@ void FirstPersonControlModeUpdate();
 // anchor, stable heading, roomscale drag and directional gait handling as one
 // unit. Called by the merged-pad Y+LT chord.
 void FirstPersonToggle();
-// Right Grip owns a nearby wall lever until release; otherwise retain Walk.
+// Right Grip owns a nearby lever or button interaction (including RT priority);
+// otherwise retain Walk. Buttons still activate through hand contact.
 bool FirstPersonSwitchGrip(bool down,bool allowed);
 // Preserve world/body heading when the runtime resets its tracking origin.
 void FirstPersonTrackingOriginChanged(float yawCorrection);
@@ -54,6 +55,9 @@ const float* FirstPersonHandSkin(int& wristJoint);
 const float* FirstPersonNativeBodySkin();
 const float* FirstPersonBodySkin(uint32_t& visibleJoints);
 bool FirstPersonBodyClearance(float out[4],uint64_t& mask);
+bool FirstPersonTorsoMeasureInfo(float inverse[12],uint64_t& mask,bool& measured);
+bool FirstPersonTorsoBufferKnown(unsigned buffer);
+void FirstPersonTorsoMeasure(unsigned buffer,const float low[3],const float high[3],unsigned vertices);
 uint32_t FirstPersonBodyWristSeamMask();
 // Complete tracked light-pass palette before native attachment masking.
 const float* FirstPersonShadowSkin(uint32_t& visibleJoints,uint32_t& wristJoints);

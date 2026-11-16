@@ -12,8 +12,9 @@ void ExerciseSidearmAnimation(Render render,MoveController moveController,MoveAn
     auto onControllers=[](const auto& pose) {
         for(int hand=0;hand<2;++hand) {
             Frame wrist{};Basis controller{};BuildControllerWrist(hand,wrist,controller);
+            wrist=ExpectedPublishedWrist(hand,wrist);
             Check(firstperson::Length(Sub(pose[hand?10:13].origin,wrist.origin))<.08f,
-                  "completed equip/unequip blend restores exact controller wrists");
+                  "completed equip/unequip blend restores reachable controller wrists");
         }
     };
     g_pistolAnimation.Reset();

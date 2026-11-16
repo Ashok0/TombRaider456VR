@@ -301,10 +301,12 @@ bool UpdateSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
     auto& p=g_switchPreview;
     if(!p.active) return false;
     const float scale=LiveWorldUnitsPerMetre();
-    if(now<p.lastTime || now-p.lastTime>250 || SwitchLength(Sub(hand,p.lastHand))>scale*.4f) {
-        ParkSwitchPreview();g_switchGripClaimed=false;return false;
-    }
+    // A stalled simulation or a tracking discontinuity is not a grip release.
+    // Ignore that sample, then resume from valid tracked motion on the next tick.
+    const bool discontinuity=now<p.lastTime || now-p.lastTime>250 ||
+        SwitchLength(Sub(hand,p.lastHand))>scale*.4f;
     p.lastTime=now;p.lastHand=hand;
+    if(discontinuity) return false;
     const auto contact=Add(hand,p.handOffset);
     if(p.valve) {
         motiongun::Frame inverse{};
@@ -333,7 +335,9 @@ bool UpdateSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
         // Prefer the earlier pose where the authored clip has stationary frames.
         if(distance<nearest-.01f) { nearest=distance;selected=i; }
     }
-    if(nearest>scale*scale*.25f*.25f) { ParkSwitchPreview();g_switchGripClaimed=false;return false; }
+    // Keep the hand attached during an imprecise pull. Progress resumes when
+    // it returns to the arc; SwitchReach still rejects a distant hand/body.
+    if(nearest>scale*scale*.25f*.25f) return false;
     p.selected=selected;p.grip=p.points[selected];
     SwitchPoseMatrices(item,p.path.poses[selected]);
     std::memcpy(item+off::item_joints_prev,item+off::item_joints_cur,1584); // no automatic interpolation away from the grabbed pose
@@ -349,13 +353,15 @@ bool UpdateSwitchPreview(uint8_t* item,motiongun::Vec hand,uint64_t now) {
 bool SwitchReach(uint8_t* target,uint8_t* lara,motiongun::Vec hand,float& distance,bool grabbed) {
     const int object=*reinterpret_cast<const int16_t*>(target+16);
     const int state=*reinterpret_cast<const int16_t*>(target+off::item_anim_state);
-    const int idleAnimation=g_boundDll->module[4]==L'3' ? 103 : 11;
+    // All three games enter STOP through 11, then settle into idle loop 103.
+    // Requiring only the entry clip makes a stationary TR1/2 Lara ungrabbable.
+    const int animation=*reinterpret_cast<const int16_t*>(lara+off::item_anim_number);
     const auto* special=SpecialSwitch(target);
     if ((object!=WallSwitchObject() && !special) || (special && special->wheel && special->game==2 && state!=0) || (state!=0 && state!=1) ||
         (*reinterpret_cast<const uint16_t*>(target+off::item_flags)&6) ||
         (*reinterpret_cast<const uint16_t*>(target+44)&0x100) ||
         *reinterpret_cast<const int16_t*>(lara+off::item_anim_state)!=2 ||
-        *reinterpret_cast<const int16_t*>(lara+off::item_anim_number)!=idleAnimation ||
+        (animation!=11 && animation!=103) ||
         (*reinterpret_cast<const uint16_t*>(lara+off::item_flags)&8)) return false;
     const auto& pos=*reinterpret_cast<const PHD_3DPOS*>(target+off::item_pos);
     if (pos.x_rot || pos.z_rot) return false;
@@ -377,11 +383,22 @@ bool SwitchReach(uint8_t* target,uint8_t* lara,motiongun::Vec hand,float& distan
     if (height<bounds[2] || height>bounds[3]) return false;
     const auto local=locomotion::Rotate({hand.x-pos.x_pos,hand.z-pos.z_pos},-locomotion::Radians(pos.y_rot));
     const auto bodyLocal=locomotion::Rotate({float(body.x_pos)-float(pos.x_pos),float(body.z_pos)-float(pos.z_pos)},-locomotion::Radians(pos.y_rot));
-    if (bodyLocal.z>nativeBounds[4] || local.z>nativeBounds[5]+16) return false;
+    if (bodyLocal.z>nativeBounds[4] || (!grabbed && local.z>nativeBounds[5]+16)) return false;
     const float scale=LiveWorldUnitsPerMetre();
     const float dx=bodyLocal.x-std::clamp(bodyLocal.x,float(nativeBounds[0]),float(nativeBounds[1]));
     const float dz=bodyLocal.z-std::clamp(bodyLocal.z,float(nativeBounds[4]),float(nativeBounds[5]));
     if (!std::isfinite(scale) || scale<=1 || dx*dx+dz*dz>scale*scale*.9f*.9f) return false;
+    if(grabbed && g_switchPreview.active && !g_switchPreview.valve) {
+        // The moving handle can leave its original idle bounds, especially
+        // when lifting it. Check the authored arc, including the grab offset.
+        const auto contact=Add(hand,g_switchPreview.handOffset);distance=1.e30f;
+        for(int i=0;i<g_switchPreview.path.count;++i) {
+            const auto delta=Sub(contact,g_switchPreview.points[i]);
+            distance=std::min(distance,motiongun::Dot(delta,delta));
+        }
+        return std::isfinite(contact.x) && std::isfinite(contact.y) &&
+            std::isfinite(contact.z) && distance<=scale*scale*.6f*.6f;
+    }
     if(special) {
         motiongun::Vec jointLocal{},grip{};
         if(!SpecialGripPoint(target,hand,jointLocal,grip)) return false;
@@ -494,8 +511,16 @@ bool AdvancePhysicalSwitch(uint8_t* lara,void* collision,uint64_t now) {
     motiongun::Vec hand{};float distance=0;
     if (!PhysicalSwitchReady() || !g_switchGripDown || !target ||
         lara!=*Ptr<uint8_t*>(g_boundDll->laraItem) ||
-        !SwitchHand(hand) || !SwitchReach(target,lara,hand,distance,true) ||
         *reinterpret_cast<int16_t*>(target+18)!=g_switchGrab.state) {
+        ParkSwitchPreview();g_switchGripClaimed=false;return false;
+    }
+    if(!SwitchHand(hand)) {
+        // Brief controller occlusion freezes the handle without demanding a
+        // release/regrab. Prolonged tracking loss relinquishes it as before.
+        if(now>=g_switchPreview.lastTime && now-g_switchPreview.lastTime<=750) return false;
+        ParkSwitchPreview();g_switchGripClaimed=false;return false;
+    }
+    if(!SwitchReach(target,lara,hand,distance,true)) {
         ParkSwitchPreview();g_switchGripClaimed=false;return false;
     }
     if (!UpdateSwitchPreview(target,hand,now)) return false;
@@ -545,8 +570,7 @@ bool UpdatePhysicalSwitchGrip(bool down,bool allowed,uint64_t now) {
         if (!allowed || !PhysicalSwitchReady()) g_switchCandidate={};
         return false;
     }
-    if (g_switchGripClaimed && (!SwitchItem(g_switchGrab) ||
-        (!g_switchCompleted && (now<g_switchPreview.lastTime || now-g_switchPreview.lastTime>250)))) {
+    if (g_switchGripClaimed && !SwitchItem(g_switchGrab)) {
         ParkSwitchPreview();
         g_switchCompleted=false;g_switchGripClaimed=false;
     }

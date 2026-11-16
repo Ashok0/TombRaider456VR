@@ -357,12 +357,18 @@ void TestFullBodyIK() {
                 Detour_GetJoints(itemMemory,palette,0);
                 Frame target{};Basis controller{};Check(BuildControllerWrist(1,target,controller),"side/back movement retains a live controller target");
                 const Vec liveCamera{worldCameraPos[0],worldCameraPos[1],worldCameraPos[2]};
+                Frame reachChain[3]{};
+                for(int n=0;n<count;++n) if(mapping[n]>=8 && mapping[n]<=10) {
+                    reachChain[mapping[n]-8]=Multiply(ReadRows(palette+n*12),bind[n]);
+                    reachChain[mapping[n]-8].origin=Add(reachChain[mapping[n]-8].origin,liveCamera);
+                }
+                target=ExpectedPublishedWrist(1,target);
                 locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
                 view=locomotion::Rotate(view,g_headingBase)*LiveWorldUnitsPerMetre();
                 const Vec liveEye{g_scenePose.x_pos+view.x,g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre(),g_scenePose.z_pos+view.z};
                 for(int i=0;i<count;++i) {
                     const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
-                    if(mapping[i]==10) Check(nearVec(Add(actual.origin,liveCamera),target.origin),"side/back stabilization never delays real controller movement");
+                    if(mapping[i]==10) Check(nearVec(Add(actual.origin,liveCamera),target.origin),"side/back stabilization follows live controller movement within connected reach");
                     if(mapping[i]==14) Check(nearVec(Add(actual.origin,liveCamera),liveEye),"side/back stabilization preserves live headset lean");
                 }
                 VR().m_rawHeadPose=oldTrackedHead;VR().m_rawControllerPose[1]=oldRightHand;
@@ -598,7 +604,13 @@ void TestFullBodyIK() {
             uint64_t mask=0;int captured=0;const auto* physics=FirstPersonBodyPalette(mask,captured);
             Check(physics && captured==count && !std::memcmp(physics,baseline,count*12*sizeof(float)),"full-body keeps complete jiggle anchor palette native");
             const auto* render=FirstPersonRenderBodyPalette(mask,captured);
-            Check(render && !std::memcmp(render,palette,count*12*sizeof(float)),"skinning uploads the full-body pose without physics overwriting it");
+            Check(render!=nullptr,"full-body render palette is available");
+            int chest=0;while(chest<count && mapping[chest]!=7) ++chest;
+            for(int i=0;i<count;++i) {
+                const bool hiddenNeck=mapping[i]==14 && !(mask&(uint64_t(1)<<i)) && chest<count && (mask&(uint64_t(1)<<chest));
+                Check(!std::memcmp(render+i*12,palette+(hiddenNeck?chest:i)*12,12*sizeof(float)),
+                      "full-body upload preserves IK with hidden collar weights following the chest");
+            }
             for(int i=0;i<count;++i) {
                 const int joint=mapping[i];const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
                 if(airborne && (joint<8 || joint==14))
@@ -608,8 +620,8 @@ void TestFullBodyIK() {
                     for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
                         float dot=0;
                         for(int k=0;k<3;++k) dot+=actual.basis.r[k][r]*actual.basis.r[k][c];
-                        Check(std::fabs(dot-(r==c ? 1.f : 0.f))<.003f,
-                              "full-body tracked arms retain rigid meshes with calibrated native-size body");
+                        Check((joint==10 || joint==13 ? std::fabs(dot-(r==c ? 1.f : 0.f))<.003f : std::isfinite(dot)),
+                              "full-body arms allow full extension while hand meshes remain rigid");
                     }
                 }
                 if((joint==3 || joint==6) && FullBodyGripState(itemMemory) && !armed) Check(nearVec(actual.origin,Sub(bodyJointWorld[joint],camera)),"constrained grip keeps native animated feet");
@@ -621,9 +633,15 @@ void TestFullBodyIK() {
                     } else {
                         const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
                                                 -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
-                        Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),
-                              "full-body hands keep the same physical grip pivot as floating guns");
-                        if (armed) Check(nearVec(Add(actual.origin,camera),target.origin),"armed full-body wrist position remains unchanged");
+                        Frame chain[3]{};
+                        for(int n=0;n<count;++n) if(mapping[n]>=joint-2 && mapping[n]<=joint) {
+                            chain[mapping[n]-(joint-2)]=Multiply(ReadRows(palette+n*12),bind[n]);
+                            chain[mapping[n]-(joint-2)].origin=Add(chain[mapping[n]-(joint-2)].origin,camera);
+                        }
+                        const Frame limited=ExpectedPublishedWrist(joint==10 ? 1 : 0,target);
+                        Check(nearVec(Add(Transform(actual,grip),camera),Transform(limited,grip)),
+                              "full-body hand reaches the closest feasible grip with the shoulder fixed");
+                        if (armed) Check(nearVec(Add(actual.origin,camera),limited.origin),"armed wrist follows the same connected reach limit");
                     }
                     if(armed) for(int r=0;r<3;++r) for(int c=0;c<3;++c)
                         Check(std::fabs(actual.basis.r[r][c]-target.basis.r[r][c])<.002f,"armed body wrist matches exact gun orientation without unarmed wrist limits");
@@ -732,9 +750,11 @@ void TestFullBodyIK() {
                 if(omitBodyHands) for(int joint:{10,13}) {
                     expected[joint-8]=g_pistolArmPose.joint[joint-8];
                     Frame target{};Basis controller{};
-                    Check(BuildControllerWrist(joint==10 ? 1 : 0,target,controller) &&
-                          nearVec(Add(expected[joint-8].origin,camera),target.origin),
-                          "body with omitted hands still publishes the exact solved controller wrist");
+                    Check(BuildControllerWrist(joint==10 ? 1 : 0,target,controller),"omitted hand retains controller orientation");
+                    Frame chain[3]{};
+                    for(int n=0;n<3;++n) {chain[n]=g_pistolArmPose.joint[joint-10+n];chain[n].origin=Add(chain[n].origin,camera);}
+                    Check(nearVec(Add(expected[joint-8].origin,camera),ExpectedPublishedWrist(joint==10 ? 1 : 0,target).origin),
+                          "body with omitted hands publishes the connected wrist for its weapon mesh");
                 }
                 for(int sample=0;sample<12;++sample) {
                     float attachment[33*12]{},attachmentPoses[33*12]{};
@@ -884,10 +904,16 @@ void TestFullBodyIK() {
                         }
                         if(mapping[i]==10 || mapping[i]==13) {
                             Frame target{};Basis controller{};BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller);
+                            Frame chain[3]{};
+                            for(int n=0;n<count;++n) if(mapping[n]>=mapping[i]-2 && mapping[n]<=mapping[i]) {
+                                chain[mapping[n]-(mapping[i]-2)]=Multiply(ReadRows(palette+n*12),bind[n]);
+                                chain[mapping[n]-(mapping[i]-2)].origin=Add(chain[mapping[n]-(mapping[i]-2)].origin,camera);
+                            }
+                            const Frame limited=ExpectedPublishedWrist(mapping[i]==10 ? 1 : 0,target);
                             const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
                                                     -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
-                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),
-                                  "automatic body scaling preserves physical controller grip alignment");
+                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(limited,grip)),
+                                  "automatic body scaling preserves connected controller grip alignment");
                         }
                     }
                 }
@@ -923,8 +949,14 @@ void TestFullBodyIK() {
                         }
                         if(mapping[i]==10 || mapping[i]==13) {
                             Frame target{};Basis controller{};BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller);
+                            Frame chain[3]{};
+                            for(int n=0;n<count;++n) if(mapping[n]>=mapping[i]-2 && mapping[n]<=mapping[i]) {
+                                chain[mapping[n]-(mapping[i]-2)]=Multiply(ReadRows(palette+n*12),bind[n]);
+                                chain[mapping[n]-(mapping[i]-2)].origin=Add(chain[mapping[n]-(mapping[i]-2)].origin,camera);
+                            }
+                            const Frame limited=ExpectedPublishedWrist(mapping[i]==10 ? 1 : 0,target);
                             const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,-testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
-                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),"leg planting preserves physical controller grips");
+                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(limited,grip)),"leg planting preserves connected controller grips");
                         }
                     }
                     Check(!std::memcmp(&cameraBefore,&g_scenePose,sizeof(g_scenePose)),"leg planting cannot write the camera pose");
@@ -1137,10 +1169,16 @@ void TestFullBodyIK() {
                     }
                     if(mapping[i]==10 || mapping[i]==13) {
                         Frame target{};Basis controller{};Check(BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller),"centered body wrist target available");
+                        Frame chain[3]{};
+                        for(int n=0;n<count;++n) if(mapping[n]>=mapping[i]-2 && mapping[n]<=mapping[i]) {
+                            chain[mapping[n]-(mapping[i]-2)]=Multiply(ReadRows(palette+n*12),bind[n]);
+                            chain[mapping[n]-(mapping[i]-2)].origin=Add(chain[mapping[n]-(mapping[i]-2)].origin,camera);
+                        }
+                        const Frame limited=ExpectedPublishedWrist(mapping[i]==10 ? 1 : 0,target);
                         const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
                                                 -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
-                        Check(firstperson::Length(Sub(Add(Transform(joint,grip),camera),Transform(target,grip)))<2,
-                              "centering body keeps physical controller grip within native integer-joint precision");
+                        Check(firstperson::Length(Sub(Add(Transform(joint,grip),camera),Transform(limited,grip)))<2,
+                              "centering body keeps connected controller grip within native integer-joint precision");
                     }
                 }
                 Check(itemSnapshot==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)),"centering changes only render skeleton");

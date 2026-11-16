@@ -1,22 +1,205 @@
 ## Tomb Raider I-III Remastered VR Mod
 
+Ordinary jumps clear any leftover body-hiding delay from an earlier landing or
+ledge transition, preventing the torso from suddenly reappearing during flight.
+The reaching animation keeps the same stabilized jump eye until Lara catches
+the ledge. Forward, reaching and straight-up jumps retain the calibrated mesh
+size through the contact frame where native collision clears gravity, avoiding
+a brief switch to the larger native mesh. Temporary controller-tracking loss or
+a hands-busy flag also keeps the airborne torso fit and its small near-eye trim;
+hand tracking resumes when available. Hanging still hides the torso.
+Straight-up jumps also keep the calibrated upright torso orientation through
+ascent and descent, matching forward jumps so the open neck cannot tip toward
+the eyes. The camera, native jump arc, leg motion and tracked wrists are preserved.
+
+When both motion controllers stay in the same tracked positions, Lara's
+horizontal body position and physical facing are held while you move or turn
+your head. The view and controller hands remain fully tracked. Small independent controller drift does not release the hold. Coordinated
+head and both-controller travel of roughly 2.5 cm can release the positional
+hold after repeated directional evidence. Initialization starts planted; a
+single coincident head/hand adjustment is insufficient. While looking aside,
+the detector compares gaze with the controller-facing reference and requires
+stricter agreement between the hands. It returns to the planted state when
+step confidence expires or direction becomes ambiguous. A lower continuation
+threshold preserves confirmed slow movement.
+After 120 ms without that movement the body holds again.
+Both controllers must travel together by comparable amounts, and physical
+turns must rotate the line between them along with the headset. Unrelated
+hand gestures and sideways head glances do not count as body movement.
+The step detector discards incoherent displacement immediately. A confirmed
+step consumes only its own neck-space travel; it cannot release a pending turn's
+position reference. Position references that differ from the refreshed neck
+observation by more than 8 cm are retired without moving the held mesh.
+Accepted turn-position corrections are consumed continuously, limited to current
+head travel plus 1.35 metres per second of catch-up. Unconsumed turn progress
+remains in its original frame so limiting a correction does not redefine the
+remaining displacement as an intentional lean. Capture-derived regression
+inputs cover the intermittent large position jumps; in-headset confirmation
+is still required.
+A turn's pending body-position adjustment also needs fresh movement evidence.
+A new head glance cannot combine with controller motion left over from a turn
+or step to slide the mesh. Head-only travel retires the stale position sample;
+real steps retain their separate movement test. Standing-height calibration and
+normal headset tracking are unchanged.
+
+Looking down around Lara's holsters also lowers your head as you lean around
+your hips. Visual posture uses the calibrated torso length and the head's
+horizontal displacement from the held body anchor to account for that arc,
+so a side lean does not automatically lower the pelvis as though you crouched.
+A vertical crouch retains its height change; camera tracking and standing-height
+calibration remain independent of this visual correction.
+
+Roomscale turning estimates whether your stance is planted using the headset
+and both controller positions. Small hand adjustments during a head glance are
+not enough to turn Lara. Starting a turn requires repeated coordinated samples,
+at least 120 ms of evidence, roughly 13 degrees of controller-frame rotation,
+and at least 7 cm of travel from each hand. Head movement must agree with that
+rotation and the three tracked positions must remain consistent with a shared
+body turn. The conservative onset deliberately favors a stable planted mesh.
+Once a turn is established, facing blends each hand's calibrated bearing around
+an estimated body center with the accepted controller-frame heading. Hand reach
+sets the relative influence of the two arm hints. This reduces the effect of
+asymmetric arm motion on torso facing. Head movement validates turn intent;
+live gaze does not enter the facing blend during an established hold.
+The lower body uses an angular lock: an accepted error exceeding 6 degrees
+releases it, then elapsed-time smoothing follows the target continuously.
+A short motion history tolerates a missed turn sample during arm articulation.
+Unchanged controller samples end that permission promptly, and expired motion
+cannot be revived by a later glance. Head-led glances with smaller hand motion
+can also end a turn. Fresh coordinated evidence is required to begin again.
+Hands closer than 5 cm still cannot authorize a new controller-frame turn;
+turn detection can reacquire when they separate.
+Walking has its own observation window, independent of turn updates. It compares
+shared headset/controller travel after accounting for rotation, so a real step
+can continue while turning and with modest opposing arm swing. Head-led glances
+use stricter agreement checks. During a head-led glance, step estimation removes
+the observed rotation of the controller pair before comparing translation.
+It cannot ignore that aiming rotation or substitute headset yaw to obtain a
+closer fit. This prevents small aiming arcs with extended arms from being
+mistaken for sideways steps. With head and body facing together, alternate
+fits still accommodate opposing arm swing during walking and turning.
+For a planted, head-led glance with both hands raised, movement admission
+compares the compensated
+neck and both hands around the held body pivot. A torso swivel around that
+stance does not automatically become a sideways step merely because the neck
+moved. Residual shared displacement still permits a step in any direction.
+The gaze evidence uses the raw headset forward vector even when locomotion yaw
+is held near vertical; camera/body heading retains its stabilized yaw. Separate
+raw-gaze and stabilized-yaw references prevent switching modes from combining
+unrelated angles. Confirmed walking and whole-body turns retain their existing
+movement transport, distance thresholds and timing checks. Lowered-hand
+movement detection retains its previous behavior.
+When looking steeply down with both hands raised, the detector also checks
+whether their shared motion fits a torso lean around a point behind the head.
+That evidence can keep the body planted when the hands are held closer to the
+chest. A fitted pivot beside or in front of the head cannot block a step;
+fresh shared translation releases the hold. This admission check does not
+cancel an established roomscale step or turn. Recorded close-hand glances,
+forward/backward steps, sidesteps and turns are covered by regression tests.
+A combined turn and step applies shared travel once. These devices cannot directly measure feet, so stance remains an estimate
+rather than foot tracking.
+Facing and body position use separate movement references. Changing arm reach
+cannot replay an old hand position as a forward or backward body jump when a
+turn resumes. Once fresh headset/controller movement agrees, placement carries
+the existing body-to-neck offset through the accepted turn and step, without
+accumulating hand-fitting errors. During a confirmed curved step, stronger
+three-device agreement allows one hand to travel less near the turning pivot.
+The facing blend cannot reposition the body or inherit head-only sway.
+The camera and tracked hand targets remain unchanged. Ordinary head motion
+never transports that anchor. Physical steps and stick locomotion still release
+the positional hold, independently of the angular stance decision.
+The leg solver's footprint is transported with that accepted anchor before
+rotation, keeping the feet and pelvis in the same frame through repeated turns.
+The step detector compensates the eye-to-neck arc using the tracked headset's
+horizontal forward-vector projection, including pitch. Looking down shortens
+that horizontal offset; treating it as a level-head offset would manufacture
+sideways movement during a downward glance. Each movement reference retains
+its own neck projection so changes in pitch cannot rewrite an older sample.
+Camera tracking and height calibration remain unchanged. Forward, backward and
+sideways physical travel still use the shared head/controller displacement.
+With `FirstPersonDriftLog` enabled, `body-input` records each processed tracked
+pose's full anchor inputs and result; `body-input-reset` marks explicit resets.
+These records support direct replay instead of reconstructing tracking from
+sparse render samples. `tools/body_anchor_replay.cpp` replays a captured log
+and checks the recorded anchor positions and movement flags.
+Once the controllers confirm a step, gameplay movement uses the configured
+roomscale deadzone rather than adding the body's larger lean deadzone. Native
+wall, floor and ledge collision still owns the movement; initialization or a
+head-only glance does not grant permission to move the gameplay root.
+Physical movement carries only the detected travel; it does not pull the body
+across an accumulated head lean. While held, horizontal posture and chest
+clearance corrections also stay anchored, so looking down and around Lara
+does not make the torso dodge your head. Vertical crouching and tracked hand IK
+remain active.
+Stick locomotion/turning still works. Tracking loss, recentering and game changes
+clear the hold. Native jumps and vertical crouching remain available.
+
+Physical turns use coordinated headset and both-hand movement to turn the body
+around the same eye-relative pivot as stick turns. This keeps the mesh closer to
+your facing when you turn your whole body, while retaining head-turn freedom for
+looking around. Hand gestures alone do not turn the body. Without reliable
+matching hand movement, the usual head-turn slack remains; this is an inference,
+not waist tracking. `FirstPersonBodyHandYawWeight=0` disables this assistance.
+
+Automatic body sizing also checks the visible collar with the legs fully
+extended. It targets 25 cm of room below the standing eye position, reducing
+the rendered body uniformly by at most 15% from its initial height fit. This
+keeps the standing torso lower while preserving proportions and floor contact.
+The fit stays fixed until recentering or a model change; looking down does not
+repeatedly resize Lara. Camera height and controller targets are unchanged.
+An explicit `FirstPersonBodyScale` value bypasses this automatic refinement.
+Looking down uses the same neck-arc compensation while standing, running and
+crouching, so the moving torso does not sink by the headset's neck-rotation arc.
+Real crouching still lowers the body.
+Ordinary jumps retain that calibrated visual size and the measured torso
+clearance check. Native airborne leg poses scale with the body instead of
+switching back to the larger mesh; standing foot planting stays off in flight.
+Tracked hands remain connected, and the camera and gameplay jump path are unchanged.
+Forward and reaching jumps keep the calibrated upright torso orientation to
+avoid exposing the open collar; the hips and legs retain their native jump
+animation. First-person head hiding also keeps the braid hidden during jumps.
+
+Full-body IK measures the rendered torso and checks both eye clearance and the
+short space below the eyes after applying Body Position. A bounded upper-torso
+bend (up to 12 degrees) addresses chest clipping as the legs straighten, preserving
+hip height and planted feet. Shoulders follow the torso and hands solve back to
+the controllers. Correction keeps up with the rising torso and eases back when
+clear. Extreme leaning can exceed the limit; the skeleton-based guard is used
+until mesh measurements are available. The emergency near-eye trim remains
+3 cm while correction is active. No opaque caps or replacement surfaces are drawn.
+
+Chest physics compares root and torso directions in the same render frame,
+preventing camera orientation from reversing the front/back deformation region.
+Existing spring strength and damping settings are preserved.
+
 Native stereoscopic 3D with 6DOF head tracking for *Tomb Raider I-III Remastered*
 (`tomb123.exe`), covering all three games.
 
 ## Recent updates
 
-### Connected arms and visible hanging body (2026-11-04)
+### Connected arms and hanging visibility (2026-11-04)
 
-In TR1-3 first person, tracked arms now keep their shoulders attached to the
-rendered torso, including during jump and landing smoothing. Hands and weapons
-retain their controller positions and orientations. Reachable poses retain their
-normal proportions; reaching beyond Lara's arm length extends the arm bones only
-as required, preserving mesh thickness and hand/gun size. Close reaches fold
-smoothly, and holster transitions preserve the connected arm shape.
+Tracked arms keep their shoulders attached to the body and preserve upper-arm
+and forearm lengths. When a controller goes beyond Lara's reach, the visible
+hand and weapon stop at the closest reachable position; they match the
+controller again as it returns within reach. Wrist orientation remains tracked,
+and hand poses are unchanged. Guns, muzzle origins and flare lights follow the
+limited hand position. This also prevents the shoulder from detaching when a
+controller comes too close to it. Lara's calibrated proportions may differ from
+your own, so an extended virtual hand can stop short of your real hand.
 
-Ledge hangs, shimmies and supported monkey-bar traversal now show the torso and
-legs as well as the arms. Native grip contacts and climbing physics are unchanged.
-Existing head hiding, local headset clearance, mount/crouch restrictions and
+Native holster animations, climbing contacts and the native landing-animation
+handoff retain their existing behavior. This change does not adjust roomscale
+movement inference, standing height or camera placement.
+
+With the head hidden, shared collar vertices follow the final chest pose during
+crouch recovery. Only the rendered palette changes: camera tracking, torso
+fitting, native shadows and the chest-physics input remain unchanged.
+
+Ledge hangs, shimmies and supported monkey-bar traversal use arms-only rendering
+again: the camera-clearance cutout cannot seal the body's exposed interior.
+Native grip contacts and climbing
+physics are unchanged. Existing head hiding, mount/crouch restrictions and
 somersault hiding remain. Changes are visual only; no INI reset is required.
 
 ### Jump body centering after VR turns (2026-11-04)
@@ -1893,8 +2076,11 @@ your hand through the lever's travel: the lever and Lara's IK hand follow the
 native animation path, including pauses and reversals. Releasing before the end
 stop leaves the lever at its current position without activation. Walk into
 reach and regrab to resume; an off-centre regrab does not jump or rewind the lever.
-Pulling off the arc, starting to move, or briefly losing tracking also releases
-the hand while retaining progress. Reaching the end activates the native switch once without
+Small deviations from the arc pause travel while RG keeps the hand attached;
+returning to the arc resumes the pull. Brief controller occlusion (up to 750 ms)
+and simulation stalls also retain the grab. Moving Lara, prolonged tracking loss,
+or pulling more than 60 cm from the arc releases it while retaining progress.
+Reaching the end activates the native switch once without
 moving Lara or switching the camera to third person. Release before grabbing
 again. In first person, Right Grip still means Walk away from a lever.
 The [third-person backward-hop shortcut](#third-person-backward-hop) is separate.
@@ -1902,22 +2088,29 @@ Both-grip Action, menus,
 Photo Mode and Y/trigger chords take priority.
 
 The Action icon does not need to be visible or active. Squeezing Right Grip
-queries nearby wall levers directly using the visible calibrated palm (18 cm to grab,
-40 cm while holding), independently of the native
+queries nearby wall levers directly using the visible calibrated palm (18 cm to grab),
+independently of the native
 horizontal Action zone. Lara must remain within 90 cm horizontally of the
 lever's mesh, on its usable side and within native floor-height limits.
 Native Y/Action bounds and third-person controls are unchanged. A clear line
 from the eye to the hand is required. The pull updates on Lara's simulation tick
 even without a native switch collision visit.
-Input priority remains as ported: either trigger, System, Photo Mode or Action
-cancels a grab so equipping weapons and changing modes take precedence.
+Once grabbed, ordinary and small levers use their moving animation path for
+hand reach, so lifting a handle beyond its resting bounds does not detach it.
+RG takes priority over RT at supported levers, small switches and airlock wheels:
+RT neither cancels the grab nor draws/fires a weapon during it. RG within 10 cm
+of a supported push-button face also consumes RT while touch operates the button.
+Away from these interactions, RT and RG retain their usual functions.
+LT, System, Photo Mode and Action still cancel a grab.
 
 This interaction is ported from TR4/5 for TR1, TR2 and TR3 ordinary wall levers.
 Underwater switches and other unsupported special
 mechanisms retain native **Y / Action**, including its temporary third-person
 animation. Recentring, explicit reset, and native Action takeover restore the
 original lever pose; retained previews cannot overwrite script-modified items.
-TR3 uses its own standing animation (103) for grab eligibility; TR1/2 use 11.
+All three games accept standing entry (11) and the settled idle loop (103) for
+grab eligibility. Restricting TR1/2 to entry 11 previously blocked grabs after
+Lara settled into her normal standing loop.
 No INI changes are required. The existing motion-gun
 and unarmed-IK settings control whether the attached hand is visible.
 TR5's type-4 subtype does not exist in TR1–3's native switch handlers; these
@@ -2344,6 +2537,14 @@ heading. The same tracking pivot as a right-stick turn preserves roomscale lean,
 and the standing eye anchor rotates to Lara's new facing direction. No second
 body turn is injected. Third person and water/air roll states keep their native
 behavior. Headset confirmation is still needed for the new first-person turn.
+
+Remastered body tracking preserves the body's facing relative to its cached
+tracking frame when a roll turns the VR camera. Input and roomscale reads can
+run before the next body draw; they now account for that pending turn instead
+of planting the torso 180 degrees backward or undoing Lara's native turn.
+`tests/build_roll_body.cmd` reproduces that ordering and verifies body facing,
+shoulder order and both controller wrists through two consecutive rolls in
+TR1–3, including reset/expired body caches and armed/unarmed rendering.
 
 During ground-roll states the camera follows its interpolated animated head
 anchor and retains the drop toward the ground. After horizontal wall clearance,
@@ -3409,3 +3610,120 @@ checks and the existing ground-movement regressions. The original first-person
 simulation, ground-gait and directional-jump paths were compared against their
 pre-shortcut versions. In-headset confirmation of the corrected shortcut is
 still needed.
+
+
+### Native first-person fall landings (2026-11-14)
+
+During a hard-fall impact and its recovery animation, Lara's native animation
+controls her torso, legs, arms, hands and weapons. Full-body VRIK, arm-only IK
+and tracked weapon placement pause for the entire clip. The body keeps its
+calibrated uniform visual scale and menu placement; joint angles and limb
+positions come from the animation, without extra knee or wrist constraints.
+Ordinary jumps and their existing quick landing behavior are unchanged.
+
+When the native clip ends, VRIK clears its transient body, torso, arm and weapon
+pose caches and starts from the current tracking data. This is a pose restart,
+not a height recalibration: standing height, body size, headset tracking and
+physical movement inference remain intact. During the clip, the visible hands
+and guns follow the canned animation instead of the controllers.
+
+The landing camera retains the improved animated dip and rise. It uses the
+calibrated neck reserve and at least 25 cm above the measured upper torso,
+matching standing torso fitting. Missing or stale outfit measurements retain
+the neck/reserve fallback. Camera clearance does not move or bend the native
+landing skeleton, and does not feed last frame's rendered pose into the camera.
+
+Regression checks cover extracted TR1-5 impacts and standing recovery, native
+joint positions and rotations, calibrated size, IK suspension, rendering hooks,
+armed/unarmed states, physical headset lowering and measured torso clearance.
+The native animation palette used for chest physics remains untouched. With
+drift logging enabled, `landing-native` records the animation, visual scale and
+above-collar camera clearance. In-headset confirmation remains necessary.
+
+### Downward head-led inspection hold (2026-11-14)
+
+When looking down toward Lara's holsters, a head turn that leads the controller
+frame by more than 20 degrees now holds the inferred body facing when the
+tracked head/hand arc also indicates a planted torso inspection. Later hand
+movement cannot retroactively turn that same inspection into a whole-body turn.
+The hold releases when the gaze rises, returns near the body's facing, or the
+movement stick is used. Coordinated head/controller turns can still start while
+looking down, and the hold does not disable roomscale translation.
+
+This is a conservative compromise with head-and-hand tracking: a real body turn
+started after such an inspection may require raising or centering the gaze
+first. The classifier has no direct foot tracking. A captured post-ladder glance
+reproduces the previous false turn; regressions also cover coordinated turns at
+60/90/120 Hz, different arm extensions, and walking in all four directions.
+Height calibration, the native landing-animation handoff, and camera clearance
+are unchanged. In-headset confirmation remains necessary.
+
+### Sustained lowered inspection (2026-11-14)
+
+A steep downward inspection now also holds body facing when the tracked head is
+more than 18 cm below calibrated standing height. This covers glances where the
+head and hands turn together, which could previously start rotating the mesh
+after a few seconds. The hold neither expires nor releases just because a glance
+crosses the center of the body. It uses raw physical height, not the animated
+landing camera or posture compensation.
+
+Looking up, rising to within 10 cm of standing height, or using the movement
+stick releases this additional hold. A matching straight displacement of the
+head and both controllers also releases it and allows two seconds of physical
+turn continuation. Roomscale translation retains its existing algorithm.
+A genuine turn begun while deeply lowered and inspecting can require looking
+up or straightening first; this conservative facing hold cannot directly track
+the feet. Standing calibration, landing animation and camera code are unchanged.
+
+Regression coverage includes the complete 1,163-sample stationary-glance capture,
+30 seconds of repeated synthetic glances, the earlier recorded walking/turning
+sequence, and shared physical steps in all four directions. Drift replay logs
+now include the physical height input. Headset confirmation remains necessary.
+
+### Consistent planted-inspection transitions (2026-11-14)
+
+The inspection hold now applies to horizontal body placement as well as facing.
+A deeply lowered inspection can stop an already active inferred turn; an earlier
+turn no longer exempts later glances from the hold. Looking up while the head is
+still physically lowered does not release it. Returning upright (within 5 cm of
+standing height, gaze above roughly 20 degrees down), explicit stick travel, or
+corroborated physical walking releases the deep inspection hold.
+
+Walking release uses sustained shared head/controller displacement over 0.2 to
+0.6 seconds. Very clean straight movement can qualify after 3 cm; movement with
+arm sway requires 6 cm and agreement within 20 percent. Both paths reject changes
+in heading. A single short 6 mm coincidence no longer opens the two-second
+walking/turn continuation window. The window itself cannot authorize movement.
+
+Turn continuation checks head agreement for deliberate bilateral hand gestures.
+Tracking noise can finish an already accepted blend, but deliberate arm motion
+without head movement cannot keep renewing an old turn. When horizontal
+controller spacing is below 12 cm, turn entry also needs agreement from the hand
+midpoint moving around the head; the short hand-to-hand line alone is unreliable.
+Translation then needs the stronger shared-step evidence too. A turn begun
+while deeply bent over inspecting can require straightening first. These are
+conservative compromises of head/hand inference, not direct foot tracking.
+
+The user-labelled 8,093-pose stationary recording is checked with physical input
+isolated from recorded stick motion and artificial yaw. The prior build falsely
+authorizes 1,880 turn samples and 1,434 movement samples in that replay; the
+correction authorizes neither and retains the anchor throughout each tracking
+segment. Separate regressions cover recorded actual walking/turning, hand-only
+gestures after a turn, four-direction steps after a swivel, and upright turning
+after inspection. Landing, calibration, camera and animation solvers are unchanged.
+In-headset confirmation remains necessary.
+
+### Attached shoulders and limited controller reach (2026-11-14)
+
+Tracked arms keep their shoulders attached to the body and preserve upper-arm
+and forearm lengths. When a controller goes beyond Lara's reach, the visible
+hand and weapon stop at the closest reachable position; they match the
+controller again as it returns within reach. Wrist orientation remains tracked,
+and hand poses are unchanged. Guns, muzzle origins and flare lights follow the
+limited hand position. This also prevents the shoulder from detaching when a
+controller comes too close to it. Lara's calibrated proportions may differ from
+your own, so an extended virtual hand can stop short of your real hand.
+
+Native holster animations, climbing contacts and the native landing-animation
+handoff retain their existing behavior. This change does not adjust roomscale
+movement inference, standing height or camera placement.

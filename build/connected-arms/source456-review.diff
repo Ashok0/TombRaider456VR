@@ -1,0 +1,731 @@
+--- README.md
++++ README.md
+@@ -89,12 +89,18 @@
+ matching hand movement, the usual head-turn slack remains; this is an inference,
+ not waist tracking. `FirstPersonBodyHandYawWeight=0` disables this assistance.
+ 
+-Tracked arms preserve upper-arm and forearm lengths, including during jump and
+-landing transitions. Hands and weapons retain their controller positions and
+-rotations. Reachable poses keep the shoulder anchored. Outside Lara's natural
+-reach, the visual shoulder moves only by the excess needed to keep the hand
+-tracked, rather than stretching the arm mesh. Extreme reaches can expose a
+-shoulder seam; this restores the earlier rigid-arm compromise.
++Tracked arms keep their shoulders attached to the body and preserve upper-arm
++and forearm lengths. When a controller goes beyond Lara's reach, the visible
++hand and weapon stop at the closest reachable position; they match the
++controller again as it returns within reach. Wrist orientation remains tracked,
++and hand poses are unchanged. Guns, muzzle origins and flare lights follow the
++limited hand position. This also prevents the shoulder from detaching when a
++controller comes too close to it. Lara's calibrated proportions may differ from
++your own, so an extended virtual hand can stop short of your real hand.
++
++Native holster animations, climbing contacts and the native landing-animation
++handoff retain their existing behavior. This change does not adjust roomscale
++movement inference, standing height or camera placement.
+ 
+ With the head hidden, shared collar vertices follow the final chest pose so
+ crouch-to-stand recovery cannot pull neck triangles toward the headset. The
+@@ -9396,3 +9402,18 @@
+ gestures after a turn, four-direction steps after a swivel, and upright turning
+ after inspection. Landing, calibration, camera and animation solvers are unchanged.
+ In-headset confirmation remains necessary.
++
++#### Attached shoulders and limited controller reach (2026-11-14)
++
++Tracked arms keep their shoulders attached to the body and preserve upper-arm
++and forearm lengths. When a controller goes beyond Lara's reach, the visible
++hand and weapon stop at the closest reachable position; they match the
++controller again as it returns within reach. Wrist orientation remains tracked,
++and hand poses are unchanged. Guns, muzzle origins and flare lights follow the
++limited hand position. This also prevents the shoulder from detaching when a
++controller comes too close to it. Lara's calibrated proportions may differ from
++your own, so an extended virtual hand can stop short of your real hand.
++
++Native holster animations, climbing contacts and the native landing-animation
++handoff retain their existing behavior. This change does not adjust roomscale
++movement inference, standing height or camera placement.
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -268,6 +268,18 @@
+     uint64_t serial=0;
+     motiongun::Frame joint[6]{};
+ } g_pistolArmPose;
++// The last visible body solve supplies reach geometry, not a frozen hand pose.
++// Fresh controller orientation/position is limited against it before firing.
++struct ConnectedWeaponReach {
++    bool valid=false;
++    const uint8_t* item=nullptr;
++    int game=-1,weapon=0,object=-1,level=-1;
++    uint64_t serial=0;
++    double time=0;
++    float heading=0,units=0,bodyOffset=0;
++    motiongun::Vec root{};
++    motiongun::Frame chain[3]{};
++} g_connectedWeaponReach[2];
+ bool g_pistolBodyScope=false,g_pistolForearmScope=false;
+ bool g_pistolArmSolveReady=false;
+ struct PistolRollHistory {
+@@ -326,6 +338,7 @@
+ }
+ void ResetBodyFollower() {
+     ResetControllerBodyAnchor();
++    for(auto& reach:g_connectedWeaponReach) reach={};
+     g_torsoSurface.Reset();
+     g_torsoClearance.Reset();
+     g_groundTorso.Reset();
+@@ -1485,6 +1498,36 @@
+     return BuildControllerWrist(0,wrist,controller) && BuildControllerWrist(1,wrist,controller);
+ }
+ 
++void PublishConnectedWeaponReach(uint8_t* item,int hand,const motiongun::Frame (&chain)[3],motiongun::Vec camera) {
++    if(!g_active || !item || !g_boundDll || !g_boundBase || hand<0 || hand>1 || NativeLandingAnimation(item)) return;
++    auto& reach=g_connectedWeaponReach[hand];
++    reach={};reach.valid=true;reach.item=item;reach.game=g_boundDll->game;reach.weapon=CurrentMotionWeapon();
++    reach.object=*reinterpret_cast<const int16_t*>(item+off::item_object);reach.level=AppState(drva::app_off::level);
++    reach.serial=VR().PoseSerial();reach.time=TurnTime();reach.heading=g_headingBase;
++    reach.units=LiveWorldUnitsPerMetre();reach.bodyOffset=Cfg().firstPersonBodyForwardCm;
++    const auto& root=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
++    reach.root={float(root.x_pos),float(root.y_pos),float(root.z_pos)};
++    for(int i=0;i<3;++i) {reach.chain[i]=chain[i];reach.chain[i].origin=Add(chain[i].origin,camera);}
++}
++void LimitConnectedWeaponWrist(uint8_t* item,int hand,motiongun::Frame& wrist) {
++    if(!g_active || !g_boundDll || !g_boundBase || !item || hand<0 || hand>1 || NativeLandingAnimation(item)) return;
++    const auto& reach=g_connectedWeaponReach[hand];
++    const double age=TurnTime()-reach.time;
++    if(!reach.valid || reach.item!=item || reach.game!=g_boundDll->game || reach.weapon!=CurrentMotionWeapon() ||
++       reach.object!=*reinterpret_cast<const int16_t*>(item+off::item_object) || reach.level!=AppState(drva::app_off::level) ||
++       VR().PoseSerial()<reach.serial || VR().PoseSerial()-reach.serial>1 || age<0 || age>.1 ||
++       reach.units!=LiveWorldUnitsPerMetre() || reach.bodyOffset!=Cfg().firstPersonBodyForwardCm) return;
++    const auto& root=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
++    const motiongun::Vec position{float(root.x_pos),float(root.y_pos),float(root.z_pos)};
++    if(firstperson::Length(Sub(position,reach.root))>reach.units*2) return;
++    const auto rotation=firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},
++        firstperson::BodyAngle(g_headingBase-reach.heading)));
++    const motiongun::Frame transport{rotation,Sub(position,Transform(rotation,reach.root))};
++    motiongun::Frame chain[3]{},limited{};
++    for(int i=0;i<3;++i) chain[i]=motiongun::Multiply(transport,reach.chain[i]);
++    if(firstperson::ConnectedArmTarget(chain,wrist,limited)) wrist=limited;
++}
++
+ bool BuildGunPose(int hand, GunPose& out) {
+     if (hand<0 || hand>1) return false;
+     if (const auto* reason=MotionBlockedReason()) {
+@@ -1495,6 +1538,7 @@
+     };
+     motiongun::Frame wrist{}; GunBasis controller{};
+     if (!BuildControllerWrist(hand,wrist,controller)) return false;
++    LimitConnectedWeaponWrist(*Ptr<uint8_t*>(g_boundDll->laraItem),hand,wrist);
+     out.desired=wrist.basis; out.trackedHand=wrist.origin;
+     const int16_t gun = *Ptr<int16_t>(g_boundDll->lara + 4);
+     uint8_t* item = *Ptr<uint8_t*>(g_boundDll->laraItem);
+@@ -1783,7 +1827,7 @@
+ bool PistolBodyPoseMatches(const uint8_t* item,int pass) {
+     if(!g_boundDll || !g_boundBase) return false;
+     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
+-    return (MotionReady() || status==2 || status==3 || g_pistolAnimation.blending) && SidearmWeapon() && g_pistolArmPose.valid &&
++    return (MotionReady() || (SidearmWeapon() && (status==2 || status==3 || g_pistolAnimation.blending))) && g_pistolArmPose.valid &&
+         g_pistolArmPose.item==item && g_pistolArmPose.weapon==CurrentMotionWeapon() && g_pistolArmPose.game==g_boundDll->game &&
+         g_pistolArmPose.pass==pass && g_pistolArmPose.serial==VR().PoseSerial() &&
+         g_pistolArmPose.fraction==*Ptr<int32_t>(g_boundDll->frameFrac);
+@@ -1793,7 +1837,7 @@
+     using namespace motiongun;
+     if(!g_boundDll || !g_boundBase) return false;
+     const int status=*Ptr<int16_t>(g_boundDll->lara+2);
+-    if((!MotionReady() && status!=2 && status!=3 && !g_pistolAnimation.blending) || !SidearmWeapon() || count<15 || count>33) return false;
++    if((!MotionReady() && (!SidearmWeapon() || (status!=2 && status!=3 && !g_pistolAnimation.blending))) || count<15 || count>33) return false;
+     const int fraction=*Ptr<int32_t>(g_boundDll->frameFrac);
+     if(capture) {
+         // Solvers publish the complete chains, including joints omitted from
+@@ -2407,9 +2451,9 @@
+         const Frame armBind[3]={bind[first],bind[first+1],bind[first+2]};
+         if(!grip && MotionReady() && CurrentMotionWeapon()==1 &&
+            !firstperson::PistolArmReference(posed[7],bind[7],armBind,pistolBodyScale,chain)) return false;
+-        auto roll=g_pistolBodyScope ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
++        auto roll=(g_pistolBodyScope && SidearmWeapon()) ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
+         if(grip ? !firstperson::SolveArm(chain,target,pole,changes,nullptr,nullptr,false)
+-                : !firstperson::SolveTrackedArm(chain,target,pole,armBind,changes,true,g_pistolBodyScope ? &roll : nullptr)) return false;
++                : !firstperson::SolveConnectedTrackedArm(chain,target,pole,armBind,changes,true,(g_pistolBodyScope && SidearmWeapon()) ? &roll : nullptr)) return false;
+         if(g_pistolBodyScope) {
+             g_pistolRoll.current[hand]=roll;
+             g_pistolRoll.minConfidence[hand]=std::min(g_pistolRoll.minConfidence[hand],roll.confidence);
+@@ -2448,6 +2492,11 @@
+     for(int i=0;i<count;++i) {
+         const int joint=mapping ? mapping[i] : i;
+         if(joint>=0 && joint<15) WriteRows(Multiply(correction[joint],ReadRows(joints+i*12)),joints+i*12);
++    }
++    if(!grip && !animatedSidearms) for(int hand=0;hand<2;++hand) {
++        const int first=hand ? 8 : 11;
++        const Frame arm[3]={posed[first],posed[first+1],posed[first+2]};
++        PublishConnectedWeaponReach(item,hand,arm,cameraOffset);
+     }
+     if(g_pistolBodyScope) {
+         for(int joint=8;joint<=13;++joint) g_pistolArmPose.joint[joint-8]=posed[joint];
+@@ -2512,6 +2561,7 @@
+     if(animatedSidearms) for(auto& arm:g_jumpArms) arm.Reset();
+     if(animatedSidearms) for(auto& arm:g_traversalArms) arm.Reset();
+     bool solved[2]{};
++    motiongun::Vec reachCamera[2]{};
+     bool bindReference[2]{};
+     for (int hand=0;hand<2;++hand) {
+         // The crowbar is part of the native right-hand mesh. Keep that entire
+@@ -2628,8 +2678,9 @@
+             if(!g_traversalArms[hand].Prepare(item,VR().PoseSerial(),TurnTime(),false,
+                 traversalReference,native,chain,target,pole)) return false;
+         } else if(!shadow) g_traversalArms[hand].Reset();
++        reachCamera[hand]=Sub(trackedOrigin,target.origin);
+         auto roll=bindReference[hand] ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
+-        if (!firstperson::SolveTrackedArm(chain,target,pole,bind,changes,present[0],bindReference[hand] ? &roll : nullptr)) return false;
++        if (!firstperson::SolveConnectedTrackedArm(chain,target,pole,bind,changes,present[0],bindReference[hand] ? &roll : nullptr)) return false;
+         if(traversal) {
+             const motiongun::Frame posed[3]={Multiply(changes[0],chain[0]),Multiply(changes[1],chain[1]),Multiply(changes[2],chain[2])};
+             g_traversalArms[hand].Finish(traversalReference,posed);
+@@ -2673,6 +2724,11 @@
+         if (index>=0 && solved[index/3]) motiongun::WriteRows(motiongun::Multiply(correction[index],
+             motiongun::ReadRows(joints+i*12)),joints+i*12);
+         else if(shifted) stabilization::OffsetBodyPalette(joints+i*12,1,meshOffset);
++    }
++    if(!shadow && !animatedSidearms) for(int hand=0;hand<2;++hand) if(solved[hand]) {
++        const int first=hand ? 0 : 3;
++        const motiongun::Frame arm[3]={solvedArms[first],solvedArms[first+1],solvedArms[first+2]};
++        PublishConnectedWeaponReach(item,hand,arm,reachCamera[hand]);
+     }
+     if(!shadow && g_pistolBodyScope && solved[0] && solved[1]) {
+         for(int i=0;i<6;++i) g_pistolArmPose.joint[i]=solvedArms[i];
+@@ -3254,6 +3310,7 @@
+        elapsed<0 || elapsed>.15 || !FlareIKReady()) {g_flareLights={};return;}
+     motiongun::Frame wrist{};GunBasis controller{};
+     if(!BuildControllerWrist(0,wrist,controller)) return;
++    LimitConnectedWeaponWrist(g_headingItem,0,wrist);
+     const auto tip=Transform(wrist,{11,-64,41});
+     for(int i=0;i<g_flareLights.count;++i) {
+         auto& slot=g_flareLights.slots[i];
+@@ -3299,6 +3356,7 @@
+     g_flareLights={};
+     FlareHandFrames frames{};GunBasis controller{};
+     if(FlareIKReady() && BuildControllerWrist(0,frames.current,controller)) {
++        LimitConnectedWeaponWrist(*Ptr<uint8_t*>(g_boundDll->laraItem),0,frames.current);
+         auto& h=g_flareHandHistory;
+         const int level=AppState(drva::app_off::level);
+         const double now=TurnTime();
+@@ -5251,7 +5309,7 @@
+                 const bool previousPistolScope=g_pistolBodyScope;
+                 const bool previousWristScope=g_bodyWristSeamScope;
+                 g_bodyWristSeamScope=true;
+-                g_pistolBodyScope=SidearmWeapon();
++                g_pistolBodyScope=MotionReady();
+                 g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
+                 g_pistolBodyScope=previousPistolScope;
+                 g_bodyWristSeamScope=previousWristScope;
+@@ -5282,7 +5340,7 @@
+             bits=forearms;g_renderArm=-1;g_renderHandJoint=-1;
+             g_bodySkinScope=true;g_bodySkinReady=false;
+             const bool previousPistolScope=g_pistolForearmScope;
+-            g_pistolForearmScope=SidearmWeapon();
++            g_pistolForearmScope=MotionReady();
+             g_hDrawCreatureHD.Original<Fn_DrawCreatureHD>()(item,1,renderPass);
+             g_pistolForearmScope=previousPistolScope;
+             g_bodySkinScope=g_bodySkinReady=false;
+--- src/FirstPersonIK.h
++++ src/FirstPersonIK.h
+@@ -403,4 +403,34 @@
+     }
+     return true;
+ }
++// Keep the shoulder fixed and both rigid bone lengths unchanged. Only the
++// position is limited; controller orientation and authored hand pose survive.
++inline bool ConnectedArmTarget(const Frame (&chain)[3],const Frame& tracked,Frame& target) {
++    const auto length=[](Vec v) {return std::sqrt(Dot(v,v));};
++    const float upper=length(Sub(chain[1].origin,chain[0].origin));
++    const float lower=length(Sub(chain[2].origin,chain[1].origin));
++    const Vec offset=Sub(tracked.origin,chain[0].origin);
++    const float distance=length(offset);
++    Frame inverse{};
++    if(!std::isfinite(upper+lower+distance) || upper<.001f || lower<.001f || !Inverse(tracked,inverse)) return false;
++    Vec direction{};
++    if(!Unit(offset,direction) && !Unit(Sub(chain[2].origin,chain[0].origin),direction)) direction={0,0,1};
++    const float margin=std::min(upper,lower)*.001f;
++    const float reach=std::clamp(distance,std::fabs(upper-lower)+margin,upper+lower-margin);
++    target=tracked;
++    if(reach!=distance) target.origin=Add(chain[0].origin,Scale(direction,reach));
++    return true;
++}
++inline bool SolveConnectedTrackedArm(const Frame (&native)[3],const Frame& tracked,
++                                    Vec pole,const Frame (&bind)[3],Frame* corrections,
++                                    bool upperArmPresent=true,ArmRollContinuity* continuity=nullptr) {
++    Frame target{};
++    if(!ConnectedArmTarget(native,tracked,target) ||
++       !SolveTrackedArm(native,target,pole,bind,corrections,upperArmPresent,continuity)) return false;
++    // Remove only numerical residual at the reach boundary. The original
++    // rigid solver's roll transport and elbow/wrist seams remain intact.
++    const Vec shift=Sub(native[0].origin,Multiply(corrections[0],native[0]).origin);
++    for(int i=0;i<3;++i) corrections[i].origin=Add(corrections[i].origin,shift);
++    return true;
++}
+ } // namespace tr::firstperson
+--- tools/body_transition_regression.inl
++++ tools/body_transition_regression.inl
+@@ -130,9 +130,10 @@
+             }
+             for(int hand=0;hand<2;++hand) {
+                 Frame wrist{};Basis controller{};BuildControllerWrist(hand,wrist,controller);
++                wrist=ExpectedPublishedWrist(hand,wrist);
+                 Frame shown{};ReadIKJoint(objectInfo,palette,15,0,nullptr,nullptr,hand?10:13,shown);
+                 Check(firstperson::Length(Sub(shown.origin,wrist.origin))<.05f,
+-                      "draw/holster keeps both rendered wrists on the live controllers");
++                      "draw/holster keeps both rendered wrists on the reachable controller targets");
+             }
+             uint64_t visible=0;int count=0;
+             Check(!std::memcmp(FirstPersonBodyPalette(visible,count),fixture,sizeof(fixture)),
+@@ -1187,6 +1188,7 @@
+             Check(std::fabs(g_bodyFollower.yaw)<.0001f,"stationary controllers freeze physical body yaw");
+             for(int hand=0;hand<2;++hand) {
+                 Frame wrist{};Basis controller{};Check(BuildControllerWrist(hand,wrist,controller),"body hold retains controller targets");
++                wrist=ExpectedPublishedWrist(hand,wrist);
+                 Check(firstperson::Length(Sub(pose[hand ? 10 : 13].origin,wrist.origin))<.1f,
+                       "stationary body retains exact tracked hands");
+             }
+@@ -1280,8 +1282,9 @@
+               "live torso clearance preserves standing hip height, body offset and planted feet");
+         for(int hand=0;hand<2;++hand) {
+             Frame wrist{};Basis basis{};BuildControllerWrist(hand,wrist,basis);
++            wrist=ExpectedPublishedWrist(hand,wrist);
+             Check(firstperson::Length(Sub(pose[hand?10:13].origin,wrist.origin))<.1f,
+-                  "production clearance keeps controller wrists exact while the torso bends");
++                  "production clearance keeps connected wrist targets while the torso bends");
+         }
+     }
+     if(cm<20) Check(largest>.001f,"production standing solver exercises nonzero upper-torso clearance");
+@@ -1308,8 +1311,9 @@
+     }
+     for(int hand=0;hand<2;++hand) {
+         Frame wrist{};Basis basis{};BuildControllerWrist(hand,wrist,basis);
++        wrist=ExpectedPublishedWrist(hand,wrist);
+         Check(firstperson::Length(Sub(fittedPose[hand?10:13].origin,wrist.origin))<.1f,
+-              "smaller visual body retains exact tracked wrists");
++              "smaller visual body retains reachable tracked wrists");
+     }
+     const auto savedHead=VR().m_rawHeadPose;
+     const float savedNeck=VR().m_firstPersonNeutralEyeNeckY;
+@@ -1387,8 +1391,9 @@
+               "measured torso clearance stays active and clears the downward jump view");
+         for(int hand=0;hand<2;++hand) {
+             Frame wrist{};Basis basis{};BuildControllerWrist(hand,wrist,basis);
++            wrist=ExpectedPublishedWrist(hand,wrist);
+             Check(firstperson::Length(Sub(Add(shown[hand?10:13].origin,camera),wrist.origin))<.1f,
+-                  "airborne visual fit retains exact tracked wrists");
++                  "airborne visual fit retains reachable tracked wrists");
+         }
+         Frame inverseChest{};Inverse(native[7],inverseChest);
+         const auto chestChange=Multiply(shown[7],inverseChest);
+--- tools/flare_regression.inl
++++ tools/flare_regression.inl
+@@ -85,8 +85,9 @@
+             float palette[33*12]{};Detour_GetJoints(itemMemory,palette,0);
+             Frame actual{};
+             for(int i=0;i<count;++i) if((count==15 ? i : (i*7)%15)==13) actual=Multiply(ReadRows(palette+i*12),binds[i]);
++            LimitConnectedWeaponWrist(itemMemory,0,wrist);
+             const auto tip=Transform(wrist,{11,-64,41});
+-            Check(firstperson::Length(Sub(Add(actual.origin,camera),wrist.origin))<.05f,"flare mesh wrist follows left controller position with rigid arm IK");
++            Check(firstperson::Length(Sub(Add(actual.origin,camera),wrist.origin))<.05f,"flare mesh wrist follows the connected reach limit");
+             Check(firstperson::Length(Sub(Add(Transform(actual,{11,-64,41}),camera),tip))<.06f,"flare mesh tip follows controller rotation and matches light origin");
+             const auto savedBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
+             *reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits)=0x3000;
+@@ -110,6 +111,7 @@
+             // render pose, not the last native update or native 256-unit bias.
+             hand.m[0][3]+=.08f;++VR().m_poseSerial;
+             Frame renderWrist{};Check(BuildControllerWrist(0,renderWrist,controller),"render-time flare wrist builds");
++            LimitConnectedWeaponWrist(itemMemory,0,renderWrist);
+             const auto renderTip=Transform(renderWrist,{11,-64,41});
+             UpdateFlareLightPosition();
+             for(int slot=0;slot<(flareMirror ? 2 : 1);++slot) {
+@@ -130,6 +132,7 @@
+     // The simulation gate may be unavailable even though the render is tracked.
+     g_scenePoseValid=false;Detour_FlareInHand(100);g_scenePoseValid=true;
+     Frame renderWrist{};Basis renderController{};BuildControllerWrist(0,renderWrist,renderController);
++    LimitConnectedWeaponWrist(itemMemory,0,renderWrist);
+     const auto latestTip=Transform(renderWrist,{11,-64,41});
+     UpdateFlareLightPosition();
+     auto lightPoint=[] {auto* p=reinterpret_cast<int32_t*>(flareLights[0]);return PHD_VECTOR{p[0],p[2],p[4]};};
+--- tools/fullbody_ik_regression.inl
++++ tools/fullbody_ik_regression.inl
+@@ -357,12 +357,18 @@
+                 Detour_GetJoints(itemMemory,palette,0);
+                 Frame target{};Basis controller{};Check(BuildControllerWrist(1,target,controller),"side/back movement retains a live controller target");
+                 const Vec liveCamera{worldCameraPos[0],worldCameraPos[1],worldCameraPos[2]};
++                Frame reachChain[3]{};
++                for(int n=0;n<count;++n) if(mapping[n]>=8 && mapping[n]<=10) {
++                    reachChain[mapping[n]-8]=Multiply(ReadRows(palette+n*12),bind[n]);
++                    reachChain[mapping[n]-8].origin=Add(reachChain[mapping[n]-8].origin,liveCamera);
++                }
++                target=ExpectedConnectedWrist(reachChain,target);
+                 locomotion::Vec view{};VR().FirstPersonViewOffset(view.x,view.z);
+                 view=locomotion::Rotate(view,g_headingBase)*LiveWorldUnitsPerMetre();
+                 const Vec liveEye{g_scenePose.x_pos+view.x,g_scenePose.y_pos+VR().FirstPersonVerticalOffset()*LiveWorldUnitsPerMetre(),g_scenePose.z_pos+view.z};
+                 for(int i=0;i<count;++i) {
+                     const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+-                    if(mapping[i]==10) Check(nearVec(Add(actual.origin,liveCamera),target.origin),"side/back stabilization never delays real controller movement");
++                    if(mapping[i]==10) Check(nearVec(Add(actual.origin,liveCamera),target.origin),"side/back stabilization follows live controller movement within connected reach");
+                     if(mapping[i]==14) Check(nearVec(Add(actual.origin,liveCamera),liveEye),"side/back stabilization preserves live headset lean");
+                 }
+                 VR().m_rawHeadPose=oldTrackedHead;VR().m_rawControllerPose[1]=oldRightHand;
+@@ -598,7 +604,13 @@
+             uint64_t mask=0;int captured=0;const auto* physics=FirstPersonBodyPalette(mask,captured);
+             Check(physics && captured==count && !std::memcmp(physics,baseline,count*12*sizeof(float)),"full-body keeps complete jiggle anchor palette native");
+             const auto* render=FirstPersonRenderBodyPalette(mask,captured);
+-            Check(render && !std::memcmp(render,palette,count*12*sizeof(float)),"skinning uploads the full-body pose without physics overwriting it");
++            Check(render!=nullptr,"full-body render palette is available");
++            int chest=0;while(chest<count && mapping[chest]!=7) ++chest;
++            for(int i=0;i<count;++i) {
++                const bool hiddenNeck=mapping[i]==14 && !(mask&(uint64_t(1)<<i)) && chest<count && (mask&(uint64_t(1)<<chest));
++                Check(!std::memcmp(render+i*12,palette+(hiddenNeck?chest:i)*12,12*sizeof(float)),
++                      "full-body upload preserves IK with hidden collar weights following the chest");
++            }
+             for(int i=0;i<count;++i) {
+                 const int joint=mapping[i];const auto actual=Multiply(ReadRows(palette+i*12),bind[i]);
+                 if(airborne && (joint<8 || joint==14))
+@@ -621,9 +633,15 @@
+                     } else {
+                         const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
+                                                 -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+-                        Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),
+-                              "full-body hands keep the same physical grip pivot as floating guns");
+-                        if (armed) Check(nearVec(Add(actual.origin,camera),target.origin),"armed full-body wrist position remains unchanged");
++                        Frame chain[3]{};
++                        for(int n=0;n<count;++n) if(mapping[n]>=joint-2 && mapping[n]<=joint) {
++                            chain[mapping[n]-(joint-2)]=Multiply(ReadRows(palette+n*12),bind[n]);
++                            chain[mapping[n]-(joint-2)].origin=Add(chain[mapping[n]-(joint-2)].origin,camera);
++                        }
++                        const Frame limited=ExpectedConnectedWrist(chain,target);
++                        Check(nearVec(Add(Transform(actual,grip),camera),Transform(limited,grip)),
++                              "full-body hand reaches the closest feasible grip with the shoulder fixed");
++                        if (armed) Check(nearVec(Add(actual.origin,camera),limited.origin),"armed wrist follows the same connected reach limit");
+                     }
+                     if(armed) for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                         Check(std::fabs(actual.basis.r[r][c]-target.basis.r[r][c])<.002f,"armed body wrist matches exact gun orientation without unarmed wrist limits");
+@@ -732,9 +750,11 @@
+                 if(omitBodyHands) for(int joint:{10,13}) {
+                     expected[joint-8]=g_pistolArmPose.joint[joint-8];
+                     Frame target{};Basis controller{};
+-                    Check(BuildControllerWrist(joint==10 ? 1 : 0,target,controller) &&
+-                          nearVec(Add(expected[joint-8].origin,camera),target.origin),
+-                          "body with omitted hands still publishes the exact solved controller wrist");
++                    Check(BuildControllerWrist(joint==10 ? 1 : 0,target,controller),"omitted hand retains controller orientation");
++                    Frame chain[3]{};
++                    for(int n=0;n<3;++n) {chain[n]=g_pistolArmPose.joint[joint-10+n];chain[n].origin=Add(chain[n].origin,camera);}
++                    Check(nearVec(Add(expected[joint-8].origin,camera),ExpectedConnectedWrist(chain,target).origin),
++                          "body with omitted hands publishes the connected wrist for its weapon mesh");
+                 }
+                 for(int sample=0;sample<12;++sample) {
+                     float attachment[33*12]{},attachmentPoses[33*12]{};
+@@ -884,10 +904,16 @@
+                         }
+                         if(mapping[i]==10 || mapping[i]==13) {
+                             Frame target{};Basis controller{};BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller);
++                            Frame chain[3]{};
++                            for(int n=0;n<count;++n) if(mapping[n]>=mapping[i]-2 && mapping[n]<=mapping[i]) {
++                                chain[mapping[n]-(mapping[i]-2)]=Multiply(ReadRows(palette+n*12),bind[n]);
++                                chain[mapping[n]-(mapping[i]-2)].origin=Add(chain[mapping[n]-(mapping[i]-2)].origin,camera);
++                            }
++                            const Frame limited=ExpectedConnectedWrist(chain,target);
+                             const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
+                                                     -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+-                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),
+-                                  "automatic body scaling preserves physical controller grip alignment");
++                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(limited,grip)),
++                                  "automatic body scaling preserves connected controller grip alignment");
+                         }
+                     }
+                 }
+@@ -923,8 +949,14 @@
+                         }
+                         if(mapping[i]==10 || mapping[i]==13) {
+                             Frame target{};Basis controller{};BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller);
++                            Frame chain[3]{};
++                            for(int n=0;n<count;++n) if(mapping[n]>=mapping[i]-2 && mapping[n]<=mapping[i]) {
++                                chain[mapping[n]-(mapping[i]-2)]=Multiply(ReadRows(palette+n*12),bind[n]);
++                                chain[mapping[n]-(mapping[i]-2)].origin=Add(chain[mapping[n]-(mapping[i]-2)].origin,camera);
++                            }
++                            const Frame limited=ExpectedConnectedWrist(chain,target);
+                             const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,-testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+-                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(target,grip)),"leg planting preserves physical controller grips");
++                            Check(nearVec(Add(Transform(actual,grip),camera),Transform(limited,grip)),"leg planting preserves connected controller grips");
+                         }
+                     }
+                     Check(!std::memcmp(&cameraBefore,&g_scenePose,sizeof(g_scenePose)),"leg planting cannot write the camera pose");
+@@ -1137,10 +1169,16 @@
+                     }
+                     if(mapping[i]==10 || mapping[i]==13) {
+                         Frame target{};Basis controller{};Check(BuildControllerWrist(mapping[i]==10 ? 1 : 0,target,controller),"centered body wrist target available");
++                        Frame chain[3]{};
++                        for(int n=0;n<count;++n) if(mapping[n]>=mapping[i]-2 && mapping[n]<=mapping[i]) {
++                            chain[mapping[n]-(mapping[i]-2)]=Multiply(ReadRows(palette+n*12),bind[n]);
++                            chain[mapping[n]-(mapping[i]-2)].origin=Add(chain[mapping[n]-(mapping[i]-2)].origin,camera);
++                        }
++                        const Frame limited=ExpectedConnectedWrist(chain,target);
+                         const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
+                                                 -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+-                        Check(firstperson::Length(Sub(Add(Transform(joint,grip),camera),Transform(target,grip)))<2,
+-                              "centering body keeps physical controller grip within native integer-joint precision");
++                        Check(firstperson::Length(Sub(Add(Transform(joint,grip),camera),Transform(limited,grip)))<2,
++                              "centering body keeps connected controller grip within native integer-joint precision");
+                     }
+                 }
+                 Check(itemSnapshot==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)),"centering changes only render skeleton");
+--- tools/jump_turn_regression.inl
++++ tools/jump_turn_regression.inl
+@@ -70,6 +70,7 @@
+             if(MotionReady() || UnarmedIKReady()) for(int hand:{0,1}) {
+                 Frame target{},wrist{};Basis controller{};
+                 Check(BuildControllerWrist(hand,target,controller) && ReadIKJoint(objectInfo,palette,15,0,nullptr,nullptr,hand?10:13,wrist),"jump wrist fixture resolves");
++                target=ExpectedPublishedWrist(hand,target);
+                 Check(firstperson::Length(Sub(Add(wrist.origin,camera),target.origin))<.2f,"turning jump placement preserves controller wrist targets");
+             }
+             Check(before==std::string(reinterpret_cast<char*>(itemMemory),sizeof(itemMemory)),"jump centering leaves gameplay and collision untouched");
+--- tools/sidearm_animation_steps.inl
++++ tools/sidearm_animation_steps.inl
+@@ -12,8 +12,9 @@
+     auto onControllers=[](const auto& pose) {
+         for(int hand=0;hand<2;++hand) {
+             Frame wrist{};Basis controller{};BuildControllerWrist(hand,wrist,controller);
++            wrist=ExpectedPublishedWrist(hand,wrist);
+             Check(firstperson::Length(Sub(pose[hand?10:13].origin,wrist.origin))<.08f,
+-                  "completed equip/unequip blend restores exact controller wrists");
++                  "completed equip/unequip blend restores reachable controller wrists");
+         }
+     };
+     g_pistolAnimation.Reset();
+--- tools/unarmed_ik_regression.inl
++++ tools/unarmed_ik_regression.inl
+@@ -1,3 +1,21 @@
++// Test oracle for the requested shoulder-anchored reach contract.
++tr::motiongun::Frame ExpectedConnectedWrist(const tr::motiongun::Frame (&chain)[3],tr::motiongun::Frame target) {
++    using namespace tr::motiongun;using tr::firstperson::Length;
++    const float a=Length(Sub(chain[1].origin,chain[0].origin)),b=Length(Sub(chain[2].origin,chain[1].origin));
++    Vec delta=Sub(target.origin,chain[0].origin);float distance=Length(delta);
++    if(distance<.00001f) {delta=Sub(chain[2].origin,chain[0].origin);distance=Length(delta);}
++    const float margin=std::min(a,b)*.001f;
++    const float requested=Length(Sub(target.origin,chain[0].origin));
++    const float radius=std::clamp(requested,std::fabs(a-b)+margin,a+b-margin);
++    if(requested!=radius) target.origin=Add(chain[0].origin,Scale(delta,radius/distance));
++    return target;
++}
++
++tr::motiongun::Frame ExpectedPublishedWrist(int hand,tr::motiongun::Frame target) {
++    Check(tr::g_connectedWeaponReach[hand].valid,"successful arm draw publishes connected reach");
++    return ExpectedConnectedWrist(tr::g_connectedWeaponReach[hand].chain,target);
++}
++
+ // Independent contract for the restored rigid arm solve: exact lengths and
+ // the minimum shoulder displacement required by the reachable annulus.
+ void CheckRigidTrackedReach(const tr::motiongun::Frame (&native)[3],const tr::motiongun::Frame (&posed)[3]) {
+@@ -637,9 +655,15 @@
+                     const auto rendered=Multiply(ReadRows(palette+i*12),bind[i]);
+                     const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
+                                             -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
+-                    const Frame floatingGun{gunPose.desired,Sub(gunPose.trackedHand,cameraOrigin)};
+-                    Check(nearVec(Transform(rendered,grip),Transform(floatingGun,grip)),
+-                          "IK and floating gun keep the same physical grip pivot after wrist constraints");
++                    Frame raw{};Basis controller{};
++                    Check(BuildControllerWrist(joint==10 ? 1 : 0,raw,controller),"raw controller wrist available");
++                    raw.origin=Sub(raw.origin,cameraOrigin);
++                    Frame chain[3]{};const int first=joint-2;
++                    for(int n=0;n<count;++n) if(mapping[n]>=first && mapping[n]<=joint)
++                        chain[mapping[n]-first]=Multiply(ReadRows(baseline+n*12),bind[n]);
++                    const Frame limited=ExpectedConnectedWrist(chain,raw);
++                    Check(nearVec(Transform(rendered,grip),Transform(limited,grip)),
++                          "visible hand preserves grip orientation at the shoulder-anchored reach limit");
+                 } else if(joint<8 || joint>13) {
+                     Check(!std::memcmp(palette+i*12,baseline+i*12,12*sizeof(float)),"IK preserves torso, head and legs exactly");
+                 }
+@@ -690,10 +714,21 @@
+                     const auto adjusted=Multiply(ReadRows(adjustedPalette+i*12),bind[i]);
+                     if(joint<8 || joint>13) Check(nearVec(adjusted.origin,Add(old.origin,{bodyShift.x,0,bodyShift.z})),
+                         "armed body moves by the visual offset without moving simulation");
+-                    if(joint==10 || joint==13) Check(nearVec(adjusted.origin,old.origin),
+-                        "body position leaves every tracked weapon wrist fixed");
++                    if(joint==10 || joint==13) {
++                        Frame raw{};Basis controller{};BuildControllerWrist(joint==10?1:0,raw,controller);
++                        raw.origin=Sub(raw.origin,cameraOrigin);Frame chain[3]{};
++                        for(int n=0;n<count;++n) if(mapping[n]>=joint-2 && mapping[n]<=joint) {
++                            chain[mapping[n]-(joint-2)]=Multiply(ReadRows(nativePalette+n*12),bind[n]);
++                            chain[mapping[n]-(joint-2)].origin=Add(chain[mapping[n]-(joint-2)].origin,{bodyShift.x,0,bodyShift.z});
++                        }
++                        Check(nearVec(adjusted.origin,ExpectedConnectedWrist(chain,raw).origin),
++                            "body placement keeps shoulder attached and changes wrist only at its reach boundary");
++                    }
+                 }
+                 config.firstPersonBodyForwardCm=0;
++                // Menu placement changes invalidate cached reach geometry.
++                // The real render order redraws the body before its weapons.
++                Detour_GetJoints(itemMemory,armedPalette,0);
+                 for(int i=0;i<count;++i) {
+                     const int joint=mapping[i];
+                     if(joint<8 || joint>13) Check(!std::memcmp(armedPalette+i*12,nativePalette+i*12,12*sizeof(float)),
+@@ -725,8 +760,10 @@
+                           "armed attachments retain exact gun hands, with forearms hidden only while crouching");
+                     Check(IsCrouchState(itemMemory) || !std::memcmp(observedForearmPalette,armedPalette,count*12*sizeof(float)),
+                           "visible forearm uses same articulated chain as the solved body");
+-                    Check(!std::memcmp(observedGunPalette,gunPalette,count*12*sizeof(float)),
+-                          "restoring forearm draw cannot change floating gun transform");
++                    float gunDifference=0;
++                    for(int n=0;n<count*12;++n) gunDifference=std::max(gunDifference,std::fabs(observedGunPalette[n]-gunPalette[n]));
++                    if(gunDifference>.05f) std::printf("gun mismatch game=%d weapon=%d stance=%d step=%d hand=%d diff=%.6f\n",which,weapon,stance,step,hand,gunDifference);
++                    Check(gunDifference<.05f,"forearm redraw preserves the connected hand/gun transform within numerical precision");
+                     meshBits=savedBits;g_hDrawCreatureHD.m_trampoline=savedDraw;
+                     g_bodySkinScope=true;
+                     const int joint=hand ? 10 : 13;
+@@ -742,8 +779,9 @@
+                     }
+                     // Compare every field, excluding indeterminate tail padding.
+                     GunPose after{};Check(BuildGunPose(hand,after) &&
+-                        !std::memcmp(&before[hand],&after,offsetof(GunPose,meshAligned)+sizeof(after.meshAligned)),
+-                                          "arm rendering cannot change weapon pose muzzle or aim");
++                        nearVec(after.direction,before[hand].direction) &&
++                        nearVec(Sub(after.muzzle,after.trackedHand),Sub(before[hand].muzzle,before[hand].trackedHand)),
++                        "reach limiting moves gun and muzzle together without redirecting aim");
+                 }
+             }
+             // A single weapon must keep its right arm connected if left tracking
+--- tools/upjump_arms_test.cpp
++++ tools/upjump_arms_test.cpp
+@@ -167,8 +167,13 @@
+                                               "airborne legs retain their native animation while the collar keeps its upright reference");
+                     if(j==10 || j==13) {
+                         Frame target{};Basis basis{};BuildControllerWrist(j==10 ? 1 : 0,target,basis);
+-                        Check(firstperson::Length(Sub(actual.origin,target.origin))<.04f,
+-                              "jump continuity never lags controller wrists or inherits gameplay joint interpolation");
++                        Frame chain[3]{};
++                        for(int n=0;n<count;++n) if(mapping[n]>=j-2 && mapping[n]<=j) {
++                            chain[mapping[n]-(j-2)]=Multiply(ReadRows(palette+n*12),binds[n]);
++                            chain[mapping[n]-(j-2)].origin=Add(chain[mapping[n]-(j-2)].origin,camera);
++                        }
++                        Check(firstperson::Length(Sub(actual.origin,ExpectedConnectedWrist(chain,target).origin))<.04f,
++                              "jump continuity follows the live controller within connected reach");
+                     }
+                 }
+                 uint64_t visible=0;int captured=0;
+@@ -187,7 +192,13 @@
+                         if(j<8 || j==14) Check(firstperson::Length(Sub(adjusted.origin,Add(old.origin,{0,0,cm*10})))<.05f,
+                             "live body position moves torso and legs forward by the chosen centimetres, including zero reset");
+                         if(j==10 || j==13) {
+-                            Check(firstperson::Length(Sub(adjusted.origin,old.origin))<.04f,"body offset never moves tracked wrists");
++                            Frame target{},chain[3]{};Basis basis{};BuildControllerWrist(j==10 ? 1 : 0,target,basis);
++                            for(int n=0;n<count;++n) if(mapping[n]>=j-2 && mapping[n]<=j) {
++                                chain[mapping[n]-(j-2)]=Multiply(ReadRows(repeat+n*12),binds[n]);
++                                chain[mapping[n]-(j-2)].origin=Add(chain[mapping[n]-(j-2)].origin,camera);
++                            }
++                            Check(firstperson::Length(Sub(Add(adjusted.origin,camera),ExpectedConnectedWrist(chain,target).origin))<.04f,
++                                  "body offset keeps wrists within reach of the attached shoulder");
+                             for(int r=0;r<3;++r) for(int c=0;c<3;++c)
+                                 Check(std::fabs(adjusted.basis.r[r][c]-old.basis.r[r][c])<.001f,"body offset preserves controller wrist orientation");
+                         }
+--- tools/connected_arm_tests.cpp
++++ tools/connected_arm_tests.cpp
+@@ -0,0 +1,41 @@
++#include "FirstPersonBodyIK.h"
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++using namespace tr::firstperson;
++using namespace tr::motiongun;
++int checks=0;
++void Check(bool b,const char* m) {++checks;if(!b){std::fprintf(stderr,"FAIL: %s\n",m);std::exit(1);}}
++int main() {
++ for(float scale:{.5f,1.f,1.5f}) for(float yaw:{-2.f,0.f,1.3f}) for(float side:{-1.f,1.f}) {
++  const Frame body{RotationMatrix(AxisRotation({0,1,0},yaw)),{170,-90,240}};
++  Frame arm[3]{};
++  for(int i=0;i<3;++i)arm[i]=Multiply(body,{IdentityBasis(),{float(i==0?0:i==1?300:500)*scale,0,0}});
++  for(Vec axis:{Vec{side,0,0},Vec{0,side,0},Vec{0,0,side},Vec{side*.6f,.8f,0}}) {
++   const auto direction=Transform(body.basis,axis);Frame previous[3]{};
++   for(int distance=0;distance<=1000;++distance) {
++    const Frame target{Multiply(body.basis,RotationMatrix(AxisRotation({0,0,1},distance*.01f))),Add(arm[0].origin,Scale(direction,distance*scale))};
++    Frame corrections[3]{},repeat[3]{};
++    Check(SolveConnectedTrackedArm(arm,target,Transform(body.basis,{0,1,.2f}),arm,corrections),"connected solve succeeds at folded, reachable and overextended targets");
++    Check(SolveConnectedTrackedArm(arm,target,Transform(body.basis,{0,1,.2f}),arm,repeat) && !std::memcmp(corrections,repeat,sizeof(repeat)),"stereo and repeated draws give identical connected arms");
++    Frame solved[3]{};
++    for(int i=0;i<3;++i) {
++     solved[i]=Multiply(corrections[i],arm[i]);Check(Finite(solved[i]),"connected arm remains finite");
++     for(int r=0;r<3;++r)for(int c=0;c<3;++c) {
++      float v=0;for(int k=0;k<3;++k)v+=corrections[i].basis.r[k][r]*corrections[i].basis.r[k][c];
++      Check(std::fabs(v-(r==c?1.f:0.f))<.003f,"connected limbs and hands never scale or shear");
++     }
++     if(i<2)Check(Length(Sub(Transform(corrections[i],arm[i+1].origin),Multiply(corrections[i+1],arm[i+1]).origin))<.05f,"elbow and wrist seams remain connected");
++    }
++    Check(Length(Sub(solved[0].origin,arm[0].origin))<.001f,"shoulder never leaves torso");
++    Check(std::fabs(Length(Sub(solved[1].origin,solved[0].origin))-300*scale)<.04f && std::fabs(Length(Sub(solved[2].origin,solved[1].origin))-200*scale)<.04f,"both arm lengths remain fixed");
++    const float radius=std::clamp(float(distance),100.2f,499.8f)*scale;
++    Check(std::fabs(Length(Sub(solved[2].origin,arm[0].origin))-radius)<.04f,"wrist stops at independently calculated reach boundary");
++    for(int r=0;r<3;++r)for(int c=0;c<3;++c)Check(std::fabs(solved[2].basis.r[r][c]-target.basis.r[r][c])<.002f,"controller orientation remains exact at every reach");
++    if(distance>1)Check(Length(Sub(solved[2].origin,previous[2].origin))<1.02f*scale,"wrist crosses reach boundaries without a position jump");
++    for(int i=0;i<3;++i)previous[i]=solved[i];
++   }
++  }
++ }
++ std::printf("PASS: %d connected arm geometry checks\n",checks);
++}
+--- tools/connected_reach_regression.inl
++++ tools/connected_reach_regression.inl
+@@ -0,0 +1,63 @@
++void TestConnectedWeaponReach() {
++    using namespace tr;using namespace tr::motiongun;
++    trackingtest::Clock clock;
++    const auto savedReach0=g_connectedWeaponReach[0],savedReach1=g_connectedWeaponReach[1];
++    const auto savedSerial=VR().m_poseSerial;
++    auto& root=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
++    const auto savedRoot=root;const auto savedHeading=g_headingBase;
++    const auto savedConfig=config;
++    auto& anim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
++    const auto savedAnim=anim;
++    Frame chain[3]={{firstperson::IdentityBasis(),{100,-600,200}},
++                    {firstperson::IdentityBasis(),{100,-300,200}},
++                    {firstperson::IdentityBasis(),{100,-100,200}}};
++    for(int hand=0;hand<2;++hand) {
++        root={};g_headingBase=0;VR().m_poseSerial=100;
++        PublishConnectedWeaponReach(itemMemory,hand,chain,{});
++        Frame requested{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},.7f)),{100,-600,1200}};
++        auto limited=requested;LimitConnectedWeaponWrist(itemMemory,hand,limited);
++        Check(firstperson::Length(Sub(limited.origin,{100,-600,699.8f}))<.02f,
++              "weapon wrist stops at fixed shoulder reach");
++        Check(!std::memcmp(&limited.basis,&requested.basis,sizeof(Basis)),"reach limit retains fresh controller orientation");
++        Frame inside{requested.basis,{100,-600,500}};const auto exact=inside;
++        LimitConnectedWeaponWrist(itemMemory,hand,inside);
++        Check(!std::memcmp(&inside,&exact,sizeof(Frame)),"reachable weapon frame is unchanged");
++        const auto original=g_connectedWeaponReach[hand];
++        for(int reason=0;reason<11;++reason) {
++            auto& reach=g_connectedWeaponReach[hand];reach=original;
++            if(reason==0) reach.valid=false;
++            if(reason==1) reach.item=laraMemory;
++            if(reason==2) ++reach.game;
++            if(reason==3) ++reach.weapon;
++            if(reason==4) ++reach.object;
++            if(reason==5) ++reach.level;
++            if(reason==6) reach.serial-=2;
++            if(reason==7) ++reach.serial;
++            if(reason==8) reach.time-=.11;
++            if(reason==9) reach.units*=2;
++            if(reason==10) ++reach.bodyOffset;
++            auto untouched=requested;LimitConnectedWeaponWrist(itemMemory,hand,untouched);
++            Check(!std::memcmp(&untouched,&requested,sizeof(Frame)),"weapon cannot inherit invalid, stale or recalibrated reach");
++        }
++        g_connectedWeaponReach[hand]=original;
++        root.x_pos=120;root.z_pos=-75;g_headingBase=1.57079632679f;++VR().m_poseSerial;
++        const Frame transport{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},g_headingBase)),{120,0,-75}};
++        auto moved=Multiply(transport,requested);
++        const auto wanted=Multiply(transport,limited);
++        LimitConnectedWeaponWrist(itemMemory,hand,moved);
++        Check(firstperson::Length(Sub(moved.origin,wanted.origin))<.02f,
++              "previous-pose weapon reach follows native movement and artificial turning");
++        Check(!std::memcmp(&moved.basis,&wanted.basis,sizeof(Basis)),"turn transport does not overwrite current hand rotation");
++        root={};g_headingBase=0;VR().m_poseSerial=100;
++        anim=24;Check(NativeLandingAnimation(itemMemory),"fixture enters native hard landing");
++        auto landing=requested;LimitConnectedWeaponWrist(itemMemory,hand,landing);
++        Check(!std::memcmp(&landing,&requested,sizeof(Frame)),"native landing cannot use tracked reach");
++        g_connectedWeaponReach[hand]={};PublishConnectedWeaponReach(itemMemory,hand,chain,{});
++        Check(!g_connectedWeaponReach[hand].valid,"native landing cannot publish tracked arm geometry");
++        anim=savedAnim;
++    }
++    ResetBodyFollower();
++    Check(!g_connectedWeaponReach[0].valid && !g_connectedWeaponReach[1].valid,"body reset invalidates both weapon reach caches");
++    root=savedRoot;g_headingBase=savedHeading;VR().m_poseSerial=savedSerial;config=savedConfig;
++    g_connectedWeaponReach[0]=savedReach0;g_connectedWeaponReach[1]=savedReach1;
++}

@@ -1,0 +1,452 @@
+--- README.md
++++ README.md
+@@ -179,7 +179,7 @@
+ 
+ ### Connected arms and hanging visibility (2026-11-04)
+ 
+-Tracked arms keep their shoulder sockets attached while allowing modest extra
++Tracked arms keep their shoulder sockets attached while following full controller
+ reach. **VR Options > Arm Length** adjusts the arm fit from 80% to 120%, in 1%
+ steps; Select restores 100%. It applies immediately and is independent of body
+ height. This is a manual fit, not an automatic measurement of your real arms.
+@@ -188,11 +188,12 @@
+ Hands follow the controllers exactly through ordinary reach and a small extra
+ allowance. Near full extension, the upper arm and forearm lengthen gradually,
+ without changing limb thickness, hand size, weapon size or controller orientation.
+-Beyond 104% of fitted reach, hand travel gradually softens toward a 112% maximum.
+-Each limb's extra stretch is bounded to 15% of its fitted length. An extremely
+-extended real hand can therefore still move farther than its virtual hand.
+-
+-Lara has no independent collarbones. The compromise distributes the extra give
++There is no outward reach cap or soft resistance: the arms extend as far as
++required to reach the controllers. Very close shoulder-to-hand poses retain an
++inner singularity guard. Arm Length sets the resting proportions, not a maximum
++controller distance. Long reaches can visibly stretch the arms; this is deliberate.
++
++Lara has no independent collarbones. The solver distributes the extra extension
+ through her arm segments while leaving the shoulder sockets on the torso; it
+ does not move her chest to chase the controllers. Guns, muzzle origins and flare
+ lights use the same reach envelope. The original arm reference is retained so
+@@ -3726,7 +3727,7 @@
+ 
+ ### Attached shoulders and limited controller reach (2026-11-14)
+ 
+-Tracked arms keep their shoulder sockets attached while allowing modest extra
++Tracked arms keep their shoulder sockets attached while following full controller
+ reach. **VR Options > Arm Length** adjusts the arm fit from 80% to 120%, in 1%
+ steps; Select restores 100%. It applies immediately and is independent of body
+ height. This is a manual fit, not an automatic measurement of your real arms.
+@@ -3735,11 +3736,12 @@
+ Hands follow the controllers exactly through ordinary reach and a small extra
+ allowance. Near full extension, the upper arm and forearm lengthen gradually,
+ without changing limb thickness, hand size, weapon size or controller orientation.
+-Beyond 104% of fitted reach, hand travel gradually softens toward a 112% maximum.
+-Each limb's extra stretch is bounded to 15% of its fitted length. An extremely
+-extended real hand can therefore still move farther than its virtual hand.
+-
+-Lara has no independent collarbones. The compromise distributes the extra give
++There is no outward reach cap or soft resistance: the arms extend as far as
++required to reach the controllers. Very close shoulder-to-hand poses retain an
++inner singularity guard. Arm Length sets the resting proportions, not a maximum
++controller distance. Long reaches can visibly stretch the arms; this is deliberate.
++
++Lara has no independent collarbones. The solver distributes the extra extension
+ through her arm segments while leaving the shoulder sockets on the torso; it
+ does not move her chest to chase the controllers. Guns, muzzle origins and flare
+ lights use the same reach envelope. The original arm reference is retained so
+@@ -3802,3 +3804,26 @@
+ sweeps at 80/100/120% fit, repeated stereo draws, weapon cache invalidation,
+ menu save/reload and landing-camera regression checks. Headset confirmation is
+ still required; extreme reaches intentionally retain a soft limit.
++
++
++### Full arm reach and slow roomscale motion (2026-11-15)
++
++Tracked arms now have no outward reach limit. The wrist and weapon remain on
++the controller at long reaches; the shoulder stays attached and only the limb
++length stretches. Hand size, gun size and wrist orientation remain unchanged.
++The manual Arm Length setting still adjusts the resting fit independently of height.
++
++Slow roomscale motion has a separate short-history agreement check for head and
++both controller positions. This supplies movement intent to the existing body
++anchor rather than creating a second position solver. It rejects head-led motion,
++checks the intervening trajectory, and avoids using near-vertical inspection
++samples to authorize a turn after looking up. Once a turn is accepted, the old
++six-degree rendering lock is reduced to half a degree. Deep downward inspections
++retain the more conservative existing turn-recovery path.
++
++Accepted physical steps gradually retire retained horizontal lean toward the
++calibrated neck position. Head pitch/yaw are removed from this centering target,
++and visual catch-up is bounded per frame. This cosmetic correction is separate
++from the physical displacement consumed by collision and ledge/fall movement.
++Stationary glances never authorize that recentering. Three tracked devices still infer feet rather than measure
++them; simultaneous head/arm articulation can remain ambiguous.
+--- TombRaiderVR.ini
++++ TombRaiderVR.ini
+@@ -12,7 +12,7 @@
+ ; Defaults synchronized with the Steam TombRaiderVR.ini.good profile.
+ [VR]
+ ; First-person arm fit, independent of body height. Live in VR Options.
+-; 80..120 percent; default 100. Connected arms use bounded soft extension.
++; 80..120 percent; default 100. Connected arms extend freely to the controllers.
+ FirstPersonArmLengthPercent=100
+ Enabled=1
+ ; Built-in stock-texture effect enhancement. No EffectRetex DDS installation.
+--- src/BodyFollower.h
++++ src/BodyFollower.h
+@@ -371,7 +371,7 @@
+         // A meaningful accepted angular error releases the lock; frame-time
+         // convergence then follows continuously instead of timing motion packets.
+         const float facingError=recoveringHeading ? BodyAngle(physicalTarget-yaw) : 0.f;
+-        if(recoveringHeading && allowHeldTurn && std::fabs(facingError)>.104719755f) physicalLocked=false;
++        if(recoveringHeading && allowHeldTurn && std::fabs(facingError)>.008726646f) physicalLocked=false;
+         if(!recoveringHeading) physicalLocked=true;
+         float physical=recoveringHeading && !physicalLocked ?
+             std::clamp(facingError*(1-std::exp(-50*dt)),-3.14159265f*dt,3.14159265f*dt) :
+--- src/ControllerBodyAnchor.h
++++ src/ControllerBodyAnchor.h
+@@ -3,6 +3,7 @@
+ #include "PlantedPivotEvidence.h"
+ #include "InspectionStepEvidence.h"
+ #include "InspectionTurnEvidence.h"
++#include "CoherentBodyMotion.h"
+ namespace tr::firstperson {
+ // Controller POSITIONS, not their aim. Require coordinated head/hand travel.
+ // A fixed reference and separate entry/continuation thresholds reject noise without
+@@ -34,6 +35,7 @@
+ };
+ struct ControllerBodyAnchor {
+     RoomscaleHeadingRecovery heading;
++    CoherentBodyMotion coherentMotion;
+     PhysicalStepIntent stepIntent;
+     PlantedPivotEvidence pivotEvidence,inspectionEvidence;
+     InspectionStepEvidence inspectionStep;
+@@ -49,9 +51,10 @@
+     double time=0,moved=0,referenceTime=0,rotated=0,translated=0;
+     float base=0,yaw=0,height=0,motionYaw=0;
+     int reason=0;float handTravel[2]{};
++    Vec visualHead{},visualOffset{},visualCorrection{};
+     Vec hands[2]{},sampleHands[2]{},sampleEye{},offset{},head{},motionEye{},consumedTravel{};
+     float sampleHeadYaw=0,sampleGazeYaw=0;double headOnlySince=-1;
+-    Vec placementHands[2]{},placementEye{},placementNeck{},placementAnchor{};
++    Vec placementHands[2]{},placementEye{},placementNeck{},placementAnchor{},neutralEyeOffset{};
+     Vec sampleNeckOffset{},placementNeckOffset{},motionPivot{};float motionGazeYaw=0;
+     float placementFacing=0,placementHeadYaw=0;
+     Vec motionSampleHands[2]{};double handMotionTime=0;bool placementQuiet=false;
+@@ -89,13 +92,19 @@
+             loweredInspectionHold=headForward.y<-.85f;
+             motionSampleHands[0]=sampleHands[0]=hands[0]=left;
+             motionSampleHands[1]=sampleHands[1]=hands[1]=right;handMotionTime=now;
+-            head=eye;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
++            neutralEyeOffset=YawVector(neckOffset,-bodyYaw);
++            visualHead=head=eye;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
+             motionPivot=Sub(head,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},bodyYaw));yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
+             CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+             stepIntent.Capture(walkEye,left,right,now);
+             sampleEye=eye;sampleHeadYaw=headYaw;sampleGazeYaw=gazeYaw;sampleNeckOffset=neckOffset;
+             heading.Update(eye,left,right,bodyYaw,headYaw,now,head);return;
+         }
++        const Vec slowPair=Flat(Sub(right,left));
++        const float slowFacing=heading.valid ? BodyAngle(heading.bodyOrigin+std::atan2(slowPair.x,slowPair.z)-heading.facingOrigin) : bodyYaw;
++        if(walking) coherentMotion.Reset();
++        const bool slowMotion=!walking && Length(headForward)>.1f && coherentMotion.Update(eye,left,right,headYaw,now,allowBodyTurn && headForward.y>-.90f,std::fabs(BodyAngle(headYaw-slowFacing))<.104719755f);
++        const bool slowTurn=slowMotion && coherentMotion.turn,slowStep=slowMotion && coherentMotion.step;
+         // Evidence may span several frames, but a new head pose cannot spend
+         // old controller travel after both controllers have stopped.
+         const bool freshHands=Length(Flat(Sub(left,sampleHands[0])))>1.e-6f ||
+@@ -138,7 +147,7 @@
+            Length(Flat(Sub(right,motionSampleHands[1])))>.006f) {
+             motionSampleHands[0]=left;motionSampleHands[1]=right;handMotionTime=now;
+         }
+-        const bool quietHands=now-handMotionTime>=.10;
++        const bool quietHands=now-handMotionTime>=.10 && !slowMotion;
+         if(quietHands && !placementQuiet) CapturePlacementEvidence(eye,left,right,headYaw,neckOffset);
+         placementQuiet=quietHands;
+         const float dt=float(std::clamp(now-time,0.,.05));serial=frame;time=now;turnOutput=0;
+@@ -161,11 +170,11 @@
+             // Unapplied inspection gestures cannot survive this handoff.
+             heading={};
+         }
+-        const bool inspectionTurnConfirmed=inspectionTurn.Update(eye,left,right,headForward,headYaw,now) || recoveringOpposed;
++        const bool inspectionTurnConfirmed=inspectionTurn.Update(eye,left,right,headForward,headYaw,now) || recoveringOpposed || slowTurn;
+         if(inspectionTurnConfirmed) inspectionTurnActive=true;
+         else if(!heading.turning) inspectionTurnActive=false;
+         const bool continuingPhysicalTurn=inspectionTurnActive && heading.turning && now<=heading.continuousUntil;
+-        if(inspectionStep.Update(eye,left,right,headYaw,now)) lastInspectionStep=now;
++        if(slowStep || inspectionStep.Update(eye,left,right,headYaw,now)) lastInspectionStep=now;
+         const bool releaseInspection=inspectionTurnConfirmed || continuingPhysicalTurn || walking || now-lastInspectionStep<2. || headForward.y>-.35f ||
+             std::fabs(BodyAngle(gazeYaw-bodyYaw))<.174532925f;
+         if(releaseInspection) inspectionHold=false;
+@@ -205,7 +214,14 @@
+             if(inspectionHold || loweredInspectionHold) holdHeading();else heading={};
+             stepIntent.Capture(walkEye,left,right,now);translating=false;
+         }
+-        if(recoveringOpposed) {
++        if(slowTurn) {
++            const bool wasTurning=heading.turning;
++            heading.Update(eye,left,right,bodyYaw,headYaw,now,head);
++            if(!wasTurning && !heading.turning) heading.Capture(eye,left,right,headYaw,now);
++            if(!heading.sampleAccepted) heading.target=slowFacing;
++            heading.active=heading.established=heading.turning=heading.sampleAccepted=true;
++            heading.continuousUntil=now+.38;
++        } else if(recoveringOpposed) {
+             heading.target=opposedRecovery.target;
+             heading.active=heading.established=heading.turning=heading.sampleAccepted=true;
+             heading.continuousUntil=now+.38;
+@@ -263,11 +279,11 @@
+         const float c=Length(common);
+         const float rawTravel[2]={Length(Flat(Sub(left,hands[0]))),Length(Flat(Sub(right,hands[1])))};
+         handTravel[0]=rawTravel[0];handTravel[1]=rawTravel[1];
+-        const float threshold=held ? .025f : .003f;
++        const float threshold=held && !slowStep ? .025f : .003f;
+         // Both real controllers must travel; removing a head rotation from
+         // fixed hands is never sufficient evidence. Allow modest arm swing
+         // around the common step, but reject large asymmetric gestures.
+-        const bool translationCoherent=!plantedPivot && h>0 && c>0 &&
++        const bool translationCoherent=slowStep || !plantedPivot && h>0 && c>0 &&
+             (!headLeading || (Dot(delta[0],delta[1])>.95f*Length(delta[0])*Length(delta[1]) &&
+                 Length(Sub(delta[0],delta[1]))<std::max(.008f,c*.25f))) &&
+             Dot(common,stepDelta)>.95f*c*h &&
+@@ -277,7 +293,7 @@
+         // Only admission uses the stance-relative residual. Existing accepted
+         // movement transport stays in neck coordinates to preserve turn/step
+         // consumption and avoid double-counting pending angular progress.
+-        const bool stepConfirmed=stepIntent.Observe(walkEye,left,right,now,
++        const bool stepConfirmed=slowStep || stepIntent.Observe(walkEye,left,right,now,
+             freshHands && !quietHands && translationCoherent);
+         if(!walking && !stepConfirmed && !held) {held=true;height=eye.y;yaw=bodyYaw;}
+         const bool inspectionPlanted=(inspectionHold || loweredInspectionHold) && now-lastInspectionStep>=2.;
+@@ -309,8 +325,8 @@
+         const bool rigidTravel=rotation && placementError<.01f &&
+             std::fabs(BodyAngle(headYaw-placementHeadYaw-placementTurn))<.04f &&
+             std::min(placementTravel[0],placementTravel[1])>.003f;
+-        const bool freshPlacement=std::max(placementTravel[0],placementTravel[1])>=.025f &&
+-            (std::min(placementTravel[0],placementTravel[1])>=.025f || rigidTravel);
++        const bool freshPlacement=std::max(placementTravel[0],placementTravel[1])>=(slowTurn ? .003f : .025f) &&
++            (std::min(placementTravel[0],placementTravel[1])>=(slowTurn ? .003f : .025f) || rigidTravel);
+         // Observation refreshes must not revive an old positional origin.
+         // Allow small pivot-model error during articulated turns, but retire
+         // an origin over 8 cm away from the refreshed neck observation.
+@@ -401,6 +417,23 @@
+             offset=Flat(Sub(eye,head));yaw=bodyYaw;
+             CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+         }
++        // Cosmetic centering must never alter the physical anchor consumed by
++        // collision/roomscale movement. Preserve its independent lean history.
++        const bool visualTravel=translation || (translating && translationCoherent && freshHands && !quietHands);
++        if(walking || Length(headForward)<=.1f) {
++            visualCorrection={};visualHead=head;
++        } else if(visualTravel || rotation || recoveringOpposed) {
++            if(visualTravel) {
++                const Vec centered=Add(walkEye,YawVector(neutralEyeOffset,bodyYaw));
++                const Vec gap=Flat(Sub(centered,Add(head,visualCorrection)));
++                const float distance=Length(gap);
++                if(distance>0) visualCorrection=Add(visualCorrection,Scale(gap,std::min(distance,.5f*dt)/distance));
++            }
++            const Vec travel=Flat(Sub(Add(head,visualCorrection),visualHead));
++            const float distance=Length(travel),limit=currentHeadTravel+(rotation || recoveringOpposed ? 1.35f : .5f)*dt;
++            if(distance>0) visualHead=Add(visualHead,Scale(travel,std::min(distance,limit)/distance));
++        }
++        visualOffset=Flat(Sub(eye,visualHead));
+     }
+ };
+ }
+--- src/ControllerBodyAnchor.inl
++++ src/ControllerBodyAnchor.inl
+@@ -60,7 +60,8 @@
+ bool BodyControllersStationary() { UpdateControllerBodyAnchor();return g_controllerBodyAnchor.held; }
+ bool HasControllerBodyAnchor() { UpdateControllerBodyAnchor();return g_controllerBodyAnchor.valid; }
+ bool BodyControllersPermitTravel() { UpdateControllerBodyAnchor();return !g_controllerBodyAnchor.valid || g_controllerBodyAnchor.translating; }
+-void BodyTrackingOffset(float& right,float& forward) {
++void BodyTrackingOffset(float& right,float& forward,bool physical) {
+     UpdateControllerBodyAnchor();VR().FirstPersonViewOffset(right,forward);
+-    right-=g_controllerBodyAnchor.offset.x;forward-=g_controllerBodyAnchor.offset.z;
++    const auto offset=physical ? g_controllerBodyAnchor.offset : g_controllerBodyAnchor.visualOffset;
++    right-=offset.x;forward-=offset.z;
+ }
+--- src/DefaultIni.h
++++ src/DefaultIni.h
+@@ -8,7 +8,7 @@
+ // comments in the template carry most of what was learned tuning this thing,
+ // and a generated key=value dump would throw all of it away.
+ //
+-// Source: TombRaiderVR.ini, 40671 bytes, 836 lines.
++// Source: TombRaiderVR.ini, 40677 bytes, 836 lines.
+ #pragma once
+ 
+ namespace tr {
+@@ -31,7 +31,7 @@
+ ; Defaults synchronized with the Steam TombRaiderVR.ini.good profile.
+ [VR]
+ ; First-person arm fit, independent of body height. Live in VR Options.
+-; 80..120 percent; default 100. Connected arms use bounded soft extension.
++; 80..120 percent; default 100. Connected arms extend freely to the controllers.
+ FirstPersonArmLengthPercent=100
+ Enabled=1
+ ; Built-in stock-texture effect enhancement. No EffectRetex DDS installation.
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -443,7 +443,7 @@
+ bool BodyControllersStationary();
+ bool HasControllerBodyAnchor();
+ bool BodyControllersPermitTravel();
+-void BodyTrackingOffset(float& right,float& forward);
++void BodyTrackingOffset(float& right,float& forward,bool physical=false);
+ firstperson::BodySizeCalibration g_bodySize;
+ firstperson::AutoBodyCalibration g_autoBodyCalibration;
+ firstperson::TorsoPoseFilter g_torsoPose;
+@@ -1620,7 +1620,7 @@
+     // displacement here so looking down at an edge cannot leave the collision
+     // root behind the rendered body through neck-pivot compensation.
+     if(Cfg().firstPersonFullBodyIK && Cfg().firstPersonMovementStabilization)
+-        BodyTrackingOffset(pending.x,pending.z);
++        BodyTrackingOffset(pending.x,pending.z,true);
+     const float scale = LiveWorldUnitsPerMetre();
+     if (!std::isfinite(scale) || scale <= 1) return {};
+     // Exclude motion already simulated but not yet displayed by interpolation.
+--- src/FirstPersonIK.h
++++ src/FirstPersonIK.h
+@@ -408,8 +408,8 @@
+ inline float ConnectedArmScale(float percent) {
+     return std::isfinite(percent) ? std::clamp(percent,80.f,120.f)*.01f : 1.f;
+ }
+-// Exact tracking through 104% of fitted reach, then a C1 soft limit asymptotic
+-// to 112%. Preserve controller orientation and hand/weapon size throughout.
++// No outward reach limit: hands and weapons follow the tracked controller.
++// Only the inner folded-arm singularity needs a positional guard.
+ inline bool ConnectedArmTarget(const Frame (&chain)[3],const Frame& tracked,Frame& target,float percent=100) {
+     const auto length=[](Vec v) {return std::sqrt(Dot(v,v));};
+     const float scale=ConnectedArmScale(percent);
+@@ -422,9 +422,7 @@
+     Vec direction{};
+     if(!Unit(offset,direction) && !Unit(Sub(chain[2].origin,chain[0].origin),direction)) direction={0,0,1};
+     const float margin=std::min(upper,lower)*.001f;
+-    const float natural=upper+lower-margin,begin=natural*1.04f,band=natural*.08f;
+-    float reach=std::max(distance,std::fabs(upper-lower)+margin);
+-    if(distance>begin) reach=begin-band*std::expm1(-(distance-begin)/band);
++    const float reach=std::max(distance,std::fabs(upper-lower)+margin);
+     target=tracked;
+     if(reach!=distance) target.origin=Add(chain[0].origin,Scale(direction,reach));
+     return true;
+@@ -447,9 +445,14 @@
+     const float extra=natural*extension;
+     // The rig has no clavicles. Keep its socket fixed and distribute give into
+     // the upper arm (60%) and forearm (40%) instead of translating the chest.
+-    // Use proportional weights for unusual rigs to bound each limb to +15%.
++    // Proportional weights keep unusual rigs well conditioned at long reach.
+     const float share=std::clamp(.6f,1.f-1.25f*b/(a+b),1.25f*a/(a+b));
+-    const float lengths[2]={a+extra*share,b+extra*(1-share)};
++    float lengths[2]={a+extra*share,b+extra*(1-share)};
++    const float available=lengths[0]+lengths[1]-std::min(lengths[0],lengths[1])*.001f;
++    if(radius>available) {
++        const float growth=(radius+.001f)/available;
++        lengths[0]*=growth;lengths[1]*=growth;
++    }
+     Frame reference[3]={native[0],native[1],native[2]};
+     for(int i=0;i<2;++i) {
+         Vec axis{};const Vec bone=Sub(native[i+1].origin,native[i].origin);
+--- tests/body_transition_selftest.h
++++ tests/body_transition_selftest.h
+@@ -118,8 +118,8 @@
+     for(int hz:{72,90,120}) {
+         BodyFollower body;body.Update(1,0,0,0,0,{},{},false,tr::firstperson::BodyFollowSettings());
+         for(int i=1;i<=hz;++i) {
+-            body.Update(i+1,double(i)/hz,0,0,0,{},{},false,tr::firstperson::BodyFollowSettings(),{},false,true,0,true,true,.08f,true);
+-            Check(body.yaw==0,"small accepted facing errors keep the lower-body geometric lock planted");
++            body.Update(i+1,double(i)/hz,0,0,0,{},{},false,tr::firstperson::BodyFollowSettings(),{},false,true,0,true,true,.004f,true);
++            Check(body.yaw==0,"sub-half-degree accepted errors keep the lower-body lock planted");
+         }
+         for(int i=1;i<=hz*3;++i) {
+             const float goal=.2f+i*.6f/hz;
+@@ -1133,7 +1133,7 @@
+             for(int limb=0;limb<2;++limb) {
+                 const float a=firstperson::Length(Sub(reference[limb+1].origin,reference[limb].origin));
+                 const float b=firstperson::Length(Sub(actual[limb+1].origin,actual[limb].origin));
+-                Check(b>=a-.1f && b<=a*1.15f+.1f,"jump limb stretch stays bounded");
++                Check(b>=a-.1f && std::isfinite(b),"jump limb stretch remains finite");
+             }
+         }
+             Check(g_bodySize.factor==fixedSize,"jump never recalibrates visual size");
+--- tests/connected_reach_expected.h
++++ tests/connected_reach_expected.h
+@@ -7,8 +7,7 @@
+     if(distance<.00001f) {delta=Sub(chain[2].origin,chain[0].origin);distance=Length(delta);}
+     const float margin=std::min(a,b)*.001f;
+     const float requested=Length(Sub(target.origin,chain[0].origin));
+-    const double reach=a+b-margin,begin=1.04*reach,band=.08*reach;
+-    const float radius=requested>begin ? float(begin+band*(1-std::exp(-(requested-begin)/band))) : std::max(requested,std::fabs(a-b)+margin);
++    const float radius=std::max(requested,std::fabs(a-b)+margin);
+     if(requested!=radius) target.origin=Add(chain[0].origin,Scale(delta,radius/distance));
+     return target;
+ }
+--- tests/jump_arm_selftest.h
++++ tests/jump_arm_selftest.h
+@@ -155,8 +155,8 @@
+                         const auto change=Multiply(actual,inverse);
+                         for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
+                             float dot=0;for(int k=0;k<3;++k) dot+=change.basis.r[k][r]*change.basis.r[k][c];
+-                            Check(std::fabs(dot-(r==c?1.f:0.f))<.323f,
+-                                  "jump shoulder adjustment retains bounded arm geometry in both eyes");
++                            Check(std::isfinite(dot),
++                                  "jump shoulder adjustment retains finite connected arm geometry in both eyes");
+                         }
+                     }
+                     if(state==28 && j<7) Check(!std::memcmp(render+i*12,ikNative+i*12,12*sizeof(float)),
+--- tests/recorded_hands_out_regression.inl
++++ tests/recorded_hands_out_regression.inl
+@@ -657,7 +657,7 @@
+         for(const auto& s:samples) {
+             anchor.Update(s.frame,s.time,s.eye,s.left,s.right,0,recordedBody?s.body:samples[0].body,true,false,s.yaw,.15f,s.forward);
+             if(s.frame==samples[0].frame) planted=anchor.head;
+-            Check(Length(Flat(Sub(anchor.head,planted)))<.00001f,
++            Check(Length(Flat(Sub(anchor.head,planted)))<.00001f && Length(Flat(Sub(anchor.visualHead,planted)))<.00001f,
+                 "recorded hands-out torso swivel retains the planted position");
+             Check(!anchor.translating && !anchor.rotating && !anchor.heading.active,
+                 "recorded hands-out torso swivel grants neither travel nor body yaw");
+@@ -672,8 +672,10 @@
+                 if(!firstStep && walking.translating) firstStep=i;
+             }
+             Check(firstStep>0 && firstStep<=25,"straight walking releases a hands-out swivel hold within 25 poses");
+-            Check(Length(Flat(Sub(Sub(walking.head,planted),shift)))<.015f,
+-                "walking from the recorded swivel posture retains physical travel and the existing lean");
++        Check(Length(Flat(Sub(Sub(walking.head,planted),shift)))<.015f,
++            "cosmetic centering preserves physical step displacement and lean");
++            Check(Length(Flat(Sub(walking.visualHead,Add(Add(Sub(last.eye,Scale(Flat(last.forward),.15f)),YawVector(walking.neutralEyeOffset,recordedBody?last.body:samples[0].body)),shift))))<.015f,
++                "walking from the recorded swivel posture consumes travel and recenters the body");
+         }
+     }
+ }
+--- tests/recorded_planted_glance_regression.inl
++++ tests/recorded_planted_glance_regression.inl
+@@ -1589,23 +1589,28 @@
+     for(const auto& s:samples) {
+         anchor.Update(s.frame,s.time,s.eye,s.left,s.right,s.base,s.body,true,false,s.yaw,s.neck,s.forward);
+         if(s.frame==samples[0].frame) planted=anchor.head;
+-        Check(Length(Flat(Sub(anchor.head,planted)))<.00001f,
++        Check(Length(Flat(Sub(anchor.head,planted)))<.00001f && Length(Flat(Sub(anchor.visualHead,planted)))<.00001f,
+             "recorded raised/lowered-hand planted glances keep the body position fixed");
+         Check(!anchor.translating,"recorded planted glances do not grant gameplay roomscale travel");
+     }
+     // A real shared displacement from this exact leaned posture must release
+-    // promptly in each direction, retaining the already established lean.
++    // promptly in each direction, then retire the old lean gradually while walking.
+     const auto& last=samples[sizeof(samples)/sizeof(samples[0])-1];
+     for(int direction=0;direction<4;++direction) {
+         auto walking=anchor;tr::motiongun::Vec shift{};int firstStep=0;
+         for(int i=1;i<=180;++i) {
+             shift=YawVector({0,0,i*.0015f},direction*1.5707963f);
++            const auto previous=walking.visualHead;
+             walking.Update(last.frame+i,last.time+i/90.,Add(last.eye,shift),Add(last.left,shift),Add(last.right,shift),
+                 last.base,last.body,true,false,last.yaw,last.neck,last.forward);
+             if(!firstStep && walking.translating) firstStep=i;
++            if(firstStep && i>firstStep+2) Check(Length(Flat(Sub(walking.visualHead,previous)))<.010f,
++                "confirmed walking recenters smoothly without a body jump");
+         }
+         Check(firstStep>0 && firstStep<=25,"a real small step after the recorded glance releases without an extra delay");
+         Check(Length(Flat(Sub(Sub(walking.head,planted),shift)))<.015f,
+-            "walking after a planted glance retains the lean without losing physical travel");
++            "cosmetic centering preserves physical step displacement and lean");
++        Check(Length(Flat(Sub(walking.visualHead,Add(Add(Sub(last.eye,Scale(Flat(last.forward),last.neck)),YawVector(walking.neutralEyeOffset,last.body)),shift))))<.015f,
++            "walking after a planted glance recenters the body after consuming physical travel");
+     }
+ }

@@ -1,0 +1,63 @@
+void TestConnectedWeaponReach() {
+    using namespace tr;using namespace tr::motiongun;
+    trackingtest::Clock clock;
+    const auto savedReach0=g_connectedWeaponReach[0],savedReach1=g_connectedWeaponReach[1];
+    const auto savedSerial=VR().m_poseSerial;
+    auto& root=*reinterpret_cast<PHD_3DPOS*>(itemMemory+off::item_pos);
+    const auto savedRoot=root;const auto savedHeading=g_headingBase;
+    const auto savedConfig=config;
+    auto& anim=*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_number);
+    const auto savedAnim=anim;
+    Frame chain[3]={{firstperson::IdentityBasis(),{100,-600,200}},
+                    {firstperson::IdentityBasis(),{100,-300,200}},
+                    {firstperson::IdentityBasis(),{100,-100,200}}};
+    for(int hand=0;hand<2;++hand) {
+        root={};g_headingBase=0;VR().m_poseSerial=100;
+        PublishConnectedWeaponReach(itemMemory,hand,chain,{});
+        Frame requested{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},.7f)),{100,-600,1200}};
+        auto limited=requested;LimitConnectedWeaponWrist(itemMemory,hand,limited);
+        Check(firstperson::Length(Sub(limited.origin,{100,-600,699.8f}))<.02f,
+              "weapon wrist stops at fixed shoulder reach");
+        Check(!std::memcmp(&limited.basis,&requested.basis,sizeof(Basis)),"reach limit retains fresh controller orientation");
+        Frame inside{requested.basis,{100,-600,500}};const auto exact=inside;
+        LimitConnectedWeaponWrist(itemMemory,hand,inside);
+        Check(!std::memcmp(&inside,&exact,sizeof(Frame)),"reachable weapon frame is unchanged");
+        const auto original=g_connectedWeaponReach[hand];
+        for(int reason=0;reason<11;++reason) {
+            auto& reach=g_connectedWeaponReach[hand];reach=original;
+            if(reason==0) reach.valid=false;
+            if(reason==1) reach.item=laraMemory;
+            if(reason==2) ++reach.game;
+            if(reason==3) ++reach.weapon;
+            if(reason==4) ++reach.object;
+            if(reason==5) ++reach.level;
+            if(reason==6) reach.serial-=2;
+            if(reason==7) ++reach.serial;
+            if(reason==8) reach.time-=.11;
+            if(reason==9) reach.units*=2;
+            if(reason==10) ++reach.bodyOffset;
+            auto untouched=requested;LimitConnectedWeaponWrist(itemMemory,hand,untouched);
+            Check(!std::memcmp(&untouched,&requested,sizeof(Frame)),"weapon cannot inherit invalid, stale or recalibrated reach");
+        }
+        g_connectedWeaponReach[hand]=original;
+        root.x_pos=120;root.z_pos=-75;g_headingBase=1.57079632679f;++VR().m_poseSerial;
+        const Frame transport{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},g_headingBase)),{120,0,-75}};
+        auto moved=Multiply(transport,requested);
+        const auto wanted=Multiply(transport,limited);
+        LimitConnectedWeaponWrist(itemMemory,hand,moved);
+        Check(firstperson::Length(Sub(moved.origin,wanted.origin))<.02f,
+              "previous-pose weapon reach follows native movement and artificial turning");
+        Check(!std::memcmp(&moved.basis,&wanted.basis,sizeof(Basis)),"turn transport does not overwrite current hand rotation");
+        root={};g_headingBase=0;VR().m_poseSerial=100;
+        anim=24;Check(NativeLandingAnimation(itemMemory),"fixture enters native hard landing");
+        auto landing=requested;LimitConnectedWeaponWrist(itemMemory,hand,landing);
+        Check(!std::memcmp(&landing,&requested,sizeof(Frame)),"native landing cannot use tracked reach");
+        g_connectedWeaponReach[hand]={};PublishConnectedWeaponReach(itemMemory,hand,chain,{});
+        Check(!g_connectedWeaponReach[hand].valid,"native landing cannot publish tracked arm geometry");
+        anim=savedAnim;
+    }
+    ResetBodyFollower();
+    Check(!g_connectedWeaponReach[0].valid && !g_connectedWeaponReach[1].valid,"body reset invalidates both weapon reach caches");
+    root=savedRoot;g_headingBase=savedHeading;VR().m_poseSerial=savedSerial;config=savedConfig;
+    g_connectedWeaponReach[0]=savedReach0;g_connectedWeaponReach[1]=savedReach1;
+}

@@ -14,7 +14,10 @@
 #include "../src/VRSystem.h"
 #include "../src/InlineHook.h"
 #undef private
+#include "../tools/TrackingTestClock.h"
+#define QueryPerformanceCounter trackingtest::Counter
 #include "../src/FirstPerson.cpp"
+#undef QueryPerformanceCounter
 #include "../src/Gamepad.cpp"
 
 namespace tr {
@@ -76,7 +79,8 @@ void VRSystem::RecenterView() { RecenterHead(); }
 void VRSystem::RecenterHead() { if (!testAllowRecenter) std::abort(); ++testRecenterCalls; }
 void VRSystem::FirstPersonViewOffset(float& x,float& z) const { x=testViewRight; z=testViewForward; }
 float VRSystem::HeadVerticalOffset() const { return testViewRise; }
-float VRSystem::FirstPersonPostureDrop() const { return -testViewRise; }
+float testPostureNeckDrop=0;
+float VRSystem::FirstPersonPostureDrop() const { return -testViewRise-testPostureNeckDrop; }
 void VRSystem::ConsumeHeadFloorOffset(float x,float z) { if (x!=0 || z!=0) std::abort(); }
 bool VRSystem::ControllerPose(int hand,vr::HmdMatrix34_t& pose) const {
     pose=testControllerPose[hand]; return testPoseAvailable && testMissingHand!=hand;
@@ -384,10 +388,15 @@ void TestResponsiveEntry() {
 #include "jump_arm_selftest.h"
 #include "connected_arm_math_selftest.h"
 #include "body_transition_selftest.h"
+#include "torso_clearance_selftest.h"
 
+#include "connected_reach_selftest.h"
 int main() {
+    BodyRig(1,false);TestConnectedWeaponReach();
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     TestJumpArms();TestConnectedArmMath();
     TestBodyPosition();
+    TestTorsoClearance();
     TestBodyTransitions();
     TestManorPiano();
     TestMountCameraSmoothing();

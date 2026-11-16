@@ -36,7 +36,10 @@ void TestConnectedArmMath() {
                 }
                 if(j<2) Check(nearVec(Transform(changes[j],chain[j+1].origin),Multiply(changes[j+1],chain[j+1]).origin),
                     "roll continuity keeps the arm mesh joined at its elbow and wrist");
-                if(j==0) Check(nearVec(actual.origin,chain[0].origin),"roll continuity never detaches the shoulder");
+                if(j==0) {
+                    Frame solved[3]{};for(int k=0;k<3;++k) solved[k]=Multiply(changes[k],chain[k]);
+                    CheckRigidTrackedReach(chain,solved);
+                }
                 if(j==2) {
                     Check(nearVec(actual.origin,target.origin),"glance protection leaves pistol wrist position exact");
                     for(int r=0;r<3;++r) for(int c=0;c<3;++c)
@@ -63,13 +66,8 @@ void TestConnectedArmMath() {
               "pistol reaches beyond anatomical range with full controller roll");
         Frame output[3]{};for(int j=0;j<3;++j) output[j]=Multiply(changes[j],chain[j]);
         Check(nearVec(output[2].origin,target.origin),"pistol wrist follows controller immediately");
-        Check(nearVec(output[0].origin,chain[0].origin),"pistol shoulder remains anchored to the torso beyond natural reach");
-        const float reach=firstperson::Length(Sub(target.origin,chain[0].origin));
-        const float natural=firstperson::Length(Sub(chain[1].origin,chain[0].origin))+firstperson::Length(Sub(chain[2].origin,chain[1].origin));
+        CheckRigidTrackedReach(chain,output);
         for(int j=0;j<2;++j) {
-            Check(std::fabs(firstperson::Length(Sub(output[j+1].origin,output[j].origin))-
-                std::max(1.f,reach/(natural-std::min(firstperson::Length(Sub(chain[1].origin,chain[0].origin)),firstperson::Length(Sub(chain[2].origin,chain[1].origin)))*.001f))*size*firstperson::Length(Sub(armBind[j+1].origin,armBind[j].origin)))<.04f,
-                "pistol reach uses only the extension needed to keep the shoulder attached and wrist tracked");
             Check(nearVec(Transform(changes[j],chain[j+1].origin),output[j+1].origin),"pistol arm meshes remain joined at elbow and wrist");
         }
     }

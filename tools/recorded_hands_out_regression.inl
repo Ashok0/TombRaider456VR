@@ -657,7 +657,7 @@ void TestRecordedHandsOutSwivels() {
         for(const auto& s:samples) {
             anchor.Update(s.frame,s.time,s.eye,s.left,s.right,0,recordedBody?s.body:samples[0].body,true,false,s.yaw,.15f,s.forward);
             if(s.frame==samples[0].frame) planted=anchor.head;
-            Check(Length(Flat(Sub(anchor.head,planted)))<.00001f,
+            Check(Length(Flat(Sub(anchor.head,planted)))<.00001f && Length(Flat(Sub(anchor.visualHead,planted)))<.00001f,
                 "recorded hands-out torso swivel retains the planted position");
             Check(!anchor.translating && !anchor.rotating && !anchor.heading.active,
                 "recorded hands-out torso swivel grants neither travel nor body yaw");
@@ -672,8 +672,10 @@ void TestRecordedHandsOutSwivels() {
                 if(!firstStep && walking.translating) firstStep=i;
             }
             Check(firstStep>0 && firstStep<=25,"straight walking releases a hands-out swivel hold within 25 poses");
-            Check(Length(Flat(Sub(Sub(walking.head,planted),shift)))<.015f,
-                "walking from the recorded swivel posture retains physical travel and the existing lean");
+        Check(Length(Flat(Sub(Sub(walking.head,planted),shift)))<.015f,
+            "cosmetic centering preserves physical step displacement and lean");
+            Check(Length(Flat(Sub(walking.visualHead,Add(Add(Sub(last.eye,Scale(Flat(last.forward),.15f)),YawVector(walking.neutralEyeOffset,recordedBody?last.body:samples[0].body)),shift))))<.015f,
+                "walking from the recorded swivel posture consumes travel and recenters the body");
         }
     }
 }

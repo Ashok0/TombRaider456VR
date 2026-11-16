@@ -10,6 +10,11 @@
 #include <cstdlib>
 
 namespace tr {
+bool FirstPersonBodyClearance(float*,uint64_t&) { return false; }
+bool FirstPersonTorsoMeasureInfo(float*,uint64_t&,bool&) { return false; }
+bool FirstPersonTorsoBufferKnown(unsigned) { return false; }
+void FirstPersonTorsoMeasure(unsigned,const float*,const float*,unsigned) {}
+
 void FirstPersonDrawLara(void* item,void*,void (__fastcall* draw)(void*)) { draw(item); }
 Config testConfig;
 RenderState testState{};
@@ -107,9 +112,27 @@ float LandingPeak(int hz) {
     return peak;
 }
 
+void TestIrregularPhysicsFrames() {
+    using namespace tr;
+    ResetPhysics();testConfig.dynamicBonesStiffness=630;testConfig.dynamicBonesDamping=9.5f;
+    testConfig.dynamicBonesGravity=5400;testConfig.dynamicBonesMaxDisplace=40;
+    testConfig.dynamicBonesDriveMode=1;testConfig.dynamicBonesAirGravity=1;
+    for(int frame=0;frame<600;++frame) Solve(1.f/90);
+    for(auto& bone:g_bone) bone.x[1]+=1;
+    const float times[]={1.f/90,.09f,1.f/60,.075f,.095f};float offset[3]{};
+    for(int frame=0;frame<200;++frame) {
+        Solve(times[frame%5]);
+        Require(DynamicBonesWorldOffset(offset) && std::fabs(offset[1])<2,
+                "long frames damp grounded motion instead of amplifying it into the clamp");
+    }
+    Require(std::fabs(offset[1])<.001f && g_jumps==0 && g_lands==0,
+            "irregular frames settle without synthetic jump or landing events");
+}
+
 int main(int argc, char** argv) {
     using namespace tr;
     Require(argc >= 2, "supply the stock/retail/Gold executable paths");
+    TestIrregularPhysicsFrames();
     const float p60 = LandingPeak(60), p90 = LandingPeak(90), p120 = LandingPeak(120);
     Require(std::fabs(p60 - p120) / p120 < 0.2f && std::fabs(p90 - p120) / p120 < 0.2f,
             "landing strength remains comparable at 60/90/120 Hz");
@@ -121,11 +144,18 @@ int main(int argc, char** argv) {
     Require(ReadLaraAir(air, speed) && !air, "status bits do not masquerade as airborne");
     Air(true, 123);
     Require(ReadLaraAir(air, speed) && air && speed == 123, "TR1-3 item offsets and flag width");
-    int16_t angle = 16384;
-    std::memcpy(testItem + 102, &angle, 2);
     float forward[3]{};
-    Require(DynamicBonesLaraForward(forward) && forward[0] > 0.999f && std::fabs(forward[2]) < 0.001f,
-            "TR1-3 facing offset drives front-of-chest selection");
+    Require(!DynamicBonesLaraForward(forward),"no chest-facing reference before a live body capture");
+    g_settled=true;
+    for(float yaw:{0.f,.7f,2.4f,3.1415926f,-1.57f}) {
+        auto& root=g_best.joints[0];root={};
+        root.m[0]=root.m[10]=std::cos(yaw);root.m[2]=std::sin(yaw);root.m[8]=-std::sin(yaw);root.m[5]=1;
+        g_torsoThis=root;g_fwd=0;g_fwdSamples=0;g_fwdEvidence=0;
+        for(int frame=0;frame<30;++frame) UpdateForward();
+        Require(DynamicBonesLaraForward(forward) && g_fwd==1,
+                "render heading cannot reverse chest front selection against the world-facing item");
+    }
+    g_settled=false;
 
     Joint palette[32]{};
     for (int j = 0; j < 32; ++j) {

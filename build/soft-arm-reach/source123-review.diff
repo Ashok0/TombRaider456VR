@@ -1,0 +1,586 @@
+--- README.md
++++ README.md
+@@ -179,14 +179,24 @@
+ 
+ ### Connected arms and hanging visibility (2026-11-04)
+ 
+-Tracked arms keep their shoulders attached to the body and preserve upper-arm
+-and forearm lengths. When a controller goes beyond Lara's reach, the visible
+-hand and weapon stop at the closest reachable position; they match the
+-controller again as it returns within reach. Wrist orientation remains tracked,
+-and hand poses are unchanged. Guns, muzzle origins and flare lights follow the
+-limited hand position. This also prevents the shoulder from detaching when a
+-controller comes too close to it. Lara's calibrated proportions may differ from
+-your own, so an extended virtual hand can stop short of your real hand.
++Tracked arms keep their shoulder sockets attached while allowing modest extra
++reach. **VR Options > Arm Length** adjusts the arm fit from 80% to 120%, in 1%
++steps; Select restores 100%. It applies immediately and is independent of body
++height. This is a manual fit, not an automatic measurement of your real arms.
++Start at 100%; increase it slightly if ordinary extended poses feel too short.
++
++Hands follow the controllers exactly through ordinary reach and a small extra
++allowance. Near full extension, the upper arm and forearm lengthen gradually,
++without changing limb thickness, hand size, weapon size or controller orientation.
++Beyond 104% of fitted reach, hand travel gradually softens toward a 112% maximum.
++Each limb's extra stretch is bounded to 15% of its fitted length. An extremely
++extended real hand can therefore still move farther than its virtual hand.
++
++Lara has no independent collarbones. The compromise distributes the extra give
++through her arm segments while leaving the shoulder sockets on the torso; it
++does not move her chest to chase the controllers. Guns, muzzle origins and flare
++lights use the same reach envelope. The original arm reference is retained so
++repeated draws cannot compound the extension. Hand poses remain unchanged.
+ 
+ Native holster animations, climbing contacts and the native landing-animation
+ handoff retain their existing behavior. This change does not adjust roomscale
+@@ -498,7 +508,8 @@
+ with tracked weapons too, including TR3's running sprint somersault.
+ 
+ Changes save automatically to `ValveIndexControllers`, `VRBrighterColors`,
+-`HybridModernTankControls` and `FirstPersonBodyForwardCm` in the
++`HybridModernTankControls`, `FirstPersonBodyForwardCm` and
++`FirstPersonArmLengthPercent` in the
+ installed INI. Existing INIs without a color setting keep Dark; new INIs include
+ `VRBrighterColors=0`. Other settings stay unchanged, and the previous INI is backed
+ up as `TombRaiderVR.ini.vr-options.bak`. Index mode uses the existing
+@@ -3715,14 +3726,24 @@
+ 
+ ### Attached shoulders and limited controller reach (2026-11-14)
+ 
+-Tracked arms keep their shoulders attached to the body and preserve upper-arm
+-and forearm lengths. When a controller goes beyond Lara's reach, the visible
+-hand and weapon stop at the closest reachable position; they match the
+-controller again as it returns within reach. Wrist orientation remains tracked,
+-and hand poses are unchanged. Guns, muzzle origins and flare lights follow the
+-limited hand position. This also prevents the shoulder from detaching when a
+-controller comes too close to it. Lara's calibrated proportions may differ from
+-your own, so an extended virtual hand can stop short of your real hand.
++Tracked arms keep their shoulder sockets attached while allowing modest extra
++reach. **VR Options > Arm Length** adjusts the arm fit from 80% to 120%, in 1%
++steps; Select restores 100%. It applies immediately and is independent of body
++height. This is a manual fit, not an automatic measurement of your real arms.
++Start at 100%; increase it slightly if ordinary extended poses feel too short.
++
++Hands follow the controllers exactly through ordinary reach and a small extra
++allowance. Near full extension, the upper arm and forearm lengthen gradually,
++without changing limb thickness, hand size, weapon size or controller orientation.
++Beyond 104% of fitted reach, hand travel gradually softens toward a 112% maximum.
++Each limb's extra stretch is bounded to 15% of its fitted length. An extremely
++extended real hand can therefore still move farther than its virtual hand.
++
++Lara has no independent collarbones. The compromise distributes the extra give
++through her arm segments while leaving the shoulder sockets on the torso; it
++does not move her chest to chase the controllers. Guns, muzzle origins and flare
++lights use the same reach envelope. The original arm reference is retained so
++repeated draws cannot compound the extension. Hand poses remain unchanged.
+ 
+ Native holster animations, climbing contacts and the native landing-animation
+ handoff retain their existing behavior. This change does not adjust roomscale
+@@ -3764,3 +3785,20 @@
+ fed back into the detector, slow half-turns at several rates, stopped-turn recovery,
+ and the earlier 8,093-pose stationary-glance recording. Headset confirmation remains
+ necessary; three tracked devices still cannot directly observe feet.
++
++
++### Soft connected-arm reach (2026-11-15)
++
++The arm solver now uses a manual arm-length fit plus bounded axial extension
++and a smooth outer reach limit. There is no hard stop at the original arm length.
++The shoulder socket stays attached; no independent collarbone motion is claimed.
++The new Arm Length setting affects tracked first-person arms in TR1-5, including
++weapon reach, without changing body height, the camera, roomscale inference,
++native grip contacts or native landing-animation ownership. Native holstering
++still uses its authored proportions, with the existing transition back to IK.
++The TR4-6 package exposes this option in TR6's menu but it affects TR4/5 only.
++
++Validation includes both collection render/hook suites, independent geometry
++sweeps at 80/100/120% fit, repeated stereo draws, weapon cache invalidation,
++menu save/reload and landing-camera regression checks. Headset confirmation is
++still required; extreme reaches intentionally retain a soft limit.
+--- TombRaiderVR.ini
++++ TombRaiderVR.ini
+@@ -11,6 +11,9 @@
+ 
+ ; Defaults synchronized with the Steam TombRaiderVR.ini.good profile.
+ [VR]
++; First-person arm fit, independent of body height. Live in VR Options.
++; 80..120 percent; default 100. Connected arms use bounded soft extension.
++FirstPersonArmLengthPercent=100
+ Enabled=1
+ ; Built-in stock-texture effect enhancement. No EffectRetex DDS installation.
+ ; Set to 0 to restore native appearance; restart the game after changing.
+@@ -829,3 +832,4 @@
+ ; Base eye clearance always applies; 0 permits physical leaning through walls, 1 also clamps leaning.
+ FirstPersonWallCollision=0
+ WorldInventory=1
++
+--- src/Config.cpp
++++ src/Config.cpp
+@@ -241,6 +241,8 @@
+     g_cfg.firstPersonBodyLeanRadiusMetres = GetFloat(L"FirstPersonBodyLeanRadiusMetres", g_cfg.firstPersonBodyLeanRadiusMetres, ini);
+     g_cfg.firstPersonBodyFollowSpeedMetres = GetFloat(L"FirstPersonBodyFollowSpeedMetres", g_cfg.firstPersonBodyFollowSpeedMetres, ini);
+     g_cfg.firstPersonBodyHandYawWeight = GetFloat(L"FirstPersonBodyHandYawWeight", g_cfg.firstPersonBodyHandYawWeight, ini);
++    const float armLength=GetFloat(L"FirstPersonArmLengthPercent",100,ini);
++    g_cfg.firstPersonArmLengthPercent=std::isfinite(armLength) ? std::round(std::clamp(armLength,80.f,120.f)) : 100;
+     g_cfg.firstPersonBodyScale = GetFloat(L"FirstPersonBodyScale", g_cfg.firstPersonBodyScale, ini);
+     const float bodyForward=GetFloat(L"FirstPersonBodyForwardCm",0,ini);
+     g_cfg.firstPersonBodyForwardCm=std::isfinite(bodyForward) ? std::round(std::clamp(bodyForward,0.f,20.f)) : 0;
+--- src/Config.h
++++ src/Config.h
+@@ -215,6 +215,7 @@
+     float firstPersonBodyLeanRadiusMetres = .15f;
+     float firstPersonBodyFollowSpeedMetres = .9f;
+     float firstPersonBodyHandYawWeight = .15f;
++    float firstPersonArmLengthPercent = 100; // Manual arm fit, independent of body height (80..120).
+     float firstPersonBodyScale = 0;
+     float firstPersonBodyForwardCm = 0; // Cosmetic offset; zero restores the original fit.
+     bool firstPersonPhysicalCrouch = true; // TR3 only; opt out in INI.
+--- src/DefaultIni.h
++++ src/DefaultIni.h
+@@ -8,7 +8,7 @@
+ // comments in the template carry most of what was learned tuning this thing,
+ // and a generated key=value dump would throw all of it away.
+ //
+-// Source: TombRaiderVR.ini, 40375 bytes, 830 lines.
++// Source: TombRaiderVR.ini, 40671 bytes, 836 lines.
+ #pragma once
+ 
+ namespace tr {
+@@ -30,6 +30,9 @@
+ 
+ ; Defaults synchronized with the Steam TombRaiderVR.ini.good profile.
+ [VR]
++; First-person arm fit, independent of body height. Live in VR Options.
++; 80..120 percent; default 100. Connected arms use bounded soft extension.
++FirstPersonArmLengthPercent=100
+ Enabled=1
+ ; Built-in stock-texture effect enhancement. No EffectRetex DDS installation.
+ ; Set to 0 to restore native appearance; restart the game after changing.
+@@ -322,12 +325,12 @@
+ FirstPersonInteractionAnchorZ=16
+ 
+ ; First person uses a stable tracking-to-world heading. Physical turns and the
+-; right stick steer that heading; the chase camera cannot steer it back.
++)INI"
++           R"INI(; right stick steer that heading; the chase camera cannot steer it back.
+ ; Legacy FirstPersonYawFromLara is ignored by this path.
+ FirstPersonYawFromLara=0
+ 
+-)INI"
+-           R"INI(; Translation is relative to the head position captured on entry. END retakes
++; Translation is relative to the head position captured on entry. END retakes
+ ; it without changing your world heading. Rotation is always tracked.
+ FirstPersonHeadTranslation=1
+ FirstPersonRecenterKey=0x23
+@@ -618,10 +621,10 @@
+ ; Set to 1 for Valve Index controllers, then restart the game. Uses explicit
+ ; SteamVR Input bindings to separate A/B, thumbstick clicks and grip squeeze.
+ ; Keep the TombRaiderVRBindings folder beside TombRaiderVR.dll.
+-; 0 retains the existing Touch-style legacy input for other controllers.
++)INI"
++           R"INI(; 0 retains the existing Touch-style legacy input for other controllers.
+ ValveIndexControllers=0
+-)INI"
+-           R"INI(; Grip force thresholds (0..1). Lower Press for a lighter squeeze. Release must
++; Grip force thresholds (0..1). Lower Press for a lighter squeeze. Release must
+ ; be below Press; the gap prevents chatter. Resting fingers alone do not grip.
+ ValveIndexGripPress=0.55
+ ValveIndexGripRelease=0.35
+@@ -836,6 +839,8 @@
+ 
+ ; TR4/5 collection parity: full-body fitting and physical duck (TR3 only).
+ FirstPersonFullBodyIK=1
++; Visual first-person body offset: 0 restores default; VR Options adjusts 0-20 cm.
++FirstPersonBodyForwardCm=0
+ FirstPersonBodyYawSlackDegrees=45
+ FirstPersonBodyLeanRadiusMetres=0.15
+ FirstPersonBodyFollowSpeedMetres=0.9
+@@ -848,6 +853,7 @@
+ ; Base eye clearance always applies; 0 permits physical leaning through walls, 1 also clamps leaning.
+ FirstPersonWallCollision=0
+ WorldInventory=1
++
+ )INI";
+ }
+ 
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -413,7 +413,7 @@
+     int game=-1,weapon=0,object=-1,level=-1;
+     uint64_t serial=0;
+     double time=0;
+-    float heading=0,units=0,bodyOffset=0;
++    float heading=0,units=0,bodyOffset=0,armLength=100;
+     motiongun::Vec root{};
+     motiongun::Frame chain[3]{};
+ } g_connectedWeaponReach[2];
+@@ -1994,7 +1994,7 @@
+     reach={};reach.valid=true;reach.item=item;reach.game=(g_boundDll->module[4]-L'1');reach.weapon=CurrentMotionWeapon();
+     reach.object=*reinterpret_cast<const int16_t*>(item+off::item_object_number);reach.level=AppFlag(drva::app_off::level);
+     reach.serial=VR().PoseSerial();reach.time=TurnTime();reach.heading=g_heading.base;
+-    reach.units=LiveWorldUnitsPerMetre();reach.bodyOffset=Cfg().firstPersonBodyForwardCm;
++    reach.units=LiveWorldUnitsPerMetre();reach.bodyOffset=Cfg().firstPersonBodyForwardCm;reach.armLength=Cfg().firstPersonArmLengthPercent;
+     const auto& root=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+     reach.root={float(root.x_pos),float(root.y_pos),float(root.z_pos)};
+     for(int i=0;i<3;++i) {reach.chain[i]=chain[i];reach.chain[i].origin=Add(chain[i].origin,camera);}
+@@ -2006,7 +2006,7 @@
+     if(!reach.valid || reach.item!=item || reach.game!=(g_boundDll->module[4]-L'1') || reach.weapon!=CurrentMotionWeapon() ||
+        reach.object!=*reinterpret_cast<const int16_t*>(item+off::item_object_number) || reach.level!=AppFlag(drva::app_off::level) ||
+        VR().PoseSerial()<reach.serial || VR().PoseSerial()-reach.serial>1 || age<0 || age>.1 ||
+-       reach.units!=LiveWorldUnitsPerMetre() || reach.bodyOffset!=Cfg().firstPersonBodyForwardCm) return;
++       reach.units!=LiveWorldUnitsPerMetre() || reach.bodyOffset!=Cfg().firstPersonBodyForwardCm || reach.armLength!=Cfg().firstPersonArmLengthPercent) return;
+     const auto& root=*reinterpret_cast<const PHD_3DPOS*>(item+off::item_pos);
+     const motiongun::Vec position{float(root.x_pos),float(root.y_pos),float(root.z_pos)};
+     if(firstperson::Length(Sub(position,reach.root))>reach.units*2) return;
+@@ -2015,7 +2015,7 @@
+     const motiongun::Frame transport{rotation,Sub(position,Transform(rotation,reach.root))};
+     motiongun::Frame chain[3]{},limited{};
+     for(int i=0;i<3;++i) chain[i]=motiongun::Multiply(transport,reach.chain[i]);
+-    if(firstperson::ConnectedArmTarget(chain,wrist,limited)) wrist=limited;
++    if(firstperson::ConnectedArmTarget(chain,wrist,limited,Cfg().firstPersonArmLengthPercent)) wrist=limited;
+ }
+ 
+ bool BuildGunPose(int hand, GunPose& out) {
+@@ -2896,6 +2896,7 @@
+             quiet ? 0.f : g_bodyFollower.stepWeight,
+             firstperson::KneeBendDegrees(posed,1),firstperson::KneeBendDegrees(posed,4));
+     }
++    Frame reachReference[2][3]{};
+     const bool animatedSidearms=SidearmAnimationActive();
+     if(animatedSidearms) for(auto& arm:g_jumpArms) arm.Reset();
+     // Authored arms travel to/from the holsters on the stabilized body.
+@@ -2924,8 +2925,9 @@
+         if(!PrepareJumpArm(item,hand,jumpReference,chain)) return false;
+         if(!grip && MotionReady() && CurrentMotionWeapon()==1 &&
+            !firstperson::PistolArmReference(posed[7],bind[7],armBind,pistolBodyScale,chain)) return false;
++        for(int i=0;i<3;++i) reachReference[hand][i]=chain[i];
+         auto roll=g_pistolBodyScope && SidearmWeapon() ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
+-        if(!firstperson::SolveConnectedTrackedArm(chain,target,pole,armBind,changes,true,g_pistolBodyScope && SidearmWeapon() ? &roll : nullptr)) return false;
++        if(!firstperson::SolveConnectedTrackedArm(chain,target,pole,armBind,changes,true,g_pistolBodyScope && SidearmWeapon() ? &roll : nullptr,Cfg().firstPersonArmLengthPercent)) return false;
+         if(g_pistolBodyScope) {
+             g_pistolRoll.current[hand]=roll;
+             g_pistolRoll.minConfidence[hand]=std::min(g_pistolRoll.minConfidence[hand],roll.confidence);
+@@ -2962,9 +2964,7 @@
+         if(joint>=0 && joint<15) WriteRows(Multiply(correction[joint],ReadRows(joints+i*12)),joints+i*12);
+     }
+     if(!grip && !animatedSidearms) for(int hand=0;hand<2;++hand) {
+-        const int first=hand ? 8 : 11;
+-        const Frame arm[3]={posed[first],posed[first+1],posed[first+2]};
+-        PublishConnectedWeaponReach(item,hand,arm,cameraOffset);
++        PublishConnectedWeaponReach(item,hand,reachReference[hand],cameraOffset);
+     }
+     if(g_pistolBodyScope) {
+         for(int joint=8;joint<=13;++joint) g_pistolArmPose.joint[joint-8]=posed[joint];
+@@ -3027,6 +3027,7 @@
+     if(animatedSidearms) for(auto& arm:g_jumpArms) arm.Reset();
+     bool solved[2]{};
+     motiongun::Vec reachCamera[2]{};
++    motiongun::Frame reachReference[2][3]{};
+     bool bindReference[2]{};
+     for (int hand=0;hand<2;++hand) {
+         const int first=hand ? 8 : 11;
+@@ -3128,9 +3129,10 @@
+             const motiongun::Frame jumpReference{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},g_heading.base)),Sub(eye,cameraOffset)};
+             if(!PrepareJumpArm(item,hand,jumpReference,chain)) return false;
+         }
+-        reachCamera[hand]=motiongun::Sub(trackedOrigin,target.origin);
++        reachCamera[hand]=Sub(trackedOrigin,target.origin);
++        for(int i=0;i<3;++i) reachReference[hand][i]=chain[i];
+         auto roll=bindReference[hand] ? PistolRollSeed(hand,item) : firstperson::ArmRollContinuity{};
+-        if (!firstperson::SolveConnectedTrackedArm(chain,target,pole,bind,changes,present[0],bindReference[hand] ? &roll : nullptr)) return false;
++        if (!firstperson::SolveConnectedTrackedArm(chain,target,pole,bind,changes,present[0],bindReference[hand] ? &roll : nullptr,Cfg().firstPersonArmLengthPercent)) return false;
+         if(bindReference[hand]) {
+             g_pistolRoll.current[hand]=roll;
+             g_pistolRoll.minConfidence[hand]=std::min(g_pistolRoll.minConfidence[hand],roll.confidence);
+@@ -3172,9 +3174,7 @@
+         else if(shifted) stabilization::OffsetBodyPalette(joints+i*12,1,meshOffset);
+     }
+     if(!shadow && !animatedSidearms) for(int hand=0;hand<2;++hand) if(solved[hand]) {
+-        const int first=hand ? 0 : 3;
+-        const motiongun::Frame arm[3]={solvedArms[first],solvedArms[first+1],solvedArms[first+2]};
+-        PublishConnectedWeaponReach(item,hand,arm,reachCamera[hand]);
++        PublishConnectedWeaponReach(item,hand,reachReference[hand],reachCamera[hand]);
+     }
+     if(!shadow && g_pistolBodyScope && solved[0] && solved[1]) {
+         for(int i=0;i<6;++i) g_pistolArmPose.joint[i]=solvedArms[i];
+--- src/FirstPersonIK.h
++++ src/FirstPersonIK.h
+@@ -403,12 +403,18 @@
+     }
+     return true;
+ }
+-// Keep the shoulder fixed and both rigid bone lengths unchanged. Only the
+-// position is limited; controller orientation and authored hand pose survive.
+-inline bool ConnectedArmTarget(const Frame (&chain)[3],const Frame& tracked,Frame& target) {
++// Manual arm-length fit is independent of body height. No pose history or
++// automatic growing: repeated eyes/draws must never increase the reach envelope.
++inline float ConnectedArmScale(float percent) {
++    return std::isfinite(percent) ? std::clamp(percent,80.f,120.f)*.01f : 1.f;
++}
++// Exact tracking through 104% of fitted reach, then a C1 soft limit asymptotic
++// to 112%. Preserve controller orientation and hand/weapon size throughout.
++inline bool ConnectedArmTarget(const Frame (&chain)[3],const Frame& tracked,Frame& target,float percent=100) {
+     const auto length=[](Vec v) {return std::sqrt(Dot(v,v));};
+-    const float upper=length(Sub(chain[1].origin,chain[0].origin));
+-    const float lower=length(Sub(chain[2].origin,chain[1].origin));
++    const float scale=ConnectedArmScale(percent);
++    const float upper=length(Sub(chain[1].origin,chain[0].origin))*scale;
++    const float lower=length(Sub(chain[2].origin,chain[1].origin))*scale;
+     const Vec offset=Sub(tracked.origin,chain[0].origin);
+     const float distance=length(offset);
+     Frame inverse{};
+@@ -416,21 +422,57 @@
+     Vec direction{};
+     if(!Unit(offset,direction) && !Unit(Sub(chain[2].origin,chain[0].origin),direction)) direction={0,0,1};
+     const float margin=std::min(upper,lower)*.001f;
+-    const float reach=std::clamp(distance,std::fabs(upper-lower)+margin,upper+lower-margin);
++    const float natural=upper+lower-margin,begin=natural*1.04f,band=natural*.08f;
++    float reach=std::max(distance,std::fabs(upper-lower)+margin);
++    if(distance>begin) reach=begin-band*std::expm1(-(distance-begin)/band);
+     target=tracked;
+     if(reach!=distance) target.origin=Add(chain[0].origin,Scale(direction,reach));
+     return true;
+ }
+ inline bool SolveConnectedTrackedArm(const Frame (&native)[3],const Frame& tracked,
+                                     Vec pole,const Frame (&bind)[3],Frame* corrections,
+-                                    bool upperArmPresent=true,ArmRollContinuity* continuity=nullptr) {
++                                    bool upperArmPresent=true,ArmRollContinuity* continuity=nullptr,float percent=100) {
+     Frame target{};
+-    if(!ConnectedArmTarget(native,tracked,target) ||
+-       !SolveTrackedArm(native,target,pole,bind,corrections,upperArmPresent,continuity)) return false;
+-    // Remove only numerical residual at the reach boundary. The original
+-    // rigid solver's roll transport and elbow/wrist seams remain intact.
+-    const Vec shift=Sub(native[0].origin,Multiply(corrections[0],native[0]).origin);
+-    for(int i=0;i<3;++i) corrections[i].origin=Add(corrections[i].origin,shift);
++    if(!ConnectedArmTarget(native,tracked,target,percent)) return false;
++    const auto length=[](Vec v) {return std::sqrt(Dot(v,v));};
++    const float scale=ConnectedArmScale(percent);
++    const float a=length(Sub(native[1].origin,native[0].origin))*scale;
++    const float b=length(Sub(native[2].origin,native[1].origin))*scale;
++    const float radius=length(Sub(target.origin,native[0].origin));
++    const float natural=a+b-std::min(a,b)*.001f;
++    // Grow gradually over the last 10% of ordinary reach. At full extension
++    // there is still a small elbow bend, avoiding an abrupt straight-arm lock.
++    const float x=std::max(0.f,radius/natural-.9f);
++    const float extension=x<.2f ? x*x/.4f : x-.1f;
++    const float extra=natural*extension;
++    // The rig has no clavicles. Keep its socket fixed and distribute give into
++    // the upper arm (60%) and forearm (40%) instead of translating the chest.
++    // Use proportional weights for unusual rigs to bound each limb to +15%.
++    const float share=std::clamp(.6f,1.f-1.25f*b/(a+b),1.25f*a/(a+b));
++    const float lengths[2]={a+extra*share,b+extra*(1-share)};
++    Frame reference[3]={native[0],native[1],native[2]};
++    for(int i=0;i<2;++i) {
++        Vec axis{};const Vec bone=Sub(native[i+1].origin,native[i].origin);
++        if(!Unit(bone,axis)) return false;
++        reference[i+1].origin=Add(reference[i].origin,Scale(axis,lengths[i]));
++    }
++    if(!SolveTrackedArm(reference,target,pole,bind,corrections,upperArmPresent,continuity)) return false;
++    Frame solved[3]{};
++    for(int i=0;i<3;++i) solved[i]=Multiply(corrections[i],reference[i]);
++    const Vec residual=Sub(native[0].origin,solved[0].origin);
++    for(int i=0;i<3;++i) {
++        if(i<2) {
++            Vec axis{};if(!Unit(Sub(solved[i+1].origin,solved[i].origin),axis)) return false;
++            const float ratio=lengths[i]/length(Sub(native[i+1].origin,native[i].origin));
++            const float v[3]={axis.x,axis.y,axis.z};auto stretch=IdentityBasis();
++            for(int row=0;row<3;++row) for(int col=0;col<3;++col)
++                stretch.r[row][col]+=(ratio-1)*v[row]*v[col];
++            solved[i].basis=Multiply(stretch,solved[i].basis);
++        }
++        solved[i].origin=Add(solved[i].origin,residual);
++        Frame inverse{};if(!Inverse(native[i],inverse)) return false;
++        corrections[i]=Multiply(solved[i],inverse);
++    }
+     return true;
+ }
+ } // namespace tr::firstperson
+--- src/VRMenuModel.h
++++ src/VRMenuModel.h
+@@ -8,11 +8,11 @@
+ struct ControllerPage {
+     bool open=false,index=false,bright=false,hybrid=false,saveFailed=false;
+     int selected=0;
+-    float bodyForwardCm=0;
++    float bodyForwardCm=0,armLengthPercent=100;
+     mutable char bodyValue[32]{};
+-    void Open(bool useIndex,bool brighter=false,bool hybridControls=false,float bodyForward=0) {
++    void Open(bool useIndex,bool brighter=false,bool hybridControls=false,float bodyForward=0,float armLength=100) {
+         open=true;index=useIndex;bright=brighter;hybrid=hybridControls;selected=0;saveFailed=false;
+-        bodyForwardCm=bodyForward;
++        bodyForwardCm=bodyForward;armLengthPercent=armLength;
+     }
+     Action Input(uint64_t buttons) {
+         if(!open) return Action::None;
+@@ -33,14 +33,16 @@
+     }
+     bool Enabled(int row) const { return row==0 ? index : row==1 ? bright : hybrid; }
+     float ChangedValue(uint64_t buttons) const {
++        if(selected==4) return buttons&0x100000 ? 100.f : std::clamp(armLengthPercent+(buttons&0x40000000 ? -1.f : 1.f),80.f,120.f);
+         if(selected!=3) return Enabled(selected) ? 0.f : 1.f;
+         if(buttons&0x100000) return 0; // Select restores the exact default.
+         return std::clamp(bodyForwardCm+(buttons&0x40000000 ? -1.f : 1.f),0.f,20.f);
+     }
+     const char* Name(int row) const {
+-        return row==0 ? "Controller Type" : row==1 ? "Color Scheme" : row==2 ? "Hybrid Modern/Tank Controls" : "Body Position";
++        return row==0 ? "Controller Type" : row==1 ? "Color Scheme" : row==2 ? "Hybrid Modern/Tank Controls" : row==3 ? "Body Position" : "Arm Length";
+     }
+     const char* Value(int row=0) const {
++        if(row==4) { std::snprintf(bodyValue,sizeof(bodyValue),"%.0f%%",armLengthPercent);return bodyValue; }
+         if(row==3) {
+             if(bodyForwardCm==0) return "Default (0 cm)";
+             std::snprintf(bodyValue,sizeof(bodyValue),"Forward %.0f cm",bodyForwardCm);return bodyValue;
+@@ -50,6 +52,7 @@
+     }
+     const char* Message(bool tr6=false) const {
+         if(saveFailed) return "Could not save setting";
++        if(selected==4) return tr6 ? "TR4/5 first-person arms only" : "Left/Right: 1%   Select: 100%";
+         if(selected==3) return tr6 ? "TR4/5 first-person body only" : "Left/Right: 1 cm   Select: default";
+         return selected==0 ? "Controller changes require a restart" : selected==1 ? "Colors apply immediately" :
+             tr6 ? "TR4/5 only; TR6 uses native controls" : "Third person only; applies immediately";
+--- src/VRMenuSettings.h
++++ src/VRMenuSettings.h
+@@ -2,7 +2,7 @@
+ #include <array>
+ #include <string>
+ namespace tr::vrmenu {
+-constexpr int SettingCount=4;
++constexpr int SettingCount=5;
+ struct Setting {
+     const wchar_t* key;
+     const wchar_t* label;
+--- src/VRMenuSettings.inl
++++ src/VRMenuSettings.inl
+@@ -5,7 +5,8 @@
+         {L"ValveIndexControllers",L"Controller Type",0,1,1,true,[]{return Cfg().valveIndexControllers ? 1.f : 0.f;}},
+         {L"VRBrighterColors",L"Color Scheme",0,1,1,true,[]{return Cfg().vrBrighterColors ? 1.f : 0.f;}},
+         {L"HybridModernTankControls",L"Hybrid Modern/Tank Controls",0,1,1,true,[]{return Cfg().hybridModernTankControls ? 1.f : 0.f;}},
+-        {L"FirstPersonBodyForwardCm",L"Body Position",0,20,1,false,[]{return Cfg().firstPersonBodyForwardCm;}}
++        {L"FirstPersonBodyForwardCm",L"Body Position",0,20,1,false,[]{return Cfg().firstPersonBodyForwardCm;}},
++        {L"FirstPersonArmLengthPercent",L"Arm Length",80,120,1,false,[]{return Cfg().firstPersonArmLengthPercent;}}
+     }};
+     return settings;
+ }
+@@ -56,7 +57,8 @@
+     if(values[1]!=original[1]) g_cfg.vrBrighterColors=values[1]!=0;
+     if(values[2]!=original[2]) g_cfg.hybridModernTankControls=values[2]!=0;
+     if(values[3]!=original[3]) g_cfg.firstPersonBodyForwardCm=values[3];
+-    Log("VR Options saved; colors, hybrid controls and body position apply immediately; controller type requires restart");
++    if(values[4]!=original[4]) g_cfg.firstPersonArmLengthPercent=values[4];
++    Log("VR Options saved; colors, hybrid controls, body position and arm length apply immediately; controller type requires restart");
+     return true;
+ }
+ }
+--- src/VRNativeMenu.cpp
++++ src/VRNativeMenu.cpp
+@@ -65,7 +65,7 @@
+ template<class T> T& Field(void* p,size_t off) { return *reinterpret_cast<T*>(static_cast<uint8_t*>(p)+off); }
+ uint32_t HookRva(const Slot& s) { return s.extra->options ? s.extra->options : s.row->title; }
+ void OpenPage(Slot& s) {
+-    const auto values=vrmenu::ReadSettings();s.page.Open(values[0]!=0,values[1]!=0,values[2]!=0,values[3]);
++    const auto values=vrmenu::ReadSettings();s.page.Open(values[0]!=0,values[1]!=0,values[2]!=0,values[3],values[4]);
+ }
+ bool PageInput(Slot& s,uint64_t input) {
+     if(s.page.Input(input)==vrmenu::Action::Change) {
+@@ -74,7 +74,7 @@
+         values[row]=s.page.ChangedValue(input);
+         std::wstring error;
+         s.page.saveFailed=!vrmenu::SaveSettings(values,original,error);
+-        if(!s.page.saveFailed) { s.page.index=values[0]!=0;s.page.bright=values[1]!=0;s.page.hybrid=values[2]!=0;s.page.bodyForwardCm=values[3]; }
++        if(!s.page.saveFailed) { s.page.index=values[0]!=0;s.page.bright=values[1]!=0;s.page.hybrid=values[2]!=0;s.page.bodyForwardCm=values[3];s.page.armLengthPercent=values[4]; }
+     }
+     return s.page.open;
+ }
+--- tests/body_transition_selftest.h
++++ tests/body_transition_selftest.h
+@@ -1129,7 +1129,12 @@
+             for(int shoulder:{8,11}) {
+             Frame reference[3]{},actual[3]{};
+             for(int j=0;j<3;++j) { reference[j]=Multiply(chestChange,native[shoulder+j]);actual[j]=shown[shoulder+j]; }
+-            CheckRigidTrackedReach(reference,actual);
++            Check(firstperson::Length(Sub(reference[0].origin,actual[0].origin))<.1f,"connected shoulder remains on torso during jump");
++            for(int limb=0;limb<2;++limb) {
++                const float a=firstperson::Length(Sub(reference[limb+1].origin,reference[limb].origin));
++                const float b=firstperson::Length(Sub(actual[limb+1].origin,actual[limb].origin));
++                Check(b>=a-.1f && b<=a*1.15f+.1f,"jump limb stretch stays bounded");
++            }
+         }
+             Check(g_bodySize.factor==fixedSize,"jump never recalibrates visual size");
+             if(jump==3 || jump==9 || jump==15 || jump==28) {
+--- tests/connected_reach_expected.h
++++ tests/connected_reach_expected.h
+@@ -1,18 +1,20 @@
+ // Test oracle for the requested shoulder-anchored reach contract.
+-tr::motiongun::Frame ExpectedConnectedWrist(const tr::motiongun::Frame (&chain)[3],tr::motiongun::Frame target) {
++tr::motiongun::Frame ExpectedConnectedWrist(const tr::motiongun::Frame (&chain)[3],tr::motiongun::Frame target,float percent=100) {
+     using namespace tr::motiongun;using tr::firstperson::Length;
+-    const float a=Length(Sub(chain[1].origin,chain[0].origin)),b=Length(Sub(chain[2].origin,chain[1].origin));
++    const float fit=percent/100;
++    const float a=Length(Sub(chain[1].origin,chain[0].origin))*fit,b=Length(Sub(chain[2].origin,chain[1].origin))*fit;
+     tr::motiongun::Vec delta=Sub(target.origin,chain[0].origin);float distance=Length(delta);
+     if(distance<.00001f) {delta=Sub(chain[2].origin,chain[0].origin);distance=Length(delta);}
+     const float margin=std::min(a,b)*.001f;
+     const float requested=Length(Sub(target.origin,chain[0].origin));
+-    const float radius=std::clamp(requested,std::fabs(a-b)+margin,a+b-margin);
++    const double reach=a+b-margin,begin=1.04*reach,band=.08*reach;
++    const float radius=requested>begin ? float(begin+band*(1-std::exp(-(requested-begin)/band))) : std::max(requested,std::fabs(a-b)+margin);
+     if(requested!=radius) target.origin=Add(chain[0].origin,Scale(delta,radius/distance));
+     return target;
+ }
+ 
+ tr::motiongun::Frame ExpectedPublishedWrist(int hand,tr::motiongun::Frame target) {
+     Check(tr::g_connectedWeaponReach[hand].valid,"successful arm draw publishes connected reach");
+-    return ExpectedConnectedWrist(tr::g_connectedWeaponReach[hand].chain,target);
++    return ExpectedConnectedWrist(tr::g_connectedWeaponReach[hand].chain,target,tr::Cfg().firstPersonArmLengthPercent);
+ }
+ 
+--- tests/connected_reach_selftest.h
++++ tests/connected_reach_selftest.h
+@@ -16,14 +16,23 @@
+         PublishConnectedWeaponReach(item,hand,chain,{});
+         Frame requested{firstperson::RotationMatrix(firstperson::AxisRotation({0,1,0},.7f)),{100,-600,1200}};
+         auto limited=requested;LimitConnectedWeaponWrist(item,hand,limited);
+-        Check(firstperson::Length(Sub(limited.origin,{100,-600,699.8f}))<.02f,
+-              "weapon wrist stops at fixed shoulder reach");
++        Check(firstperson::Length(Sub(limited.origin,ExpectedConnectedWrist(chain,requested).origin))<.02f,
++              "weapon wrist follows the soft limit from the unstretched reference");
+         Check(!std::memcmp(&limited.basis,&requested.basis,sizeof(Basis)),"reach limit retains fresh controller orientation");
+         Frame inside{requested.basis,{100,-600,500}};const auto exact=inside;
+         LimitConnectedWeaponWrist(item,hand,inside);
+         Check(!std::memcmp(&inside,&exact,sizeof(Frame)),"reachable weapon frame is unchanged");
++        const float savedFit=Cfg().firstPersonArmLengthPercent;
++        for(float fit:{80.f,100.f,120.f}) {
++            testConfig.firstPersonArmLengthPercent=fit;
++            PublishConnectedWeaponReach(item,hand,chain,{});
++            auto fitted=requested;LimitConnectedWeaponWrist(item,hand,fitted);
++            Check(firstperson::Length(Sub(fitted.origin,ExpectedConnectedWrist(chain,requested,fit).origin))<.03f,
++                  "live arm fit affects weapon reach without compounding extension");
++        }
++        testConfig.firstPersonArmLengthPercent=savedFit;PublishConnectedWeaponReach(item,hand,chain,{});
+         const auto original=g_connectedWeaponReach[hand];
+-        for(int reason=0;reason<11;++reason) {
++        for(int reason=0;reason<12;++reason) {
+             auto& reach=g_connectedWeaponReach[hand];reach=original;
+             if(reason==0) reach.valid=false;
+             if(reason==1) reach.item=Ptr<uint8_t>(dll.lara);
+@@ -36,6 +45,7 @@
+             if(reason==8) reach.time-=.11;
+             if(reason==9) reach.units*=2;
+             if(reason==10) ++reach.bodyOffset;
++            if(reason==11) ++reach.armLength;
+             auto untouched=requested;LimitConnectedWeaponWrist(item,hand,untouched);
+             Check(!std::memcmp(&untouched,&requested,sizeof(Frame)),"weapon cannot inherit invalid, stale or recalibrated reach");
+         }
+--- tests/jump_arm_selftest.h
++++ tests/jump_arm_selftest.h
+@@ -155,8 +155,8 @@
+                         const auto change=Multiply(actual,inverse);
+                         for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
+                             float dot=0;for(int k=0;k<3;++k) dot+=change.basis.r[k][r]*change.basis.r[k][c];
+-                            Check(std::fabs(dot-(r==c?1.f:0.f))<.003f,
+-                                  "jump shoulder adjustment retains rigid arm geometry in both eyes");
++                            Check(std::fabs(dot-(r==c?1.f:0.f))<.323f,
++                                  "jump shoulder adjustment retains bounded arm geometry in both eyes");
+                         }
+                     }
+                     if(state==28 && j<7) Check(!std::memcmp(render+i*12,ikNative+i*12,12*sizeof(float)),

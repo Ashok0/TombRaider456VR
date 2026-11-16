@@ -18,10 +18,10 @@ int main() {
     const std::wstring ini=std::wstring(cwd)+L"\\vr-menu-test.ini";
     { std::ofstream f("vr-menu-test.ini");f<<"; keep comment\n[VR]\nValveIndexControllers=0\nValveIndexGripPress=0.63\nValveIndexGripRelease=0.31\nDpadShift=0\nFirstPersonTurnDegreesPerSecond=123\nFirstPersonMotionGunPitchDegrees=-17\n[Other]\nCustom=77\n"; }
     tr::LoadConfig(ini.c_str());
-    check(SettingCount==4 && std::wstring(Settings()[0].label)==L"Controller Type" &&
+    check(SettingCount==5 && std::wstring(Settings()[0].label)==L"Controller Type" &&
         std::wstring(Settings()[1].label)==L"Color Scheme" &&
         std::wstring(Settings()[2].label)==L"Hybrid Modern/Tank Controls" &&
-        std::wstring(Settings()[3].label)==L"Body Position","all four settings are exposed");
+        std::wstring(Settings()[3].label)==L"Body Position","all five settings are exposed");
     check(ReadSettings()[3]==0 && tr::Cfg().firstPersonBodyForwardCm==0,"existing INIs retain the exact default body position");
     check(!tr::Cfg().hybridModernTankControls && ReadSettings()[2]==0,"older INIs show hybrid controls Off by default");
     check(!tr::Cfg().vrBrighterColors && ReadSettings()[1]==0,"old INIs without a color key retain the original dark look");
@@ -74,6 +74,15 @@ int main() {
     original=ReadSettings();next=original;next[3]=5;tr::g_iniPath=goodPath+L".missing";
     check(!SaveSettings(next,original,error) && tr::Cfg().firstPersonBodyForwardCm==0,"failed body save keeps the visible body in place");
     tr::g_iniPath=goodPath;
+    for(float fit:{80.f,101.f,120.f,100.f}) {
+        original=ReadSettings();next=original;next[4]=fit;
+        check(SaveSettings(next,original,error) && tr::Cfg().firstPersonArmLengthPercent==fit,"arm length applies immediately");
+        tr::LoadConfig(ini.c_str());check(ReadSettings()[4]==fit && tr::Cfg().firstPersonArmLengthPercent==fit,"arm fit survives reload");
+    }
+    for(float invalid:{79.f,121.f,100.5f,std::numeric_limits<float>::quiet_NaN()}) {
+        original=ReadSettings();next=original;next[4]=invalid;
+        check(!SaveSettings(next,original,error) && tr::Cfg().firstPersonArmLengthPercent==100,"invalid arm fit cannot change live setting");
+    }
     ControllerPage page;
     check(page.Input(0x100000)==Action::None,"closed page leaves native Select alone");
     page.Open(false);check(std::string(page.Value())=="Meta Touch","Touch name uses requested text");
@@ -86,7 +95,11 @@ int main() {
     check(page.Input(0x80000000)==Action::Change && page.selected==1,"Right changes the selected color row");
     check(std::string(page.Message())=="Colors apply immediately","color row explains immediate application");
     check(page.Input(0x10000000)==Action::None && page.selected==0,"Up returns to Controller Type");
-    check(page.Input(0x10000000)==Action::None && page.selected==3,"Up from first row wraps to Body Position");
+    check(page.Input(0x10000000)==Action::None && page.selected==4,"Up from first row wraps to Arm Length");
+    check(page.ChangedValue(0x80000000)==101 && page.ChangedValue(0x40000000)==99 && page.ChangedValue(0x100000)==100,"arm fit has steps and reset");
+    page.armLengthPercent=120;check(page.ChangedValue(0x80000000)==120,"arm fit upper bound");
+    page.armLengthPercent=80;check(page.ChangedValue(0x40000000)==80,"arm fit lower bound");
+    check(page.Input(0x10000000)==Action::None && page.selected==3,"Up from arm length visits body position");
     check(std::string(page.Value(3))=="Default (0 cm)" && page.ChangedValue(0x40000000)==0,"body adjustment cannot move behind default");
     check(page.ChangedValue(0x80000000)==1,"Right moves body forward one centimetre");
     page.bodyForwardCm=20;
@@ -99,7 +112,8 @@ int main() {
     check(page.Input(0x80000000)==Action::Change && page.selected==2,"Right adjusts hybrid controls");
     check(page.Input(0x30000000)==Action::None && page.selected==2,"opposite directions do not move the third row");
     check(page.Input(0x20100000)==Action::None && page.selected==3,"Down to body cannot reset it when Select arrives with navigation");
-    check(page.Input(0x20000000)==Action::None && page.selected==0,"Down wraps from the body setting");
+    check(page.Input(0x20000000)==Action::None && page.selected==4,"Down from body visits Arm Length");
+    check(page.Input(0x20000000)==Action::None && page.selected==0,"Down wraps from Arm Length");
     check(page.Input(0x20000000)==Action::None && page.selected==1,"Down visits color row");
     check(page.Input(0x20000000)==Action::None && page.selected==2,"Down visits hybrid row");
     check(std::string(page.Message())=="Third person only; applies immediately","hybrid row explains live application");

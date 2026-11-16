@@ -1,4 +1,16 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
+$validation=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'validation.json') -Raw | ConvertFrom-Json
+if(!(Select-String -LiteralPath (Join-Path $PSScriptRoot 'test-arms-456.log') -SimpleMatch 'PASS: 10868078 straight-up jump arm checks' -Quiet)) { throw 'TR4-6 regression suite has not passed.' }
+if(!(Select-String -LiteralPath (Join-Path $PSScriptRoot 'test-123.log') -SimpleMatch 'PASS: 5515538 locomotion, gun-control and camera hook checks' -Quiet)) { throw 'TR1-3 regression suite has not passed.' }
+foreach($source in $validation.testHashes.PSObject.Properties) {
+    if((Get-FileHash -LiteralPath (Join-Path 'C:\dev\TombRaider456VR' $source.Name)).Hash -ne $source.Value) { throw 'TR4-6 test source changed.' }
+}
+foreach($source in $validation.productionHashes.PSObject.Properties) {
+    if((Get-FileHash -LiteralPath (Join-Path 'C:\dev\TombRaider456VR' $source.Name)).Hash -ne $source.Value) { throw 'TR4-6 tested source changed.' }
+}
+if(!(Select-String -LiteralPath (Join-Path $PSScriptRoot 'targeted-camera.log') -SimpleMatch 'PASS: 19880640 landing camera checks' -Quiet)) { throw 'Landing camera tests have not passed.' }
+if(!(Select-String -LiteralPath (Join-Path $PSScriptRoot 'geometry.log') -SimpleMatch 'PASS: 3387240 connected arm geometry checks' -Quiet)) { throw 'Connected arm tests have not passed.' }
+if(!(Select-String -LiteralPath (Join-Path $PSScriptRoot 'integration.log') -SimpleMatch 'PASS: 1952268 connected arm integration checks' -Quiet)) { throw 'Connected arm tests have not passed.' }
 $repo123='C:\dev\TombRaider123VR'
 $stage=Join-Path $PSScriptRoot '123-work'
 $manifest=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'source123-manifest.json') -Raw | ConvertFrom-Json
@@ -8,7 +20,7 @@ foreach($entry in $manifest) {
     if($entry.OriginalHash) {
         if((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $entry.OriginalHash) { throw 'TR1-3 source changed since staging.' }
     } elseif(Test-Path -LiteralPath $target) { throw 'New source path is already occupied.' }
-    if((Get-FileHash -LiteralPath (Join-Path $stage $entry.Relative) -Algorithm SHA256).Hash -ne $entry.ModifiedHash) { throw 'Tested source changed.' }
+    if(!$entry.Deleted -and (Get-FileHash -LiteralPath (Join-Path $stage $entry.Relative) -Algorithm SHA256).Hash -ne $entry.ModifiedHash) { throw 'Tested source changed.' }
 }
 foreach($release in $releases) {
     if(Get-Process $release.Process -ErrorAction SilentlyContinue) { throw 'Close the game before installation.' }
@@ -30,8 +42,11 @@ foreach($entry in $manifest) {
         New-Item -ItemType Directory -Path (Split-Path -Parent $save) -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $repo123 $entry.Relative) -Destination $save
     }
-    Copy-Item -LiteralPath (Join-Path $stage $entry.Relative) -Destination (Join-Path $repo123 $entry.Relative) -Force
-    if((Get-FileHash -LiteralPath (Join-Path $repo123 $entry.Relative) -Algorithm SHA256).Hash -ne $entry.ModifiedHash) { throw 'Source copy mismatch.' }
+    if($entry.Deleted) { throw 'This deployment does not remove source files.'
+    } else {
+        Copy-Item -LiteralPath (Join-Path $stage $entry.Relative) -Destination (Join-Path $repo123 $entry.Relative) -Force
+        if((Get-FileHash -LiteralPath (Join-Path $repo123 $entry.Relative) -Algorithm SHA256).Hash -ne $entry.ModifiedHash) { throw 'Source copy mismatch.' }
+    }
 }
 $repoBuild=Join-Path $repo123 'build\connected-arms\bin'
 New-Item -ItemType Directory -Path $repoBuild -Force | Out-Null
@@ -50,5 +65,6 @@ $results=foreach($release in $releases) {
 $results | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'deployment.json') -Encoding UTF8
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'deployment.json') -Destination (Join-Path $repo123 'build\connected-arms\deployment.json') -Force
 Write-Output 'Installed both tested builds. Source and DLL hashes verified; existing INIs preserved; previous DLLs backed up.'
+
 
 

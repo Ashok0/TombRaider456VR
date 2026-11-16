@@ -32,6 +32,7 @@ void __cdecl FakeButtonMatrices(uint8_t* target) {
     leverMatrixPtr+=12;
 }
 void TestButtons() {
+    XState pad{};bool shifted=false,chord=false;
     for(const auto& profile:firstperson::ButtonProfiles) for(int state:{0,1}) for(int hand:{0,1}) for(int yaw:{0,1,2,3}) {
         Reset(2,{},true);ResetPhysicalButtons();dll.module=profile.game==2 ? L"tomb2.dll" : L"tomb3.dll";
         const auto base=std::min(reinterpret_cast<uint64_t>(module),reinterpret_cast<uint64_t>(&FakeButtonMatrices))&~0xffffull;
@@ -75,9 +76,30 @@ void TestButtons() {
         uint8_t savedItem[sizeof(item)],savedLara[432];std::memcpy(savedItem,item,sizeof(item));std::memcpy(savedLara,Ptr<uint8_t>(dll.lara),432);
         *Ptr<uint32_t>(dll.input)=0x800;*Ptr<uint32_t>(dll.input+4)=0xdeadbeef;
         tick(face.z);Check(!leverActivations,"initial hand overlap is not a press");
+        if(hand==1) {
+            testHands[1].grip=testHands[1].trigger=1;
+            BuildState(pad,shifted,true,chord);
+            Check(!pad.Gamepad.bRightTrigger && !(pad.Gamepad.wButtons&(XB_X|XB_RIGHT_SHOULDER)) && !g_switchGripClaimed,
+                "RG near button consumes RT and Walk without blocking touch");
+            leverSightBlocked=true;BuildState(pad,shifted,true,chord);leverSightBlocked=false;
+            Check(pad.Gamepad.bRightTrigger==255,"occluded button does not consume RT");
+            *Ptr<int16_t>(dll.lara+2)=1;BuildState(pad,shifted,true,chord);*Ptr<int16_t>(dll.lara+2)=0;
+            Check(pad.Gamepad.bRightTrigger==255,"armed shooting stays available near buttons");
+            tick(outside);BuildState(pad,shifted,true,chord);
+            Check(pad.Gamepad.bRightTrigger==255,"RT remains available away from the button face");
+            testHands[1].grip=testHands[1].trigger=0;BuildState(pad,shifted,true,chord);
+            ResetPhysicalButtons();tick(face.z);
+        }
         buttonReject=true;tick(outside);tick(face.z);buttonReject=false;
         Check(!leverActivations,"native rejection gives neither activation nor haptic acknowledgement");
-        tick(outside);tick(face.z);
+        tick(outside);
+        if(hand==1) testHands[1].grip=testHands[1].trigger=1;
+        tick(face.z);
+        if(hand==1) {
+            BuildState(pad,shifted,true,chord);
+            Check(!pad.Gamepad.bRightTrigger,"RG+RT remains consumed at an activated button");
+            testHands[1].grip=testHands[1].trigger=0;BuildState(pad,shifted,true,chord);
+        }
         Check(leverActivations==1 && LeverField<int16_t>(20)==1-state,"touch toggles native button from both idle positions");
         Check(!std::memcmp(savedItem,item,sizeof(item)) && !std::memcmp(savedLara,Ptr<uint8_t>(dll.lara),432),"touch restores Lara position, animation and globals");
         Check(LeverField<int16_t>(42)==900 && *Ptr<uint32_t>(dll.input)==0x800 && *Ptr<uint32_t>(dll.input+4)==0xdeadbeef,"timer and adjacent input preserved");

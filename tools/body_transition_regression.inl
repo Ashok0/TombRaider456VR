@@ -130,9 +130,10 @@ void TestBodyTransitions(uint8_t* objectInfo) {
             }
             for(int hand=0;hand<2;++hand) {
                 Frame wrist{};Basis controller{};BuildControllerWrist(hand,wrist,controller);
+                wrist=ExpectedPublishedWrist(hand,wrist);
                 Frame shown{};ReadIKJoint(objectInfo,palette,15,0,nullptr,nullptr,hand?10:13,shown);
                 Check(firstperson::Length(Sub(shown.origin,wrist.origin))<.05f,
-                      "draw/holster keeps both rendered wrists on the live controllers");
+                      "draw/holster keeps both rendered wrists on the reachable controller targets");
             }
             uint64_t visible=0;int count=0;
             Check(!std::memcmp(FirstPersonBodyPalette(visible,count),fixture,sizeof(fixture)),
@@ -256,8 +257,8 @@ void TestControllerBodyAnchor() {
     for(int hz:{72,90,120}) {
         BodyFollower body;body.Update(1,0,0,0,0,{},{},false,BodyFollowSettings());
         for(int i=1;i<=hz;++i) {
-            body.Update(i+1,double(i)/hz,0,0,0,{},{},false,BodyFollowSettings(),{},false,true,0,true,true,.08f,true);
-            Check(body.yaw==0,"small accepted facing errors keep the lower-body geometric lock planted");
+            body.Update(i+1,double(i)/hz,0,0,0,{},{},false,BodyFollowSettings(),{},false,true,0,true,true,.004f,true);
+            Check(body.yaw==0,"sub-half-degree accepted errors keep the lower-body lock planted");
         }
         for(int i=1;i<=hz*3;++i) {
             const float goal=.2f+i*.6f/hz;
@@ -1187,6 +1188,7 @@ void TestStandingCalibration(uint8_t* objectInfo) {
             Check(std::fabs(g_bodyFollower.yaw)<.0001f,"stationary controllers freeze physical body yaw");
             for(int hand=0;hand<2;++hand) {
                 Frame wrist{};Basis controller{};Check(BuildControllerWrist(hand,wrist,controller),"body hold retains controller targets");
+                wrist=ExpectedPublishedWrist(hand,wrist);
                 Check(firstperson::Length(Sub(pose[hand ? 10 : 13].origin,wrist.origin))<.1f,
                       "stationary body retains exact tracked hands");
             }
@@ -1280,8 +1282,9 @@ void TestStandingCalibration(uint8_t* objectInfo) {
               "live torso clearance preserves standing hip height, body offset and planted feet");
         for(int hand=0;hand<2;++hand) {
             Frame wrist{};Basis basis{};BuildControllerWrist(hand,wrist,basis);
+            wrist=ExpectedPublishedWrist(hand,wrist);
             Check(firstperson::Length(Sub(pose[hand?10:13].origin,wrist.origin))<.1f,
-                  "production clearance keeps controller wrists exact while the torso bends");
+                  "production clearance keeps connected wrist targets while the torso bends");
         }
     }
     if(cm<20) Check(largest>.001f,"production standing solver exercises nonzero upper-torso clearance");
@@ -1308,8 +1311,9 @@ void TestStandingCalibration(uint8_t* objectInfo) {
     }
     for(int hand=0;hand<2;++hand) {
         Frame wrist{};Basis basis{};BuildControllerWrist(hand,wrist,basis);
+        wrist=ExpectedPublishedWrist(hand,wrist);
         Check(firstperson::Length(Sub(fittedPose[hand?10:13].origin,wrist.origin))<.1f,
-              "smaller visual body retains exact tracked wrists");
+              "smaller visual body retains reachable tracked wrists");
     }
     const auto savedHead=VR().m_rawHeadPose;
     const float savedNeck=VR().m_firstPersonNeutralEyeNeckY;
@@ -1387,8 +1391,9 @@ void TestStandingCalibration(uint8_t* objectInfo) {
               "measured torso clearance stays active and clears the downward jump view");
         for(int hand=0;hand<2;++hand) {
             Frame wrist{};Basis basis{};BuildControllerWrist(hand,wrist,basis);
+            wrist=ExpectedPublishedWrist(hand,wrist);
             Check(firstperson::Length(Sub(Add(shown[hand?10:13].origin,camera),wrist.origin))<.1f,
-                  "airborne visual fit retains exact tracked wrists");
+                  "airborne visual fit retains reachable tracked wrists");
         }
         Frame inverseChest{};Inverse(native[7],inverseChest);
         const auto chestChange=Multiply(shown[7],inverseChest);

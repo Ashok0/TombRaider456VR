@@ -303,7 +303,10 @@ inline ArmRotation ReachRotation(const Basis& basis,Vec axis,float ratio) {
 inline bool SolveTrackedArm(const Frame (&native)[3],const Frame& target,
                             Vec pole,const Frame (&bind)[3],Frame* corrections,
                             bool upperArmPresent=true,ArmRollContinuity* continuity=nullptr) {
-    if(!SolveArm(native,target,pole,corrections,nullptr,nullptr,false,{},true,true)) return false;
+    // Fixed mesh lengths take precedence over a pinned shoulder outside reach.
+    // Keep the historical minimum shoulder translation and exact tracked wrist;
+    // enabling connectedReach here reintroduces visibly rubbery arm extension.
+    if(!SolveArm(native,target,pole,corrections,nullptr,nullptr,false,{},true,false)) return false;
     const auto forearm=Multiply(corrections[1],native[1]);
     Vec axis{};if(!Unit(Sub(target.origin,forearm.origin),axis)) return false;
     const auto boneLength=[](Vec v) { return std::sqrt(Dot(v,v)); };
@@ -398,6 +401,36 @@ inline bool SolveTrackedArm(const Frame (&native)[3],const Frame& target,
             corrections[0]=Multiply({roll,Sub(upper.origin,Transform(roll,upper.origin))},corrections[0]);
         }
     }
+    return true;
+}
+// Keep the shoulder fixed and both rigid bone lengths unchanged. Only the
+// position is limited; controller orientation and authored hand pose survive.
+inline bool ConnectedArmTarget(const Frame (&chain)[3],const Frame& tracked,Frame& target) {
+    const auto length=[](Vec v) {return std::sqrt(Dot(v,v));};
+    const float upper=length(Sub(chain[1].origin,chain[0].origin));
+    const float lower=length(Sub(chain[2].origin,chain[1].origin));
+    const Vec offset=Sub(tracked.origin,chain[0].origin);
+    const float distance=length(offset);
+    Frame inverse{};
+    if(!std::isfinite(upper+lower+distance) || upper<.001f || lower<.001f || !Inverse(tracked,inverse)) return false;
+    Vec direction{};
+    if(!Unit(offset,direction) && !Unit(Sub(chain[2].origin,chain[0].origin),direction)) direction={0,0,1};
+    const float margin=std::min(upper,lower)*.001f;
+    const float reach=std::clamp(distance,std::fabs(upper-lower)+margin,upper+lower-margin);
+    target=tracked;
+    if(reach!=distance) target.origin=Add(chain[0].origin,Scale(direction,reach));
+    return true;
+}
+inline bool SolveConnectedTrackedArm(const Frame (&native)[3],const Frame& tracked,
+                                    Vec pole,const Frame (&bind)[3],Frame* corrections,
+                                    bool upperArmPresent=true,ArmRollContinuity* continuity=nullptr) {
+    Frame target{};
+    if(!ConnectedArmTarget(native,tracked,target) ||
+       !SolveTrackedArm(native,target,pole,bind,corrections,upperArmPresent,continuity)) return false;
+    // Remove only numerical residual at the reach boundary. The original
+    // rigid solver's roll transport and elbow/wrist seams remain intact.
+    const Vec shift=Sub(native[0].origin,Multiply(corrections[0],native[0]).origin);
+    for(int i=0;i<3;++i) corrections[i].origin=Add(corrections[i].origin,shift);
     return true;
 }
 } // namespace tr::firstperson

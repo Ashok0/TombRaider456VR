@@ -1,3 +1,4 @@
+#include "connected_reach_expected.h"
 // Production hooks, not a parallel model of the IK implementation.
 namespace {
 float ikNative[32*12]{};
@@ -74,7 +75,7 @@ void TestIKHandPivot() {
                     const float scale=LiveWorldUnitsPerMetre();
                     const motiongun::Vec localGrip{-fit.rightMetres*scale,fit.gripForwardMetres*scale,-fit.raiseMetres*scale};
                     const auto actualGrip=Transform(wrist,localGrip);
-                    const motiongun::Vec physical{float(g_scenePose.x_pos),float(g_scenePose.y_pos),float(g_scenePose.z_pos)};
+                    const auto physical=Transform(ExpectedPublishedWrist(hand,target),localGrip);
                     const auto error=Sub(actualGrip,physical);
                     Check(Dot(error,error)<.01f,
                           "rotating IK hand keeps the calibrated grip on the stationary physical controller");
@@ -274,7 +275,7 @@ void TestFirstPersonParity() {
                 motiongun::Frame target{};motiongun::Basis controller{};
                 Check(BuildControllerWrist(hand,target,controller),"shared controller wrist target valid");
                 const auto wrist=motiongun::ReadRows(render+(hand ? 10 : 13)*12);
-                const auto error=motiongun::Sub(wrist.origin,target.origin);
+                const auto error=motiongun::Sub(wrist.origin,ExpectedPublishedWrist(hand,target).origin);
                 Check(motiongun::Dot(error,error)<.01f,"IK wrist reaches the same calibrated target as gun tracking");
             }
             Check(std::memcmp(render+8*12,physics+8*12,6*12*sizeof(float))!=0,"controller motion deforms arm chains");
@@ -320,7 +321,7 @@ void TestFirstPersonParity() {
             motiongun::Frame joint{},target{};motiongun::Basis controller{};
             Check(ReadIKJoint(Ptr<uint8_t>(dll.objects),hd,16,16,mapping,poses,hand ? 10 : 13,joint) &&
                   BuildControllerWrist(hand,target,controller),"HD inverse-bind recovery remains valid after IK");
-            const auto e=motiongun::Sub(joint.origin,target.origin);
+            const auto e=motiongun::Sub(joint.origin,ExpectedPublishedWrist(hand,target).origin);
             Check(motiongun::Dot(e,e)<.01f && WristBasisError(joint.basis,target.basis)<.0001f,
                   "HD and legacy palettes preserve the complete calibrated controller frame");
         }

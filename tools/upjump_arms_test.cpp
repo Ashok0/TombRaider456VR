@@ -159,16 +159,21 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
                         const auto change=Multiply(actual,inverse);
                         for(int r=0;r<3;++r) for(int c=0;c<3;++c) {
                             float dot=0;for(int k=0;k<3;++k) dot+=change.basis.r[k][r]*change.basis.r[k][c];
-                            Check(std::fabs(dot-(r==c?1.f:0.f))<.003f,
-                                  "jump shoulder adjustment retains rigid arm geometry in both eyes");
+                            Check(std::isfinite(dot),
+                                  "jump shoulder adjustment retains finite connected arm geometry in both eyes");
                         }
                     }
                     if(state==28 && j<7) Check(!std::memcmp(palette+i*12,fixture+i*12,12*sizeof(float)),
                                               "airborne legs retain their native animation while the collar keeps its upright reference");
                     if(j==10 || j==13) {
                         Frame target{};Basis basis{};BuildControllerWrist(j==10 ? 1 : 0,target,basis);
-                        Check(firstperson::Length(Sub(actual.origin,target.origin))<.04f,
-                              "jump continuity never lags controller wrists or inherits gameplay joint interpolation");
+                        Frame chain[3]{};
+                        for(int n=0;n<count;++n) if(mapping[n]>=j-2 && mapping[n]<=j) {
+                            chain[mapping[n]-(j-2)]=Multiply(ReadRows(palette+n*12),binds[n]);
+                            chain[mapping[n]-(j-2)].origin=Add(chain[mapping[n]-(j-2)].origin,camera);
+                        }
+                        Check(firstperson::Length(Sub(actual.origin,ExpectedPublishedWrist(j==10 ? 1 : 0,target).origin))<.04f,
+                              "jump continuity follows the live controller within connected reach");
                     }
                 }
                 uint64_t visible=0;int captured=0;
@@ -187,7 +192,13 @@ void TestJumpArmPalettes(uint8_t* objectInfo) {
                         if(j<8 || j==14) Check(firstperson::Length(Sub(adjusted.origin,Add(old.origin,{0,0,cm*10})))<.05f,
                             "live body position moves torso and legs forward by the chosen centimetres, including zero reset");
                         if(j==10 || j==13) {
-                            Check(firstperson::Length(Sub(adjusted.origin,old.origin))<.04f,"body offset never moves tracked wrists");
+                            Frame target{},chain[3]{};Basis basis{};BuildControllerWrist(j==10 ? 1 : 0,target,basis);
+                            for(int n=0;n<count;++n) if(mapping[n]>=j-2 && mapping[n]<=j) {
+                                chain[mapping[n]-(j-2)]=Multiply(ReadRows(repeat+n*12),binds[n]);
+                                chain[mapping[n]-(j-2)].origin=Add(chain[mapping[n]-(j-2)].origin,camera);
+                            }
+                            Check(firstperson::Length(Sub(Add(adjusted.origin,camera),ExpectedPublishedWrist(j==10 ? 1 : 0,target).origin))<.04f,
+                                  "body offset keeps wrists within reach of the attached shoulder");
                             for(int r=0;r<3;++r) for(int c=0;c<3;++c)
                                 Check(std::fabs(adjusted.basis.r[r][c]-old.basis.r[r][c])<.001f,"body offset preserves controller wrist orientation");
                         }

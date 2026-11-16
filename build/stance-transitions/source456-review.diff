@@ -1,0 +1,230 @@
+--- src/ControllerBodyAnchor.h
++++ src/ControllerBodyAnchor.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ #include "BodyFollower.h"
+ #include "PlantedPivotEvidence.h"
++#include "InspectionStepEvidence.h"
+ namespace tr::firstperson {
+ // Controller POSITIONS, not their aim. Require coordinated head/hand travel.
+ // A fixed reference and separate entry/continuation thresholds reject noise without
+@@ -34,6 +35,7 @@
+     RoomscaleHeadingRecovery heading;
+     PhysicalStepIntent stepIntent;
+     PlantedPivotEvidence pivotEvidence,inspectionEvidence;
++    InspectionStepEvidence inspectionStep;
+     float turnOutput=0; // Facing is supplied exclusively as an absolute target.
+     bool valid=false,held=false,rotating=false,translating=false;
+     bool inspectionHold=false;
+@@ -78,6 +80,9 @@
+         const bool turn=valid && std::fabs(BodyAngle(artificial-base))>1.e-6f;
+         if(!valid || now<time || now-time>.5 || turn) {
+             *this={};valid=true;held=true;serial=frame;time=moved=referenceTime=rotated=now;base=artificial;
++            // Recentring while looking down makes calibrated height drop zero.
++            // That is not evidence that an inspection ended or feet moved.
++            loweredInspectionHold=headForward.y<-.85f;
+             motionSampleHands[0]=sampleHands[0]=hands[0]=left;
+             motionSampleHands[1]=sampleHands[1]=hands[1]=right;handMotionTime=now;
+             head=eye;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
+@@ -143,8 +148,8 @@
+         const float controllerFacingBefore=heading.valid && Length(facingPair)>.05f ?
+             BodyAngle(heading.bodyOrigin+std::atan2(facingPair.x,facingPair.z)-heading.facingOrigin) : bodyYaw;
+         const bool inspectionArc=inspectionEvidence.Update(eye,left,right,headForward,now,-.55f);
+-        if(inspectionEvidence.straightTravel) lastInspectionStep=now;
+-        const bool releaseInspection=walking || headForward.y>-.35f ||
++        if(inspectionStep.Update(eye,left,right,headYaw,now)) lastInspectionStep=now;
++        const bool releaseInspection=walking || now-lastInspectionStep<2. || headForward.y>-.35f ||
+             std::fabs(BodyAngle(gazeYaw-bodyYaw))<.174532925f;
+         if(releaseInspection) inspectionHold=false;
+         else if(inspectionArc && headForward.y<-.55f && !heading.turning &&
+@@ -158,9 +163,10 @@
+         // correlated sample must not promote the same inspection to a turn.
+         // Use calibrated physical height (including the neck arc), not the
+         // animated landing camera or a gaze-dependent posture compensation.
+-        if(walking || now-lastInspectionStep<2. || headForward.y>-.65f || physicalHeightDrop<.10f || !std::isfinite(physicalHeightDrop))
++        if(walking || now-lastInspectionStep<2. ||
++           (headForward.y>-.35f && physicalHeightDrop<.05f) || !std::isfinite(physicalHeightDrop))
+             loweredInspectionHold=false;
+-        else if(!heading.turning && headForward.y<-.85f && physicalHeightDrop>.18f)
++        else if(headForward.y<-.85f && physicalHeightDrop>.18f)
+             loweredInspectionHold=true;
+         if(loweredInspectionHold) {
+             heading={};rotating=false;yaw=bodyYaw;
+@@ -239,7 +245,9 @@
+         const bool stepConfirmed=stepIntent.Observe(walkEye,left,right,now,
+             freshHands && !quietHands && translationCoherent);
+         if(!walking && !stepConfirmed && !held) {held=true;height=eye.y;yaw=bodyYaw;}
+-        const bool translation=(!(headOnlyTravel || (currentHeadTurn>.025f && currentHeadTurn>currentHandTurn*2.2f)) || currentStep) && stepConfirmed && freshHands && !quietHands && translationCoherent && c>=threshold && h>=threshold &&
++        const bool inspectionPlanted=(inspectionHold || loweredInspectionHold) && now-lastInspectionStep>=2.;
++        const bool ambiguousPair=beforeSpan<.12f || afterSpan<.12f;
++        const bool translation=!inspectionPlanted && (!ambiguousPair || now-lastInspectionStep<2.) && (!(headOnlyTravel || (currentHeadTurn>.025f && currentHeadTurn>currentHandTurn*2.2f)) || currentStep) && stepConfirmed && freshHands && !quietHands && translationCoherent && c>=threshold && h>=threshold &&
+             rawTravel[0]>=threshold*.35f && rawTravel[1]>=threshold*.35f &&
+             Length(Flat(Scale(Add(Sub(left,hands[0]),Sub(right,hands[1])),.5f)))>=std::max(threshold*.8f,h*.5f);
+         if(translation) {translating=true;translated=now;}
+--- src/BodyFollower.h
++++ src/BodyFollower.h
+@@ -184,12 +184,13 @@
+     float facingOrigin=0,bodyOrigin=0;Vec facingAnchor{},facingMid{};
+     Vec eyeReference{},hands[2]{},lastHands[2]{},quietHands[2]{};
+     double referenceTime=0,quietSince=0,geometryRejectedSince=-1;int coherentSamples=0;Vec evaluatedHands[2]{};
+-    Vec filteredHands[2]{},windowHands[2]{};
++    Vec filteredHands[2]{},windowHands[2]{},windowRawHands[2]{};
+     double filterTime=0,windowTime=0,continuousUntil=0,stillSince=-1;
+     float windowHead=0;
+     void Capture(Vec eye,Vec left,Vec right,float headYaw,double now) {
+         headReference=headYaw;geometryRejectedSince=-1;
+-        filteredHands[0]=windowHands[0]=left;filteredHands[1]=windowHands[1]=right;
++        filteredHands[0]=windowHands[0]=windowRawHands[0]=left;
++        filteredHands[1]=windowHands[1]=windowRawHands[1]=right;
+         filterTime=windowTime=now;windowHead=headYaw;continuousUntil=0;stillSince=-1;
+         eyeReference=eye;hands[0]=lastHands[0]=quietHands[0]=left;
+         hands[1]=lastHands[1]=quietHands[1]=right;referenceTime=quietSince=now;turning=false;coherentSamples=0;evaluatedHands[0]=left;evaluatedHands[1]=right;
+@@ -249,6 +250,15 @@
+         }
+         geometryRejectedSince=-1;
+         if(!turning) {
++            // A short hand-to-hand line magnifies wrist adjustments. Require
++            // the independently measured hand midpoint around the head to
++            // corroborate entry; close hands can still make a real turn.
++            if(beforeSpan<.12f || afterSpan<.12f) {
++                const Vec before=Flat(Sub(beforeMid,eyeReference)),after=Flat(Sub(afterMid,eye));
++                const float midTurn=BodyAngle(std::atan2(after.x,after.z)-std::atan2(before.x,before.z));
++                if(Length(before)<.12f || Length(after)<.12f || midTurn*headTurn<=0 ||
++                   std::fabs(BodyAngle(midTurn-headTurn))>std::max(.04f,std::fabs(headTurn)*.4f)) return;
++            }
+             if(Length(Flat(Sub(left,evaluatedHands[0])))<.025f || Length(Flat(Sub(right,evaluatedHands[1])))<.025f) return;
+             evaluatedHands[0]=left;evaluatedHands[1]=right;
+             if(headTurn*heading<=0 || std::fabs(BodyAngle(headTurn-heading))>std::max(.12f,std::fabs(heading)*.45f)) {
+@@ -257,7 +267,8 @@
+             ++coherentSamples;
+             if(coherentSamples<2 || now-referenceTime<.12 || std::fabs(heading)<.22f ||
+                Length(Flat(Sub(left,hands[0])))<.07f || Length(Flat(Sub(right,hands[1])))<.07f) return;
+-            filteredHands[0]=windowHands[0]=left;filteredHands[1]=windowHands[1]=right;
++            filteredHands[0]=windowHands[0]=windowRawHands[0]=left;
++            filteredHands[1]=windowHands[1]=windowRawHands[1]=right;
+             windowHead=headYaw;windowTime=now;continuousUntil=now+.38;
+         } else {
+             // Once intent is established, follow a filtered controller frame
+@@ -273,12 +284,20 @@
+                 // A head-led glance with modest hand drift terminates the
+                 // intent, including its unfinished blend. It cannot convert
+                 // old controller momentum into more mesh rotation.
+-                if(support && std::fabs(head)>.20f && std::fabs(head)>std::fabs(turn)*2.2f) {
+-                    target=bodyYaw;active=false;
++                const bool handGesture=Length(Flat(Sub(left,windowRawHands[0])))>.02f &&
++                    Length(Flat(Sub(right,windowRawHands[1])))>.02f;
++                const bool headSupports=(!handGesture || std::fabs(head)>.008f) &&
++                    !(std::fabs(head)>.20f && std::fabs(head)>std::fabs(turn)*2.2f);
++                // Both arms can keep sweeping after the feet and head stop.
++                // A successful entry is not permanent permission to follow
++                // controller facing; renew it with fresh head agreement too.
++                if(support && !headSupports) {
++                    target=bodyYaw;active=established=false;
+                     Capture(eye,left,right,headYaw,now);Replant(left,right,anchor,bodyYaw);return;
+                 }
+-                if(support) continuousUntil=now+.38;
++                if(support && headSupports) continuousUntil=now+.38;
+                 windowHands[0]=filteredHands[0];windowHands[1]=filteredHands[1];windowHead=headYaw;windowTime=now;
++                windowRawHands[0]=left;windowRawHands[1]=right;
+             }
+             if(now>continuousUntil) return;
+         }
+--- src/InspectionStepEvidence.h
++++ src/InspectionStepEvidence.h
+@@ -0,0 +1,34 @@
++#pragma once
++#include "BodyFollower.h"
++namespace tr::firstperson {
++// Releasing a planted inspection needs an actual shared displacement, not a
++// single 6 mm coincidence while head and hands sweep past the same direction.
++struct InspectionStepEvidence {
++    struct Sample { Vec eye{},left{},right{};float yaw=0;double time=0; };
++    Sample samples[64]{};int next=0,count=0;
++    bool Update(Vec eye,Vec left,Vec right,float yaw,double now) {
++        bool step=false;
++        for(int i=0;i<count;++i) {
++            const auto& s=samples[i];const double age=now-s.time;
++            if(age<.2 || age>.6) continue;
++            const Vec h=Flat(Sub(eye,s.eye));const float distance=Length(h);
++            const float headTurn=std::fabs(BodyAngle(yaw-s.yaw));
++            if(distance<.03f || headTurn>.10f) continue;
++            const Vec a=Flat(Sub(s.right,s.left)),b=Flat(Sub(right,left));
++            if(Length(a)<.05f || Length(b)<.05f) continue;
++            const float turn=std::fabs(BodyAngle(std::atan2(b.x,b.z)-std::atan2(a.x,a.z)));
++            if(turn>.08f) continue;
++            const float error=std::max(Length(Sub(Flat(Sub(left,s.left)),h)),
++                Length(Sub(Flat(Sub(right,s.right)),h)));
++            // Very clean straight movement can start sooner. The longer
++            // displacement is needed only when allowing natural arm sway.
++            if((distance>=.06f && error<distance*.2f) ||
++               (headTurn<.02f && turn<.02f && error<.001f)) step=true;
++        }
++        if(count==0 || now-samples[(next+63)%64].time>=.01) {
++            samples[next]={eye,left,right,yaw,now};next=(next+1)%64;count=std::min(64,count+1);
++        }
++        return step;
++    }
++};
++}
+--- tools/lowered_inspection_tests.cpp
++++ tools/lowered_inspection_tests.cpp
+@@ -54,7 +54,19 @@
+             "four-direction walking releases the inspection without freezing roomscale travel");
+     }
+     hold.Update(1801,31.02,eye,left,right,0,0,true,false,0,.15f,{0,0,1},.25f);
+-    Check(!hold.loweredInspectionHold,"looking up restores normal facing inference");
++    Check(hold.loweredInspectionHold,"looking up while still lowered cannot spend prior inspection movement");
++    hold.Update(1802,31.04,eye,left,right,0,0,true,false,0,.15f,{0,0,1},0.f);
++    Check(!hold.loweredInspectionHold,"returning upright restores normal facing inference");
++    // After returning upright, a fresh physical turn is admitted normally.
++    float body=0;bool turned=false;
++    for(int i=0;i<180;++i) {
++        const float angle=1.2f*std::min(1.f,float(i)/120.f);
++        hold.Update(1803+i,31.06+i/60.,YawVector(eye,angle),YawVector(left,angle),YawVector(right,angle),
++            0,body,true,false,angle,.15f,YawVector({0,0,1},angle),0.f);
++        if(hold.heading.active) {body=hold.heading.target;turned=true;}
++    }
++    Check(turned && std::fabs(BodyAngle(body-1.2f))<.22f,"upright roomscale turning resumes after an inspection");
++
+ #endif
+     std::printf("PASS: %d sustained-inspection checks\n",checks);
+ }
+--- README.md
++++ README.md
+@@ -9363,3 +9363,36 @@
+ 30 seconds of repeated synthetic glances, the earlier recorded walking/turning
+ sequence, and shared physical steps in all four directions. Drift replay logs
+ now include the physical height input. Headset confirmation remains necessary.
++
++### Consistent planted-inspection transitions (2026-11-14)
++
++The inspection hold now applies to horizontal body placement as well as facing.
++A deeply lowered inspection can stop an already active inferred turn; an earlier
++turn no longer exempts later glances from the hold. Looking up while the head is
++still physically lowered does not release it. Returning upright (within 5 cm of
++standing height, gaze above roughly 20 degrees down), explicit stick travel, or
++corroborated physical walking releases the deep inspection hold.
++
++Walking release uses sustained shared head/controller displacement over 0.2 to
++0.6 seconds. Very clean straight movement can qualify after 3 cm; movement with
++arm sway requires 6 cm and agreement within 20 percent. Both paths reject changes
++in heading. A single short 6 mm coincidence no longer opens the two-second
++walking/turn continuation window. The window itself cannot authorize movement.
++
++Turn continuation checks head agreement for deliberate bilateral hand gestures.
++Tracking noise can finish an already accepted blend, but deliberate arm motion
++without head movement cannot keep renewing an old turn. When horizontal
++controller spacing is below 12 cm, turn entry also needs agreement from the hand
++midpoint moving around the head; the short hand-to-hand line alone is unreliable.
++Translation then needs the stronger shared-step evidence too. A turn begun
++while deeply bent over inspecting can require straightening first. These are
++conservative compromises of head/hand inference, not direct foot tracking.
++
++The user-labelled 8,093-pose stationary recording is checked with physical input
++isolated from recorded stick motion and artificial yaw. The prior build falsely
++authorizes 1,880 turn samples and 1,434 movement samples in that replay; the
++correction authorizes neither and retains the anchor throughout each tracking
++segment. Separate regressions cover recorded actual walking/turning, hand-only
++gestures after a turn, four-direction steps after a swivel, and upright turning
++after inspection. Landing, calibration, camera and animation solvers are unchanged.
++In-headset confirmation remains necessary.

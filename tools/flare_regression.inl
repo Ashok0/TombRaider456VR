@@ -85,8 +85,9 @@ void TestFlareTracking(int count,const tr::motiongun::Frame* binds,tr::motiongun
             float palette[33*12]{};Detour_GetJoints(itemMemory,palette,0);
             Frame actual{};
             for(int i=0;i<count;++i) if((count==15 ? i : (i*7)%15)==13) actual=Multiply(ReadRows(palette+i*12),binds[i]);
+            LimitConnectedWeaponWrist(itemMemory,0,wrist);
             const auto tip=Transform(wrist,{11,-64,41});
-            Check(firstperson::Length(Sub(Add(actual.origin,camera),wrist.origin))<.05f,"flare mesh wrist follows left controller position with rigid arm IK");
+            Check(firstperson::Length(Sub(Add(actual.origin,camera),wrist.origin))<.05f,"flare mesh wrist follows the connected reach limit");
             Check(firstperson::Length(Sub(Add(Transform(actual,{11,-64,41}),camera),tip))<.06f,"flare mesh tip follows controller rotation and matches light origin");
             const auto savedBits=*reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits);
             *reinterpret_cast<uint32_t*>(itemMemory+off::item_mesh_bits)=0x3000;
@@ -110,6 +111,7 @@ void TestFlareTracking(int count,const tr::motiongun::Frame* binds,tr::motiongun
             // render pose, not the last native update or native 256-unit bias.
             hand.m[0][3]+=.08f;++VR().m_poseSerial;
             Frame renderWrist{};Check(BuildControllerWrist(0,renderWrist,controller),"render-time flare wrist builds");
+            LimitConnectedWeaponWrist(itemMemory,0,renderWrist);
             const auto renderTip=Transform(renderWrist,{11,-64,41});
             UpdateFlareLightPosition();
             for(int slot=0;slot<(flareMirror ? 2 : 1);++slot) {
@@ -130,6 +132,7 @@ void TestFlareTracking(int count,const tr::motiongun::Frame* binds,tr::motiongun
     // The simulation gate may be unavailable even though the render is tracked.
     g_scenePoseValid=false;Detour_FlareInHand(100);g_scenePoseValid=true;
     Frame renderWrist{};Basis renderController{};BuildControllerWrist(0,renderWrist,renderController);
+    LimitConnectedWeaponWrist(itemMemory,0,renderWrist);
     const auto latestTip=Transform(renderWrist,{11,-64,41});
     UpdateFlareLightPosition();
     auto lightPoint=[] {auto* p=reinterpret_cast<int32_t*>(flareLights[0]);return PHD_VECTOR{p[0],p[2],p[4]};};

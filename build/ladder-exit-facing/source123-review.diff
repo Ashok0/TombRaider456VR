@@ -1,0 +1,82 @@
+--- src/ControllerBodyAnchor.h
++++ src/ControllerBodyAnchor.h
+@@ -33,9 +33,10 @@
+ struct ControllerBodyAnchor {
+     RoomscaleHeadingRecovery heading;
+     PhysicalStepIntent stepIntent;
+-    PlantedPivotEvidence pivotEvidence;
++    PlantedPivotEvidence pivotEvidence,inspectionEvidence;
+     float turnOutput=0; // Facing is supplied exclusively as an absolute target.
+     bool valid=false,held=false,rotating=false,translating=false;
++    bool inspectionHold=false;
+     uint64_t serial=0;
+     double time=0,moved=0,referenceTime=0,rotated=0,translated=0;
+     float base=0,yaw=0,height=0,motionYaw=0;
+@@ -132,6 +133,23 @@
+         const float dt=float(std::clamp(now-time,0.,.05));serial=frame;time=now;turnOutput=0;
+         if(now-rotated>=.12 || walking) rotating=false;
+         if(walking) heading={};
++        // A downward head-led inspection can eventually carry both hands
++        // far enough to satisfy ordinary turn entry. Do not retroactively
++        // convert that glance into a turn when the hands catch up. Keep this
++        // separate from position/step evidence so physical walking still works.
++        const Vec facingPair=Flat(Sub(right,left));
++        const float controllerFacingBefore=heading.valid && Length(facingPair)>.05f ?
++            BodyAngle(heading.bodyOrigin+std::atan2(facingPair.x,facingPair.z)-heading.facingOrigin) : bodyYaw;
++        const bool inspectionArc=inspectionEvidence.Update(eye,left,right,headForward,now,-.55f);
++        const bool releaseInspection=walking || headForward.y>-.35f ||
++            std::fabs(BodyAngle(gazeYaw-bodyYaw))<.174532925f;
++        if(releaseInspection) inspectionHold=false;
++        else if(inspectionArc && headForward.y<-.55f && !heading.turning &&
++                std::fabs(BodyAngle(gazeYaw-controllerFacingBefore))>.34906585f)
++            inspectionHold=true;
++        if(inspectionHold) {
++            heading={};rotating=false;yaw=bodyYaw;
++        }
+         // Entry evidence must not revoke an established step or body turn.
+         // Only fresh, independently corroborated inspection arcs hold a stance.
+         const bool plantedPivot=pivotEvidence.Update(eye,left,right,headForward,now) && !walking && !heading.turning && !translating;
+--- README.md
++++ README.md
+@@ -3633,3 +3633,21 @@
+ The native animation palette used for chest physics remains untouched. With
+ drift logging enabled, `landing-native` records the animation, visual scale and
+ above-collar camera clearance. In-headset confirmation remains necessary.
++
++### Downward head-led inspection hold (2026-11-14)
++
++When looking down toward Lara's holsters, a head turn that leads the controller
++frame by more than 20 degrees now holds the inferred body facing when the
++tracked head/hand arc also indicates a planted torso inspection. Later hand
++movement cannot retroactively turn that same inspection into a whole-body turn.
++The hold releases when the gaze rises, returns near the body's facing, or the
++movement stick is used. Coordinated head/controller turns can still start while
++looking down, and the hold does not disable roomscale translation.
++
++This is a conservative compromise with head-and-hand tracking: a real body turn
++started after such an inspection may require raising or centering the gaze
++first. The classifier has no direct foot tracking. A captured post-ladder glance
++reproduces the previous false turn; regressions also cover coordinated turns at
++60/90/120 Hz, different arm extensions, and walking in all four directions.
++Height calibration, the native landing-animation handoff, and camera clearance
++are unchanged. In-headset confirmation remains necessary.
+--- src/PlantedPivotEvidence.h
++++ src/PlantedPivotEvidence.h
+@@ -8,7 +8,7 @@
+     struct Sample { Vec eye{},left{},right{};double time=0; };
+     Sample samples[32]{};int next=0,count=0;
+     double until=0;
+-    bool Update(Vec eye,Vec left,Vec right,Vec forward,double now) {
++    bool Update(Vec eye,Vec left,Vec right,Vec forward,double now,float inspectionPitch=-.65f) {
+         bool orbit=false,straight=false;
+         int nearbyTurns=0,arcTurns=0;
+         // Current shared translation releases an old angular observation.
+@@ -20,7 +20,7 @@
+             const float distance=Length(h);
+             if(distance>.006f && Length(Sub(h,l))<distance*.12f && Length(Sub(h,r))<distance*.12f) straight=true;
+         }
+-        const bool inspecting=forward.y<-.65f && left.y>eye.y-.5f && right.y>eye.y-.5f;
++        const bool inspecting=forward.y<inspectionPitch && left.y>eye.y-.5f && right.y>eye.y-.5f;
+         if(inspecting) for(int i=0;i<count;++i) {
+             const auto& s=samples[i];const double age=now-s.time;
+             if(age<.10 || age>.24) continue;

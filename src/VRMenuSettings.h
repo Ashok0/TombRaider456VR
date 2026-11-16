@@ -2,7 +2,7 @@
 #include <array>
 #include <string>
 namespace tr::vrmenu {
-constexpr int SettingCount=4;
+constexpr int SettingCount=5;
 struct Setting {
     const wchar_t* key;
     const wchar_t* label;

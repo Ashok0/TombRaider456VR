@@ -1,0 +1,262 @@
+--- src/ControllerBodyAnchor.h
++++ src/ControllerBodyAnchor.h
+@@ -38,6 +38,7 @@
+     PlantedPivotEvidence pivotEvidence,inspectionEvidence;
+     InspectionStepEvidence inspectionStep;
+     InspectionTurnEvidence inspectionTurn;
++    OpposedStanceRecovery opposedRecovery;
+     float turnOutput=0; // Facing is supplied exclusively as an absolute target.
+     bool valid=false,held=false,rotating=false,translating=false;
+     bool inspectionHold=false;
+@@ -64,7 +65,7 @@
+         const Vec pair=Sub(right,left);placementFacing=std::atan2(pair.x,pair.z);
+     }
+     void Reset() { *this={}; }
+-    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f,Vec headForward={},float physicalHeightDrop=0) {
++    void Update(uint64_t frame,double now,Vec eye,Vec left,Vec right,float artificial,float bodyYaw,bool tracked,bool walking,float headYaw=0,float neckMetres=.15f,Vec headForward={},float physicalHeightDrop=0,bool allowBodyTurn=true) {
+         if(!tracked || !Finite({IdentityBasis(),eye}) || !Finite({IdentityBasis(),left}) ||
+            !Finite({IdentityBasis(),right}) || !Finite({IdentityBasis(),headForward}) || !std::isfinite(now+artificial+bodyYaw+headYaw+neckMetres)) {Reset();return;}
+         // The forward eye-to-neck offset shrinks horizontally when looking
+@@ -152,7 +153,15 @@
+             BodyAngle(heading.bodyOrigin+std::atan2(facingPair.x,facingPair.z)-heading.facingOrigin) : bodyYaw;
+         const bool wasInspection=inspectionHold || loweredInspectionHold;
+         const bool inspectionArc=inspectionEvidence.Update(eye,left,right,headForward,now,-.55f);
+-        const bool inspectionTurnConfirmed=inspectionTurn.Update(eye,left,right,headForward,headYaw,now);
++        const bool wasRecovering=opposedRecovery.active;
++        const bool recoveringOpposed=opposedRecovery.Update(now,bodyYaw,headYaw,controllerFacingBefore,
++            Length(facingPair),eye,head,wasInspection,walking || !allowBodyTurn);
++        if(wasRecovering && !recoveringOpposed) {
++            // Replant at the displayed body after the accepted pose completes.
++            // Unapplied inspection gestures cannot survive this handoff.
++            heading={};
++        }
++        const bool inspectionTurnConfirmed=inspectionTurn.Update(eye,left,right,headForward,headYaw,now) || recoveringOpposed;
+         if(inspectionTurnConfirmed) inspectionTurnActive=true;
+         else if(!heading.turning) inspectionTurnActive=false;
+         const bool continuingPhysicalTurn=inspectionTurnActive && heading.turning && now<=heading.continuousUntil;
+@@ -196,7 +205,12 @@
+             if(inspectionHold || loweredInspectionHold) holdHeading();else heading={};
+             stepIntent.Capture(walkEye,left,right,now);translating=false;
+         }
+-        heading.Update(eye,left,right,bodyYaw,headYaw,now,head);
++        if(recoveringOpposed) {
++            heading.target=opposedRecovery.target;
++            heading.active=heading.established=heading.turning=heading.sampleAccepted=true;
++            heading.continuousUntil=now+.38;
++        } else heading.Update(eye,left,right,bodyYaw,headYaw,now,head);
++        const Vec recoveryStart=head;
+         rotating=heading.turning;
+         if(heading.established || rotating) yaw=bodyYaw;
+         // Walking owns an independent observation window. Remove the rigid
+@@ -377,6 +391,16 @@
+             head=Sub(eye,offset);height=eye.y;yaw=bodyYaw;
+             CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+         }
++        if(recoveringOpposed) {
++            // A completed physical turnaround can leave the frozen body on
++            // the old side of the player. Recenter only toward the latched
++            // accepted position, with the same bounded speed as normal turns.
++            const Vec travel=Flat(Sub(opposedRecovery.position,recoveryStart));const float distance=Length(travel);
++            head=recoveryStart;
++            if(distance>0) head=Add(head,Scale(travel,std::min(distance,1.35f*dt)/distance));
++            offset=Flat(Sub(eye,head));yaw=bodyYaw;
++            CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
++        }
+     }
+ };
+ }
+--- src/InspectionTurnEvidence.h
++++ src/InspectionTurnEvidence.h
+@@ -1,6 +1,42 @@
+ #pragma once
+ #include "BodyFollower.h"
+ namespace tr::firstperson {
++// A short motion window cannot resolve a slow or already completed turnaround.
++// Opposed head AND hand-frame facing sustained over a planted stance provides
++// a second, pose-based escape. Latch the accepted pose: subsequent head glances
++// must not drag the target around while the renderer catches up.
++struct OpposedStanceRecovery {
++    bool active=false;double began=-1,last=0,acceptedAt=0;
++    float target=0,acceptedHead=0;Vec position{};
++    void Reset() {*this={};}
++    bool Update(double now,float body,float head,float hands,float span,Vec eye,Vec anchor,
++                bool inspecting,bool walking) {
++        if(walking || (last && (now<last || now-last>.5))) Reset();
++        last=now;
++        if(active) {
++            // Include the remainder of a real turn during catch-up. Advance
++            // only when head and controller frame supply matching new yaw;
++            // either device moving alone leaves the accepted pose untouched.
++            const float h=BodyAngle(head-acceptedHead),c=BodyAngle(hands-target);
++            if(span>=.12f && std::fabs(h)>.0174533f && std::fabs(c)>.0174533f && h*c>0 &&
++               std::fabs(BodyAngle(h-c))<.08f && std::fabs(BodyAngle(head-hands))<.43633231f) {
++                target=hands;acceptedHead=head;position=eye;acceptedAt=now;
++            }
++            if(now-acceptedAt>.35 && std::fabs(BodyAngle(target-body))<.025f && Length(Flat(Sub(position,anchor)))<.005f) {
++                active=false;began=-1;
++            }
++            return active;
++        }
++        const bool opposed=!walking && inspecting && span>=.12f &&
++            std::fabs(BodyAngle(head-body))>2.0943951f &&
++            std::fabs(BodyAngle(hands-body))>2.0943951f &&
++            std::fabs(BodyAngle(head-hands))<.43633231f;
++        if(!opposed) {began=-1;return false;}
++        if(began<0) began=now;
++        if(now-began<.75) return false;
++        active=true;target=hands;acceptedHead=head;position=eye;acceptedAt=now;began=-1;return true;
++    }
++};
+ // A downward inspection is a persistent stance, not a permanent ban on turns.
+ // Release it only after a broad, one-direction turn of the tracked triangle
+ // around a compact body pivot. A single matching sample cannot release it.
+--- src/ControllerBodyAnchor.inl
++++ src/ControllerBodyAnchor.inl
+@@ -21,7 +21,7 @@
+         {left.m[0][3],left.m[1][3],-left.m[2][3]},
+         {right.m[0][3],right.m[1][3],-right.m[2][3]},g_heading.base,
+         bodyYaw,tracked,walking,headYaw,Cfg().firstPersonRoomscaleNeckMetres,{-head.m[0][2],-head.m[1][2],head.m[2][2]},
+-        VR().FirstPersonHeightDrop());
++        VR().FirstPersonHeightDrop(),Cfg().firstPersonBodyHandYawWeight>0);
+     if(trace) LogF("body-input: %llu %.17g %.9g %.9g %d %d %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g -> %.9g %.9g %d %d %d drop=%.9g",
+         frame,time,g_heading.base,bodyYaw,int(tracked),int(walking),headYaw,Cfg().firstPersonRoomscaleNeckMetres,
+         head.m[0][3],head.m[1][3],-head.m[2][3],left.m[0][3],left.m[1][3],-left.m[2][3],
+--- README.md
++++ README.md
+@@ -3743,3 +3743,24 @@
+ remain held; ordinary upright turn entry is unchanged. This is an inference from
+ head/hand tracking, not direct foot tracking. Connected arms, calibrated height,
+ native landing animations and existing INI values are preserved.
++
++### Slow and completed roomscale turnaround recovery (2026-11-15)
++
++The short inspection-turn window can miss a slow physical turnaround when head
++height or pitch changes. A separate safeguard now recognizes a sustained pose:
++both headset and calibrated controller-frame facing more than 120 degrees from
++the frozen body, agreeing within 25 degrees for 0.75 seconds. It can recover an
++already completed turn; fresh motion every frame is not required.
++
++Recovery uses the existing bounded body rotation and moves the visual body
++smoothly toward the accepted tracked position. A new head-only glance or hand-only
++gesture cannot drag that target. Matching new head/controller rotation advances
++it if the physical turn continues. Once motion settles and the body catches up,
++normal planted-glance protection resumes. Tracking loss, explicit stick walking
++and disabled hand-assisted body yaw cancel this recovery. Camera position,
++standing height, connected arms and native landing animation handling are unchanged.
++
++Automated validation includes the reported recording with corrected body facing
++fed back into the detector, slow half-turns at several rates, stopped-turn recovery,
++and the earlier 8,093-pose stationary-glance recording. Headset confirmation remains
++necessary; three tracked devices still cannot directly observe feet.
+--- tools/opposed_stance_tests.cpp
++++ tools/opposed_stance_tests.cpp
+@@ -0,0 +1,109 @@
++#include "ControllerBodyAnchor.h"
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++using namespace tr::firstperson;
++using namespace tr::motiongun;
++int checks=0;
++void Check(bool ok,const char* message) {++checks;if(!ok){std::fprintf(stderr,"FAIL: %s\n",message);std::exit(1);}}
++#ifndef BASELINE_RECORDING
++void Synthetic() {
++    {
++        ControllerBodyAnchor disabled;
++        for(int i=0;i<240;++i) {
++            const float yaw=i<30 ? 0.f : 3.14159265f;
++            disabled.Update(i+1,1+i/60.,YawVector({0,1.45f,.15f},yaw),
++                YawVector({-.18f,1.2f,.4f},yaw),YawVector({.18f,1.2f,.4f},yaw),
++                0,0,true,false,yaw,.15f,YawVector({0,-.93f,.36756f},yaw),.25f,false);
++            Check(!disabled.opposedRecovery.active,"disabled hand-assisted body yaw cannot trigger forced turn recentering");
++        }
++    }
++    for(int hz:{60,90,120}) for(float sign:{-1.f,1.f}) for(float seconds:{4.f,8.f,16.f}) {
++        ControllerBodyAnchor anchor;BodyFollower body;BodyFollowSettings settings;
++        const Vec eye{0,1.45f,.15f},left{-.18f,1.15f,.4f},right{.18f,1.15f,.4f};
++        double now=1;uint64_t frame=0;float actual=0;bool recovered=false;
++        auto update=[&](float yaw,float hands,float pitch,float height) {
++            Vec e=YawVector(eye,yaw);e.y+=height;
++            auto l=YawVector(left,hands),r=YawVector(right,hands);l.y+=height;r.y+=height;
++            const auto before=anchor.head;const float beforeYaw=body.yaw;
++            const auto forward=YawVector({0,-std::sin(pitch),std::cos(pitch)},yaw);
++            anchor.Update(++frame,now,e,l,r,0,body.yaw,true,false,yaw,.15f,forward,.25f-height);
++            body.Update(frame,now,0,yaw,0,{}, {},false,settings,anchor.head,false,true,0,true,true,
++                anchor.heading.active ? anchor.heading.target : NAN,anchor.rotating);
++            if(frame>1) {
++                Check(std::fabs(BodyAngle(body.yaw-beforeYaw))<=3.141593f/hz+.001f,"turn catch-up stays within the body yaw rate limit");
++                if(anchor.opposedRecovery.active) Check(Length(Flat(Sub(anchor.head,before)))<=1.35f/hz+.001f,
++                    "opposed stance recenters smoothly instead of teleporting the mesh");
++            }
++            recovered=recovered || anchor.opposedRecovery.active;now+=1./hz;
++        };
++        for(int i=0;i<hz;++i) update(0,0,1.2f,0);
++        for(int i=0;i<int(seconds*hz);++i) {
++            actual=sign*3.14159265f*(i+1)/(seconds*hz);
++            // Natural head elevation/pitch changes intentionally violate the
++            // short rigid-orbit detector that rejected the reported turn.
++            update(actual,actual,1.2f+.18f*std::sin(i*4.f/hz),.07f*std::sin(i*3.f/hz));
++        }
++        for(int i=0;i<hz*3;++i) update(actual,actual,1.2f,0);
++        if(std::fabs(BodyAngle(body.yaw-actual))>=.06f) std::printf("case hz=%d sign=%.0f seconds=%.0f yaw=%.1f actual=%.1f recovered=%d active=%d held=%d target=%.1f facingOrigin=%.1f bodyOrigin=%.1f\n",hz,sign,seconds,body.yaw*57.29578f,actual*57.29578f,recovered,anchor.opposedRecovery.active,anchor.loweredInspectionHold,anchor.heading.target*57.29578f,anchor.heading.facingOrigin*57.29578f,anchor.heading.bodyOrigin*57.29578f);
++        Check(std::fabs(BodyAngle(body.yaw-actual))<.06f,"slow half-turn recovers even after all tracked movement stops");
++        Check(Length(Flat(Sub(anchor.head,YawVector(eye,actual))))<.10f,"recovered body does not stay on the old side of the player");
++        const auto settled=anchor.head;const float settledYaw=body.yaw;
++        for(int i=0;i<hz*3;++i) {
++            update(actual+.5f*std::sin(i*3.f/hz),actual,1.2f,0);
++            Check(std::fabs(BodyAngle(body.yaw-settledYaw))<.002f && Length(Flat(Sub(anchor.head,settled)))<.002f,
++                "head-only glances after catch-up cannot drag the mesh");
++        }
++    }
++    OpposedStanceRecovery recovery;
++    for(int i=0;i<200;++i) Check(!recovery.Update(i/90.,0,3.14f,0,.3f,{}, {},true,false),
++        "head turning alone cannot request opposed-stance recovery");
++    for(int i=0;i<200;++i) Check(!recovery.Update(3+i/90.,0,0,3.14f,.3f,{}, {},true,false),
++        "controller gestures alone cannot request opposed-stance recovery");
++    for(int i=0;i<150;++i) recovery.Update(6+i/90.,0,3.14f,3.14f,.3f,{.2f,0,0},{},true,false);
++    Check(recovery.active,"opposed pose can authorize catch-up without frame-to-frame motion");
++    const float target=recovery.target;const auto position=recovery.position;
++    recovery.Update(7.7,0,2.5f,2.8f,.3f,{.8f,0,.4f},{},false,false);
++    Check(recovery.active && recovery.target==target && Length(Sub(position,recovery.position))==0,
++          "accepted recovery pose is latched rather than following subsequent glances");
++    recovery.Update(7.71,0,3.14f,3.14f,.3f,{}, {},true,true);
++    Check(!recovery.active,"explicit stick walking immediately cancels catch-up");
++}
++#endif
++void Recorded(const char* path) {
++    FILE* file=nullptr;fopen_s(&file,path,"r");Check(file!=nullptr,"reported slow-turn capture opens");
++    ControllerBodyAnchor anchor;BodyFollower follower;BodyFollowSettings settings;
++    char line[4096]{};double start=-1;bool simulate=false;int observed=0,corrected=0;float worst=0;
++    while(std::fgets(line,sizeof(line),file)) {
++        if(!std::strncmp(line,"body-input-reset",16)){anchor.Reset();continue;}
++        if(std::strncmp(line,"body-input: ",12)) continue;
++        unsigned long long serial;double time;float base,body,yaw,neck;int tracked,walking;Vec eye{},left{},right{},forward{};
++        const int n=std::sscanf(line+12,"%llu %lf %f %f %d %d %f %f %f %f %f %f %f %f %f %f %f %f %f %f",
++            &serial,&time,&base,&body,&tracked,&walking,&yaw,&neck,&eye.x,&eye.y,&eye.z,&left.x,&left.y,&left.z,
++            &right.x,&right.y,&right.z,&forward.x,&forward.y,&forward.z);
++        Check(n==20,"capture contains complete head and controller positions");if(start<0)start=time;
++        const double t=time-start;if(t>=47)break;
++        if(t>=31 && !simulate) {
++            simulate=true;follower.Update(serial-1,time-1./60.,base,base+body,base+body,{}, {},false,settings,anchor.head);
++        }
++        if(simulate)body=BodyAngle(follower.yaw-base);
++        const char* drop=std::strstr(line," drop=");
++        anchor.Update(serial,time,eye,left,right,base,body,tracked!=0,walking!=0,yaw,neck,forward,drop?float(std::atof(drop+6)):0);
++        if(simulate)follower.Update(serial,time,base,base+yaw,base+body,{}, {},false,settings,anchor.head,false,true,0,true,true,
++            anchor.heading.active ? BodyAngle(base+anchor.heading.target) : NAN,anchor.rotating);
++        if(t>=36 && t<38) {
++            ++observed;const float error=std::fabs(BodyAngle(follower.yaw-base-yaw));worst=std::max(worst,error);
++            if(error<.65f)++corrected;
++        }
++    }
++    std::fclose(file);
++    std::printf("Closed-loop slow turn: %d/%d samples recovered, maximum head/body difference %.1f degrees\n",corrected,observed,worst*57.29578f);
++    Check(observed>90 && corrected>.95f*observed,"reported completed half-turn no longer leaves Lara facing the opposite way");
++}
++int main(int argc,char** argv) {
++    Check(argc==2,"capture supplied");
++#ifndef BASELINE_RECORDING
++    Synthetic();
++#endif
++    Recorded(argv[1]);std::printf("PASS: %d opposed stance checks\n",checks);
++}

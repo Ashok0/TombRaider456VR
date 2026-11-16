@@ -4,3 +4,4 @@ if errorlevel 1 exit /b 1
 msbuild "C:\dev\TombRaider456VR\build\connected-arms\123-work/TombRaiderVR.vcxproj" /p:SolutionDir=C:\dev\TombRaider456VR\build\connected-arms\123-work/ /p:Configuration=Release /p:Platform=x64 /p:DeployToGame=false /p:TrackFileAccess=false /p:IntDir=C:\dev\TombRaider456VR\build\connected-arms\123/obj/ /p:OutDir=C:\dev\TombRaider456VR\build\connected-arms\123/bin/ /m /v:minimal /nologo
 
 
+

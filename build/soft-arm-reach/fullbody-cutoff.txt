@@ -1,0 +1,18 @@
+savedPose;g_headingBase=savedHeading;g_bodyVisualOffset=savedOffset;
+    VR().m_rawHeadPose=savedHead;std::memcpy(VR().m_rawControllerPose,controllers,sizeof(controllers));
+    std::memcpy(itemMemory,savedItem.data(),sizeof(itemMemory));std::memcpy(laraMemory,savedLara.data(),sizeof(laraMemory));
+    config=settings;dll=savedDll;testCalibration=calibration;g_unarmedTwist[0]=savedLeft;g_unarmedTwist[1]=savedRight;
+    g_bodyFollower=savedFollower;VR().m_poseSerial=savedSerial;
+    g_pistolRoll=savedPistolRoll;
+    g_torsoPose=savedTorso;g_mountBodyTransition=savedMount;
+    g_groundGait=savedGait;g_groundGaitObject=savedGaitObject;
+    g_jumpLanding=savedJumpLanding;g_jumpBodyReference=savedJumpBody;g_jumpBodyObject=savedJumpBodyObject;
+    g_bodyLanding=savedLanding;
+    g_pistolAnimation=savedPistolAnimation;
+    g_bodyVisibility=savedVisibility;
+    g_autoBodyCalibration=savedAuto;
+    g_bodySize=savedBodySize;g_bodySizeObject=savedSizeObject;
+    VR().m_firstPersonNeutralEyeNeckY=savedNeckHeight;
+    g_heightCrouch=savedHeightCrouch;g_physicalCrouchCamera=savedPhysicalCamera;
+}
+}

@@ -24,9 +24,12 @@ struct BodyVisibilityRecovery {
     uint32_t mask=UINT32_MAX;
     double until=0,last=0;
     uint32_t Update(const void* item,int currentLevel,double now,bool armsOnly,
-                    bool landing,bool recovering) {
+                    bool landing,bool recovering,bool freeJump=false) {
         if(owner!=item || level!=currentLevel || now<last) *this={};
         owner=item;level=currentLevel;last=now;
+        // A new ordinary flight supersedes the previous mount/landing mask.
+        // Letting that timer expire in midair makes the torso blink back on.
+        if(freeJump && !armsOnly && !landing) { mask=UINT32_MAX;until=0; }
         if(armsOnly || landing) {
             mask=armsOnly ? ArmMeshBits : ~(1u<<7);
             until=now+.35;
@@ -70,6 +73,23 @@ inline uint32_t SkinJointMask(uint32_t meshBits, const int32_t* mapping, int cou
             result|=uint32_t(1)<<i;
     }
     return result;
+}
+
+// A hidden head must not pull shared collar vertices toward the tracked eye
+// while the fitted/filtered torso rises from a crouch. Skin matrices already
+// share mesh coordinates: use the final chest transform for hidden head weights.
+// Only the eye-view upload is changed; keep native physics, camera and shadow
+// palettes, visible heads and arms-only attachments untouched.
+inline bool StabilizeHiddenNeck(float* palette,int count,const int32_t* mapping,uint64_t visible) {
+    if(!palette || count<1 || count>32) return false;
+    const auto head=SkinJointMask(HeadMeshBit,mapping,count);
+    const auto chest=SkinJointMask(1u<<7,mapping,count)&visible;
+    if(!head || (head&visible) || !chest) return false;
+    int source=0;while(!(chest&(uint64_t(1)<<source))) ++source;
+    for(int k=0;k<12;++k) if(!std::isfinite(palette[source*12+k])) return false;
+    for(int i=0;i<count;++i) if(head&(uint64_t(1)<<i))
+        for(int k=0;k<12;++k) palette[i*12+k]=palette[source*12+k];
+    return true;
 }
 
 // DrawLaraHD passes zero for an unmasked body. Its effective native mask is

@@ -1,3 +1,22 @@
+// Test oracle for the requested shoulder-anchored reach contract.
+tr::motiongun::Frame ExpectedConnectedWrist(const tr::motiongun::Frame (&chain)[3],tr::motiongun::Frame target,float percent=100) {
+    using namespace tr::motiongun;using tr::firstperson::Length;
+    const float fit=percent/100;
+    const float a=Length(Sub(chain[1].origin,chain[0].origin))*fit,b=Length(Sub(chain[2].origin,chain[1].origin))*fit;
+    Vec delta=Sub(target.origin,chain[0].origin);float distance=Length(delta);
+    if(distance<.00001f) {delta=Sub(chain[2].origin,chain[0].origin);distance=Length(delta);}
+    const float margin=std::min(a,b)*.001f;
+    const float requested=Length(Sub(target.origin,chain[0].origin));
+    const float radius=std::max(requested,std::fabs(a-b)+margin);
+    if(requested!=radius) target.origin=Add(chain[0].origin,Scale(delta,radius/distance));
+    return target;
+}
+
+tr::motiongun::Frame ExpectedPublishedWrist(int hand,tr::motiongun::Frame target) {
+    Check(tr::g_connectedWeaponReach[hand].valid,"successful arm draw publishes connected reach");
+    return ExpectedConnectedWrist(tr::g_connectedWeaponReach[hand].chain,target,tr::Cfg().firstPersonArmLengthPercent);
+}
+
 // Independent contract for the restored rigid arm solve: exact lengths and
 // the minimum shoulder displacement required by the reachable annulus.
 void CheckRigidTrackedReach(const tr::motiongun::Frame (&native)[3],const tr::motiongun::Frame (&posed)[3]) {
@@ -637,9 +656,15 @@ void TestUnarmedIK() {
                     const auto rendered=Multiply(ReadRows(palette+i*12),bind[i]);
                     const Vec grip=Scale(Vec{-testCalibration.rightMetres,testCalibration.gripForwardMetres,
                                             -testCalibration.raiseMetres},LiveWorldUnitsPerMetre());
-                    const Frame floatingGun{gunPose.desired,Sub(gunPose.trackedHand,cameraOrigin)};
-                    Check(nearVec(Transform(rendered,grip),Transform(floatingGun,grip)),
-                          "IK and floating gun keep the same physical grip pivot after wrist constraints");
+                    Frame raw{};Basis controller{};
+                    Check(BuildControllerWrist(joint==10 ? 1 : 0,raw,controller),"raw controller wrist available");
+                    raw.origin=Sub(raw.origin,cameraOrigin);
+                    Frame chain[3]{};const int first=joint-2;
+                    for(int n=0;n<count;++n) if(mapping[n]>=first && mapping[n]<=joint)
+                        chain[mapping[n]-first]=Multiply(ReadRows(baseline+n*12),bind[n]);
+                    const Frame limited=ExpectedConnectedWrist(chain,raw);
+                    Check(nearVec(Transform(rendered,grip),Transform(limited,grip)),
+                          "visible hand preserves grip orientation at the shoulder-anchored reach limit");
                 } else if(joint<8 || joint>13) {
                     Check(!std::memcmp(palette+i*12,baseline+i*12,12*sizeof(float)),"IK preserves torso, head and legs exactly");
                 }
@@ -690,10 +715,21 @@ void TestUnarmedIK() {
                     const auto adjusted=Multiply(ReadRows(adjustedPalette+i*12),bind[i]);
                     if(joint<8 || joint>13) Check(nearVec(adjusted.origin,Add(old.origin,{bodyShift.x,0,bodyShift.z})),
                         "armed body moves by the visual offset without moving simulation");
-                    if(joint==10 || joint==13) Check(nearVec(adjusted.origin,old.origin),
-                        "body position leaves every tracked weapon wrist fixed");
+                    if(joint==10 || joint==13) {
+                        Frame raw{};Basis controller{};BuildControllerWrist(joint==10?1:0,raw,controller);
+                        raw.origin=Sub(raw.origin,cameraOrigin);Frame chain[3]{};
+                        for(int n=0;n<count;++n) if(mapping[n]>=joint-2 && mapping[n]<=joint) {
+                            chain[mapping[n]-(joint-2)]=Multiply(ReadRows(nativePalette+n*12),bind[n]);
+                            chain[mapping[n]-(joint-2)].origin=Add(chain[mapping[n]-(joint-2)].origin,{bodyShift.x,0,bodyShift.z});
+                        }
+                        Check(nearVec(adjusted.origin,ExpectedConnectedWrist(chain,raw).origin),
+                            "body placement keeps shoulder attached and changes wrist only at its reach boundary");
+                    }
                 }
                 config.firstPersonBodyForwardCm=0;
+                // Menu placement changes invalidate cached reach geometry.
+                // The real render order redraws the body before its weapons.
+                Detour_GetJoints(itemMemory,armedPalette,0);
                 for(int i=0;i<count;++i) {
                     const int joint=mapping[i];
                     if(joint<8 || joint>13) Check(!std::memcmp(armedPalette+i*12,nativePalette+i*12,12*sizeof(float)),
@@ -705,8 +741,8 @@ void TestUnarmedIK() {
                             float dot=0;
                             for(int k=0;k<3;++k) dot+=change.basis.r[k][r]*change.basis.r[k][c];
                             Check(std::isfinite(dot),"production arm reach remains finite at every controller distance");
-                            Check(std::fabs(dot-(r==c ? 1.f : 0.f))<.003f,
-                                  "production tracked reach preserves rigid arms, hands and weapon dimensions");
+                            Check((joint==10 || joint==13 ? std::fabs(dot-(r==c ? 1.f : 0.f))<.003f : std::isfinite(dot)),
+                                  "production reach allows full arm extension and preserves rigid hands and weapons");
                         }
                     }
                 }
@@ -725,8 +761,10 @@ void TestUnarmedIK() {
                           "armed attachments retain exact gun hands, with forearms hidden only while crouching");
                     Check(IsCrouchState(itemMemory) || !std::memcmp(observedForearmPalette,armedPalette,count*12*sizeof(float)),
                           "visible forearm uses same articulated chain as the solved body");
-                    Check(!std::memcmp(observedGunPalette,gunPalette,count*12*sizeof(float)),
-                          "restoring forearm draw cannot change floating gun transform");
+                    float gunDifference=0;
+                    for(int n=0;n<count*12;++n) gunDifference=std::max(gunDifference,std::fabs(observedGunPalette[n]-gunPalette[n]));
+                    if(gunDifference>.05f) std::printf("gun mismatch game=%d weapon=%d stance=%d step=%d hand=%d diff=%.6f\n",which,weapon,stance,step,hand,gunDifference);
+                    Check(gunDifference<.05f,"forearm redraw preserves the connected hand/gun transform within numerical precision");
                     meshBits=savedBits;g_hDrawCreatureHD.m_trampoline=savedDraw;
                     g_bodySkinScope=true;
                     const int joint=hand ? 10 : 13;
@@ -742,8 +780,9 @@ void TestUnarmedIK() {
                     }
                     // Compare every field, excluding indeterminate tail padding.
                     GunPose after{};Check(BuildGunPose(hand,after) &&
-                        !std::memcmp(&before[hand],&after,offsetof(GunPose,meshAligned)+sizeof(after.meshAligned)),
-                                          "arm rendering cannot change weapon pose muzzle or aim");
+                        nearVec(after.direction,before[hand].direction) &&
+                        nearVec(Sub(after.muzzle,after.trackedHand),Sub(before[hand].muzzle,before[hand].trackedHand)),
+                        "reach limiting moves gun and muzzle together without redirecting aim");
                 }
             }
             // A single weapon must keep its right arm connected if left tracking
