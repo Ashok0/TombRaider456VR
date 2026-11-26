@@ -11,7 +11,7 @@ void UpdateControllerBodyAnchor() {
     const bool walking=g_haveManualInput && !g_shifted && locomotion::Length(g_manualLocal)>.05f;
     const auto frame=VR().PoseSerial();const double time=TurnTime();
     const float headYaw=VR().HeadYawRadians();
-    const float bodyYaw=g_bodyFollower.valid ? firstperson::BodyAngle(g_bodyFollower.yaw-g_headingBase) :
+    const float bodyYaw=g_bodyFollower.valid ? firstperson::BodyAngle(g_bodyFollower.yaw-g_bodyFollower.base) :
         g_controllerBodyAnchor.valid ? g_controllerBodyAnchor.yaw : headYaw;
     const bool trace=Cfg().firstPersonDriftLog &&
         ((tracked && (!g_controllerBodyAnchor.valid || g_controllerBodyAnchor.serial!=frame || g_controllerBodyAnchor.base!=g_headingBase)) ||

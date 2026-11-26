@@ -1,0 +1,89 @@
+--- README.md
++++ README.md
+@@ -9517,3 +9517,25 @@
+ from the physical displacement consumed by collision and ledge/fall movement.
+ Stationary glances never authorize that recentering. Three tracked devices still infer feet rather than measure
+ them; simultaneous head/arm articulation can remain ambiguous.
++
++
++### Rotation pivot and turn continuity (2026-11-16)
++
++Analog turning preserves the established visual body pivot, including after
++physical walking and a head-only lean. The tracking-space offset is transformed
++with the artificial turn instead of being erased. TR4?6 also reads physical
++body yaw in the body follower's own artificial-yaw frame, avoiding a stale-frame
++error while the stick turns between tracking poses.
++
++Roomscale turn detection retains its absolute facing reference while rejecting
++ambiguous early samples. Once a turn is confirmed, fresh turn evidence remains
++valid when looking down; it does not need to requalify through the inspection
++escape path. Head-only glances and hand-only gestures still cannot sustain it.
++The existing small-motion thresholds and walking classifier are unchanged.
++
++Regression coverage includes a full analog revolution after walking and glancing,
++stereo repeat calls, stopping the stick, changing gaze pitch during an accepted
++turn, the captured planted-glance corpus, and the latest recorded turn sequences.
++The recent replay improves substantially overall, but one turn sequence retains
++slightly more head/body separation and some entry lag remains. These are head/hand
++measurements, not directly observed feet, and headset confirmation is still needed.
+--- src/ControllerBodyAnchor.h
++++ src/ControllerBodyAnchor.h
+@@ -86,6 +86,12 @@
+         if(valid && serial==frame && artificial==base) return;
+         const bool turn=valid && std::fabs(BodyAngle(artificial-base))>1.e-6f;
+         if(!valid || now<time || now-time>.5 || turn) {
++            // Stick yaw changes the world/tracking transform, not the inferred
++            // player position. Preserve the rendered pivot in world space as
++            // VRSystem counter-rotates the eye's pending tracking offset.
++            const bool carryVisual=turn && now>=time && now-time<=.5;
++            const Vec carriedOffset=carryVisual ? YawVector(visualOffset,BodyAngle(base-artificial)) : Vec{};
++            const Vec calibratedEyeOffset=neutralEyeOffset;
+             *this={};valid=true;held=true;serial=frame;time=moved=referenceTime=rotated=now;base=artificial;
+             // Recentring while looking down makes calibrated height drop zero.
+             // That is not evidence that an inspection ended or feet moved.
+@@ -94,6 +100,10 @@
+             motionSampleHands[1]=sampleHands[1]=hands[1]=right;handMotionTime=now;
+             neutralEyeOffset=YawVector(neckOffset,-bodyYaw);
+             visualHead=head=eye;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
++            if(carryVisual) {
++                visualOffset=carriedOffset;visualHead=Sub(eye,visualOffset);
++                visualCorrection=Sub(visualHead,head);neutralEyeOffset=calibratedEyeOffset;
++            }
+             motionPivot=Sub(head,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},bodyYaw));yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
+             CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
+             stepIntent.Capture(walkEye,left,right,now);
+@@ -173,7 +183,10 @@
+         const bool inspectionTurnConfirmed=inspectionTurn.Update(eye,left,right,headForward,headYaw,now) || recoveringOpposed || slowTurn;
+         if(inspectionTurnConfirmed) inspectionTurnActive=true;
+         else if(!heading.turning) inspectionTurnActive=false;
+-        const bool continuingPhysicalTurn=inspectionTurnActive && heading.turning && now<=heading.continuousUntil;
++        // Fresh ordinary turn evidence is also sufficient. Requiring the
++        // inspection-specific entry path lets a downward gaze cancel a turn
++        // already admitted by the normal controller classifier.
++        const bool continuingPhysicalTurn=heading.turning && now<=heading.continuousUntil;
+         if(slowStep || inspectionStep.Update(eye,left,right,headYaw,now)) lastInspectionStep=now;
+         const bool releaseInspection=inspectionTurnConfirmed || continuingPhysicalTurn || walking || now-lastInspectionStep<2. || headForward.y>-.35f ||
+             std::fabs(BodyAngle(gazeYaw-bodyYaw))<.174532925f;
+@@ -211,7 +224,10 @@
+         // Only fresh, independently corroborated inspection arcs hold a stance.
+         const bool plantedPivot=pivotEvidence.Update(eye,left,right,headForward,now) && !inspectionTurnConfirmed && !walking && !heading.turning && !translating;
+         if(plantedPivot) {
+-            if(inspectionHold || loweredInspectionHold) holdHeading();else heading={};
++            // Reject output, but retain the absolute stance reference. Early
++            // physical-turn samples can resemble a lean; discarding their
++            // origin loses those degrees even after the turn is confirmed.
++            holdHeading();
+             stepIntent.Capture(walkEye,left,right,now);translating=false;
+         }
+         if(slowTurn) {
+--- src/ControllerBodyAnchor.inl
++++ src/ControllerBodyAnchor.inl
+@@ -11,7 +11,7 @@
+     const bool walking=g_haveManualInput && !g_shifted && locomotion::Length(g_manualLocal)>.05f;
+     const auto frame=VR().PoseSerial();const double time=TurnTime();
+     const float headYaw=VR().HeadYawRadians();
+-    const float bodyYaw=g_bodyFollower.valid ? firstperson::BodyAngle(g_bodyFollower.yaw-g_headingBase) :
++    const float bodyYaw=g_bodyFollower.valid ? firstperson::BodyAngle(g_bodyFollower.yaw-g_bodyFollower.base) :
+         g_controllerBodyAnchor.valid ? g_controllerBodyAnchor.yaw : headYaw;
+     const bool trace=Cfg().firstPersonDriftLog &&
+         ((tracked && (!g_controllerBodyAnchor.valid || g_controllerBodyAnchor.serial!=frame || g_controllerBodyAnchor.base!=g_headingBase)) ||

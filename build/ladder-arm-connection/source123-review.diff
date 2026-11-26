@@ -1,0 +1,70 @@
+--- README.md
++++ README.md
+@@ -3849,3 +3849,18 @@
+ The recent replay improves substantially overall, but one turn sequence retains
+ slightly more head/body separation and some entry lag remains. These are head/hand
+ measurements, not directly observed feet, and headset confirmation is still needed.
++
++
++### Attached ladder arms (2026-11-16)
++
++Ladder camera clearance now moves both shoulders with the chest by the same
++amount. The older native-reach limit could leave the shoulders behind the moved
++torso, making the arms appear detached. The arm solve now allows axial extension
++when needed to keep the shoulders connected and the animated hands fixed to the
++rungs. It retains native grip orientation and hand size, arm thickness, pelvis
++and leg animation, and native shadows. Extreme clearance can visibly lengthen
++the arms. Controller reach settings do not change the ladder grip positions.
++
++Regression tests cover the ladder animation states, turns and clearance distances,
++classic and HD joint palettes, and separate arm attachments. TR1's reused state
++numbers remain excluded; the ladder correction applies to supported ladder games.
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -3246,10 +3246,11 @@
+                 original[i]={firstperson::IdentityBasis(),motiongun::Add(original[reference].origin,
+                     motiongun::Sub(NativeJointPoint(item,first+i),world))};
+         }
+-        // Keep the chest clear, but do not drag shoulders beyond the arms'
+-        // native reach. Moving a nearly straight arm back used to stretch it.
+-        const Frame armShift{shift.basis,Scale(shift.origin,
+-            firstperson::ArmClearanceFraction(original,shift.origin))};
++        // Shoulders share the chest's full clearance transform. Limiting
++        // shoulder travel by native arm reach separates the upper arms from
++        // the moved torso. The anchored solve may extend the limb axially;
++        // native rung position/orientation and hand size remain exact.
++        const Frame armShift=shift;
+         for(int i=0;i<3;++i) chain[i]=Multiply(armShift,original[i]);
+         if(!firstperson::SolveArm(chain,original[2],motiongun::Sub(original[1].origin,original[0].origin),
+                                  changes,nullptr,nullptr,false)) return false;
+--- tests/ik_collection_parity_selftest.h
++++ tests/ik_collection_parity_selftest.h
+@@ -181,12 +181,22 @@
+                 const auto a=ReadRows(ikNative+first*12),b=ReadRows(ikNative+(first+1)*12),c=ReadRows(ikNative+(first+2)*12);
+                 Check(Dot(Sub(hand.origin,c.origin),Sub(hand.origin,c.origin))<.01f && WristBasisError(hand.basis,c.basis)<.001f,
+                       "ladder hand preserves native rung grip and rotation");
+-                Check(std::fabs(std::sqrt(Dot(Sub(elbow.origin,shoulder.origin),Sub(elbow.origin,shoulder.origin)))-
+-                                std::sqrt(Dot(Sub(b.origin,a.origin),Sub(b.origin,a.origin))))<.01f,
+-                      "ladder shoulders never stretch upper arm");
+-                Check(std::fabs(std::sqrt(Dot(Sub(hand.origin,elbow.origin),Sub(hand.origin,elbow.origin)))-
+-                                std::sqrt(Dot(Sub(c.origin,b.origin),Sub(c.origin,b.origin))))<.01f,
+-                      "ladder shoulders never stretch forearm");
++                const motiongun::Vec shift{0,0,game==1 ? 0.f : -80.f};
++                Check(Length(Sub(shoulder.origin,Add(a.origin,shift)))<.01f,
++                      "ladder shoulders share the torso clearance and remain attached");
++                const Frame native[3]={a,b,c},solved[3]={shoulder,elbow,hand};
++                for(int segment=0;segment<2;++segment) {
++                    Frame inverse{};Check(Inverse(native[segment],inverse),"native ladder arm is invertible");
++                    Check(Length(Sub(Transform(solved[segment],Transform(inverse,native[segment+1].origin)),solved[segment+1].origin))<.01f,
++                          "ladder elbow and wrist seams remain connected");
++                    motiongun::Vec axis{},across{};
++                    Unit(Sub(native[segment+1].origin,native[segment].origin),axis);
++                    Unit(Cross(axis,std::fabs(axis.x)<.8f ? motiongun::Vec{1,0,0} : motiongun::Vec{0,1,0}),across);
++                    const auto change=Multiply(solved[segment],inverse);
++                    Check(std::fabs(Length(Transform(change.basis,across))-1.f)<.001f &&
++                          std::fabs(Length(Transform(change.basis,Cross(axis,across)))-1.f)<.001f,
++                          "ladder arm extension preserves mesh thickness");
++                }
+             }
+             *Ptr<int32_t>(dll.renderPass)=4;Detour_GetJoints(item);
+             Check(!std::memcmp(Ptr<float>(dll.joints),ikNative,sizeof(ikNative)),"ladder shadow preserves entire native skeleton");

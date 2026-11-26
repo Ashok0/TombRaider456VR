@@ -1204,7 +1204,7 @@ jump priority also applies in third person.
 
 | Change | Current status |
 |---|---|
-| Chest obstructs the view while climbing rungs | October 11: use a closer 80-unit ladder clearance and limit shoulder displacement to native arm reach. Keep native rung grips without stretching arm bones. Body stays visible; no full-body IK setting change. See [ladder clearance](#ladder-torso-clearance-2026-10-11). |
+| Chest obstructs the view while climbing rungs | Use the 80-unit ladder chest clearance with shoulders attached to the shifted torso. Arms may extend to retain native rung grips; hand size and orientation remain unchanged. Body stays visible; no full-body IK setting change. |
 | Torso/chest obstructs the view near walls | October 11 follow-up: preserve the rendered body relative to the collision-adjusted eye. The first attempt kept world placement fixed and let the camera retreat into the torso; it is superseded. See [wall proximity](#first-person-torso-at-walls-2026-10-11). |
 | Looking straight down rotates the torso | October 11: hold the last reliable headset heading near vertical, with hysteresis when looking back up. Full camera pitch/roll tracking remains active. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
 | Right System recenter height calibration | October 11: runtime seated/standing origin resets now recalibrate the shared headset/controller neutral, compensate origin yaw and preserve the standing body anchor. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
@@ -9517,3 +9517,59 @@ and visual catch-up is bounded per frame. This cosmetic correction is separate
 from the physical displacement consumed by collision and ledge/fall movement.
 Stationary glances never authorize that recentering. Three tracked devices still infer feet rather than measure
 them; simultaneous head/arm articulation can remain ambiguous.
+
+
+### Rotation pivot and turn continuity (2026-11-16)
+
+Analog turning preserves the established visual body pivot, including after
+physical walking and a head-only lean. The tracking-space offset is transformed
+with the artificial turn instead of being erased. TR4?6 also reads physical
+body yaw in the body follower's own artificial-yaw frame, avoiding a stale-frame
+error while the stick turns between tracking poses.
+
+Roomscale turn detection retains its absolute facing reference while rejecting
+ambiguous early samples. Once a turn is confirmed, fresh turn evidence remains
+valid when looking down; it does not need to requalify through the inspection
+escape path. Head-only glances and hand-only gestures still cannot sustain it.
+The existing small-motion thresholds and walking classifier are unchanged.
+
+Regression coverage includes a full analog revolution after walking and glancing,
+stereo repeat calls, stopping the stick, changing gaze pitch during an accepted
+turn, the captured planted-glance corpus, and the latest recorded turn sequences.
+The recent replay improves substantially overall, but one turn sequence retains
+slightly more head/body separation and some entry lag remains. These are head/hand
+measurements, not directly observed feet, and headset confirmation is still needed.
+
+
+### Attached ladder arms (2026-11-16)
+
+Ladder camera clearance now moves both shoulders with the chest by the same
+amount. The older native-reach limit could leave the shoulders behind the moved
+torso, making the arms appear detached. The arm solve now allows axial extension
+when needed to keep the shoulders connected and the animated hands fixed to the
+rungs. It retains native grip orientation and hand size, arm thickness, pelvis
+and leg animation, and native shadows. Extreme clearance can visibly lengthen
+the arms. Controller reach settings do not change the ladder grip positions.
+
+Regression tests cover the ladder animation states, turns and clearance distances,
+classic and HD joint palettes, and separate arm attachments. TR1's reused state
+numbers remain excluded; the ladder correction applies to supported ladder games.
+
+
+### Jump and wall-clearance audit (2026-11-16)
+
+TR1?3 now uses the bounded, refined eye sweep already used by TR4?6. Passing the
+512-unit sweep limit keeps the eye at that limit instead of snapping it back to
+Lara's collision root. Contact is refined to integer precision instead of jumping
+between 16-unit sweep samples. The game-specific floor/ceiling sample counts remain
+four for TR1/2 and six for TR3.
+
+TR4?6 ladder states now receive the rendered-eye wall check too. During ladder
+climbing, both collections apply camera retraction to the chest/arm clearance,
+keeping native feet and rung grips anchored. Ordinary jump trajectories, gravity,
+tracking calibration and standing height are not modified by these render fixes.
+
+Tests reproduce the previous ladder wall bypass and long-offset camera snap,
+and cover standing, jump/fall transitions, crate tops, both tracked-lean policies,
+interpolated poses, ladder limb connections and native landing-camera behavior.
+This is automated coverage, not an in-headset guarantee for every level's geometry.

@@ -856,9 +856,11 @@ void TestUnarmedIK() {
             const auto oldFit=g_bodyVisualOffset,oldWall=g_bodyWallOffset;
             g_bodyVisualOffset=g_bodyWallOffset={};status=1;
             for(int which:{0,1}) for(int climb:{56,57,58,59,60,61})
-            for(float yaw:{0.f,.8f,-1.9f}) for(float depth:{64.f,128.f,512.f}) {
+            for(float yaw:{0.f,.8f,-1.9f}) for(float depth:{64.f,128.f,512.f}) for(float wallRetreat:{0.f,-48.f}) {
                 dll.game=which;*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=int16_t(climb);
                 g_ladderTorsoOffset=locomotion::Rotate({0,-depth},yaw);
+                ApplyBodyWallClearance(itemMemory,locomotion::Rotate({0,wallRetreat},yaw));
+                Check(g_bodyWallOffset.x==0 && g_bodyWallOffset.z==0,"ladder wall retraction cannot translate native feet or rung grips");
                 float climbPalette[33*12]{};Detour_GetJoints(itemMemory,climbPalette,0);
                 const Vec offset{g_ladderTorsoOffset.x,0,g_ladderTorsoOffset.z};
                 for(int i=0;i<count;++i) {
@@ -886,12 +888,27 @@ void TestUnarmedIK() {
                         original[segment]=Multiply(ReadRows(fixture+i*12),bind[i]);
                         actual[segment]=Multiply(ReadRows(climbPalette+i*12),bind[i]);
                     }
-                    for(int segment=0;segment<2;++segment)
-                        Check(std::fabs(firstperson::Length(Sub(actual[segment+1].origin,actual[segment].origin))-
-                              firstperson::Length(Sub(original[segment+1].origin,original[segment].origin)))<.01f,
-                              "ladder clearance cannot stretch upper arm or forearm to reach the rung");
-                    Check(firstperson::Length(Sub(actual[0].origin,original[0].origin))<=firstperson::Length(offset)+.01f,
-                          "ladder shoulder moves no farther than the torso clearance");
+                    Check(nearVec(actual[0].origin,Add(original[0].origin,offset)),
+                          "ladder shoulders stay attached to the translated torso at every reach");
+                    float nativeLength=0,solvedLength=0;
+                    for(int segment=0;segment<2;++segment) {
+                        Frame inverse{};Check(Inverse(original[segment],inverse),"ladder arm reference is invertible");
+                        const Vec jointLocal=Transform(inverse,original[segment+1].origin);
+                        Check(firstperson::Length(Sub(Transform(actual[segment],jointLocal),actual[segment+1].origin))<.01f,
+                              "ladder upper-arm and forearm mesh endpoints meet their next joints");
+                        const Vec bone=Sub(original[segment+1].origin,original[segment].origin);
+                        Vec axis{},across{};firstperson::Unit(bone,axis);
+                        firstperson::Unit(Cross(axis,std::fabs(axis.x)<.8f ? Vec{1,0,0} : Vec{0,1,0}),across);
+                        const auto correction=Multiply(actual[segment],inverse);
+                        Check(std::fabs(firstperson::Length(Transform(correction.basis,across))-1.f)<.001f &&
+                              std::fabs(firstperson::Length(Transform(correction.basis,Cross(axis,across)))-1.f)<.001f,
+                              "ladder reach extends limb length without widening arm meshes");
+                        Check(firstperson::Finite(actual[segment]),"ladder arm solve remains finite");
+                        nativeLength+=firstperson::Length(bone);
+                        solvedLength+=firstperson::Length(Sub(actual[segment+1].origin,actual[segment].origin));
+                    }
+                    Check(solvedLength<=nativeLength+firstperson::Length(offset)+.01f,
+                          "ladder arm extends only as required by torso clearance");
                 }
             }
             if(count==33) {

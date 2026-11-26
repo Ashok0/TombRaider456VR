@@ -86,6 +86,12 @@ struct ControllerBodyAnchor {
         if(valid && serial==frame && artificial==base) return;
         const bool turn=valid && std::fabs(BodyAngle(artificial-base))>1.e-6f;
         if(!valid || now<time || now-time>.5 || turn) {
+            // Stick yaw changes the world/tracking transform, not the inferred
+            // player position. Preserve the rendered pivot in world space as
+            // VRSystem counter-rotates the eye's pending tracking offset.
+            const bool carryVisual=turn && now>=time && now-time<=.5;
+            const Vec carriedOffset=carryVisual ? YawVector(visualOffset,BodyAngle(base-artificial)) : Vec{};
+            const Vec calibratedEyeOffset=neutralEyeOffset;
             *this={};valid=true;held=true;serial=frame;time=moved=referenceTime=rotated=now;base=artificial;
             // Recentring while looking down makes calibrated height drop zero.
             // That is not evidence that an inspection ended or feet moved.
@@ -94,6 +100,10 @@ struct ControllerBodyAnchor {
             motionSampleHands[1]=sampleHands[1]=hands[1]=right;handMotionTime=now;
             neutralEyeOffset=YawVector(neckOffset,-bodyYaw);
             visualHead=head=eye;motionEye=walkEye;motionYaw=headYaw;motionGazeYaw=gazeYaw;
+            if(carryVisual) {
+                visualOffset=carriedOffset;visualHead=Sub(eye,visualOffset);
+                visualCorrection=Sub(visualHead,head);neutralEyeOffset=calibratedEyeOffset;
+            }
             motionPivot=Sub(head,YawVector({0,0,std::clamp(neckMetres,0.f,.4f)},bodyYaw));yaw=bodyYaw;height=eye.y;reason=turn ? 4 : 0;
             CapturePlacement(eye,walkEye,left,right,headYaw,neckOffset);
             stepIntent.Capture(walkEye,left,right,now);
@@ -173,7 +183,10 @@ struct ControllerBodyAnchor {
         const bool inspectionTurnConfirmed=inspectionTurn.Update(eye,left,right,headForward,headYaw,now) || recoveringOpposed || slowTurn;
         if(inspectionTurnConfirmed) inspectionTurnActive=true;
         else if(!heading.turning) inspectionTurnActive=false;
-        const bool continuingPhysicalTurn=inspectionTurnActive && heading.turning && now<=heading.continuousUntil;
+        // Fresh ordinary turn evidence is also sufficient. Requiring the
+        // inspection-specific entry path lets a downward gaze cancel a turn
+        // already admitted by the normal controller classifier.
+        const bool continuingPhysicalTurn=heading.turning && now<=heading.continuousUntil;
         if(slowStep || inspectionStep.Update(eye,left,right,headYaw,now)) lastInspectionStep=now;
         const bool releaseInspection=inspectionTurnConfirmed || continuingPhysicalTurn || walking || now-lastInspectionStep<2. || headForward.y>-.35f ||
             std::fabs(BodyAngle(gazeYaw-bodyYaw))<.174532925f;
@@ -211,7 +224,10 @@ struct ControllerBodyAnchor {
         // Only fresh, independently corroborated inspection arcs hold a stance.
         const bool plantedPivot=pivotEvidence.Update(eye,left,right,headForward,now) && !inspectionTurnConfirmed && !walking && !heading.turning && !translating;
         if(plantedPivot) {
-            if(inspectionHold || loweredInspectionHold) holdHeading();else heading={};
+            // Reject output, but retain the absolute stance reference. Early
+            // physical-turn samples can resemble a lean; discarding their
+            // origin loses those degrees even after the turn is confirmed.
+            holdHeading();
             stepIntent.Capture(walkEye,left,right,now);translating=false;
         }
         if(slowTurn) {

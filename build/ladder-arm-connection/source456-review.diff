@@ -1,0 +1,84 @@
+--- README.md
++++ README.md
+@@ -1204,7 +1204,7 @@
+ 
+ | Change | Current status |
+ |---|---|
+-| Chest obstructs the view while climbing rungs | October 11: use a closer 80-unit ladder clearance and limit shoulder displacement to native arm reach. Keep native rung grips without stretching arm bones. Body stays visible; no full-body IK setting change. See [ladder clearance](#ladder-torso-clearance-2026-10-11). |
++| Chest obstructs the view while climbing rungs | Use the 80-unit ladder chest clearance with shoulders attached to the shifted torso. Arms may extend to retain native rung grips; hand size and orientation remain unchanged. Body stays visible; no full-body IK setting change. |
+ | Torso/chest obstructs the view near walls | October 11 follow-up: preserve the rendered body relative to the collision-adjusted eye. The first attempt kept world placement fixed and let the camera retreat into the torso; it is superseded. See [wall proximity](#first-person-torso-at-walls-2026-10-11). |
+ | Looking straight down rotates the torso | October 11: hold the last reliable headset heading near vertical, with hysteresis when looking back up. Full camera pitch/roll tracking remains active. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
+ | Right System recenter height calibration | October 11: runtime seated/standing origin resets now recalibrate the shared headset/controller neutral, compensate origin yaw and preserve the standing body anchor. See [heading and height](#vertical-view-heading-and-system-height-calibration-2026-10-11). |
+@@ -9539,3 +9539,18 @@
+ The recent replay improves substantially overall, but one turn sequence retains
+ slightly more head/body separation and some entry lag remains. These are head/hand
+ measurements, not directly observed feet, and headset confirmation is still needed.
++
++
++### Attached ladder arms (2026-11-16)
++
++Ladder camera clearance now moves both shoulders with the chest by the same
++amount. The older native-reach limit could leave the shoulders behind the moved
++torso, making the arms appear detached. The arm solve now allows axial extension
++when needed to keep the shoulders connected and the animated hands fixed to the
++rungs. It retains native grip orientation and hand size, arm thickness, pelvis
++and leg animation, and native shadows. Extreme clearance can visibly lengthen
++the arms. Controller reach settings do not change the ladder grip positions.
++
++Regression tests cover the ladder animation states, turns and clearance distances,
++classic and HD joint palettes, and separate arm attachments. TR1's reused state
++numbers remain excluded; the ladder correction applies to supported ladder games.
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -2772,10 +2772,11 @@
+                 original[i]={firstperson::IdentityBasis(),Add(original[reference].origin,
+                     Sub(JointPoint(item,first+i,0,0,0),world))};
+         }
+-        // Keep the chest clear, but do not drag shoulders beyond the arms'
+-        // native reach. Moving a nearly straight arm back used to stretch it.
+-        const Frame armShift{shift.basis,Scale(shift.origin,
+-            firstperson::ArmClearanceFraction(original,shift.origin))};
++        // Shoulders share the chest's full clearance transform. Limiting
++        // shoulder travel by native arm reach separates the upper arms from
++        // the moved torso. The anchored solve may extend the limb axially;
++        // native rung position/orientation and hand size remain exact.
++        const Frame armShift=shift;
+         for(int i=0;i<3;++i) chain[i]=Multiply(armShift,original[i]);
+         if(!firstperson::SolveArm(chain,original[2],Sub(original[1].origin,original[0].origin),
+                                  changes,nullptr,nullptr,false)) return false;
+--- tools/unarmed_ik_regression.inl
++++ tools/unarmed_ik_regression.inl
+@@ -886,12 +886,27 @@
+                         original[segment]=Multiply(ReadRows(fixture+i*12),bind[i]);
+                         actual[segment]=Multiply(ReadRows(climbPalette+i*12),bind[i]);
+                     }
+-                    for(int segment=0;segment<2;++segment)
+-                        Check(std::fabs(firstperson::Length(Sub(actual[segment+1].origin,actual[segment].origin))-
+-                              firstperson::Length(Sub(original[segment+1].origin,original[segment].origin)))<.01f,
+-                              "ladder clearance cannot stretch upper arm or forearm to reach the rung");
+-                    Check(firstperson::Length(Sub(actual[0].origin,original[0].origin))<=firstperson::Length(offset)+.01f,
+-                          "ladder shoulder moves no farther than the torso clearance");
++                    Check(nearVec(actual[0].origin,Add(original[0].origin,offset)),
++                          "ladder shoulders stay attached to the translated torso at every reach");
++                    float nativeLength=0,solvedLength=0;
++                    for(int segment=0;segment<2;++segment) {
++                        Frame inverse{};Check(Inverse(original[segment],inverse),"ladder arm reference is invertible");
++                        const Vec jointLocal=Transform(inverse,original[segment+1].origin);
++                        Check(firstperson::Length(Sub(Transform(actual[segment],jointLocal),actual[segment+1].origin))<.01f,
++                              "ladder upper-arm and forearm mesh endpoints meet their next joints");
++                        const Vec bone=Sub(original[segment+1].origin,original[segment].origin);
++                        Vec axis{},across{};firstperson::Unit(bone,axis);
++                        firstperson::Unit(Cross(axis,std::fabs(axis.x)<.8f ? Vec{1,0,0} : Vec{0,1,0}),across);
++                        const auto correction=Multiply(actual[segment],inverse);
++                        Check(std::fabs(firstperson::Length(Transform(correction.basis,across))-1.f)<.001f &&
++                              std::fabs(firstperson::Length(Transform(correction.basis,Cross(axis,across)))-1.f)<.001f,
++                              "ladder reach extends limb length without widening arm meshes");
++                        Check(firstperson::Finite(actual[segment]),"ladder arm solve remains finite");
++                        nativeLength+=firstperson::Length(bone);
++                        solvedLength+=firstperson::Length(Sub(actual[segment+1].origin,actual[segment].origin));
++                    }
++                    Check(solvedLength<=nativeLength+firstperson::Length(offset)+.01f,
++                          "ladder arm extends only as required by torso clearance");
+                 }
+             }
+             if(count==33) {

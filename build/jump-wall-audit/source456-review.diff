@@ -1,0 +1,79 @@
+--- README.md
++++ README.md
+@@ -9554,3 +9554,22 @@
+ Regression tests cover the ladder animation states, turns and clearance distances,
+ classic and HD joint palettes, and separate arm attachments. TR1's reused state
+ numbers remain excluded; the ladder correction applies to supported ladder games.
++
++
++### Jump and wall-clearance audit (2026-11-16)
++
++TR1?3 now uses the bounded, refined eye sweep already used by TR4?6. Passing the
++512-unit sweep limit keeps the eye at that limit instead of snapping it back to
++Lara's collision root. Contact is refined to integer precision instead of jumping
++between 16-unit sweep samples. The game-specific floor/ceiling sample counts remain
++four for TR1/2 and six for TR3.
++
++TR4?6 ladder states now receive the rendered-eye wall check too. During ladder
++climbing, both collections apply camera retraction to the chest/arm clearance,
++keeping native feet and rung grips anchored. Ordinary jump trajectories, gravity,
++tracking calibration and standing height are not modified by these render fixes.
++
++Tests reproduce the previous ladder wall bypass and long-offset camera snap,
++and cover standing, jump/fall transitions, crate tops, both tracked-lean policies,
++interpolated poses, ladder limb connections and native landing-camera behavior.
++This is automated coverage, not an in-headset guarantee for every level's geometry.
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -1680,6 +1680,16 @@
+         (CanFitStandingBody(item) || CanFitAirborneBody(item) || g_bodyWallOffset.x!=0 || g_bodyWallOffset.z!=0);
+ }
+ 
++// Ladder contacts remain native. Carry camera retraction in the chest/arm
++// clearance, rather than translating the entire climbing skeleton off its rungs.
++void ApplyBodyWallClearance(const uint8_t* item,locomotion::Vec offset) {
++    g_bodyWallOffset=offset;
++    if(item && locomotion::IsLadderState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state))) {
++        g_ladderTorsoOffset=g_ladderTorsoOffset+offset;
++        g_bodyWallOffset={};
++    }
++}
++
+ locomotion::Vec BodyRenderOffset() {
+     return g_bodyVisualOffset+g_bodyWallOffset;
+ }
+@@ -4684,7 +4694,9 @@
+          (state >= 25 && state <= 29));
+     const bool roll=locomotion::IsGroundRollState(state) && LaraWaterStatus()==0 &&
+         *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0;
+-    if (!ground && !jump && !roll && !crouch) return;
++    const bool climb=locomotion::IsLadderState(state) && LaraWaterStatus()==0 &&
++        *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0;
++    if (!ground && !jump && !roll && !crouch && !climb) return;
+ 
+     const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
+     const auto& prev = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos_prev);
+@@ -5084,7 +5096,7 @@
+     ClampRenderedHeadToCollision(item, pose);
+     if(Cfg().firstPersonMovementStabilization)
+         g_mountEyeTransition.Observe({float(pose.x_pos),float(pose.y_pos),float(pose.z_pos)});
+-    g_bodyWallOffset=locomotion::Vec{float(pose.x_pos),float(pose.z_pos)}-unclampedEye;
++    ApplyBodyWallClearance(item,locomotion::Vec{float(pose.x_pos),float(pose.z_pos)}-unclampedEye);
+     TraceEyeContinuity(item,pose,body);
+     TraceForwardCamera(item, body, head, frac, GetTickCount64(), &pose);
+     pose.z_rot = 0;
+--- tools/unarmed_ik_regression.inl
++++ tools/unarmed_ik_regression.inl
+@@ -856,9 +856,11 @@
+             const auto oldFit=g_bodyVisualOffset,oldWall=g_bodyWallOffset;
+             g_bodyVisualOffset=g_bodyWallOffset={};status=1;
+             for(int which:{0,1}) for(int climb:{56,57,58,59,60,61})
+-            for(float yaw:{0.f,.8f,-1.9f}) for(float depth:{64.f,128.f,512.f}) {
++            for(float yaw:{0.f,.8f,-1.9f}) for(float depth:{64.f,128.f,512.f}) for(float wallRetreat:{0.f,-48.f}) {
+                 dll.game=which;*reinterpret_cast<int16_t*>(itemMemory+off::item_anim_state)=int16_t(climb);
+                 g_ladderTorsoOffset=locomotion::Rotate({0,-depth},yaw);
++                ApplyBodyWallClearance(itemMemory,locomotion::Rotate({0,wallRetreat},yaw));
++                Check(g_bodyWallOffset.x==0 && g_bodyWallOffset.z==0,"ladder wall retraction cannot translate native feet or rung grips");
+                 float climbPalette[33*12]{};Detour_GetJoints(itemMemory,climbPalette,0);
+                 const Vec offset{g_ladderTorsoOffset.x,0,g_ladderTorsoOffset.z};
+                 for(int i=0;i<count;++i) {

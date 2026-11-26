@@ -1,0 +1,223 @@
+--- README.md
++++ README.md
+@@ -3864,3 +3864,22 @@
+ Regression tests cover the ladder animation states, turns and clearance distances,
+ classic and HD joint palettes, and separate arm attachments. TR1's reused state
+ numbers remain excluded; the ladder correction applies to supported ladder games.
++
++
++### Jump and wall-clearance audit (2026-11-16)
++
++TR1?3 now uses the bounded, refined eye sweep already used by TR4?6. Passing the
++512-unit sweep limit keeps the eye at that limit instead of snapping it back to
++Lara's collision root. Contact is refined to integer precision instead of jumping
++between 16-unit sweep samples. The game-specific floor/ceiling sample counts remain
++four for TR1/2 and six for TR3.
++
++TR4?6 ladder states now receive the rendered-eye wall check too. During ladder
++climbing, both collections apply camera retraction to the chest/arm clearance,
++keeping native feet and rung grips anchored. Ordinary jump trajectories, gravity,
++tracking calibration and standing height are not modified by these render fixes.
++
++Tests reproduce the previous ladder wall bypass and long-offset camera snap,
++and cover standing, jump/fall transitions, crate tops, both tracked-lean policies,
++interpolated poses, ladder limb connections and native landing-camera behavior.
++This is automated coverage, not an in-headset guarantee for every level's geometry.
+--- src/FirstPerson.cpp
++++ src/FirstPerson.cpp
+@@ -772,21 +772,9 @@
+ // space for both eyes and the near plane at the last clear point.
+ void ClampHeadToCollision(const uint8_t* item, const int32_t body[3],
+                           int32_t head[3], double eyeY, int capsuleHeight=762) {
+-    const int32_t dx = head[0] - body[0], dz = head[2] - body[2];
+-    const float distance = std::hypot(float(dx), float(dz));
+-    if (distance < 1.0f) return;
+-    if (distance > 512.0f) {
+-        head[0] = body[0];
+-        head[2] = body[2];
+-        return;
+-    }
+-
+-    const int steps = std::clamp(static_cast<int>(std::ceil(distance / 16.0f)), 1, 32);
+-    int32_t clearX = body[0], clearZ = body[2];
+     const int16_t room = *reinterpret_cast<const int16_t*>(item + off::item_room_number);
+-    for (int i = 1; i <= steps; ++i) {
+-        const int32_t x = body[0] + static_cast<int32_t>(int64_t(dx) * i / steps);
+-        const int32_t z = body[2] + static_cast<int32_t>(int64_t(dz) * i / steps);
++    firstperson::ClampEyeToWall(body,head,
++        [&](int32_t x,int32_t z,int32_t clearX,int32_t clearZ) {
+         RoomCollision coll{};
+         coll.radius = 64;
+         // Eye clearance must not treat the empty space over a ledge as a wall.
+@@ -800,16 +788,10 @@
+         reinterpret_cast<Fn_GetCollisionInfo>(g_boundBase + g_boundDll->getCollisionInfo)(
+             &coll, x, body[1], z, room, capsuleHeight);
+         const int sampleCount = g_boundDll->module[4] == L'3' ? 6 : 4;
+-        if (firstperson::EyeBlocked(coll.floorSamples, sampleCount, body[1], eyeY, coll.hitStatic, capsuleHeight) ||
++        return firstperson::EyeBlocked(coll.floorSamples, sampleCount, body[1], eyeY, coll.hitStatic, capsuleHeight) ||
+             coll.type == 8 || coll.type == 16 || coll.type == 32 ||
+-            coll.shift[0] || coll.shift[2]) {
+-            head[0] = clearX;
+-            head[2] = clearZ;
+-            return;
+-        }
+-        clearX = x;
+-        clearZ = z;
+-    }
++            coll.shift[0] || coll.shift[2];
++    });
+ }
+ 
+ bool Anchor(PHD_3DPOS& pose) {
+@@ -2127,6 +2109,16 @@
+         item && item==g_headingItem && item==*Ptr<uint8_t*>(g_boundDll->laraItem) &&
+         ((CanFitStandingBody(item) && !UseLandingCamera(item)) || CanFitAirborneBody(item) ||
+          g_bodyWallOffset.x!=0 || g_bodyWallOffset.z!=0);
++}
++
++// Ladder contacts remain native. Carry camera retraction in the chest/arm
++// clearance, rather than translating the entire climbing skeleton off its rungs.
++void ApplyBodyWallClearance(const uint8_t* item,locomotion::Vec offset) {
++    g_bodyWallOffset=offset;
++    if(item && IsLadder(item)) {
++        g_ladderTorsoOffset=g_ladderTorsoOffset+offset;
++        g_bodyWallOffset={};
++    }
+ }
+ 
+ locomotion::Vec BodyRenderOffset() {
+@@ -4976,7 +4968,7 @@
+             FitBodyToRenderedEye(item, *pose, animatedHead);
+             const locomotion::Vec unclampedEye{float(pose->x_pos),float(pose->z_pos)};
+             ClampRenderedHeadToCollision(item, *pose);
+-            g_bodyWallOffset=locomotion::Vec{float(pose->x_pos),float(pose->z_pos)}-unclampedEye;
++            ApplyBodyWallClearance(item,locomotion::Vec{float(pose->x_pos),float(pose->z_pos)}-unclampedEye);
+             ClampLowAnimationCameraToFloor(item, *pose);
+             g_mountCamera.Presented({float(pose->x_pos),float(pose->y_pos),float(pose->z_pos)},mountCameraTime);
+             g_scenePose=*pose;
+--- src/FirstPersonClearance.h
++++ src/FirstPersonClearance.h
+@@ -29,4 +29,47 @@
+     }
+     return false;
+ }
++// Sweep the rendered eye from Lara's collision origin in short horizontal
++// steps. The caller supplies the engine's collision query for each candidate.
++// Keep the last clear point; do not move the eye through a blocked wall.
++template <typename Blocked>
++void ClampEyeToWall(const int32_t body[3], int32_t eye[3], Blocked blocked) {
++    int64_t dx = int64_t(eye[0]) - body[0];
++    int64_t dz = int64_t(eye[2]) - body[2];
++    double distance = std::hypot(double(dx), double(dz));
++    if (distance < 1.0) return;
++    if (distance > 512.0) {
++        // Saturate along the same ray. Resetting to the root at this boundary
++        // teleports the view when a small tracked movement crosses it.
++        dx=int64_t(std::lround(double(dx)*512.0/distance));
++        dz=int64_t(std::lround(double(dz)*512.0/distance));
++        eye[0]=body[0]+int32_t(dx);eye[2]=body[2]+int32_t(dz);
++        distance=std::hypot(double(dx),double(dz));
++    }
++
++    const int steps = std::clamp(int(std::ceil(distance / 16.0)), 1, 32);
++    int32_t clearX = body[0], clearZ = body[2];
++    for (int i = 1; i <= steps; ++i) {
++        const int32_t x = body[0] + int32_t(dx * i / steps);
++        const int32_t z = body[2] + int32_t(dz * i / steps);
++        if (blocked(x, z, clearX, clearZ)) {
++            // Refine this final segment to integer precision. Returning the
++            // previous 16-unit sample makes a tiny HMD change move the camera
++            // by a whole sample when the sweep's step count changes.
++            int32_t hitX=x,hitZ=z;
++            for(int refine=0;refine<5;++refine) {
++                const int32_t midX=clearX+(hitX-clearX)/2,midZ=clearZ+(hitZ-clearZ)/2;
++                if(midX==clearX && midZ==clearZ) break;
++                if(blocked(midX,midZ,clearX,clearZ)) { hitX=midX;hitZ=midZ; }
++                else { clearX=midX;clearZ=midZ; }
++            }
++            eye[0] = clearX;
++            eye[2] = clearZ;
++            return;
++        }
++        clearX = x;
++        clearZ = z;
++    }
++}
++
+ } // namespace tr::firstperson
+--- tests/camera_clearance_selftest.h
++++ tests/camera_clearance_selftest.h
+@@ -2,7 +2,8 @@
+ // sample writes in GetCollisionInfo: four in TR1/2, six in TR3.
+ namespace {
+ int eyeSamples=4, blockedEyeSample=-1, eyeObstacle=0, eyeQueryY=0;
+-void __cdecl NativeEyeCollision(tr::RoomCollision* coll,int32_t,int32_t y,
++int eyeWallOrigin=0,eyeWallDirection=1,eyeWallDistance=500;
++void __cdecl NativeEyeCollision(tr::RoomCollision* coll,int32_t x,int32_t y,
+                                 int32_t,int16_t,int32_t height) {
+     eyeQueryY=y;
+     Check(height==762,"camera query uses native capsule height");
+@@ -20,6 +21,7 @@
+     if (eyeObstacle==4) coll->hitStatic=1;
+     if (eyeObstacle==5) coll->type=8;
+     if (eyeObstacle==6) coll->shift[0]=1;
++    if (eyeObstacle==7 && (x-eyeWallOrigin)*eyeWallDirection>=eyeWallDistance) coll->type=8;
+ }
+ void TestCameraClearance() {
+     using namespace tr;
+@@ -54,6 +56,31 @@
+                   "looking around in an open room never retracts the standing eye");
+         }
+         testViewRight=testViewForward=testViewRise=0;
++        testConfig.firstPersonWallCollision=true;g_heading.base=0;
++        eyeWallOrigin=body.x_pos;
++        for(int state:{2,3,9,12,15,25,26,27,28,29}) for(int sign:{-1,1}) for(bool wall:{false,true}) {
++            Field<int16_t>(off::item_anim_state)=int16_t(state);eyeWallDirection=sign;eyeObstacle=wall?7:0;eyeWallDistance=500;
++            const auto root=body;
++            for(int offset=480;offset<=550;++offset) {
++                PHD_3DPOS eye{body.x_pos+sign*offset,body.y_pos-701,body.z_pos,0,0,0,0};
++                ClampRenderedHeadToCollision(item,eye);
++                Check(eye.x_pos==body.x_pos+sign*std::min(offset,wall?499:512) && eye.z_pos==body.z_pos,
++                      "jump wall sweep remains continuous when tracked offset crosses its reach limit");
++                Check(eye.y_pos==body.y_pos-701 && !std::memcmp(&root,&body,sizeof(body)),
++                      "wall reach limiting preserves jump height and native root");
++            }
++            if(wall) {
++                eyeWallDistance=100;
++                for(int offset=130;offset<240;++offset) {
++                    PHD_3DPOS eye{body.x_pos+sign*offset,body.y_pos-701,body.z_pos,0,0,0,0};
++                    ClampRenderedHeadToCollision(item,eye);
++                    Check(eye.x_pos==body.x_pos+sign*99,
++                          "jump wall contact cannot retreat in coarse 16-unit increments");
++                }
++            }
++        }
++        Field<int16_t>(off::item_anim_state)=2;eyeObstacle=0;
++
+         for (int sample=0;sample<eyeSamples;++sample) for (int obstacle=1;obstacle<=6;++obstacle) {
+             blockedEyeSample=sample; eyeObstacle=obstacle;
+             PHD_3DPOS eye{74901,2371,30921,0,0,0,0};
+--- tests/ik_collection_parity_selftest.h
++++ tests/ik_collection_parity_selftest.h
+@@ -171,17 +171,19 @@
+             testConfig.firstPersonInteractionAnchorZ=0;
+             PHD_3DPOS eye{};Check(Anchor(eye),"ladder anchor valid");
+             Check(g_ladderTorsoOffset.z==(game==1 ? 0.f : -80.f),"80-unit ladder clearance excludes TR1 reused states");
++            if(game!=1) ApplyBodyWallClearance(item,{0,-48});
++            Check(g_bodyWallOffset.x==0 && g_bodyWallOffset.z==0,"ladder wall correction keeps native feet and grip frame");
+             const auto before=ReadRows(ikNative+7*12);
+             Detour_GetJoints(item);const auto* palette=FirstPersonBodySkin(mask);
+             Check(palette && !std::memcmp(palette,ikNative,7*12*sizeof(float)),"ladder pelvis and leg animation remain authored");
+-            Check(std::fabs(palette[7*12+11]-before.origin.z-(game==1 ? 0.f : -80.f))<.001f,
++            Check(std::fabs(palette[7*12+11]-before.origin.z-(game==1 ? 0.f : -128.f))<.001f,
+                   "ladder torso moves behind eye only in ladder games");
+             for(int first:{8,11}) {
+                 const auto shoulder=ReadRows(palette+first*12),elbow=ReadRows(palette+(first+1)*12),hand=ReadRows(palette+(first+2)*12);
+                 const auto a=ReadRows(ikNative+first*12),b=ReadRows(ikNative+(first+1)*12),c=ReadRows(ikNative+(first+2)*12);
+                 Check(Dot(Sub(hand.origin,c.origin),Sub(hand.origin,c.origin))<.01f && WristBasisError(hand.basis,c.basis)<.001f,
+                       "ladder hand preserves native rung grip and rotation");
+-                const motiongun::Vec shift{0,0,game==1 ? 0.f : -80.f};
++                const motiongun::Vec shift{0,0,game==1 ? 0.f : -128.f};
+                 Check(Length(Sub(shoulder.origin,Add(a.origin,shift)))<.01f,
+                       "ladder shoulders share the torso clearance and remain attached");
+                 const Frame native[3]={a,b,c},solved[3]={shoulder,elbow,hand};

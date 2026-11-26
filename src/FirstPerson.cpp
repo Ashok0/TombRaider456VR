@@ -1680,6 +1680,16 @@ bool BodyVisualOffsetApplies(const uint8_t* item) {
         (CanFitStandingBody(item) || CanFitAirborneBody(item) || g_bodyWallOffset.x!=0 || g_bodyWallOffset.z!=0);
 }
 
+// Ladder contacts remain native. Carry camera retraction in the chest/arm
+// clearance, rather than translating the entire climbing skeleton off its rungs.
+void ApplyBodyWallClearance(const uint8_t* item,locomotion::Vec offset) {
+    g_bodyWallOffset=offset;
+    if(item && locomotion::IsLadderState(*reinterpret_cast<const int16_t*>(item+off::item_anim_state))) {
+        g_ladderTorsoOffset=g_ladderTorsoOffset+offset;
+        g_bodyWallOffset={};
+    }
+}
+
 locomotion::Vec BodyRenderOffset() {
     return g_bodyVisualOffset+g_bodyWallOffset;
 }
@@ -2772,10 +2782,11 @@ bool ApplyLadderTorsoClearance(uint8_t* item,float* joints,int count) {
                 original[i]={firstperson::IdentityBasis(),Add(original[reference].origin,
                     Sub(JointPoint(item,first+i,0,0,0),world))};
         }
-        // Keep the chest clear, but do not drag shoulders beyond the arms'
-        // native reach. Moving a nearly straight arm back used to stretch it.
-        const Frame armShift{shift.basis,Scale(shift.origin,
-            firstperson::ArmClearanceFraction(original,shift.origin))};
+        // Shoulders share the chest's full clearance transform. Limiting
+        // shoulder travel by native arm reach separates the upper arms from
+        // the moved torso. The anchored solve may extend the limb axially;
+        // native rung position/orientation and hand size remain exact.
+        const Frame armShift=shift;
         for(int i=0;i<3;++i) chain[i]=Multiply(armShift,original[i]);
         if(!firstperson::SolveArm(chain,original[2],Sub(original[1].origin,original[0].origin),
                                  changes,nullptr,nullptr,false)) return false;
@@ -4683,7 +4694,9 @@ void ClampRenderedHeadToCollision(const uint8_t* item, PHD_3DPOS& pose) {
          (state >= 25 && state <= 29));
     const bool roll=locomotion::IsGroundRollState(state) && LaraWaterStatus()==0 &&
         *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0;
-    if (!ground && !jump && !roll && !crouch) return;
+    const bool climb=locomotion::IsLadderState(state) && LaraWaterStatus()==0 &&
+        *reinterpret_cast<const int16_t*>(item+off::item_hit_points)>0;
+    if (!ground && !jump && !roll && !crouch && !climb) return;
 
     const auto& pos = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos);
     const auto& prev = *reinterpret_cast<const PHD_3DPOS*>(item + off::item_pos_prev);
@@ -5083,7 +5096,7 @@ bool Anchor(PHD_3DPOS& pose) {
     ClampRenderedHeadToCollision(item, pose);
     if(Cfg().firstPersonMovementStabilization)
         g_mountEyeTransition.Observe({float(pose.x_pos),float(pose.y_pos),float(pose.z_pos)});
-    g_bodyWallOffset=locomotion::Vec{float(pose.x_pos),float(pose.z_pos)}-unclampedEye;
+    ApplyBodyWallClearance(item,locomotion::Vec{float(pose.x_pos),float(pose.z_pos)}-unclampedEye);
     TraceEyeContinuity(item,pose,body);
     TraceForwardCamera(item, body, head, frac, GetTickCount64(), &pose);
     pose.z_rot = 0;
